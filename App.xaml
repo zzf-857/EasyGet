@@ -1,0 +1,21 @@
+<Application x:Class="EasyGet.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:EasyGet.Converters">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Themes/Generic.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- 全局转换器 -->
+            <converters:BoolToVisibilityConverter x:Key="BoolToVisibility"/>
+            <converters:InverseBooleanConverter x:Key="InverseBool"/>
+            <converters:StatusToColorConverter x:Key="StatusToColor"/>
+            <converters:StatusToTextConverter x:Key="StatusToText"/>
+            <converters:PlatformToColorConverter x:Key="PlatformToColor"/>
+            <converters:IntToBoolConverter x:Key="IntToBoolConverter"/>
+            <converters:CookieStatusConverter x:Key="CookieStatusConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

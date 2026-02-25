@@ -1,0 +1,168 @@
+<UserControl x:Class="EasyGet.Views.DownloadView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="40,32">
+
+            <!-- 页面标题 -->
+            <TextBlock Text="视频下载" FontSize="28" FontWeight="ExtraBold"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       FontFamily="Segoe UI Variable, Microsoft YaHei UI"
+                       Margin="0,0,0,24"/>
+
+            <!-- URL 输入行 -->
+            <TextBlock Text="视频链接" FontSize="12" FontWeight="Medium"
+                       Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Style="{StaticResource DarkTextBox}"
+                         Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}"
+                         FontSize="14"/>
+                <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
+                        Content="📋 粘贴" Margin="8,0,0,0"
+                        Command="{Binding PasteUrlCommand}"/>
+                <Button Grid.Column="2" Style="{StaticResource AccentButton}"
+                        Content="⬇ 下载" Margin="8,0,0,0"
+                        Command="{Binding StartDownloadCommand}"/>
+            </Grid>
+
+            <!-- 选项行 -->
+            <WrapPanel Margin="0,20,0,0" Orientation="Horizontal">
+                <!-- 格式 -->
+                <StackPanel Margin="0,0,16,8">
+                    <TextBlock Text="格式" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                    <ComboBox Style="{StaticResource DarkComboBox}" Width="140"
+                              ItemsSource="{Binding FormatOptions}"
+                              SelectedItem="{Binding SelectedFormat}"/>
+                </StackPanel>
+                <!-- 画质 -->
+                <StackPanel Margin="0,0,16,8">
+                    <TextBlock Text="画质" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                    <ComboBox Style="{StaticResource DarkComboBox}" Width="140"
+                              ItemsSource="{Binding QualityOptions}"
+                              SelectedItem="{Binding SelectedQuality}"/>
+                </StackPanel>
+                <!-- 字幕 -->
+                <StackPanel Margin="0,0,16,8">
+                    <TextBlock Text="字幕" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
+                    <ComboBox Style="{StaticResource DarkComboBox}" Width="140"
+                              ItemsSource="{Binding SubtitleOptions}"
+                              SelectedItem="{Binding SelectedSubtitle}"/>
+                </StackPanel>
+            </WrapPanel>
+
+            <!-- 下载目录 -->
+            <TextBlock Text="下载目录" FontSize="12" FontWeight="Medium"
+                       Foreground="{StaticResource TextMutedBrush}" Margin="0,12,0,8"/>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBox Grid.Column="0" Style="{StaticResource DarkTextBox}"
+                         Text="{Binding DownloadDirectory, UpdateSourceTrigger=PropertyChanged}"
+                         IsReadOnly="True"/>
+                <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
+                        Content="📁 浏览" Margin="8,0,0,0"
+                        Command="{Binding BrowseDirectoryCommand}"/>
+            </Grid>
+
+            <!-- 下载进度区域 -->
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16" Margin="0,24,0,0"
+                    Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 缩略图 -->
+                        <Border Grid.Column="0" Width="96" Height="54" CornerRadius="6"
+                                Background="#11111B" Margin="0,0,16,0" ClipToBounds="True">
+                            <Image Source="{Binding CurrentTask.ThumbnailUrl, FallbackValue={x:Null}}"
+                                   Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CurrentTask.Title, FallbackValue='准备中...'}"
+                                       FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0">
+                                <Run Text="{Binding CurrentTask.Platform, FallbackValue='', Mode=OneWay}"/>
+                                <Run Text=" · "/>
+                                <Run Text="{Binding CurrentTask.DurationText, FallbackValue='', Mode=OneWay}"/>
+                                <Run Text=" · "/>
+                                <Run Text="{Binding CurrentTask.SpeedText, FallbackValue='--', Mode=OneWay}"/>
+                                <Run Text=" · 剩余 "/>
+                                <Run Text="{Binding CurrentTask.EtaText, FallbackValue='--:--', Mode=OneWay}"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <TextBlock Grid.Column="2" VerticalAlignment="Center"
+                                   FontSize="20" FontWeight="Bold" Foreground="{StaticResource AccentBrush}">
+                            <Run Text="{Binding CurrentTask.Progress, StringFormat={}{0:F1}, FallbackValue='0'}"/>
+                            <Run Text="%"/>
+                        </TextBlock>
+                    </Grid>
+                    <ProgressBar Style="{StaticResource AccentProgressBar}"
+                                 Value="{Binding CurrentTask.Progress}" Maximum="100"
+                                 Margin="0,12,0,0"/>
+                    <Button Style="{StaticResource SurfaceButton}" Content="取消下载"
+                            HorizontalAlignment="Right" Margin="0,12,0,0"
+                            Command="{Binding CancelDownloadCommand}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- 日志区域 -->
+            <Grid Margin="0,24,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="200"/>
+                </Grid.RowDefinitions>
+                <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                    <TextBlock Text="下载日志" FontSize="14" FontWeight="Bold"
+                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Content="📋 复制日志" FontSize="11" Padding="10,5" Margin="0,0,6,0"
+                                Command="{Binding CopyLogCommand}"/>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Content="清空" FontSize="11" Padding="10,5"
+                                Command="{Binding ClearLogCommand}"/>
+                    </StackPanel>
+                </DockPanel>
+                <Border Grid.Row="1" Background="#11111B" CornerRadius="8"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                        Padding="12,8">
+                    <ListBox ItemsSource="{Binding LogLines}"
+                             Background="Transparent" BorderThickness="0"
+                             Foreground="#A6ADC8"
+                             FontFamily="Cascadia Code, Consolas, Courier New"
+                             FontSize="11"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             x:Name="LogList">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding}" TextWrapping="NoWrap"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+            </Grid>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

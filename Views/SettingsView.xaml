@@ -1,0 +1,299 @@
+<UserControl x:Class="EasyGet.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
+             Background="Transparent">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="40,32" MaxWidth="800">
+
+            <!-- 页面标题 -->
+            <TextBlock Text="设置" FontSize="28" FontWeight="ExtraBold"
+                       Foreground="{StaticResource TextPrimaryBrush}"
+                       FontFamily="Segoe UI Variable, Microsoft YaHei UI"
+                       Margin="0,0,0,32"/>
+
+            <!-- ===== 环境检测 ===== -->
+            <TextBlock Text="环境检测" FontSize="16" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16" Margin="0,0,0,24">
+                <StackPanel>
+                    <!-- yt-dlp -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="yt-dlp" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock FontSize="12" Margin="0,2,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                    </Style>
+                                </TextBlock.Style>
+                                <Run Text="{Binding YtDlpVersion, Mode=OneWay, FallbackValue='未检测'}"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <Border Grid.Column="1" CornerRadius="10" Padding="10,4" VerticalAlignment="Center">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#2D4A2D"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding YtDlpFound}" Value="False">
+                                            <Setter Property="Background" Value="#4A2D2D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="11" FontWeight="Medium">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="✓ 已安装"/>
+                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding YtDlpFound}" Value="False">
+                                                <Setter Property="Text" Value="✗ 未安装"/>
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                    </Grid>
+
+                    <!-- ffmpeg -->
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="ffmpeg" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"/>
+                            <TextBlock FontSize="12" Margin="0,2,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                    </Style>
+                                </TextBlock.Style>
+                                <Run Text="{Binding FfmpegVersion, Mode=OneWay, FallbackValue='未检测'}"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <Border Grid.Column="1" CornerRadius="10" Padding="10,4" VerticalAlignment="Center">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#2D4A2D"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding FfmpegFound}" Value="False">
+                                            <Setter Property="Background" Value="#4A2D2D"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock FontSize="11" FontWeight="Medium">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="✓ 已安装"/>
+                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding FfmpegFound}" Value="False">
+                                                <Setter Property="Text" Value="✗ 未安装"/>
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Border>
+                    </Grid>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button Style="{StaticResource SurfaceButton}" Content="🔄 重新检测"
+                                Command="{Binding CheckEnvironmentCommand}"/>
+                        <Button Style="{StaticResource SurfaceButton}" Content="⬆ 更新 yt-dlp"
+                                Margin="8,0,0,0"
+                                Command="{Binding UpdateYtDlpCommand}"
+                                IsEnabled="{Binding YtDlpFound}"/>
+                    </StackPanel>
+                    <TextBlock Text="{Binding UpdateStatusMessage}" FontSize="11"
+                               Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"
+                               TextWrapping="Wrap"
+                               Visibility="{Binding IsUpdatingYtDlp, Converter={StaticResource BoolToVisibility}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== 下载设置 ===== -->
+            <TextBlock Text="下载设置" FontSize="16" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16" Margin="0,0,0,24">
+                <StackPanel>
+                    <!-- 默认下载目录 -->
+                    <TextBlock Text="默认下载目录" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Style="{StaticResource DarkTextBox}"
+                                 Text="{Binding DefaultDownloadPath}" IsReadOnly="True"/>
+                        <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
+                                Content="📁" Margin="8,0,0,0"
+                                Command="{Binding BrowseDownloadPathCommand}"/>
+                    </Grid>
+
+                    <!-- 默认格式 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="200"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="默认格式" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" Style="{StaticResource DarkComboBox}"
+                                  ItemsSource="{Binding FormatOptions}"
+                                  SelectedItem="{Binding DefaultFormat}"/>
+                    </Grid>
+
+                    <!-- 默认画质 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="200"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="默认画质" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" Style="{StaticResource DarkComboBox}"
+                                  ItemsSource="{Binding QualityOptions}"
+                                  SelectedItem="{Binding DefaultQuality}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== 代理设置 ===== -->
+            <TextBlock Text="代理设置" FontSize="16" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16" Margin="0,0,0,24">
+                <StackPanel>
+                    <Grid Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="启用代理" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center"/>
+                        <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding UseProxy}"/>
+                    </Grid>
+                    <TextBlock Text="代理地址 (http://host:port 或 socks5://host:port)"
+                               FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                    <TextBox Style="{StaticResource DarkTextBox}"
+                             Text="{Binding ProxyAddress, UpdateSourceTrigger=PropertyChanged}"
+                             IsEnabled="{Binding UseProxy}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== Cookie 设置 ===== -->
+            <TextBlock Text="Cookie 设置" FontSize="16" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16" Margin="0,0,0,24">
+                <StackPanel>
+                    <TextBlock Text="抖音等平台需要登录 Cookie 才能下载视频" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+
+                    <!-- 操作步骤提示 -->
+                    <Border Background="#11111B" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="获取 Cookie 步骤：" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                                       Text="1. 用浏览器打开抖音网页版 (douyin.com) 并登录"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                                       Text="2. 按 F12 打开开发者工具 → 切换到「网络/Network」标签"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                                       Text="3. 刷新页面，点击任意请求，在「请求标头」中找到 Cookie"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
+                                       Text="4. 复制整行 Cookie 值，粘贴到下方输入框"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Cookie 输入框 -->
+                    <TextBox Style="{StaticResource DarkTextBox}"
+                             Text="{Binding CookieContent, UpdateSourceTrigger=LostFocus}"
+                             AcceptsReturn="True" TextWrapping="Wrap"
+                             MinHeight="60" MaxHeight="120"
+                             VerticalScrollBarVisibility="Auto"
+                             FontSize="11" FontFamily="Consolas, Courier New"
+                             VerticalContentAlignment="Top"/>
+
+                    <!-- 状态 + 清空按钮 -->
+                    <DockPanel Margin="0,8,0,0">
+                        <Button DockPanel.Dock="Right" Style="{StaticResource SurfaceButton}"
+                                Content="清空 Cookie" FontSize="11" Padding="10,5"
+                                Command="{Binding ClearCookieCommand}"/>
+                        <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
+                                   Text="{Binding CookieContent, Converter={StaticResource CookieStatusConverter}}"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== 性能设置 ===== -->
+            <TextBlock Text="性能设置" FontSize="16" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16" Margin="0,0,0,24">
+                <StackPanel>
+                    <!-- 并发分片 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="120"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="并发分片数" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="yt-dlp 多线程下载分片数" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" TextAlignment="Center"
+                                 Text="{Binding ConcurrentFragments, UpdateSourceTrigger=LostFocus}"/>
+                    </Grid>
+
+                    <!-- 同时下载数 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="120"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="同时下载任务数" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="批量下载时的并发上限" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+                        <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" TextAlignment="Center"
+                                 Text="{Binding MaxConcurrentDownloads, UpdateSourceTrigger=LostFocus}"/>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- 版本信息 -->
+            <StackPanel Margin="0,0,0,32">
+                <TextBlock Text="关于 EasyGet" FontSize="14" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"/>
+                <TextBlock Text="基于 yt-dlp 的全平台视频下载工具" FontSize="12"
+                           Foreground="{StaticResource TextMutedBrush}"/>
+                <TextBlock Text="版本 1.0.0" FontSize="12"
+                           Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"/>
+            </StackPanel>
+
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
