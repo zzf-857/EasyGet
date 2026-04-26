@@ -136,7 +136,19 @@ public partial class BatchDownloadViewModel : ObservableObject
     [RelayCommand]
     private void CancelTask(string taskId)
     {
-        _downloadManager.Cancel(taskId);
+        var task = _downloadManager.Tasks.FirstOrDefault(t => t.Id == taskId);
+        if (task != null)
+        {
+            if (task.Status is DownloadStatus.Downloading or DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Paused)
+            {
+                _downloadManager.Cancel(taskId);
+            }
+            else
+            {
+                // 如果任务已经结束（完成、失败或取消），点击 X 时将其从列表中移除
+                _downloadManager.Tasks.Remove(task);
+            }
+        }
     }
 
     [RelayCommand]
@@ -148,7 +160,18 @@ public partial class BatchDownloadViewModel : ObservableObject
     [RelayCommand]
     private void CancelAll()
     {
+        // 先发送取消信号给所有正在运行的任务
         _downloadManager.CancelAll();
         IsDownloading = false;
+
+        // 然后清理掉所有已经结束的任务（完成、失败、已取消），只留下等待或暂停的
+        var tasksToRemove = _downloadManager.Tasks
+            .Where(t => t.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled)
+            .ToList();
+            
+        foreach(var t in tasksToRemove)
+        {
+            _downloadManager.Tasks.Remove(t);
+        }
     }
 }

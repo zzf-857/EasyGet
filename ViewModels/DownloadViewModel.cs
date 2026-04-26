@@ -117,6 +117,12 @@ public partial class DownloadViewModel : ObservableObject
     [RelayCommand]
     private async Task StartDownload()
     {
+        if (IsDownloading) 
+        {
+            LogLines.Add("[提示] 当前任务正在进行中。如需同时建立多个下载任务，请使用左侧“批量下载”功能。");
+            return;
+        }
+
         if (string.IsNullOrWhiteSpace(Url))
         {
             LogLines.Add("[错误] 请输入视频链接");
@@ -149,6 +155,8 @@ public partial class DownloadViewModel : ObservableObject
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
                 {
+                    if (CurrentTask != task) return;
+
                     var status = task.Status;
                     IsDownloading = status is DownloadStatus.Waiting
                         or DownloadStatus.Resolving

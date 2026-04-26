@@ -38,7 +38,9 @@ public partial class DownloadTask : ObservableObject
     [ObservableProperty] private double _duration;
 
     /// <summary>文件大小 (bytes)</summary>
-    [ObservableProperty] private long _fileSize;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FileSizeText))]
+    private long _fileSize;
 
     /// <summary>缩略图 URL</summary>
     [ObservableProperty] private string _thumbnailUrl = "";
@@ -59,13 +61,20 @@ public partial class DownloadTask : ObservableObject
     [ObservableProperty] private string _outputFilePath = "";
 
     /// <summary>下载进度 0-100</summary>
-    [ObservableProperty] private double _progress;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SpeedText))]
+    [NotifyPropertyChangedFor(nameof(EtaText))]
+    private double _progress;
 
     /// <summary>下载速度 (bytes/s)</summary>
-    [ObservableProperty] private double _speed;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SpeedText))]
+    private double _speed;
 
     /// <summary>预估剩余时间 (秒)</summary>
-    [ObservableProperty] private double _eta;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(EtaText))]
+    private double _eta;
 
     /// <summary>已下载大小 (bytes)</summary>
     [ObservableProperty] private long _downloadedSize;

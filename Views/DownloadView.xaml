@@ -35,30 +35,34 @@
                         Command="{Binding StartDownloadCommand}"/>
             </Grid>
 
-            <!-- 选项行 -->
-            <WrapPanel Margin="0,20,0,0" Orientation="Horizontal">
-                <!-- 格式 -->
-                <StackPanel Margin="0,0,16,8">
-                    <TextBlock Text="格式" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
-                    <ComboBox Style="{StaticResource DarkComboBox}" Width="140"
-                              ItemsSource="{Binding FormatOptions}"
-                              SelectedItem="{Binding SelectedFormat}"/>
-                </StackPanel>
-                <!-- 画质 -->
-                <StackPanel Margin="0,0,16,8">
-                    <TextBlock Text="画质" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
-                    <ComboBox Style="{StaticResource DarkComboBox}" Width="140"
-                              ItemsSource="{Binding QualityOptions}"
-                              SelectedItem="{Binding SelectedQuality}"/>
-                </StackPanel>
-                <!-- 字幕 -->
-                <StackPanel Margin="0,0,16,8">
-                    <TextBlock Text="字幕" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,4"/>
-                    <ComboBox Style="{StaticResource DarkComboBox}" Width="140"
-                              ItemsSource="{Binding SubtitleOptions}"
-                              SelectedItem="{Binding SelectedSubtitle}"/>
-                </StackPanel>
-            </WrapPanel>
+            <!-- 选项卡片区 -->
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10" 
+                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                    Padding="20,16,4,8" Margin="0,20,0,0">
+                <WrapPanel Orientation="Horizontal">
+                    <!-- 格式 -->
+                    <StackPanel Margin="0,0,24,8">
+                        <TextBlock Text="格式" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                        <ComboBox Style="{StaticResource DarkComboBox}" Width="150"
+                                  ItemsSource="{Binding FormatOptions}"
+                                  SelectedItem="{Binding SelectedFormat}"/>
+                    </StackPanel>
+                    <!-- 画质 -->
+                    <StackPanel Margin="0,0,24,8">
+                        <TextBlock Text="画质" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                        <ComboBox Style="{StaticResource DarkComboBox}" Width="150"
+                                  ItemsSource="{Binding QualityOptions}"
+                                  SelectedItem="{Binding SelectedQuality}"/>
+                    </StackPanel>
+                    <!-- 字幕 -->
+                    <StackPanel Margin="0,0,24,8">
+                        <TextBlock Text="字幕" FontSize="11" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
+                        <ComboBox Style="{StaticResource DarkComboBox}" Width="150"
+                                  ItemsSource="{Binding SubtitleOptions}"
+                                  SelectedItem="{Binding SelectedSubtitle}"/>
+                    </StackPanel>
+                </WrapPanel>
+            </Border>
 
             <!-- 下载目录 -->
             <TextBlock Text="下载目录" FontSize="12" FontWeight="Medium"
@@ -76,10 +80,10 @@
                         Command="{Binding BrowseDirectoryCommand}"/>
             </Grid>
 
-            <!-- 下载进度区域 -->
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+            <!-- 下载进度区域 (悬浮卡片感) -->
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Padding="20,16" Margin="0,24,0,0"
+                    Padding="24,20" Margin="0,28,0,0" Effect="{StaticResource SoftShadow}"
                     Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibility}}">
                 <StackPanel>
                     <Grid>
@@ -90,18 +94,18 @@
                         </Grid.ColumnDefinitions>
 
                         <!-- 缩略图 -->
-                        <Border Grid.Column="0" Width="96" Height="54" CornerRadius="6"
-                                Background="#11111B" Margin="0,0,16,0" ClipToBounds="True">
+                        <Border Grid.Column="0" Width="106" Height="60" CornerRadius="8"
+                                Background="#11111B" Margin="0,0,18,0" ClipToBounds="True">
                             <Image Source="{Binding CurrentTask.ThumbnailUrl, FallbackValue={x:Null}}"
                                    Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Border>
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="{Binding CurrentTask.Title, FallbackValue='准备中...'}"
-                                       FontSize="14" FontWeight="SemiBold"
+                                       FontSize="15" FontWeight="Bold"
                                        Foreground="{StaticResource TextPrimaryBrush}"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0">
+                                       TextTrimming="CharacterEllipsis" Margin="0,0,0,6"/>
+                            <TextBlock FontSize="12" Foreground="{StaticResource TextMutedBrush}">
                                 <Run Text="{Binding CurrentTask.Platform, FallbackValue='', Mode=OneWay}"/>
                                 <Run Text=" · "/>
                                 <Run Text="{Binding CurrentTask.DurationText, FallbackValue='', Mode=OneWay}"/>

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -12,12 +12,19 @@
     <Version>1.0.0</Version>
     <Description>全平台视频下载工具</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.*" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.*" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="EasyGet.Tests\**\*.cs" />
+    <EmbeddedResource Remove="EasyGet.Tests\**\*" />
+    <None Remove="EasyGet.Tests\**\*" />
   </ItemGroup>
 
 </Project>

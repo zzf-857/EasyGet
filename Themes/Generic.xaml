@@ -29,6 +29,11 @@
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
+    <!-- ========== 全局特效 (Fluent Shadows) ========== -->
+    <DropShadowEffect x:Key="SoftShadow" BlurRadius="12" ShadowDepth="2" Direction="270" Color="Black" Opacity="0.2"/>
+    <DropShadowEffect x:Key="HoverShadow" BlurRadius="16" ShadowDepth="4" Direction="270" Color="Black" Opacity="0.4"/>
+    <DropShadowEffect x:Key="PopupShadow" BlurRadius="24" ShadowDepth="6" Direction="270" Color="Black" Opacity="0.5"/>
+
     <!-- ========== TextBox 样式 ========== -->
     <Style x:Key="DarkTextBox" TargetType="TextBox">
         <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
@@ -42,19 +47,33 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
-                    <Border Background="{TemplateBinding Background}"
-                            BorderBrush="{TemplateBinding BorderBrush}"
-                            BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="8"
-                            SnapsToDevicePixels="True">
-                        <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
-                    </Border>
+                    <Grid>
+                        <!-- Focus Ring Border (Fluent like) -->
+                        <Border x:Name="FocusRing"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="2"
+                                CornerRadius="9"
+                                Opacity="0"
+                                Margin="-1"
+                                SnapsToDevicePixels="True"/>
+                        <Border x:Name="BgBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="8"
+                                SnapsToDevicePixels="True">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                        </Trigger>
+                        <!-- Focus 触发 -->
                         <Trigger Property="IsFocused" Value="True">
-                            <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                            <Setter TargetName="FocusRing" Property="Opacity" Value="0.5"/>
+                            <Setter TargetName="BgBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                        </Trigger>
+                        <!-- Hover 触发 (直接改变画刷即可) -->
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="BgBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -77,16 +96,43 @@
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
                             CornerRadius="8"
-                            SnapsToDevicePixels="True">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}"/>
+                            SnapsToDevicePixels="True"
+                            Effect="{StaticResource SoftShadow}">
+                        <Grid>
+                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="8" IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Opacity" Value="0.85"/>
-                        </Trigger>
+                        <!-- Hover 动画 -->
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.2" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0" Duration="0:0:0.25"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <!-- 按下状态 -->
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Opacity" Value="0.7"/>
+                            <Setter TargetName="HoverOverlay" Property="Background" Value="Black"/>
+                            <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.15"/>
+                            <Setter TargetName="border" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -109,13 +155,44 @@
                             BorderBrush="{StaticResource BorderSubtleBrush}"
                             BorderThickness="1"
                             CornerRadius="8"
-                            SnapsToDevicePixels="True">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}"/>
+                            SnapsToDevicePixels="True"
+                            Effect="{StaticResource SoftShadow}">
+                        <Grid>
+                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="8" IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.05" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0" Duration="0:0:0.25"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgHoverBrush}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="HoverOverlay" Property="Background" Value="Black"/>
+                            <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.15"/>
+                            <Setter TargetName="border" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -292,32 +369,70 @@
         <Setter Property="FontSize" Value="14"/>
         <Setter Property="FontWeight" Value="Medium"/>
         <Setter Property="FontFamily" Value="Segoe UI Variable, Microsoft YaHei UI"/>
-        <Setter Property="Padding" Value="12,10"/>
+        <Setter Property="Padding" Value="12,12"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="GroupName" Value="Nav"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Border x:Name="border"
-                            Background="{TemplateBinding Background}"
-                            CornerRadius="10"
-                            SnapsToDevicePixels="True">
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="Center"
-                                          Margin="{TemplateBinding Padding}"/>
-                    </Border>
+                    <Grid>
+                        <!-- 侧边蓝条指示器 -->
+                        <Border x:Name="Indicator" Width="4" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                Background="{StaticResource AccentBrush}" CornerRadius="2" Opacity="0" Margin="2,0,0,0">
+                            <Border.RenderTransform>
+                                <ScaleTransform ScaleY="0.5"/>
+                            </Border.RenderTransform>
+                        </Border>
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8"
+                                Margin="8,0,0,0"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="8" IsHitTestVisible="False"/>
+                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                  VerticalAlignment="Center"
+                                                  Margin="{TemplateBinding Padding}"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
                     <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgHoverBrush}"/>
-                        </Trigger>
+                        <!-- Hover 平滑动画 -->
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.05" Duration="0:0:0.15"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0" Duration="0:0:0.25"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <!-- Checked 样式及动态弹起效果 -->
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="border" Property="Background">
                                 <Setter.Value>
-                                    <SolidColorBrush Color="{StaticResource Accent}" Opacity="0.15"/>
+                                    <SolidColorBrush Color="{StaticResource Accent}" Opacity="0.10"/>
                                 </Setter.Value>
                             </Setter>
                             <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                            <Setter Property="FontWeight" Value="Bold"/>
+                            <!-- 选中的蓝色左侧条纹展示 -->
+                            <Setter TargetName="Indicator" Property="Opacity" Value="1"/>
+                            <Setter TargetName="Indicator" Property="RenderTransform">
+                                <Setter.Value>
+                                    <ScaleTransform ScaleY="1.0" CenterY="0"/>
+                                </Setter.Value>
+                            </Setter>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

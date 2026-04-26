@@ -12,6 +12,8 @@ public class DownloadManager
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly SemaphoreSlim _semaphore;
+    private int _currentConcurrencyLimit;
+    private readonly object _concurrencyLock = new();
 
     /// <summary>所有任务</summary>
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
@@ -27,7 +29,8 @@ public class DownloadManager
         _ytDlpService = ytDlpService;
         _historyService = historyService;
         _configService = configService;
-        _semaphore = new SemaphoreSlim(configService.Config.MaxConcurrentDownloads);
+        _currentConcurrencyLimit = configService.Config.MaxConcurrentDownloads;
+        _semaphore = new SemaphoreSlim(_currentConcurrencyLimit, 100);
     }
 
     /// <summary>
@@ -35,7 +38,27 @@ public class DownloadManager
     /// </summary>
     public void UpdateConcurrencyLimit(int maxConcurrent)
     {
-        // SemaphoreSlim 不支持动态修改；此处仅在初始化时设置
+        lock (_concurrencyLock)
+        {
+            if (maxConcurrent <= 0) return;
+            int diff = maxConcurrent - _currentConcurrencyLimit;
+            _currentConcurrencyLimit = maxConcurrent;
+            
+            if (diff > 0)
+            {
+                _semaphore.Release(diff);
+            }
+            else if (diff < 0)
+            {
+                Task.Run(async () =>
+                {
+                    for (int i = 0; i < -diff; i++)
+                    {
+                        await _semaphore.WaitAsync();
+                    }
+                });
+            }
+        }
     }
 
     /// <summary>
@@ -64,12 +87,35 @@ public class DownloadManager
             task.FileSize = info.FileSize;
             LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {info.Title}");
             LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 平台: {info.Platform} | 时长: {task.DurationText}");
+
+            // 按平台自动归类到子文件夹
+            if (_configService.Config.AutoCategorizeByPlatform && !string.IsNullOrEmpty(info.Platform))
+            {
+                var folderName = MapPlatformToFolderName(info.Platform);
+                task.OutputDirectory = System.IO.Path.Combine(task.OutputDirectory, folderName);
+                System.IO.Directory.CreateDirectory(task.OutputDirectory);
+                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 自动归类到: {folderName}/");
+            }
         }
 
         // 等待并发位
         _ = Task.Run(async () =>
         {
-            await _semaphore.WaitAsync(task.Cts.Token);
+            try
+            {
+                await _semaphore.WaitAsync(task.Cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                if (task.Status != DownloadStatus.Paused)
+                {
+                    task.Status = DownloadStatus.Cancelled;
+                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
+                }
+                TaskFinished?.Invoke(task);
+                return;
+            }
+
             try
             {
                 var progress = new Progress<DownloadProgress>(p =>
@@ -98,6 +144,7 @@ public class DownloadManager
                         Quality = task.Quality,
                         FileSize = task.FileSize,
                         FilePath = task.OutputFilePath,
+                        ThumbnailUrl = task.ThumbnailUrl,
                         DownloadTime = DateTime.Now
                     });
                 }
@@ -193,6 +240,7 @@ public class DownloadManager
                         Quality = task.Quality,
                         FileSize = task.FileSize,
                         FilePath = task.OutputFilePath,
+                        ThumbnailUrl = task.ThumbnailUrl,
                         DownloadTime = DateTime.Now
                     });
                 }
@@ -249,5 +297,43 @@ public class DownloadManager
     {
         foreach (var task in Tasks)
             task.Cts?.Cancel();
+    }
+
+    /// <summary>
+    /// 将 yt-dlp 返回的平台标识符映射为中文友好且文件系统安全的文件夹名
+    /// </summary>
+    private static string MapPlatformToFolderName(string platform)
+    {
+        // 不区分大小写匹配常见平台
+        return platform.ToLowerInvariant() switch
+        {
+            "youtube" => "YouTube",
+            "bilibili" or "bilibilibangu" => "哔哩哔哩",
+            "douyin" => "抖音",
+            "tiktok" => "TikTok",
+            "instagram" => "Instagram",
+            "twitter" or "x" => "Twitter(X)",
+            "weibo" => "微博",
+            "xiaohongshu" => "小红书",
+            "kuaishou" => "快手",
+            "iqiyi" => "爱奇艺",
+            "youku" => "优酷",
+            "tencent" or "tencentvideo" or "qq" => "腾讯视频",
+            "facebook" => "Facebook",
+            "twitch" or "twitchvod" or "twitchstream" => "Twitch",
+            "niconico" or "niconicouser" => "NicoNico",
+            "vimeo" => "Vimeo",
+            _ => SanitizeFolderName(platform) // 未知平台使用原始名并清理无效字符
+        };
+    }
+
+    /// <summary>
+    /// 清理文件夹名中的非法字符
+    /// </summary>
+    private static string SanitizeFolderName(string name)
+    {
+        var invalid = System.IO.Path.GetInvalidFileNameChars();
+        var sanitized = new string(name.Where(c => !invalid.Contains(c)).ToArray());
+        return string.IsNullOrWhiteSpace(sanitized) ? "其他" : sanitized;
     }
 }

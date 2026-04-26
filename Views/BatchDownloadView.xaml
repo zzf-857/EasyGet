@@ -100,62 +100,122 @@
                                 Command="{Binding CancelAllCommand}"/>
                     </StackPanel>
                 </DockPanel>
-                <ListBox ItemsSource="{Binding QueueTasks}"
-                         Background="Transparent" BorderThickness="0">
+                <Grid>
+                    <!-- 空状态提示 -->
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,60">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding QueueTasks.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="📥" FontSize="48" Foreground="{StaticResource BorderSubtleBrush}" HorizontalAlignment="Center" Opacity="0.5"/>
+                        <TextBlock Text="暂无并行任务" FontSize="14" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                        <TextBlock Text="在上方粘贴多个链接即可开始批量下载" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Opacity="0.7" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <!-- 列表 -->
+                    <ListBox ItemsSource="{Binding QueueTasks}"
+                             Background="Transparent" BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                     <ListBox.ItemTemplate>
                         <DataTemplate>
                             <Border Background="#1A1A1A" CornerRadius="8" Padding="12" Margin="0,0,0,6"
                                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <StackPanel>
-                                        <TextBlock Text="{Binding Title, FallbackValue='解析中...'}"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="13" FontWeight="SemiBold"
-                                                   TextTrimming="CharacterEllipsis"/>
-                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+
+                                    <!-- 缩略图 -->
+                                    <Border Grid.Column="0" Width="80" Height="50" CornerRadius="4"
+                                            Margin="0,0,12,0" ClipToBounds="True"
+                                            Background="#222">
+                                        <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                    </Border>
+
+                                    <!-- 标题 + 状态 + 进度 -->
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <DockPanel>
+                                            <TextBlock Text="{Binding Title, FallbackValue='解析中...'}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="13" FontWeight="SemiBold"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="400"/>
+                                            <!-- 平台标签 -->
+                                            <Border DockPanel.Dock="Right" Margin="8,0,0,0"
+                                                    Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"
+                                                    CornerRadius="3" Padding="6,1" VerticalAlignment="Center"
+                                                    Visibility="{Binding Platform, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                                                <TextBlock Text="{Binding Platform}" FontSize="10"
+                                                           Foreground="White" FontWeight="Medium"/>
+                                            </Border>
+                                        </DockPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                             <TextBlock Text="{Binding Status, Converter={StaticResource StatusToText}}"
                                                        Foreground="{Binding Status, Converter={StaticResource StatusToColor}}"
                                                        FontSize="11"/>
                                             <TextBlock Text="{Binding SpeedText, Mode=OneWay}" Foreground="{StaticResource TextMutedBrush}"
                                                        FontSize="11" Margin="12,0,0,0"/>
+                                            <TextBlock Text="{Binding FileSizeText, Mode=OneWay}" Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11" Margin="12,0,0,0"/>
                                         </StackPanel>
                                         <ProgressBar Style="{StaticResource AccentProgressBar}"
                                                      Value="{Binding Progress}" Maximum="100"
-                                                     Margin="0,6,0,0"/>
+                                                     Margin="0,5,0,0"/>
                                     </StackPanel>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal"
+
+                                    <!-- 百分比 + 操作按钮 -->
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Orientation="Horizontal"
                                                 Margin="16,0,0,0">
                                         <TextBlock VerticalAlignment="Center"
                                                    FontSize="16" FontWeight="Bold"
                                                    Foreground="{StaticResource AccentBrush}" Margin="0,0,12,0">
                                             <Run Text="{Binding Progress, StringFormat={}{0:F0}}"/><Run Text="%"/>
                                         </TextBlock>
-                                        <Button Style="{StaticResource SurfaceButton}" Content="⏸"
-                                                ToolTip="暂停" Padding="8,5" FontSize="11" Margin="0,0,4,0"
-                                                Command="{Binding DataContext.PauseTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding Id}"/>
-                                        <Button Style="{StaticResource SurfaceButton}" Content="▶"
-                                                ToolTip="恢复" Padding="8,5" FontSize="11" Margin="0,0,4,0"
-                                                Command="{Binding DataContext.ResumeTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding Id}"/>
-                                        <Button Style="{StaticResource SurfaceButton}" Content="🔄"
-                                                ToolTip="重试" Padding="8,5" FontSize="11" Margin="0,0,4,0"
-                                                Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding Id}"/>
-                                        <Button Style="{StaticResource SurfaceButton}" Content="✕"
-                                                ToolTip="取消任务" Padding="8,5" FontSize="11"
-                                                Command="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding Id}"/>
+                                        
+                                        <!-- 次要操作按钮组 (鼠标悬浮才完全显示以降低视觉噪音) -->
+                                        <StackPanel Orientation="Horizontal" Background="Transparent" Cursor="Hand">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Opacity" Value="0.25"/>
+                                                    <Style.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Opacity" Value="1"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <Button Style="{StaticResource SurfaceButton}" Content="⏸"
+                                                    ToolTip="暂停" Padding="8,5" FontSize="11" Margin="0,0,4,0"
+                                                    Command="{Binding DataContext.PauseTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Id}"/>
+                                            <Button Style="{StaticResource SurfaceButton}" Content="▶"
+                                                    ToolTip="恢复" Padding="8,5" FontSize="11" Margin="0,0,4,0"
+                                                    Command="{Binding DataContext.ResumeTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Id}"/>
+                                            <Button Style="{StaticResource SurfaceButton}" Content="🔄"
+                                                    ToolTip="重试" Padding="8,5" FontSize="11" Margin="0,0,4,0"
+                                                    Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Id}"/>
+                                            <Button Style="{StaticResource SurfaceButton}" Content="✕"
+                                                    ToolTip="取消任务" Padding="8,5" FontSize="11"
+                                                    Command="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding Id}"/>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Grid>
                             </Border>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
+            </Grid>
             </DockPanel>
         </Border>
 

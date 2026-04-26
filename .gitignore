@@ -39,6 +39,18 @@ Desktop.ini
 ## Logs
 logs/
 
+## Download/test artifacts
+*.mp4
+*.webm
+*.part
+test_dl*/
+test_verify*/
+test_stdout.txt
+test_stderr.txt
+test_best_stdout.txt
+test_best_stderr.txt
+temp_ffmpeg*.txt
+
 ## Misc
 nul
 *.tmp

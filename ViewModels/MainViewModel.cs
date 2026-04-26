@@ -1,13 +1,10 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
 using EasyGet.Services;
 
 namespace EasyGet.ViewModels;
 
-/// <summary>
-/// 主窗口 ViewModel — 管理导航和全局状态
-/// </summary>
 public partial class MainViewModel : ObservableObject
 {
     private readonly ConfigService _configService;
@@ -17,9 +14,8 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty] private ObservableObject? _currentPage;
     [ObservableProperty] private int _selectedNavIndex;
-    [ObservableProperty] private string _statusMessage = "就绪";
+    [ObservableProperty] private string _statusMessage = "Ready";
 
-    // 通知
     [ObservableProperty] private bool _showNotification;
     [ObservableProperty] private string _notificationMessage = "";
     [ObservableProperty] private bool _isNotificationSuccess;
@@ -47,11 +43,9 @@ public partial class MainViewModel : ObservableObject
         HistoryVM = historyVm;
         SettingsVM = settingsVm;
 
-        // 默认显示下载页
         CurrentPage = DownloadVM;
         SelectedNavIndex = 0;
 
-        // 订阅下载完成通知
         _downloadManager.TaskFinished += OnTaskFinished;
     }
 
@@ -68,17 +62,17 @@ public partial class MainViewModel : ObservableObject
                 _ => ("", false)
             };
 
-            if (!string.IsNullOrEmpty(NotificationMessage))
+            if (string.IsNullOrEmpty(NotificationMessage))
+                return;
+
+            ShowNotification = true;
+            _notificationTimer?.Stop();
+            _notificationTimer = new System.Timers.Timer(4000) { AutoReset = false };
+            _notificationTimer.Elapsed += (_, _) =>
             {
-                ShowNotification = true;
-                _notificationTimer?.Stop();
-                _notificationTimer = new System.Timers.Timer(4000) { AutoReset = false };
-                _notificationTimer.Elapsed += (_, _) =>
-                {
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() => ShowNotification = false);
-                };
-                _notificationTimer.Start();
-            }
+                System.Windows.Application.Current?.Dispatcher.Invoke(() => ShowNotification = false);
+            };
+            _notificationTimer.Start();
         });
     }
 
@@ -89,9 +83,6 @@ public partial class MainViewModel : ObservableObject
         _notificationTimer?.Stop();
     }
 
-    /// <summary>
-    /// 切换页面
-    /// </summary>
     [RelayCommand]
     private void Navigate(string page)
     {
@@ -105,30 +96,20 @@ public partial class MainViewModel : ObservableObject
         };
     }
 
-    /// <summary>
-    /// 应用启动时的初始化
-    /// </summary>
     public async Task InitializeAsync()
     {
-        // 加载配置
         await _configService.LoadAsync();
 
-        // 检测环境
-        StatusMessage = "正在检测环境...";
+        SettingsVM.Initialize();
+        DownloadVM.Initialize();
+
+        StatusMessage = "Checking environment...";
         var status = await _envService.CheckEnvironmentAsync();
 
-        if (!status.IsReady)
-        {
-            StatusMessage = "正在安装必要工具...";
-            if (!status.YtDlpFound)
-                await _envService.AutoInstallYtDlpAsync(new Progress<string>(s => StatusMessage = s));
-            if (!status.FfmpegFound)
-                await _envService.AutoInstallFfmpegAsync(new Progress<string>(s => StatusMessage = s));
-        }
-
-        // 更新设置页的环境状态
         SettingsVM.RefreshEnvironmentStatus();
 
-        StatusMessage = status.IsReady ? "就绪" : "环境检测完成（部分工具缺失）";
+        StatusMessage = status.IsReady
+            ? "Ready"
+            : "Environment not ready. Please check Settings.";
     }
 }

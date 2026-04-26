@@ -1,4 +1,4 @@
-﻿<Window x:Class="EasyGet.MainWindow"
+<Window x:Class="EasyGet.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:EasyGet.ViewModels"
@@ -7,7 +7,11 @@
         Width="1280" Height="800"
         MinWidth="960" MinHeight="600"
         WindowStartupLocation="CenterScreen"
-        Background="{StaticResource BgPrimaryBrush}">
+        Background="{StaticResource BgPrimaryBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
 
     <!-- DataTemplate 映射 ViewModel → View -->
     <Window.Resources>
@@ -45,7 +49,17 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- 导航菜单 -->
+                <!-- 底部状态（必须在导航菜单之前声明，确保 DockPanel 为其预留空间） -->
+                <StackPanel DockPanel.Dock="Bottom" Margin="20,0,20,20">
+                    <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,12"/>
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="11" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="v1.0.0" Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="10" Margin="0,4,0,0" Opacity="0.5"/>
+                </StackPanel>
+
+                <!-- 导航菜单（LastChildFill 填充剩余空间） -->
                 <StackPanel Margin="12,0">
                     <RadioButton Style="{StaticResource NavRadioButton}"
                                  Command="{Binding NavigateCommand}" CommandParameter="download"
@@ -84,16 +98,6 @@
                     </RadioButton>
                 </StackPanel>
 
-                <!-- 底部状态 -->
-                <StackPanel DockPanel.Dock="Bottom" VerticalAlignment="Bottom" Margin="20,0,20,20">
-                    <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,12"/>
-                    <TextBlock Text="{Binding StatusMessage}"
-                               Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="11" TextTrimming="CharacterEllipsis"/>
-                    <TextBlock Text="v1.0.0" Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="10" Margin="0,4,0,0" Opacity="0.5"/>
-                </StackPanel>
-
             </DockPanel>
         </Border>
 
@@ -103,9 +107,9 @@
 
             <!-- Toast 通知 -->
             <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                    Margin="24" CornerRadius="10" Padding="16,10"
+                    Margin="24" CornerRadius="10" Padding="20,14"
                     Visibility="{Binding ShowNotification, Converter={StaticResource BoolToVisibility}}"
-                    Cursor="Hand">
+                    Cursor="Hand" Effect="{StaticResource PopupShadow}">
                 <Border.Style>
                     <Style TargetType="Border">
                         <Setter Property="Background" Value="#2D4A2D"/>
@@ -120,7 +124,7 @@
                     <MouseBinding MouseAction="LeftClick" Command="{Binding DismissNotificationCommand}"/>
                 </Border.InputBindings>
                 <StackPanel Orientation="Horizontal" MaxWidth="400">
-                    <TextBlock VerticalAlignment="Center" Margin="0,0,8,0" FontSize="14">
+                    <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="16">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Text" Value="✓"/>
@@ -136,8 +140,8 @@
                     </TextBlock>
                     <TextBlock Text="{Binding NotificationMessage}"
                                Foreground="{StaticResource TextPrimaryBrush}"
-                               FontSize="12" TextTrimming="CharacterEllipsis"
-                               VerticalAlignment="Center"/>
+                               FontSize="14" TextTrimming="CharacterEllipsis"
+                               VerticalAlignment="Center" TextWrapping="Wrap"/>
                 </StackPanel>
             </Border>
         </Grid>

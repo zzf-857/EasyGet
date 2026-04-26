@@ -36,10 +36,20 @@ public class HistoryService : IDisposable
                 quality TEXT NOT NULL DEFAULT '',
                 file_size INTEGER NOT NULL DEFAULT 0,
                 file_path TEXT NOT NULL DEFAULT '',
-                download_time TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+                download_time TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                thumbnail_url TEXT NOT NULL DEFAULT ''
             )
             """;
         cmd.ExecuteNonQuery();
+
+        // 兼容旧版数据库：尝试添加 thumbnail_url 列（已存在则忽略）
+        try
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE download_history ADD COLUMN thumbnail_url TEXT NOT NULL DEFAULT ''";
+            alter.ExecuteNonQuery();
+        }
+        catch { /* 列已存在，忽略 */ }
     }
 
     /// <summary>
@@ -49,8 +59,8 @@ public class HistoryService : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, download_time)
-            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $downloadTime)
+            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url)
+            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $downloadTime, $thumbnailUrl)
             """;
         cmd.Parameters.AddWithValue("$url", history.Url);
         cmd.Parameters.AddWithValue("$title", history.Title);
@@ -60,6 +70,7 @@ public class HistoryService : IDisposable
         cmd.Parameters.AddWithValue("$fileSize", history.FileSize);
         cmd.Parameters.AddWithValue("$filePath", history.FilePath);
         cmd.Parameters.AddWithValue("$downloadTime", history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss"));
+        cmd.Parameters.AddWithValue("$thumbnailUrl", history.ThumbnailUrl ?? "");
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -88,6 +99,9 @@ public class HistoryService : IDisposable
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
+            var thumbnailUrl = "";
+            try { thumbnailUrl = reader.GetString(reader.GetOrdinal("thumbnail_url")); } catch { }
+
             results.Add(new DownloadHistory
             {
                 Id = reader.GetInt64(0),
@@ -98,7 +112,8 @@ public class HistoryService : IDisposable
                 Quality = reader.GetString(5),
                 FileSize = reader.GetInt64(6),
                 FilePath = reader.GetString(7),
-                DownloadTime = DateTime.Parse(reader.GetString(8))
+                DownloadTime = DateTime.Parse(reader.GetString(8)),
+                ThumbnailUrl = thumbnailUrl
             });
         }
 

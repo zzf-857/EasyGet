@@ -38,6 +38,9 @@ public class AppConfig
     /// <summary>Cookie 原始内容（从浏览器复制的 cookie 字符串）</summary>
     public string CookieContent { get; set; } = "";
 
+    /// <summary>是否按平台自动归类下载文件到子文件夹</summary>
+    public bool AutoCategorizeByPlatform { get; set; } = true;
+
     /// <summary>应用窗口位置和大小</summary>
     public WindowState Window { get; set; } = new();
 }

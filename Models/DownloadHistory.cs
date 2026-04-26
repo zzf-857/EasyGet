@@ -1,9 +1,12 @@
+using System.IO;
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace EasyGet.Models;
 
 /// <summary>
 /// 下载历史记录模型
 /// </summary>
-public class DownloadHistory
+public partial class DownloadHistory : ObservableObject
 {
     /// <summary>主键 ID</summary>
     public long Id { get; set; }
@@ -31,6 +34,13 @@ public class DownloadHistory
 
     /// <summary>下载时间</summary>
     public DateTime DownloadTime { get; set; } = DateTime.Now;
+
+    /// <summary>缩略图 URL</summary>
+    public string ThumbnailUrl { get; set; } = "";
+
+    /// <summary>文件是否存在（用于 UI 灰显判断，由 ViewModel 异步刷新）</summary>
+    [ObservableProperty]
+    private bool _fileExists = true;
 
     /// <summary>
     /// 格式化的文件大小

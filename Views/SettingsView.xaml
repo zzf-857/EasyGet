@@ -14,11 +14,12 @@
                        Margin="0,0,0,32"/>
 
             <!-- ===== 环境检测 ===== -->
-            <TextBlock Text="环境检测" FontSize="16" FontWeight="Bold"
-                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+            <TextBlock Text="环境检测" FontSize="18" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Padding="20,16" Margin="0,0,0,24">
+                    Effect="{StaticResource SoftShadow}"
+                    Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <!-- yt-dlp -->
                     <Grid Margin="0,0,0,12">
@@ -128,11 +129,12 @@
             </Border>
 
             <!-- ===== 下载设置 ===== -->
-            <TextBlock Text="下载设置" FontSize="16" FontWeight="Bold"
-                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+            <TextBlock Text="下载设置" FontSize="18" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Padding="20,16" Margin="0,0,0,24">
+                    Effect="{StaticResource SoftShadow}"
+                    Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <!-- 默认下载目录 -->
                     <TextBlock Text="默认下载目录" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,6"/>
@@ -173,15 +175,31 @@
                                   ItemsSource="{Binding QualityOptions}"
                                   SelectedItem="{Binding DefaultQuality}"/>
                     </Grid>
+
+                    <!-- 自动按平台归类 -->
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="自动按平台归类" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="下载完成后自动将文件存入对应平台子目录（如 哔哩哔哩、YouTube 等）" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding AutoCategorizeByPlatform}"
+                                      VerticalAlignment="Center"/>
+                    </Grid>
                 </StackPanel>
             </Border>
 
             <!-- ===== 代理设置 ===== -->
-            <TextBlock Text="代理设置" FontSize="16" FontWeight="Bold"
-                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+            <TextBlock Text="代理设置" FontSize="18" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Padding="20,16" Margin="0,0,0,24">
+                    Effect="{StaticResource SoftShadow}"
+                    Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
@@ -202,28 +220,37 @@
             </Border>
 
             <!-- ===== Cookie 设置 ===== -->
-            <TextBlock Text="Cookie 设置" FontSize="16" FontWeight="Bold"
-                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+            <TextBlock Text="Cookie 设置" FontSize="18" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Padding="20,16" Margin="0,0,0,24">
+                    Effect="{StaticResource SoftShadow}"
+                    Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
-                    <TextBlock Text="抖音等平台需要登录 Cookie 才能下载视频" FontSize="13"
-                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
+                    <TextBlock Text="X(Twitter)、Instagram 等平台的年龄限制/私密视频需要登录 Cookie 才能下载" FontSize="13"
+                               Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,12" TextWrapping="Wrap"/>
 
                     <!-- 操作步骤提示 -->
-                    <Border Background="#11111B" CornerRadius="6" Padding="12,10" Margin="0,0,0,12">
+                    <Border Background="#11111B" CornerRadius="8" Padding="16,14" Margin="0,0,0,14">
                         <StackPanel>
-                            <TextBlock Text="获取 Cookie 步骤：" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,4"/>
-                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
-                                       Text="1. 用浏览器打开抖音网页版 (douyin.com) 并登录"/>
-                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
-                                       Text="2. 按 F12 打开开发者工具 → 切换到「网络/Network」标签"/>
-                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
-                                       Text="3. 刷新页面，点击任意请求，在「请求标头」中找到 Cookie"/>
-                            <TextBlock FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"
-                                       Text="4. 复制整行 Cookie 值，粘贴到下方输入框"/>
+                            <TextBlock Text="📋 如何获取 Cookie（以 Chrome + X 为例）" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}" Margin="0,0,0,8"/>
+                            <TextBlock FontSize="11" Foreground="#CDD6F4" TextWrapping="Wrap" Margin="0,2,0,2"
+                                       Text="① 打开 Chrome，登录 x.com（用你要下载视频的那个账号）"/>
+                            <TextBlock FontSize="11" Foreground="#CDD6F4" TextWrapping="Wrap" Margin="0,2,0,2"
+                                       Text="② 在 x.com 页面上按 F12 打开开发者工具"/>
+                            <TextBlock FontSize="11" Foreground="#CDD6F4" TextWrapping="Wrap" Margin="0,2,0,2"
+                                       Text="③ 点顶部的「Network / 网络」标签页"/>
+                            <TextBlock FontSize="11" Foreground="#CDD6F4" TextWrapping="Wrap" Margin="0,2,0,2"
+                                       Text="④ 按 F5 刷新页面，左侧会出现一堆请求列表"/>
+                            <TextBlock FontSize="11" Foreground="#CDD6F4" TextWrapping="Wrap" Margin="0,2,0,2"
+                                       Text="⑤ 点击列表中任意一条请求（比如第一个）"/>
+                            <TextBlock FontSize="11" Foreground="#CDD6F4" TextWrapping="Wrap" Margin="0,2,0,2"
+                                       Text="⑥ 在右侧「Headers / 标头」面板中往下找到「Request Headers / 请求标头」"/>
+                            <TextBlock FontSize="11" Foreground="#A6E3A1" TextWrapping="Wrap" Margin="0,4,0,2" FontWeight="SemiBold"
+                                       Text="⑦ 找到 cookie: 那一行 → 右键点击值 → 复制值 → 粘贴到下方输入框"/>
+                            <TextBlock FontSize="10" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="💡 Cookie 通常很长（一整行），形如 ct0=abc123; auth_token=xyz789; guest_id=..."/>
                         </StackPanel>
                     </Border>
 
@@ -248,11 +275,12 @@
             </Border>
 
             <!-- ===== 性能设置 ===== -->
-            <TextBlock Text="性能设置" FontSize="16" FontWeight="Bold"
-                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,12"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
+            <TextBlock Text="性能设置" FontSize="18" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
+            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Padding="20,16" Margin="0,0,0,24">
+                    Effect="{StaticResource SoftShadow}"
+                    Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <!-- 并发分片 -->
                     <Grid Margin="0,0,0,16">

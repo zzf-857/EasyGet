@@ -16,6 +16,8 @@
             <converters:PlatformToColorConverter x:Key="PlatformToColor"/>
             <converters:IntToBoolConverter x:Key="IntToBoolConverter"/>
             <converters:CookieStatusConverter x:Key="CookieStatusConverter"/>
+            <converters:StringToVisibilityConverter x:Key="StringToVisibility"/>
+            <converters:FileExistsToOpacityConverter x:Key="FileExistsToOpacity"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

@@ -34,10 +34,27 @@
                     Command="{Binding ClearAllCommand}"/>
         </Grid>
 
-        <!-- 历史列表 -->
-        <ListBox Grid.Row="2" ItemsSource="{Binding HistoryItems}"
-                 Background="Transparent" BorderThickness="0"
-                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+        <!-- 历史列表与空状态 -->
+        <Grid Grid.Row="2">
+            <!-- 空状态提示 -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,80">
+                <StackPanel.Style>
+                    <Style TargetType="StackPanel">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HistoryItems.Count}" Value="0">
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </StackPanel.Style>
+                <TextBlock Text="📭" FontSize="56" Foreground="{StaticResource BorderSubtleBrush}" HorizontalAlignment="Center" Opacity="0.5"/>
+                <TextBlock Text="暂无下载历史" FontSize="15" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+            </StackPanel>
+
+            <ListBox ItemsSource="{Binding HistoryItems}"
+                     Background="Transparent" BorderThickness="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemContainerStyle>
                 <Style TargetType="ListBoxItem">
                     <Setter Property="Padding" Value="0"/>
@@ -56,27 +73,45 @@
                 <DataTemplate>
                     <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
                             BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                            Padding="16,12">
+                            Padding="14,10"
+                            Opacity="{Binding FileExists, Converter={StaticResource FileExistsToOpacity}}"
+                            ToolTip="{Binding FilePath}">
                         <Grid>
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="4"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
+                            <!-- 缩略图 -->
+                            <Border Grid.Column="0" Width="72" Height="46" CornerRadius="4"
+                                    ClipToBounds="True" Background="#222">
+                                <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"
+                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                            </Border>
+
                             <!-- 平台色条 -->
-                            <Border Grid.Column="0" CornerRadius="2" Width="4"
+                            <Border Grid.Column="1" CornerRadius="2" Width="4" Margin="8,0,0,0"
                                     Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"/>
 
                             <!-- 内容 -->
-                            <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                                <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           TextTrimming="CharacterEllipsis"/>
+                            <StackPanel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center">
+                                <DockPanel>
+                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                </DockPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                    <TextBlock Text="{Binding Platform}" FontSize="11"
-                                               Foreground="{StaticResource AccentBrush}" FontWeight="Medium"/>
-                                    <TextBlock Text="{Binding Format, StringFormat=' · {0}'}" FontSize="11"
+                                    <!-- 平台标签 -->
+                                    <Border Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"
+                                            CornerRadius="3" Padding="6,1" Margin="0,0,6,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding Platform, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                                        <TextBlock Text="{Binding Platform}" FontSize="10"
+                                                   Foreground="White" FontWeight="Medium"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding Format}" FontSize="11"
                                                Foreground="{StaticResource TextMutedBrush}"/>
                                     <TextBlock Text="{Binding FileSizeText, StringFormat=' · {0}', Mode=OneWay}" FontSize="11"
                                                Foreground="{StaticResource TextMutedBrush}"/>
@@ -86,9 +121,20 @@
                             </StackPanel>
 
                             <!-- 操作 -->
-                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Background="Transparent" Cursor="Hand">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Opacity" Value="0.25"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Opacity" Value="1"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
                                 <Button Style="{StaticResource SurfaceButton}" Content="📂"
                                         ToolTip="打开文件夹" Padding="8,5"
+                                        IsEnabled="{Binding FileExists}"
                                         Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding FilePath}"/>
                                 <Button Style="{StaticResource SurfaceButton}" Content="🗑"
@@ -101,5 +147,6 @@
                 </DataTemplate>
             </ListBox.ItemTemplate>
         </ListBox>
+        </Grid>
     </Grid>
 </UserControl>

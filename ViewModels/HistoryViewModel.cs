@@ -35,6 +35,22 @@ public partial class HistoryViewModel : ObservableObject
         if (items == null) return;
         foreach (var item in items)
             HistoryItems.Add(item);
+
+        // 异步检查文件是否存在，避免在 UI 线程同步读取磁盘/网络驱动器导致卡顿
+        _ = Task.Run(() =>
+        {
+            foreach (var item in items)
+            {
+                var exists = !string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath);
+                if (item.FileExists != exists)
+                {
+                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
+                        item.FileExists = exists;
+                    });
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -71,22 +87,27 @@ public partial class HistoryViewModel : ObservableObject
     /// 打开文件所在文件夹
     /// </summary>
     [RelayCommand]
-    private void OpenFolder(string filePath)
+    private async Task OpenFolder(string filePath)
     {
         if (string.IsNullOrEmpty(filePath)) return;
-        try
+
+        // 放到后台线程去查询目录和启动 Explorer，避免卡死 UI 线程
+        await Task.Run(() =>
         {
-            var dir = System.IO.Path.GetDirectoryName(filePath);
-            if (dir != null && System.IO.Directory.Exists(dir))
+            try
             {
-                Process.Start(new ProcessStartInfo
+                var dir = System.IO.Path.GetDirectoryName(filePath);
+                if (dir != null && System.IO.Directory.Exists(dir))
                 {
-                    FileName = "explorer.exe",
-                    Arguments = $"/select,\"{filePath}\"",
-                    UseShellExecute = true
-                });
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{filePath}\"",
+                        UseShellExecute = true
+                    });
+                }
             }
-        }
-        catch { }
+            catch { }
+        });
     }
 }

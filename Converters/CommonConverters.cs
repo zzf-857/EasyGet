@@ -127,6 +127,18 @@ public class CookieStatusConverter : IValueConverter
 }
 
 /// <summary>
+/// 字符串非空 → Visible, 空 → Collapsed
+/// </summary>
+public class StringToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => string.IsNullOrWhiteSpace(value as string) ? Visibility.Collapsed : Visibility.Visible;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
 /// 整数 → 布尔转换器（比较 ConverterParameter）
 /// </summary>
 public class IntToBoolConverter : IValueConverter
@@ -162,5 +174,17 @@ public class NavIndexToBackgroundConverter : IMultiValueConverter
     }
 
     public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
+/// 文件存在 → 透明度转换器（不存在时变灰）
+/// </summary>
+public class FileExistsToOpacityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is true ? 1.0 : 0.4;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
