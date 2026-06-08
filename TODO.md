@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 为 yt-dlp 下载增加网络重试参数
+  - 内容：为长下载参数追加 `--retries 20`、`--fragment-retries 30`、`--socket-timeout 30` 和线性 `--retry-sleep`，让普通网络抖动、分片失败和连接卡顿更容易由 yt-dlp 自身恢复，降低偶发失败概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpArgsTests` 观察到缺少 `AddNetworkReliabilityArgs` 的编译失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，57 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`增强 yt-dlp 网络重试参数`
+
 - [x] 2026-06-09 为主要按钮样式补充禁用态视觉
   - 内容：为 `AccentButton` 和 `SurfaceButton` 增加 `IsEnabled=False` 视觉状态，禁用时降低透明度、恢复普通光标并关闭 hover overlay，让检测、安装、更新等忙碌态按钮更明确地不可操作。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到两个按钮样式缺少禁用态触发器的测试失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，56 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

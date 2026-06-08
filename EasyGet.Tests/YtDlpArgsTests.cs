@@ -27,4 +27,30 @@ public class YtDlpArgsTests
         Assert.Contains(@"C:\Tools\aria2c.exe", args);
         Assert.Contains("--external-downloader-args", args);
     }
+
+    [Fact]
+    public void AddNetworkReliabilityArgs_ConfiguresRetriesTimeoutAndBackoff()
+    {
+        var args = new List<string>();
+
+        YtDlpService.AddNetworkReliabilityArgs(args);
+
+        AssertOptionValue(args, "--retries", "20");
+        AssertOptionValue(args, "--fragment-retries", "30");
+        AssertOptionValue(args, "--socket-timeout", "30");
+        AssertOptionValue(args, "--retry-sleep", "linear=1:5:1");
+        AssertOptionValue(args, "--retry-sleep", "fragment:linear=1:5:1");
+    }
+
+    private static void AssertOptionValue(List<string> args, string option, string expectedValue)
+    {
+        var optionIndexes = args
+            .Select((value, index) => (value, index))
+            .Where(item => item.value == option)
+            .Select(item => item.index)
+            .ToList();
+
+        Assert.NotEmpty(optionIndexes);
+        Assert.Contains(optionIndexes, index => index + 1 < args.Count && args[index + 1] == expectedValue);
+    }
 }

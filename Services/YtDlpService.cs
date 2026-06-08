@@ -350,6 +350,8 @@ public partial class YtDlpService
         args.Add("--progress-template");
         args.Add("download:%(progress._percent_str)s %(progress._speed_str)s ETA %(progress._eta_str)s");
 
+        AddNetworkReliabilityArgs(args);
+
         var fragments = Math.Clamp(
             _configService.Config.ConcurrentFragments,
             AppConfig.MinConcurrentFragments,
@@ -398,6 +400,20 @@ public partial class YtDlpService
         args.Add(aria2cPath);
         args.Add("--external-downloader-args");
         args.Add("aria2c:--min-split-size=1M --max-connection-per-server=16 --split=16");
+    }
+
+    internal static void AddNetworkReliabilityArgs(List<string> args)
+    {
+        args.Add("--retries");
+        args.Add("20");
+        args.Add("--fragment-retries");
+        args.Add("30");
+        args.Add("--socket-timeout");
+        args.Add("30");
+        args.Add("--retry-sleep");
+        args.Add("linear=1:5:1");
+        args.Add("--retry-sleep");
+        args.Add("fragment:linear=1:5:1");
     }
 
     private static string BuildFormatString(string format, string quality)
