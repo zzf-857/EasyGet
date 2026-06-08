@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 为主要按钮样式补充禁用态视觉
+  - 内容：为 `AccentButton` 和 `SurfaceButton` 增加 `IsEnabled=False` 视觉状态，禁用时降低透明度、恢复普通光标并关闭 hover overlay，让检测、安装、更新等忙碌态按钮更明确地不可操作。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到两个按钮样式缺少禁用态触发器的测试失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，56 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`补充按钮禁用态样式`
+
 - [x] 2026-06-09 增强设置页安装进度阶段展示
   - 内容：为设置页环境安装反馈增加 `InstallStatusStage`，将安装日志归类为“检测中 / 准备安装 / 下载中 / 解压中 / 完成 / 失败”等阶段，并在安装状态区域显示阶段标签和原始说明，方便用户快速判断当前卡在哪一步或失败原因。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~SettingsViewModelTests|FullyQualifiedName~XamlBindingTests"` 观察到缺少 `DescribeInstallStatusStage` 的编译失败；实现后同命令 17 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，54 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
