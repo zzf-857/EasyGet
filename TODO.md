@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补齐下载管理器并发上限归一化测试
+  - 内容：为 `DownloadManager` 增加并发上限归一化 helper 和测试，构造函数与动态更新共用同一套 clamp 规则，避免 0、负数或超大并发值绕过配置归一化后进入队列管理器。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadManagerTests` 观察到缺少目标 API 的编译失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，38 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
+  - 提交说明：`补齐下载并发上限测试`
+
 - [x] 2026-06-09 清理抖音兜底下载取消后的临时文件
   - 内容：为抖音浏览器兜底直链下载增加慢速响应取消测试；下载循环、字节校验或取消发生异常时删除 `.part` 临时文件，避免取消后下载目录残留半截文件。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DouyinBrowserDownloadServiceTests` 观察到取消后 `.part` 仍存在的测试失败；修复后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，34 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
@@ -61,7 +66,6 @@
 ## 候选优化池
 
 - [ ] 下载可靠性：为抖音浏览器兜底下载增加网络中断和真实站点回归验证，降低大文件失败概率。
-- [ ] 下载可靠性：为动态并发调整增加单元测试或可验证的服务级测试，避免缩小并发时吞掉许可。
 - [ ] 下载可靠性：为 yt-dlp 长下载进程增加无输出超时、stderr 诊断与卡住保护。
 - [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。
 - [ ] UI 现代化：统一按钮图标和控件圆角/密度，降低 emoji 按钮带来的视觉不一致。

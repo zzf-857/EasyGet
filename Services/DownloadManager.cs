@@ -29,7 +29,7 @@ public class DownloadManager
         _ytDlpService = ytDlpService;
         _historyService = historyService;
         _configService = configService;
-        _currentConcurrencyLimit = configService.Config.MaxConcurrentDownloads;
+        _currentConcurrencyLimit = NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads);
         _semaphore = new SemaphoreSlim(_currentConcurrencyLimit, 100);
     }
 
@@ -38,10 +38,7 @@ public class DownloadManager
     /// </summary>
     public void UpdateConcurrencyLimit(int maxConcurrent)
     {
-        maxConcurrent = Math.Clamp(
-            maxConcurrent,
-            AppConfig.MinConcurrentDownloadLimit,
-            AppConfig.MaxConcurrentDownloadLimit);
+        maxConcurrent = NormalizeConcurrencyLimit(maxConcurrent);
 
         lock (_concurrencyLock)
         {
@@ -63,6 +60,14 @@ public class DownloadManager
                 });
             }
         }
+    }
+
+    internal static int NormalizeConcurrencyLimit(int maxConcurrent)
+    {
+        return Math.Clamp(
+            maxConcurrent,
+            AppConfig.MinConcurrentDownloadLimit,
+            AppConfig.MaxConcurrentDownloadLimit);
     }
 
     /// <summary>
