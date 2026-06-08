@@ -890,7 +890,13 @@ public partial class YtDlpService
         {
             await process.WaitForExitAsync(timeoutCts.Token);
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            await DrainProcessOutputAsync(stdoutTask, stderrTask);
+            throw;
+        }
+        catch (OperationCanceledException)
         {
             TryKill(process);
             await DrainProcessOutputAsync(stdoutTask, stderrTask);

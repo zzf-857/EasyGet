@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 修复 yt-dlp 短命令取消后子进程残留
+  - 内容：`YtDlpService.RunProcessAsync` 在用户取消时也会结束子进程并清理输出任务，避免短命令取消后后台进程继续执行。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProcessTests` 观察到取消后 marker 文件仍被写入的测试失败；修复后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，32 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
+  - 提交说明：`修复 yt-dlp 短命令取消清理`
+
 - [x] 2026-06-09 为 yt-dlp 信息解析进程增加 stderr 与超时保护
   - 内容：新增 `YtDlpService.RunProcessAsync`，用于信息解析和播放列表导入等短命令；并发读取 stdout/stderr，避免 stderr 堵塞；默认 60 秒超时，超时后结束进程并抛出 `TimeoutException`。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProcessTests` 观察到缺少目标 API 的编译失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，31 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
