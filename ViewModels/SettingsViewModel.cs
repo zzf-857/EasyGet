@@ -34,6 +34,8 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool _isUpdatingYtDlp;
     [ObservableProperty] private string _updateStatusMessage = "";
+    [ObservableProperty] private bool _isInstallingTools;
+    [ObservableProperty] private string _installStatusMessage = "";
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
     public string[] QualityOptions { get; } = ["最高画质", "2160p", "1080p", "720p", "480p"];
@@ -92,9 +94,35 @@ public partial class SettingsViewModel : ObservableObject
     private async Task CheckEnvironment()
     {
         IsCheckingEnv = true;
-        await _envService.CheckEnvironmentAsync();
-        RefreshEnvironmentStatus();
-        IsCheckingEnv = false;
+        try
+        {
+            await _envService.CheckEnvironmentAsync();
+            RefreshEnvironmentStatus();
+        }
+        finally
+        {
+            IsCheckingEnv = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task InstallMissingTools()
+    {
+        IsInstallingTools = true;
+        InstallStatusMessage = "";
+        try
+        {
+            await _envService.InstallMissingToolsAsync(new Progress<string>(s => InstallStatusMessage = s));
+            RefreshEnvironmentStatus();
+        }
+        catch (Exception ex)
+        {
+            InstallStatusMessage = $"安装失败: {ex.Message}";
+        }
+        finally
+        {
+            IsInstallingTools = false;
+        }
     }
 
     [RelayCommand]

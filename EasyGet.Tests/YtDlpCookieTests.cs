@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using System.Reflection;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -46,5 +47,41 @@ public class YtDlpCookieTests
             1);
 
         Assert.Contains("YouTube 下载被风控拦截", message);
+    }
+
+    [Fact]
+    public void ShouldRetryWithNextCookieStrategy_RetriesDouyinAfterBrowserCookieDatabaseFailure()
+    {
+        var method = typeof(YtDlpService).GetMethod(
+            "ShouldRetryWithNextCookieStrategy",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+
+        var shouldRetry = (bool)method!.Invoke(null, new object[]
+        {
+            "https://v.douyin.com/i6EpMYVJgA8/",
+            new List<string> { "ERROR: Could not copy Chrome cookie database." }
+        })!;
+
+        Assert.True(shouldRetry);
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessage_ExplainsDouyinFreshCookiesAfterBrowserCookieFailures()
+    {
+        var stderrLines = new[]
+        {
+            "ERROR: [Douyin] 7621772413184822582: Fresh cookies (not necessarily logged in) are needed",
+            "ERROR: Could not copy Chrome cookie database."
+        };
+
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://v.douyin.com/i6EpMYVJgA8/",
+            stderrLines,
+            1);
+
+        Assert.Contains("抖音", message);
+        Assert.Contains("最新 Cookie", message);
     }
 }

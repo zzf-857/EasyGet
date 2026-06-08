@@ -1,6 +1,8 @@
 # EasyGet 项目分析与开发进度追踪
 
-基于 yt-dlp 的全平台视频下载 WPF 桌面应用，采用 .NET 8 + MVVM 架构，当前处于 **v1.0.0 初始功能开发阶段**，核心下载流程已基本搭建完成，但存在多项功能缺失和质量短板。
+基于 yt-dlp 的全平台视频下载 WPF 桌面应用，采用 .NET 8 + MVVM 架构，当前处于 **v1.0.0 功能硬化阶段**。核心下载、批量队列、历史记录、设置页、环境检测、Cookie 处理和基础通知能力已基本完成，后续重点应放在下载失败率、真实站点端到端验证、UI 现代化和工程化发布。
+
+> 2026-06-09 体检基线：`dotnet test EasyGet.Tests\EasyGet.Tests.csproj` 通过，17 个测试全部通过。
 
 ---
 
@@ -33,10 +35,10 @@
 | 文件 | 职责 | 状态 | 备注 |
 |---|---|---|---|
 | `ConfigService.cs` | JSON 配置读写 | ✅ 完成 | 简洁可靠 |
-| `EnvironmentService.cs` | yt-dlp/ffmpeg 环境检测与自动安装 | ✅ 完成 | 有下载进度但无百分比展示 |
+| `EnvironmentService.cs` | yt-dlp/ffmpeg 环境检测、自动安装、手动安装与 yt-dlp 更新 | ✅ 完成 | 已有分阶段日志和下载百分比，仍需真实网络失败场景验证 |
 | `HistoryService.cs` | SQLite 历史记录 CRUD | ✅ 完成 | |
-| `YtDlpService.cs` | yt-dlp 命令封装（获取信息/下载/进度解析） | ✅ 完成 | 核心服务 |
-| `DownloadManager.cs` | 下载队列管理器（并发控制） | ⚠️ 部分完成 | `UpdateConcurrencyLimit` 未实现 |
+| `YtDlpService.cs` | yt-dlp 命令封装（获取信息/下载/进度解析、Cookie 策略、aria2c 参数、抖音兜底） | ✅ 完成 | 核心服务，建议继续补真实站点回归 |
+| `DownloadManager.cs` | 下载队列管理器（并发控制、暂停/恢复、重试、取消、完成通知） | ✅ 基本完成 | 动态并发已有实现，建议补并发调整测试 |
 
 ### 2.3 ViewModels 层 — ⚠️ 基本完成，部分逻辑待补
 
@@ -44,7 +46,7 @@
 |---|---|---|---|
 | `MainViewModel.cs` | 导航与全局状态 / 启动初始化 | ✅ 完成 | |
 | `DownloadViewModel.cs` | 单视频下载页逻辑 | ✅ 完成 | |
-| `BatchDownloadViewModel.cs` | 批量下载页逻辑 | ⚠️ 基本完成 | 缺少单任务取消按钮的绑定 |
+| `BatchDownloadViewModel.cs` | 批量下载页逻辑 | ✅ 基本完成 | 已支持单任务暂停、恢复、重试、取消/移除 |
 | `HistoryViewModel.cs` | 历史记录页逻辑 | ✅ 完成 | |
 | `SettingsViewModel.cs` | 设置页逻辑（自动保存） | ✅ 完成 | |
 
@@ -54,7 +56,7 @@
 |---|---|---|---|
 | `MainWindow.xaml` | 主窗口 + 侧边栏导航 + ContentControl 页面路由 | ✅ 完成 | |
 | `DownloadView.xaml` | 单视频下载 UI | ✅ 完成 | |
-| `BatchDownloadView.xaml` | 批量下载 UI（URL 输入 + 队列列表） | ⚠️ 基本完成 | 队列中缺少取消单任务按钮 |
+| `BatchDownloadView.xaml` | 批量下载 UI（URL 输入 + 队列列表） | ✅ 基本完成 | 已有队列单任务操作按钮，后续可统一视觉风格 |
 | `HistoryView.xaml` | 历史记录列表 UI | ✅ 完成 | |
 | `SettingsView.xaml` | 设置面板 UI（环境检测/下载/代理/性能） | ✅ 完成 | |
 
@@ -79,16 +81,19 @@
 - [x] **MVVM 架构 + 依赖注入**完整搭建
 - [x] **侧边导航栏** — 4 个页面切换（下载/批量/历史/设置）
 - [x] **单视频下载** — URL 输入、格式/画质/字幕选择、目录浏览、进度展示、取消
-- [x] **批量下载** — 多 URL 文本输入、链接计数、队列展示
+- [x] **批量下载** — 多 URL 文本输入、链接计数、播放列表导入、队列展示、并发控制、单任务操作
 - [x] **历史记录** — SQLite 持久化、搜索、单条删除、清空、打开文件夹
-- [x] **设置页** — 环境检测状态、默认下载路径/格式/画质、代理开关与地址、并发分片数/同时下载数
-- [x] **环境自动检测** — 启动时自动检测 yt-dlp/ffmpeg，缺失则自动下载安装
-- [x] **yt-dlp 集成** — `--dump-json` 获取视频信息、完整下载参数构建、实时进度解析
+- [x] **设置页** — 环境检测状态、默认下载路径/格式/画质、代理开关与地址、Cookie、aria2c、并发分片数/同时下载数
+- [x] **环境自动检测** — 启动时自动检测 yt-dlp/ffmpeg，缺失则自动下载安装，设置页可手动重试
+- [x] **yt-dlp 集成** — `--dump-json` 获取视频信息、完整下载参数构建、实时进度解析、Cookie 自动转换与浏览器 Cookie 策略
 - [x] **代理支持** — HTTP / SOCKS5 代理传递给 yt-dlp
 - [x] **暗色主题** — Catppuccin Mocha 色板，自定义控件模板
 - [x] **全局异常捕获** — `AppDomain.UnhandledException` + `DispatcherUnhandledException`，日志写入 `logs/` 目录
 - [x] **配置持久化** — JSON 格式，设置变更自动保存
 - [x] **剪贴板粘贴** — 单视频和批量页都支持
+- [x] **下载完成/失败/取消 Toast** — 应用内通知，可点击关闭
+- [x] **窗口位置/大小持久化** — 退出时保存普通窗口状态，下次启动恢复
+- [x] **抖音浏览器兜底下载** — yt-dlp 抽取失败后可用本机 Chrome/Edge headless 捕获 mp4 响应并下载
 
 ---
 
@@ -96,32 +101,26 @@
 
 ### 🔴 高优先级
 
-1. **aria2c 加速未实现** — `AppConfig.UseAria2c` 已定义，设置页有开关，但 `YtDlpService` 中未使用 `--external-downloader aria2c` 参数
-2. **并发数动态调整未实现** — `DownloadManager.UpdateConcurrencyLimit()` 方法体为空注释 `// SemaphoreSlim 不支持动态修改`
-3. **下载完成后 IsDownloading 状态不准确** — `DownloadViewModel.StartDownload()` 中 `EnqueueAsync` 返回后即检查状态，但下载实际在 `Task.Run` 中异步执行，状态可能不正确
-4. **窗口位置/大小持久化未实现** — `AppConfig.WindowState` 已定义但 `MainWindow` 未读写
-5. **批量下载队列缺少单任务取消按钮** — `BatchDownloadViewModel.CancelTaskCommand` 已定义但 View 中未绑定
+1. **真实站点端到端验证不足** — YouTube、抖音、Bilibili、X 等站点的 Cookie、风控、代理、失败重试仍需要真实 URL 回归验证
+2. **aria2c 可用性未检测** — 已集成 `--external-downloader aria2c` 参数，但启用前未确认本机存在 aria2c，可导致用户开启后下载失败
+3. **抖音浏览器兜底仍需异常场景硬化** — 已实现 Chrome/Edge headless 捕获 mp4 下载，但还需要覆盖超时、Range 续传、临时文件清理和无浏览器场景
+4. **并发动态调整缺少测试** — `UpdateConcurrencyLimit()` 已实现，但缩小并发上限时异步占用许可的行为需要专门测试
+5. **暂停/恢复需要真实下载验证** — 当前通过取消进程并重新入队依赖 yt-dlp/HTTP 续传，需验证不同站点和格式的恢复行为
 
 ### 🟡 中优先级
 
-6. **yt-dlp 更新功能缺失** — 无 `yt-dlp -U` 更新入口
-7. **下载暂停/恢复未实现** — `DownloadStatus.Paused` 已定义但无暂停逻辑
-8. **导航按钮无选中高亮** — `NavIndexToBackgroundConverter` 已定义但 `MainWindow.xaml` 导航按钮未使用
-9. **日志自动滚动到底部未实现** — `DownloadView.xaml` 中 LogList 无自动滚动行为
-10. **ComboBox 下拉样式不完整** — `DarkComboBox` 只设了基础属性，未自定义 Popup/Item 模板，下拉框可能白底
-11. **无任务完成通知** — 缺少系统托盘通知或 Toast 提示
-12. **缺少错误重试机制** — 下载失败后无重试入口
+6. **UI 视觉风格仍偏早期原型** — 暗色主题已完成，但 emoji 按钮、列表操作区、设置页密度和控件状态还可统一成更现代的 Fluent/Material 风格
+7. **ComboBox 下拉样式需继续检查** — `DarkComboBox` 已有基础样式，但 Popup/Item 状态仍需视觉验收
+8. **设置页安装体验可增强** — 当前显示文本进度，后续可拆分检测、下载、解压、完成/失败状态，并提供更清楚的失败建议
+9. **日志和运行时诊断仍弱** — 有崩溃日志和下载日志列表，但缺少结构化运行日志与可导出诊断包
+10. **系统托盘或系统级通知缺失** — 目前是应用内 Toast，后台下载时仍需要系统级提示
 
 ### 🟢 低优先级
 
-13. **无单元测试** — 项目无测试项目
-14. **无应用图标** — `Assets/` 目录为空，无 `.ico` 文件
-15. **无安装程序/发布配置** — 缺少 MSIX / Inno Setup / 单文件发布配置
-16. **无国际化 (i18n)** — UI 文字硬编码中文
-17. **无日志框架** — 仅有崩溃日志，无运行时日志（如 Serilog）
-18. **无自动更新机制** — 应用自身无检查更新功能
-19. **缩略图未展示** — `DownloadTask.ThumbnailUrl` 已获取但 UI 未显示
-20. **播放列表支持不完整** — yt-dlp 支持播放列表 URL，但 UI 无播放列表专属处理
+11. **发布配置不完整** — 缺少 MSIX / Inno Setup / 单文件发布脚本和发布检查清单
+12. **国际化 (i18n) 未实现** — UI 文字硬编码中文
+13. **应用自身自动更新缺失** — 仅支持 yt-dlp 更新
+14. **UI 自动化测试缺失** — 已有基础单元测试，但没有 WPF 交互测试或截图回归
 
 ---
 
@@ -135,7 +134,7 @@
 - 全局异常处理机制到位
 
 ### 待改进
-- **线程安全** — `DownloadManager.EnqueueAsync` 中 `Task.Run` 内直接修改 UI 绑定属性，依赖 `ObservableObject` 的线程行为，但 `ObservableCollection<DownloadTask>` 的 `Add` 在 UI 线程调用尚可，后续操作在后台线程可能引发异常
+- **线程安全** — 下载进度已通过 Dispatcher 回到 UI 线程，但状态、历史写入、队列移除等路径仍建议继续审查
 - **资源释放** — `YtDlpService` 中的 `HttpClient` 未托管（在 `EnvironmentService` 中），`Process` 对象的 `Kill` 异常处理过于宽泛
 - **硬编码** — 格式/画质的中文显示文本和内部值转换分散在多个 ViewModel 中，存在重复
 - **异常处理** — 多处 `catch { }` 空捕获，可能隐藏问题
@@ -145,19 +144,22 @@
 ## 六、建议开发路线图
 
 ### Phase 1 — Bug 修复与功能补全（当前阶段）
-- [ ] 修复 `IsDownloading` 状态追踪问题
-- [ ] 实现 aria2c 外部下载器集成
-- [ ] 实现窗口位置/大小持久化
-- [ ] 批量下载视图添加单任务取消按钮
-- [ ] 导航按钮添加选中高亮
+- [x] 实现 aria2c 外部下载器参数集成
+- [x] 实现窗口位置/大小持久化
+- [x] 批量下载视图添加单任务操作按钮
+- [x] 添加应用内 Toast 通知
+- [x] 添加日志自动滚动
+- [x] 添加 yt-dlp/ffmpeg 自动安装和设置页手动安装
+- [x] 添加抖音浏览器兜底下载
+- [ ] 为 aria2c 增加可用性检测和失败提示
+- [ ] 补并发动态调整测试
+- [ ] 补抖音兜底异常场景测试
 
 ### Phase 2 — 用户体验提升
-- [ ] 日志自动滚动
 - [ ] 完善 ComboBox 下拉样式（暗色下拉面板）
-- [ ] 添加应用图标
-- [ ] 缩略图展示
-- [ ] 下载完成 Toast 通知
-- [ ] 失败任务重试按钮
+- [ ] 统一按钮图标和操作区视觉风格
+- [ ] 增强设置页安装进度和错误提示
+- [ ] 系统级通知或托盘入口
 
 ### Phase 3 — 高级功能
 - [ ] 下载暂停/恢复

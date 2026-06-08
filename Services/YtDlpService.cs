@@ -354,6 +354,14 @@ public partial class YtDlpService
             break;
         }
 
+        if (IsDouyinUrl(task.Url) && task.Format.Equals("mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            logCallback?.Invoke("[yt-dlp] Douyin extractor failed; trying browser fallback...");
+            var fallback = new DouyinBrowserDownloadService();
+            if (await fallback.TryDownloadAsync(task, progress, logCallback, ct))
+                return;
+        }
+
         task.Status = DownloadStatus.Failed;
         task.ErrorMessage = BuildDownloadFailureMessage(task.Url, allStderr.Count > 0 ? allStderr : lastStderr, lastExitCode);
 
@@ -579,14 +587,14 @@ public partial class YtDlpService
         if (IsDouyinUrl(url))
         {
             return stderrLines.Any(line =>
-                line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase));
+                line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase))
+                || stderrLines.Any(IsBrowserCookieAccessError);
         }
 
         if (IsYoutubeUrl(url))
         {
             return stderrLines.Any(IsYoutubeBotOrForbiddenError)
-                   || stderrLines.Any(line => line.Contains("Could not copy Chrome cookie database", StringComparison.OrdinalIgnoreCase))
-                   || stderrLines.Any(line => line.Contains("Failed to decrypt with DPAPI", StringComparison.OrdinalIgnoreCase));
+                   || stderrLines.Any(IsBrowserCookieAccessError);
         }
 
         return false;
@@ -599,9 +607,22 @@ public partial class YtDlpService
                || line.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsBrowserCookieAccessError(string line)
+    {
+        return line.Contains("Could not copy Chrome cookie database", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Could not copy cookie database", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Failed to decrypt with DPAPI", StringComparison.OrdinalIgnoreCase);
+    }
+
     internal static string BuildDownloadFailureMessage(string url, IEnumerable<string> stderrLines, int exitCode)
     {
         var lines = stderrLines.ToList();
+
+        if (IsDouyinUrl(url) && (lines.Any(line => line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase))
+            || lines.Any(IsBrowserCookieAccessError)))
+        {
+            return "抖音需要最新 Cookie，但自动读取浏览器 Cookie 失败或 Cookie 已失效。请关闭 Chrome/Edge 后重试，或在设置中粘贴最新抖音 Cookie。";
+        }
 
         if (IsYoutubeUrl(url) && lines.Any(IsYoutubeBotOrForbiddenError))
         {

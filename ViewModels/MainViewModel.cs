@@ -103,13 +103,30 @@ public partial class MainViewModel : ObservableObject
         SettingsVM.Initialize();
         DownloadVM.Initialize();
 
-        StatusMessage = "Checking environment...";
+        StatusMessage = "正在检查运行环境...";
         var status = await _envService.CheckEnvironmentAsync();
+
+        if (!status.IsReady)
+        {
+            var missingTools = string.Join("、", EnvironmentService.GetMissingToolNames(status));
+            StatusMessage = $"正在安装缺失组件: {missingTools}";
+            try
+            {
+                status = await _envService.InstallMissingToolsAsync(new Progress<string>(s => StatusMessage = s));
+            }
+            catch (Exception ex)
+            {
+                StatusMessage = "环境安装失败，请在设置页重试或手动安装。";
+                NotificationMessage = $"环境安装失败: {ex.Message}";
+                IsNotificationSuccess = false;
+                ShowNotification = true;
+            }
+        }
 
         SettingsVM.RefreshEnvironmentStatus();
 
         StatusMessage = status.IsReady
             ? "Ready"
-            : "Environment not ready. Please check Settings.";
+            : "环境未就绪，请检查设置。";
     }
 }

@@ -120,10 +120,7 @@ public class DownloadManager
             {
                 var progress = new Progress<DownloadProgress>(p =>
                 {
-                    task.Progress = p.Percent;
-                    task.Speed = p.Speed;
-                    task.Eta = p.Eta;
-                    task.DownloadedSize = p.Downloaded;
+                    ApplyProgress(task, p);
                 });
 
                 await _ytDlpService.DownloadAsync(
@@ -217,10 +214,7 @@ public class DownloadManager
             {
                 var progress = new Progress<DownloadProgress>(p =>
                 {
-                    task.Progress = p.Percent;
-                    task.Speed = p.Speed;
-                    task.Eta = p.Eta;
-                    task.DownloadedSize = p.Downloaded;
+                    ApplyProgress(task, p);
                 });
 
                 await _ytDlpService.DownloadAsync(
@@ -335,5 +329,22 @@ public class DownloadManager
         var invalid = System.IO.Path.GetInvalidFileNameChars();
         var sanitized = new string(name.Where(c => !invalid.Contains(c)).ToArray());
         return string.IsNullOrWhiteSpace(sanitized) ? "其他" : sanitized;
+    }
+
+    private static void ApplyProgress(DownloadTask task, DownloadProgress progress)
+    {
+        void Apply()
+        {
+            task.Progress = progress.Percent;
+            task.Speed = progress.Speed;
+            task.Eta = progress.Eta;
+            task.DownloadedSize = progress.Downloaded;
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+            Apply();
+        else
+            dispatcher.Invoke(Apply);
     }
 }

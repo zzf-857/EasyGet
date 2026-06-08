@@ -23,8 +23,11 @@
 
   <ItemGroup>
     <Compile Remove="EasyGet.Tests\**\*.cs" />
+    <Compile Remove="handoff\**\*.cs" />
     <EmbeddedResource Remove="EasyGet.Tests\**\*" />
+    <EmbeddedResource Remove="handoff\**\*" />
     <None Remove="EasyGet.Tests\**\*" />
+    <None Remove="handoff\**\*" />
   </ItemGroup>
 
 </Project>
