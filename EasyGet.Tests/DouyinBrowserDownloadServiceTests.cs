@@ -157,6 +157,36 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
         Assert.False(File.Exists(outputPath));
     }
 
+    [Fact]
+    public async Task DownloadFileAsync_ThrowsIOExceptionAndCleansTempWhenResponseIsInterrupted()
+    {
+        var tempPath = Path.Combine(_tempDir, "no-progress.mp4.part");
+        var outputPath = Path.Combine(_tempDir, "no-progress.mp4");
+        Directory.CreateDirectory(_tempDir);
+
+        using var server = new ScriptedHttpServer(
+            """
+            HTTP/1.1 200 OK
+            Content-Type: video/mp4
+            Content-Length: 0
+            Connection: close
+
+            """);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(800));
+
+        await Assert.ThrowsAsync<IOException>(() =>
+            DouyinBrowserDownloadService.DownloadFileAsync(
+                server.Url,
+                tempPath,
+                outputPath,
+                "https://www.douyin.com/",
+                null,
+                cts.Token));
+
+        Assert.False(File.Exists(tempPath));
+        Assert.False(File.Exists(outputPath));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

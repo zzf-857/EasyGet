@@ -613,6 +613,11 @@ internal class DouyinBrowserDownloadService
             if (total > 0 && downloaded != total)
                 throw new IOException($"抖音兜底下载字节数异常：已下载 {downloaded} / {total} 字节。");
         }
+        catch (HttpRequestException ex)
+        {
+            TryDeleteFile(tempPath);
+            throw new IOException("抖音兜底下载网络中断或响应不完整。", ex);
+        }
         catch
         {
             TryDeleteFile(tempPath);
