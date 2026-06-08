@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 清理高 DPI manifest 构建警告
+  - 内容：将高 DPI 配置迁移到 `EasyGet.csproj` 的 `ApplicationHighDpiMode=PerMonitorV2`，删除 manifest 中重复的 DPI 节点，让 Release build 输出保持干净。
+  - 验证：`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，39 个测试全部通过。
+  - 提交说明：`清理高 DPI 构建警告`
+
 - [x] 2026-06-09 统一抖音兜底网络中断异常并清理临时文件
   - 内容：为抖音浏览器兜底直链下载增加响应中断测试；底层 `HttpRequestException` 会包装为更贴近下载语义的 `IOException`，同时删除 `.part` 和避免生成最终文件。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DouyinBrowserDownloadServiceTests` 观察到响应中断场景抛出 `HttpRequestException` 的测试失败；修复后同命令 8 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，39 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
