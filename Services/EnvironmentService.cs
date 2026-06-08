@@ -307,7 +307,11 @@ public class EnvironmentService
         }
     }
 
-    private static async Task<string> RunCommandAsync(string fileName, string arguments)
+    internal static async Task<string> RunCommandAsync(
+        string fileName,
+        string arguments,
+        TimeSpan? timeout = null,
+        CancellationToken ct = default)
     {
         var psi = new ProcessStartInfo
         {
@@ -319,10 +323,52 @@ public class EnvironmentService
             CreateNoWindow = true
         };
 
-        using var process = Process.Start(psi)!;
-        var output = await process.StandardOutput.ReadToEndAsync();
-        await process.WaitForExitAsync();
-        return output;
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"无法启动命令: {fileName}");
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout ?? TimeSpan.FromSeconds(30));
+
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            await DrainProcessOutputAsync(stdoutTask, stderrTask);
+            throw new TimeoutException($"命令执行超时: {fileName} {arguments}");
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        return CombineCommandOutput(stdout, stderr);
+    }
+
+    private static async Task DrainProcessOutputAsync(Task<string> stdoutTask, Task<string> stderrTask)
+    {
+        try
+        {
+            await Task.WhenAny(Task.WhenAll(stdoutTask, stderrTask), Task.Delay(1000));
+        }
+        catch
+        {
+            // 进程超时后的输出清理是 best effort。
+        }
+    }
+
+    private static string CombineCommandOutput(string stdout, string stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            return stderr;
+
+        if (string.IsNullOrWhiteSpace(stderr))
+            return stdout;
+
+        return $"{stdout.TrimEnd()}{Environment.NewLine}{stderr}";
     }
 
     private static void TryDeleteFile(string path)
@@ -348,6 +394,19 @@ public class EnvironmentService
         catch
         {
             // 忽略临时目录清理失败。
+        }
+    }
+
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // 忽略进程清理失败。
         }
     }
 }

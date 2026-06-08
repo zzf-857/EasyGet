@@ -58,6 +58,27 @@ public class EnvironmentServiceTests : IDisposable
         Assert.Equal(expectedPath, foundPath);
     }
 
+    [Fact]
+    public async Task RunCommandAsync_IncludesStderrWhenStdoutIsEmpty()
+    {
+        var output = await EnvironmentService.RunCommandAsync(
+            "powershell",
+            "-NoProfile -Command \"[Console]::Error.WriteLine('easyget-stderr-marker')\"",
+            TimeSpan.FromSeconds(5));
+
+        Assert.Contains("easyget-stderr-marker", output);
+    }
+
+    [Fact]
+    public async Task RunCommandAsync_ThrowsTimeoutExceptionWhenProcessHangs()
+    {
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            EnvironmentService.RunCommandAsync(
+                "powershell",
+                "-NoProfile -Command \"Start-Sleep -Seconds 5\"",
+                TimeSpan.FromMilliseconds(200)));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
