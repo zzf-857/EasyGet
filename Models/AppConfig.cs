@@ -7,6 +7,11 @@ namespace EasyGet.Models;
 /// </summary>
 public class AppConfig
 {
+    public const int MinConcurrentFragments = 1;
+    public const int MaxConcurrentFragments = 32;
+    public const int MinConcurrentDownloadLimit = 1;
+    public const int MaxConcurrentDownloadLimit = 8;
+
     /// <summary>默认下载目录</summary>
     public string DefaultDownloadPath { get; set; } = 
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "EasyGet");
@@ -21,7 +26,10 @@ public class AppConfig
     public string DefaultSubtitle { get; set; } = "none";
 
     /// <summary>yt-dlp 并发分片数</summary>
-    public int ConcurrentFragments { get; set; } = Environment.ProcessorCount;
+    public int ConcurrentFragments { get; set; } = Math.Clamp(
+        Environment.ProcessorCount,
+        MinConcurrentFragments,
+        MaxConcurrentFragments);
 
     /// <summary>批量下载同时任务数</summary>
     public int MaxConcurrentDownloads { get; set; } = 3;

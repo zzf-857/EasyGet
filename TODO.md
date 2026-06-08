@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 增加 aria2c 可用性检测与性能配置上下限保护
+  - 内容：为并发分片数和批量同时下载数增加运行时 clamp；启用 aria2c 时优先查找内置 tools 目录和 PATH 中的 `aria2c.exe`，未找到则回退 yt-dlp 内置下载器并输出日志提示；新增配置归一化、PATH 查找和 aria2c 参数拼装测试。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~ConfigServiceTests|FullyQualifiedName~EnvironmentServiceTests|FullyQualifiedName~YtDlpArgsTests"` 观察到缺少目标 API 的编译失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，23 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
+  - 提交说明：`增加 aria2c 检测与并发配置保护`
+
 - [x] 2026-06-09 修复批量与历史列表的平台标签可见性
   - 内容：将批量下载列表和历史列表的平台标签 `Visibility` 绑定从 `BoolToVisibility` 改为 `StringToVisibility`，修复非空平台名被错误折叠的问题；新增 XAML 回归测试防止后续误绑。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter PlatformLabelsUseStringVisibilityConverter` 观察到 2 个测试失败；修复后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，19 个测试全部通过。
@@ -20,7 +25,6 @@
 
 ## 候选优化池
 
-- [ ] 下载可靠性：为 aria2c 开关增加可执行文件检测，避免用户启用后因本机未安装 aria2c 直接失败。
 - [ ] 下载可靠性：为抖音浏览器兜底下载增加网络中断/Range 续传测试，降低大文件失败概率。
 - [ ] 下载可靠性：为动态并发调整增加单元测试或可验证的服务级测试，避免缩小并发时吞掉许可。
 - [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。

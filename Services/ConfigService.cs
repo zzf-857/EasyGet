@@ -43,6 +43,8 @@ public class ConfigService
             _config = new AppConfig();
         }
 
+        NormalizeRuntimeConfig(_config);
+
         // 确保下载目录存在
         if (!Directory.Exists(_config.DefaultDownloadPath))
         {
@@ -57,6 +59,7 @@ public class ConfigService
     {
         try
         {
+            NormalizeRuntimeConfig(_config);
             Directory.CreateDirectory(ConfigDir);
             var json = JsonSerializer.Serialize(_config, JsonOptions);
             await File.WriteAllTextAsync(ConfigFile, json);
@@ -75,5 +78,18 @@ public class ConfigService
         var dir = Path.Combine(ConfigDir, "tools");
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    internal static void NormalizeRuntimeConfig(AppConfig config)
+    {
+        config.ConcurrentFragments = Math.Clamp(
+            config.ConcurrentFragments,
+            AppConfig.MinConcurrentFragments,
+            AppConfig.MaxConcurrentFragments);
+
+        config.MaxConcurrentDownloads = Math.Clamp(
+            config.MaxConcurrentDownloads,
+            AppConfig.MinConcurrentDownloadLimit,
+            AppConfig.MaxConcurrentDownloadLimit);
     }
 }

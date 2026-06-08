@@ -204,7 +204,11 @@ public partial class YtDlpService
         for (var i = 0; i < strategies.Count; i++)
         {
             var strategy = strategies[i];
-            var args = BuildDownloadArgs(task, strategy);
+            var aria2cPath = _configService.Config.UseAria2c ? _envService.GetAria2cPath() : null;
+            if (_configService.Config.UseAria2c && string.IsNullOrWhiteSpace(aria2cPath))
+                logCallback?.Invoke("[yt-dlp] aria2c 已启用但未找到 aria2c.exe，已回退到 yt-dlp 内置下载器。");
+
+            var args = BuildDownloadArgs(task, strategy, aria2cPath);
             var strategyTag = strategy switch
             {
                 CookieStrategy.BrowserChrome => " (cookies-from-browser: chrome)",
@@ -368,7 +372,7 @@ public partial class YtDlpService
         logCallback?.Invoke($"[yt-dlp] failed (exit code: {lastExitCode})");
     }
 
-    private List<string> BuildDownloadArgs(DownloadTask task, CookieStrategy cookieStrategy = CookieStrategy.Default)
+    private List<string> BuildDownloadArgs(DownloadTask task, CookieStrategy cookieStrategy = CookieStrategy.Default, string? aria2cPath = null)
     {
         var args = new List<string>
         {
@@ -402,7 +406,10 @@ public partial class YtDlpService
         args.Add("--progress-template");
         args.Add("download:%(progress._percent_str)s %(progress._speed_str)s ETA %(progress._eta_str)s");
 
-        var fragments = _configService.Config.ConcurrentFragments;
+        var fragments = Math.Clamp(
+            _configService.Config.ConcurrentFragments,
+            AppConfig.MinConcurrentFragments,
+            AppConfig.MaxConcurrentFragments);
         if (fragments > 1)
         {
             args.Add("--concurrent-fragments");
@@ -429,19 +436,24 @@ public partial class YtDlpService
                 break;
         }
 
-        if (_configService.Config.UseAria2c)
-        {
-            args.Add("--external-downloader");
-            args.Add("aria2c");
-            args.Add("--external-downloader-args");
-            args.Add("aria2c:--min-split-size=1M --max-connection-per-server=16 --split=16");
-        }
+        AddAria2cArgs(args, _configService.Config.UseAria2c, aria2cPath);
 
         AddProxyArgs(args);
         AddCookieArgs(args, task.Url, cookieStrategy);
 
         args.Add(task.Url);
         return args;
+    }
+
+    internal static void AddAria2cArgs(List<string> args, bool useAria2c, string? aria2cPath)
+    {
+        if (!useAria2c || string.IsNullOrWhiteSpace(aria2cPath))
+            return;
+
+        args.Add("--external-downloader");
+        args.Add(aria2cPath);
+        args.Add("--external-downloader-args");
+        args.Add("aria2c:--min-split-size=1M --max-connection-per-server=16 --split=16");
     }
 
     private static string BuildFormatString(string format, string quality)

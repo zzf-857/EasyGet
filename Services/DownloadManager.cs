@@ -38,9 +38,13 @@ public class DownloadManager
     /// </summary>
     public void UpdateConcurrencyLimit(int maxConcurrent)
     {
+        maxConcurrent = Math.Clamp(
+            maxConcurrent,
+            AppConfig.MinConcurrentDownloadLimit,
+            AppConfig.MaxConcurrentDownloadLimit);
+
         lock (_concurrencyLock)
         {
-            if (maxConcurrent <= 0) return;
             int diff = maxConcurrent - _currentConcurrencyLimit;
             _currentConcurrencyLimit = maxConcurrent;
             

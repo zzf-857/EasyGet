@@ -46,6 +46,18 @@ public class EnvironmentServiceTests : IDisposable
         Assert.Equal(expectedPath, foundPath);
     }
 
+    [Fact]
+    public void FindExecutableOnPath_ReturnsExecutableFromSearchPath()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var expectedPath = Path.Combine(_tempDir, "aria2c.exe");
+        File.WriteAllText(expectedPath, "fake exe");
+
+        var foundPath = EnvironmentService.FindExecutableOnPath("aria2c", _tempDir);
+
+        Assert.Equal(expectedPath, foundPath);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))

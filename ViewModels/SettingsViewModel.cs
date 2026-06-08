@@ -172,7 +172,10 @@ public partial class SettingsViewModel : ObservableObject
         c.CookieContent = CookieContent;
         c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
 
-        _downloadManager.UpdateConcurrencyLimit(MaxConcurrentDownloads);
+        ConfigService.NormalizeRuntimeConfig(c);
+        SyncNormalizedPerformanceValues(c);
+
+        _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
         await _configService.SaveAsync();
     }
 
@@ -193,6 +196,26 @@ public partial class SettingsViewModel : ObservableObject
             return;
 
         SaveSettingsCommand.Execute(null);
+    }
+
+    private void SyncNormalizedPerformanceValues(EasyGet.Models.AppConfig config)
+    {
+        if (MaxConcurrentDownloads == config.MaxConcurrentDownloads
+            && ConcurrentFragments == config.ConcurrentFragments)
+        {
+            return;
+        }
+
+        _isInitializing = true;
+        try
+        {
+            MaxConcurrentDownloads = config.MaxConcurrentDownloads;
+            ConcurrentFragments = config.ConcurrentFragments;
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
     }
 
     [RelayCommand]

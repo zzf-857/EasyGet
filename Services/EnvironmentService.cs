@@ -129,6 +129,37 @@ public class EnvironmentService
             .FirstOrDefault();
     }
 
+    internal static string? FindExecutableOnPath(string executableName, string? searchPath = null)
+    {
+        if (string.IsNullOrWhiteSpace(executableName))
+            return null;
+
+        var pathValue = searchPath ?? Environment.GetEnvironmentVariable("PATH") ?? "";
+        var fileNames = Path.HasExtension(executableName)
+            ? [executableName]
+            : new[] { executableName, $"{executableName}.exe" };
+
+        foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            foreach (var fileName in fileNames)
+            {
+                var candidate = Path.Combine(directory, fileName);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    public string? GetAria2cPath()
+    {
+        var bundledPath = Path.Combine(ConfigService.GetToolsDirectory(), "aria2c.exe");
+        return File.Exists(bundledPath)
+            ? bundledPath
+            : FindExecutableOnPath("aria2c");
+    }
+
     private static async Task InstallYtDlpAsync(IProgress<string>? log, CancellationToken ct)
     {
         var targetPath = Path.Combine(ConfigService.GetToolsDirectory(), "yt-dlp.exe");
