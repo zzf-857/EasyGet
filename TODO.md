@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 修复批量与历史列表的平台标签可见性
+  - 内容：将批量下载列表和历史列表的平台标签 `Visibility` 绑定从 `BoolToVisibility` 改为 `StringToVisibility`，修复非空平台名被错误折叠的问题；新增 XAML 回归测试防止后续误绑。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter PlatformLabelsUseStringVisibilityConverter` 观察到 2 个测试失败；修复后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，19 个测试全部通过。
+  - 提交说明：`修复平台标签可见性绑定`
+
 - [x] 2026-06-09 项目进度体检与当前可靠性改进收束
   - 内容：核对 README、进度追踪文档、未提交 diff 和测试入口；确认当前代码已补齐运行环境自动安装、设置页手动安装、yt-dlp 更新入口、aria2c 参数集成、并发上限动态调整、批量任务操作、Toast、日志自动滚动、窗口状态持久化、抖音浏览器兜底下载与相关测试。
   - 验证：`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，17 个测试全部通过。

@@ -107,7 +107,7 @@
                                     <Border Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"
                                             CornerRadius="3" Padding="6,1" Margin="0,0,6,0"
                                             VerticalAlignment="Center"
-                                            Visibility="{Binding Platform, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                                            Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
                                         <TextBlock Text="{Binding Platform}" FontSize="10"
                                                    Foreground="White" FontWeight="Medium"/>
                                     </Border>
