@@ -161,7 +161,9 @@
                         <TextBox Grid.Column="0" Style="{StaticResource DarkTextBox}"
                                  Text="{Binding DefaultDownloadPath}" IsReadOnly="True"/>
                         <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
-                                Content="📁" Margin="8,0,0,0"
+                                Content="📁" ToolTip="选择默认下载目录"
+                                AutomationProperties.Name="选择默认下载目录"
+                                Margin="8,0,0,0"
                                 Command="{Binding BrowseDownloadPathCommand}"/>
                     </Grid>
 

@@ -193,19 +193,23 @@
                                                 </Style>
                                             </StackPanel.Style>
                                             <Button Style="{StaticResource SurfaceButton}" Content="⏸"
-                                                    ToolTip="暂停" Padding="8,5" FontSize="11" Margin="0,0,4,0"
+                                                    ToolTip="暂停" AutomationProperties.Name="暂停任务"
+                                                    Padding="8,5" FontSize="11" Margin="0,0,4,0"
                                                     Command="{Binding DataContext.PauseTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Id}"/>
                                             <Button Style="{StaticResource SurfaceButton}" Content="▶"
-                                                    ToolTip="恢复" Padding="8,5" FontSize="11" Margin="0,0,4,0"
+                                                    ToolTip="恢复" AutomationProperties.Name="恢复任务"
+                                                    Padding="8,5" FontSize="11" Margin="0,0,4,0"
                                                     Command="{Binding DataContext.ResumeTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Id}"/>
                                             <Button Style="{StaticResource SurfaceButton}" Content="🔄"
-                                                    ToolTip="重试" Padding="8,5" FontSize="11" Margin="0,0,4,0"
+                                                    ToolTip="重试" AutomationProperties.Name="重试任务"
+                                                    Padding="8,5" FontSize="11" Margin="0,0,4,0"
                                                     Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Id}"/>
                                             <Button Style="{StaticResource SurfaceButton}" Content="✕"
-                                                    ToolTip="取消任务" Padding="8,5" FontSize="11"
+                                                    ToolTip="取消任务" AutomationProperties.Name="取消任务"
+                                                    Padding="8,5" FontSize="11"
                                                     Command="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                     CommandParameter="{Binding Id}"/>
                                         </StackPanel>

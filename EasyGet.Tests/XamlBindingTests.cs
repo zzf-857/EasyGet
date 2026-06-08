@@ -99,6 +99,41 @@ public class XamlBindingTests
             text => text.Contains("aria2c", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData("BatchDownloadView.xaml")]
+    [InlineData("HistoryView.xaml")]
+    [InlineData("SettingsView.xaml")]
+    public void IconOnlyButtonsExposeTooltipAndAutomationName(string viewFileName)
+    {
+        var document = XDocument.Load(GetViewPath(viewFileName));
+
+        var missingHints = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Button")
+            .Where(element => IsIconOnlyContent(element.Attribute("Content")?.Value))
+            .Select(element => new
+            {
+                Content = element.Attribute("Content")?.Value ?? "",
+                ToolTip = element.Attribute("ToolTip")?.Value ?? "",
+                AutomationName = element
+                    .Attributes()
+                    .FirstOrDefault(attribute =>
+                        attribute.Name.LocalName == "AutomationProperties.Name")
+                    ?.Value ?? ""
+            })
+            .Where(button =>
+                string.IsNullOrWhiteSpace(button.ToolTip)
+                || string.IsNullOrWhiteSpace(button.AutomationName))
+            .Select(button =>
+                $"{viewFileName} Content=\"{button.Content}\" ToolTip=\"{button.ToolTip}\" AutomationProperties.Name=\"{button.AutomationName}\"")
+            .ToList();
+
+        Assert.True(
+            missingHints.Count == 0,
+            "Icon-only buttons must expose ToolTip and AutomationProperties.Name. Missing: "
+                + string.Join("; ", missingHints));
+    }
+
     private static string GetViewPath(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -112,5 +147,14 @@ public class XamlBindingTests
         }
 
         throw new FileNotFoundException($"Could not find Views/{fileName} from test output directory.");
+    }
+
+    private static bool IsIconOnlyContent(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return false;
+
+        var value = content.Trim();
+        return value.Length <= 3 && value.All(character => !char.IsLetterOrDigit(character));
     }
 }

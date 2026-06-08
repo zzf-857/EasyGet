@@ -133,12 +133,14 @@
                                     </Style>
                                 </StackPanel.Style>
                                 <Button Style="{StaticResource SurfaceButton}" Content="📂"
-                                        ToolTip="打开文件夹" Padding="8,5"
+                                        ToolTip="打开文件夹" AutomationProperties.Name="打开文件夹"
+                                        Padding="8,5"
                                         IsEnabled="{Binding FileExists}"
                                         Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding FilePath}"/>
                                 <Button Style="{StaticResource SurfaceButton}" Content="🗑"
-                                        ToolTip="删除记录" Padding="8,5" Margin="4,0,0,0"
+                                        ToolTip="删除记录" AutomationProperties.Name="删除记录"
+                                        Padding="8,5" Margin="4,0,0,0"
                                         Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                         CommandParameter="{Binding Id}"/>
                             </StackPanel>
