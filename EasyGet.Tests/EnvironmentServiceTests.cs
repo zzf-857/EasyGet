@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using System.Net;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -79,9 +80,56 @@ public class EnvironmentServiceTests : IDisposable
                 TimeSpan.FromMilliseconds(200)));
     }
 
+    [Fact]
+    public async Task DownloadFileAsync_RetriesTransientServerFailure()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var targetPath = Path.Combine(_tempDir, "tool.exe");
+        var attempts = 0;
+        var handler = new SequenceHandler(_ =>
+        {
+            attempts++;
+            if (attempts == 1)
+                return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent([1, 2, 3])
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+        var progress = new ListProgress();
+
+        await EnvironmentService.DownloadFileAsync(
+            new Uri("https://example.test/tool.exe"),
+            targetPath,
+            "yt-dlp",
+            progress,
+            CancellationToken.None,
+            httpClient,
+            (_, _) => Task.CompletedTask);
+
+        Assert.Equal(2, attempts);
+        Assert.Equal([1, 2, 3], File.ReadAllBytes(targetPath));
+        Assert.Contains(progress.Messages, message => message.Contains("准备重试", StringComparison.Ordinal));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
+    }
+
+    private sealed class ListProgress : IProgress<string>
+    {
+        public List<string> Messages { get; } = [];
+
+        public void Report(string value) => Messages.Add(value);
+    }
+
+    private sealed class SequenceHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(responder(request));
     }
 }

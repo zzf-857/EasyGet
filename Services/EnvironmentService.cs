@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Net;
 using System.Net.Http;
 
 namespace EasyGet.Services;
@@ -21,6 +22,7 @@ public class EnvironmentStatus
 public class EnvironmentService
 {
     private static readonly HttpClient HttpClient = new();
+    private const int ToolDownloadMaxAttempts = 3;
 
     public EnvironmentStatus Status { get; private set; } = new();
 
@@ -208,9 +210,43 @@ public class EnvironmentService
         }
     }
 
-    private static async Task DownloadFileAsync(Uri uri, string targetPath, string toolName, IProgress<string>? log, CancellationToken ct)
+    internal static async Task DownloadFileAsync(
+        Uri uri,
+        string targetPath,
+        string toolName,
+        IProgress<string>? log,
+        CancellationToken ct,
+        HttpClient? httpClient = null,
+        Func<TimeSpan, CancellationToken, Task>? retryDelayAsync = null)
     {
-        using var response = await HttpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+        retryDelayAsync ??= Task.Delay;
+
+        for (var attempt = 1; attempt <= ToolDownloadMaxAttempts; attempt++)
+        {
+            try
+            {
+                await DownloadFileOnceAsync(uri, targetPath, toolName, log, ct, httpClient ?? HttpClient);
+                return;
+            }
+            catch (Exception ex) when (ShouldRetryToolDownload(ex, attempt, ct))
+            {
+                TryDeleteFile(targetPath);
+                var delay = GetToolDownloadRetryDelay(attempt);
+                log?.Report($"{toolName} 下载失败，准备重试 ({attempt}/{ToolDownloadMaxAttempts}): {ex.Message}");
+                await retryDelayAsync(delay, ct);
+            }
+        }
+    }
+
+    private static async Task DownloadFileOnceAsync(
+        Uri uri,
+        string targetPath,
+        string toolName,
+        IProgress<string>? log,
+        CancellationToken ct,
+        HttpClient httpClient)
+    {
+        using var response = await httpClient.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength;
@@ -241,6 +277,33 @@ public class EnvironmentService
             }
         }
     }
+
+    private static bool ShouldRetryToolDownload(Exception ex, int attempt, CancellationToken ct)
+    {
+        if (attempt >= ToolDownloadMaxAttempts || ct.IsCancellationRequested)
+            return false;
+
+        return ex switch
+        {
+            HttpRequestException httpEx => IsTransientStatusCode(httpEx.StatusCode),
+            IOException => true,
+            TaskCanceledException => true,
+            _ => false
+        };
+    }
+
+    private static bool IsTransientStatusCode(HttpStatusCode? statusCode)
+    {
+        if (statusCode is null)
+            return true;
+
+        var code = (int)statusCode.Value;
+        return statusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
+               || code >= 500;
+    }
+
+    private static TimeSpan GetToolDownloadRetryDelay(int attempt)
+        => TimeSpan.FromSeconds(Math.Min(attempt, 3));
 
     private async Task<(bool found, string version, string path)> CheckToolAsync(string tool, string versionArg)
     {

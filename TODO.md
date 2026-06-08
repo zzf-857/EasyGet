@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 为环境组件下载增加瞬时失败重试
+  - 内容：为自动安装 yt-dlp/ffmpeg 的工具下载增加最多 3 次瞬时失败重试，覆盖网络异常、IO 中断、HTTP 408/429/5xx 等临时故障；重试前清理半截目标文件，并在安装进度中输出“准备重试”提示，降低首次环境安装因网络抖动失败的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~EnvironmentServiceTests` 观察到缺少 `DownloadFileAsync` 可测试重试入口的编译失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，61 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`增强环境组件下载重试`
+
 - [x] 2026-06-09 补齐图标按钮提示与可访问名称
   - 内容：为批量任务队列、历史记录和设置页的 icon-only 按钮补齐 `ToolTip` 与 `AutomationProperties.Name`，让短符号按钮在悬浮提示、屏幕阅读器和自动化测试中都有明确语义，同时新增 XAML 结构测试防止后续遗漏。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~IconOnlyButtonsExposeTooltipAndAutomationName` 观察到 3 个视图中的图标按钮缺提示或可访问名称而失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，60 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
