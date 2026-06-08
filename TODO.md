@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 修复抖音兜底下载 Range 被忽略时的文件追加错误
+  - 内容：为抖音浏览器兜底直链下载增加 Range 忽略场景测试；当续传请求收到 `200 OK` 时重置 `.part` 并从头写入，避免把完整响应追加到半截文件后面；下载结束前校验已下载字节数与已知总长度一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DouyinBrowserDownloadServiceTests` 观察到最终文件被追加为 `abcdeabcdefghij` 的测试失败；修复后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，33 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
+  - 提交说明：`修复抖音兜底续传追加错误`
+
 - [x] 2026-06-09 修复 yt-dlp 短命令取消后子进程残留
   - 内容：`YtDlpService.RunProcessAsync` 在用户取消时也会结束子进程并清理输出任务，避免短命令取消后后台进程继续执行。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProcessTests` 观察到取消后 marker 文件仍被写入的测试失败；修复后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，32 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
@@ -50,7 +55,7 @@
 
 ## 候选优化池
 
-- [ ] 下载可靠性：为抖音浏览器兜底下载增加网络中断/Range 续传测试，降低大文件失败概率。
+- [ ] 下载可靠性：为抖音浏览器兜底下载增加网络中断、取消清理和真实站点回归验证，降低大文件失败概率。
 - [ ] 下载可靠性：为动态并发调整增加单元测试或可验证的服务级测试，避免缩小并发时吞掉许可。
 - [ ] 下载可靠性：为 yt-dlp 长下载进程增加无输出超时、stderr 诊断与卡住保护。
 - [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。

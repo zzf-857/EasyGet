@@ -537,7 +537,7 @@ internal class DouyinBrowserDownloadService
         return "";
     }
 
-    private static async Task DownloadFileAsync(
+    internal static async Task DownloadFileAsync(
         string url,
         string tempPath,
         string outputPath,
@@ -561,6 +561,12 @@ internal class DouyinBrowserDownloadService
 
             using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             response.EnsureSuccessStatusCode();
+
+            if (downloaded > 0 && response.StatusCode == HttpStatusCode.OK)
+            {
+                downloaded = 0;
+                fileMode = FileMode.Create;
+            }
 
             total = response.Content.Headers.ContentRange?.Length
                 ?? Math.Max(total, response.Content.Headers.ContentLength ?? 0);
@@ -593,11 +599,17 @@ internal class DouyinBrowserDownloadService
                 }
             }
 
-            if (total <= 0 || downloaded >= total || response.StatusCode != HttpStatusCode.PartialContent)
+            if (total <= 0 || downloaded >= total)
                 break;
+
+            if (response.StatusCode != HttpStatusCode.PartialContent)
+                throw new IOException($"抖音兜底下载不完整：已下载 {downloaded} / {total} 字节。");
 
             fileMode = FileMode.Append;
         }
+
+        if (total > 0 && downloaded != total)
+            throw new IOException($"抖音兜底下载字节数异常：已下载 {downloaded} / {total} 字节。");
 
         if (File.Exists(outputPath))
             File.Delete(outputPath);
