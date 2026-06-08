@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 为 yt-dlp 长下载进程增加无输出卡住保护
+  - 内容：将长下载路径切到可复用的 `RunDownloadProcessAsync`，并发读取 stdout/stderr，进程超过 10 分钟没有任何输出时自动终止并写入失败诊断；保留取消时杀进程清理，成功退出时完整读取剩余输出，避免队列被沉默的 yt-dlp 子进程无限卡住。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProcessTests` 观察到缺少 `RunDownloadProcessAsync` 的编译失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，40 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`为 yt-dlp 长下载增加卡住保护`
+
 - [x] 2026-06-09 清理高 DPI manifest 构建警告
   - 内容：将高 DPI 配置迁移到 `EasyGet.csproj` 的 `ApplicationHighDpiMode=PerMonitorV2`，删除 manifest 中重复的 DPI 节点，让 Release build 输出保持干净。
   - 验证：`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，39 个测试全部通过。
@@ -76,7 +81,6 @@
 ## 候选优化池
 
 - [ ] 下载可靠性：为抖音浏览器兜底下载增加真实站点回归验证，降低大文件失败概率。
-- [ ] 下载可靠性：为 yt-dlp 长下载进程增加无输出超时、stderr 诊断与卡住保护。
 - [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。
 - [ ] UI 现代化：统一按钮图标和控件圆角/密度，降低 emoji 按钮带来的视觉不一致。
 - [ ] UI 现代化：检查 ComboBox、列表项 hover、导航选中态与队列操作按钮的暗色主题一致性。

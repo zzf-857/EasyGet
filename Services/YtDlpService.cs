@@ -31,6 +31,8 @@ internal sealed record ProcessOutput(string StandardOutput, string StandardError
 
 public partial class YtDlpService
 {
+    private static readonly TimeSpan DefaultDownloadNoOutputTimeout = TimeSpan.FromMinutes(10);
+
     private enum CookieStrategy
     {
         Default,
@@ -221,48 +223,19 @@ public partial class YtDlpService
             logCallback?.Invoke($"[yt-dlp] start{strategyTag}: {task.Url}");
             logCallback?.Invoke($"[yt-dlp] args: {string.Join(" ", args)}");
 
-            var psi = new ProcessStartInfo
-            {
-                FileName = GetYtDlpPath(),
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8
-            };
-
-            psi.Environment["PYTHONIOENCODING"] = "utf-8";
-            psi.Environment["PYTHONUTF8"] = "1";
-
-            foreach (var arg in args)
-                psi.ArgumentList.Add(arg);
-
-            using var process = new Process { StartInfo = psi };
-            process.Start();
-
             var stderrLines = new List<string>();
             string? capturedOutputPath = null;
             var downloadStartTime = DateTime.Now;
+            ProcessOutput processOutput;
 
-            using var reg = ct.Register(() =>
+            try
             {
-                try { process.Kill(entireProcessTree: true); } catch { }
-            });
-
-            var stdoutTask = Task.Run(async () =>
-            {
-                try
-                {
-                    while (!process.StandardOutput.EndOfStream)
+                processOutput = await RunDownloadProcessAsync(
+                    GetYtDlpPath(),
+                    args,
+                    DefaultDownloadNoOutputTimeout,
+                    line =>
                     {
-                        if (ct.IsCancellationRequested)
-                            break;
-
-                        var line = await process.StandardOutput.ReadLineAsync();
-                        if (line is null)
-                            continue;
-
                         logCallback?.Invoke(line);
 
                         var path = ParseOutputPath(line);
@@ -272,63 +245,32 @@ public partial class YtDlpService
                         var parsed = ParseProgressLine(line);
                         if (parsed is not null)
                             progress?.Report(parsed);
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    Debug.WriteLine($"[YtDlpService] stdout error: {ex.Message}");
-                }
-            });
-
-            var stderrTask = Task.Run(async () =>
-            {
-                try
-                {
-                    while (!process.StandardError.EndOfStream)
+                    },
+                    line =>
                     {
-                        if (ct.IsCancellationRequested)
-                            break;
-
-                        var line = await process.StandardError.ReadLineAsync();
-                        if (line is null)
-                            continue;
-
                         stderrLines.Add(line);
                         logCallback?.Invoke($"[stderr] {line}");
-                    }
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    Debug.WriteLine($"[YtDlpService] stderr error: {ex.Message}");
-                }
-            });
-
-            try
-            {
-                await Task.WhenAll(stdoutTask, stderrTask);
+                    },
+                    ct);
             }
-            catch
-            {
-                // swallow reader task completion errors
-            }
-
-            try
-            {
-                await process.WaitForExitAsync();
-            }
-            catch
-            {
-                // ignore
-            }
-
-            if (ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 task.Status = DownloadStatus.Cancelled;
                 return;
             }
+            catch (TimeoutException ex)
+            {
+                var message = $"ERROR: {ex.Message}";
+                stderrLines.Add(message);
+                lastStderr = stderrLines;
+                allStderr.AddRange(stderrLines);
+                lastExitCode = -1;
+                logCallback?.Invoke($"[yt-dlp] {ex.Message}");
+                break;
+            }
 
             var outputFile = ResolveOutputFile(capturedOutputPath, task, downloadStartTime);
-            if (process.ExitCode == 0)
+            if (processOutput.ExitCode == 0)
             {
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
@@ -345,7 +287,7 @@ public partial class YtDlpService
 
             lastStderr = stderrLines;
             allStderr.AddRange(stderrLines);
-            lastExitCode = process.ExitCode;
+            lastExitCode = processOutput.ExitCode;
 
             var canRetryWithNextCookieStrategy =
                 i < strategies.Count - 1
@@ -854,6 +796,93 @@ public partial class YtDlpService
         return result.StandardOutput;
     }
 
+    internal static async Task<ProcessOutput> RunDownloadProcessAsync(
+        string fileName,
+        IEnumerable<string> args,
+        TimeSpan? noOutputTimeout = null,
+        Action<string>? stdoutLineReceived = null,
+        Action<string>? stderrLineReceived = null,
+        CancellationToken ct = default)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
+        psi.Environment["PYTHONUTF8"] = "1";
+
+        foreach (var arg in args)
+            psi.ArgumentList.Add(arg);
+
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"无法启动命令: {fileName}");
+
+        var stdout = new StringBuilder();
+        var stderr = new StringBuilder();
+        var lastOutputTicks = DateTime.UtcNow.Ticks;
+        void TouchOutput() => Interlocked.Exchange(ref lastOutputTicks, DateTime.UtcNow.Ticks);
+
+        var stdoutTask = ReadProcessLinesAsync(process.StandardOutput, stdout, stdoutLineReceived, TouchOutput);
+        var stderrTask = ReadProcessLinesAsync(process.StandardError, stderr, stderrLineReceived, TouchOutput);
+
+        var idleTimeoutSource = new TaskCompletionSource<TimeoutException>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var monitorCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var monitorTask = MonitorProcessOutputIdleAsync(
+            process,
+            () => new DateTime(Interlocked.Read(ref lastOutputTicks), DateTimeKind.Utc),
+            noOutputTimeout ?? DefaultDownloadNoOutputTimeout,
+            idleTimeoutSource,
+            monitorCts.Token);
+
+        var readersDrained = false;
+        try
+        {
+            var exitTask = process.WaitForExitAsync(ct);
+            var completedTask = await Task.WhenAny(exitTask, monitorTask, idleTimeoutSource.Task);
+            if (completedTask == idleTimeoutSource.Task)
+                throw await idleTimeoutSource.Task;
+
+            if (completedTask == monitorTask)
+                await monitorTask;
+
+            await exitTask;
+            if (idleTimeoutSource.Task.IsCompletedSuccessfully)
+                throw idleTimeoutSource.Task.Result;
+
+            if (monitorTask.IsFaulted)
+                await monitorTask;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            await DrainProcessOutputAsync(stdoutTask, stderrTask);
+            readersDrained = true;
+            throw;
+        }
+        catch (TimeoutException)
+        {
+            await DrainProcessOutputAsync(stdoutTask, stderrTask);
+            readersDrained = true;
+            throw;
+        }
+        finally
+        {
+            monitorCts.Cancel();
+        }
+
+        if (!readersDrained)
+            await Task.WhenAll(stdoutTask, stderrTask);
+
+        return new ProcessOutput(stdout.ToString(), stderr.ToString(), process.ExitCode);
+    }
+
     internal static async Task<ProcessOutput> RunProcessAsync(
         string fileName,
         IEnumerable<string> args,
@@ -919,6 +948,75 @@ public partial class YtDlpService
         {
             // 进程超时后的输出清理是 best effort。
         }
+    }
+
+    private static async Task DrainProcessOutputAsync(Task stdoutTask, Task stderrTask)
+    {
+        try
+        {
+            await Task.WhenAny(Task.WhenAll(stdoutTask, stderrTask), Task.Delay(1000));
+        }
+        catch
+        {
+            // 进程超时后的输出清理是 best effort。
+        }
+    }
+
+    private static async Task ReadProcessLinesAsync(
+        StreamReader reader,
+        StringBuilder output,
+        Action<string>? lineReceived,
+        Action touchOutput)
+    {
+        try
+        {
+            while (await reader.ReadLineAsync() is { } line)
+            {
+                touchOutput();
+                output.AppendLine(line);
+                lineReceived?.Invoke(line);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)
+        {
+            Debug.WriteLine($"[YtDlpService] process output read error: {ex.Message}");
+        }
+    }
+
+    private static async Task MonitorProcessOutputIdleAsync(
+        Process process,
+        Func<DateTime> getLastOutputTimeUtc,
+        TimeSpan noOutputTimeout,
+        TaskCompletionSource<TimeoutException> idleTimeoutSource,
+        CancellationToken ct)
+    {
+        if (noOutputTimeout <= TimeSpan.Zero)
+            return;
+
+        var interval = TimeSpan.FromMilliseconds(
+            Math.Clamp(noOutputTimeout.TotalMilliseconds / 4, 100, 1000));
+
+        while (!ct.IsCancellationRequested)
+        {
+            await Task.Delay(interval, ct);
+            if (process.HasExited)
+                return;
+
+            if (DateTime.UtcNow - getLastOutputTimeUtc() < noOutputTimeout)
+                continue;
+
+            var ex = new TimeoutException($"yt-dlp 下载超过 {FormatDuration(noOutputTimeout)} 没有输出，已终止。");
+            idleTimeoutSource.TrySetResult(ex);
+            TryKill(process);
+            throw ex;
+        }
+    }
+
+    private static string FormatDuration(TimeSpan duration)
+    {
+        return duration.TotalMinutes >= 1
+            ? $"{duration.TotalMinutes:0.#} 分钟"
+            : $"{duration.TotalSeconds:0.#} 秒";
     }
 
     private static void TryKill(Process process)

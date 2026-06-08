@@ -63,4 +63,33 @@ public class YtDlpProcessTests
                 File.Delete(markerPath);
         }
     }
+
+    [Fact]
+    public async Task RunDownloadProcessAsync_KillsProcessWhenOutputStalls()
+    {
+        var markerPath = Path.Combine(Path.GetTempPath(), $"easyget-ytdlp-idle-{Guid.NewGuid():N}.txt");
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<TimeoutException>(() =>
+                YtDlpService.RunDownloadProcessAsync(
+                    "cmd",
+                    [
+                        "/c",
+                        $"echo download started & ping -n 3 127.0.0.1 > nul & echo completed>{markerPath}"
+                    ],
+                    TimeSpan.FromMilliseconds(200)));
+
+            Assert.Contains("没有输出", ex.Message);
+
+            await Task.Delay(1200);
+
+            Assert.False(File.Exists(markerPath));
+        }
+        finally
+        {
+            if (File.Exists(markerPath))
+                File.Delete(markerPath);
+        }
+    }
 }
