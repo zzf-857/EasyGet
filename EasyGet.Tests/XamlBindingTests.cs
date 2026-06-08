@@ -64,6 +64,24 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void SettingsInstallStatusStageVisibilityUsesStageContent()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+
+        var stageTextBlock = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBlock"
+                && element.Attributes("Text").Any(attribute =>
+                    attribute.Value.Contains("InstallStatusStage", StringComparison.Ordinal)));
+
+        Assert.NotNull(stageTextBlock);
+        var visibility = stageTextBlock!.Attribute("Visibility")?.Value ?? "";
+        Assert.Contains("InstallStatusStage", visibility);
+        Assert.Contains("StringToVisibility", visibility);
+    }
+
+    [Fact]
     public void SettingsViewExposesAria2cToggle()
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));

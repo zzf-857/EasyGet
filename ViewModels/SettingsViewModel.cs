@@ -35,6 +35,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isUpdatingYtDlp;
     [ObservableProperty] private string _updateStatusMessage = "";
     [ObservableProperty] private bool _isInstallingTools;
+    [ObservableProperty] private string _installStatusStage = "";
     [ObservableProperty] private string _installStatusMessage = "";
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
@@ -196,8 +197,13 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnYtDlpFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnFfmpegFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnIsCheckingEnvChanged(bool value) => NotifyEnvironmentActionStateChanged();
-    partial void OnIsInstallingToolsChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnIsInstallingToolsChanged(bool value)
+    {
+        RefreshInstallStatusStage();
+        NotifyEnvironmentActionStateChanged();
+    }
     partial void OnIsUpdatingYtDlpChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnInstallStatusMessageChanged(string value) => RefreshInstallStatusStage();
 
     private void AutoSave()
     {
@@ -232,6 +238,36 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(CanCheckEnvironment));
         OnPropertyChanged(nameof(CanInstallMissingTools));
         OnPropertyChanged(nameof(CanUpdateYtDlp));
+    }
+
+    private void RefreshInstallStatusStage()
+    {
+        InstallStatusStage = DescribeInstallStatusStage(InstallStatusMessage, IsInstallingTools);
+    }
+
+    internal static string DescribeInstallStatusStage(string message, bool isInstalling)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return isInstalling ? "检测中" : "";
+
+        if (message.Contains("失败", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("未完成", StringComparison.OrdinalIgnoreCase))
+            return "失败";
+
+        if (message.Contains("下载中", StringComparison.OrdinalIgnoreCase))
+            return "下载中";
+
+        if (message.Contains("解压", StringComparison.OrdinalIgnoreCase))
+            return "解压中";
+
+        if (message.Contains("安装完成", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("环境已就绪", StringComparison.OrdinalIgnoreCase))
+            return "完成";
+
+        if (message.Contains("正在安装", StringComparison.OrdinalIgnoreCase))
+            return "准备安装";
+
+        return isInstalling ? "处理中" : "";
     }
 
     [RelayCommand]

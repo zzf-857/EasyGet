@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 增强设置页安装进度阶段展示
+  - 内容：为设置页环境安装反馈增加 `InstallStatusStage`，将安装日志归类为“检测中 / 准备安装 / 下载中 / 解压中 / 完成 / 失败”等阶段，并在安装状态区域显示阶段标签和原始说明，方便用户快速判断当前卡在哪一步或失败原因。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~SettingsViewModelTests|FullyQualifiedName~XamlBindingTests"` 观察到缺少 `DescribeInstallStatusStage` 的编译失败；实现后同命令 17 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，54 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`增强设置页安装进度展示`
+
 - [x] 2026-06-09 补齐 Windows 发布脚本与 smoke 检查
   - 内容：新增 `scripts\publish-win-x64.ps1`，串联 restore、test、self-contained publish、`EasyGet.exe` 存在性 smoke 检查和可选 zip 打包；更新手动打包说明、README 与项目进度分析；将发布产物目录加入 `.gitignore`；固定主项目 NuGet 版本，避免 `8.*` 浮动导致测试/发布依赖冲突。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ReleaseScriptTests` 观察到脚本缺失和文档未引用的 2 个测试失败；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ProjectDependencyTests` 观察到 3 个 `8.*` 包版本未固定的测试失败；实现后两个目标测试均通过；`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -Configuration Release -Runtime win-x64 -SkipZip` 成功，脚本内 44 个 Release 测试通过并生成 `EasyGet.exe`；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，44 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
@@ -91,6 +96,5 @@
 ## 候选优化池
 
 - [ ] 下载可靠性：为抖音浏览器兜底下载增加真实站点回归验证，降低大文件失败概率。
-- [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。
 - [ ] UI 现代化：统一按钮图标和控件圆角/密度，降低 emoji 按钮带来的视觉不一致。
 - [ ] UI 现代化：检查 ComboBox、列表项 hover、导航选中态与队列操作按钮的暗色主题一致性。

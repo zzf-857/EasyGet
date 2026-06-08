@@ -126,10 +126,16 @@
                                 Command="{Binding UpdateYtDlpCommand}"
                                 IsEnabled="{Binding CanUpdateYtDlp}"/>
                     </StackPanel>
-                    <TextBlock Text="{Binding InstallStatusMessage}" FontSize="11"
-                               Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"
-                               TextWrapping="Wrap"
-                               Visibility="{Binding InstallStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+                    <StackPanel Margin="0,8,0,0"
+                                Visibility="{Binding InstallStatusStage, Converter={StaticResource StringToVisibility}}">
+                        <TextBlock Text="{Binding InstallStatusStage}" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{StaticResource AccentBrush}"
+                                   Visibility="{Binding InstallStatusStage, Converter={StaticResource StringToVisibility}}"/>
+                        <TextBlock Text="{Binding InstallStatusMessage}" FontSize="11"
+                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,2,0,0"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding InstallStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+                    </StackPanel>
                     <TextBlock Text="{Binding UpdateStatusMessage}" FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"
                                TextWrapping="Wrap"
