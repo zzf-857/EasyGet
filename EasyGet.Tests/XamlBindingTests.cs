@@ -63,6 +63,24 @@ public class XamlBindingTests
         Assert.Contains("StringToVisibility", visibility);
     }
 
+    [Fact]
+    public void SettingsViewExposesAria2cToggle()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+
+        var aria2cToggle = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "ToggleButton"
+                && element.Attributes("IsChecked").Any(attribute =>
+                    attribute.Value.Contains("UseAria2c", StringComparison.Ordinal)));
+
+        Assert.NotNull(aria2cToggle);
+        Assert.Contains(
+            document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
+            text => text.Contains("aria2c", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static string GetViewPath(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

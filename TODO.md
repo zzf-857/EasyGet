@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 在设置页暴露 aria2c 外部下载器开关
+  - 内容：在性能设置区增加 `UseAria2c` Toggle 开关，沿用现有 `ToggleSwitch` 样式和自动保存流程，并补充说明“未安装 aria2c 时自动回退到 yt-dlp 内置下载器”，让已有加速配置真正可被用户操作。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests` 观察到缺少 `UseAria2c` Toggle 的测试失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，41 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`在设置页增加 aria2c 开关`
+
 - [x] 2026-06-09 为 yt-dlp 长下载进程增加无输出卡住保护
   - 内容：将长下载路径切到可复用的 `RunDownloadProcessAsync`，并发读取 stdout/stderr，进程超过 10 分钟没有任何输出时自动终止并写入失败诊断；保留取消时杀进程清理，成功退出时完整读取剩余输出，避免队列被沉默的 yt-dlp 子进程无限卡住。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProcessTests` 观察到缺少 `RunDownloadProcessAsync` 的编译失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，40 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

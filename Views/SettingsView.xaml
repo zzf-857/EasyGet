@@ -305,6 +305,22 @@
                                  Text="{Binding ConcurrentFragments, UpdateSourceTrigger=LostFocus}"/>
                     </Grid>
 
+                    <!-- aria2c 外部下载器 -->
+                    <Grid Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="启用 aria2c 外部下载器" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <TextBlock Text="检测到 aria2c.exe 时使用多连接下载；未安装会自动回退到 yt-dlp 内置下载器" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
+                        </StackPanel>
+                        <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                      IsChecked="{Binding UseAria2c}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="启用 aria2c 外部下载器"/>
+                    </Grid>
+
                     <!-- 同时下载数 -->
                     <Grid Margin="0,0,0,16">
                         <Grid.ColumnDefinitions>
