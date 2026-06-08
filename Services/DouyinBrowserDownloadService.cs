@@ -551,65 +551,73 @@ internal class DouyinBrowserDownloadService
         var started = DateTime.UtcNow;
         var fileMode = FileMode.Create;
 
-        while (true)
+        try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.TryAddWithoutValidation("User-Agent", BrowserUserAgent);
-            request.Headers.Referrer = new Uri(referer);
-            if (downloaded > 0)
-                request.Headers.Range = new RangeHeaderValue(downloaded, null);
-
-            using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-            response.EnsureSuccessStatusCode();
-
-            if (downloaded > 0 && response.StatusCode == HttpStatusCode.OK)
+            while (true)
             {
-                downloaded = 0;
-                fileMode = FileMode.Create;
-            }
+                using var request = new HttpRequestMessage(HttpMethod.Get, url);
+                request.Headers.TryAddWithoutValidation("User-Agent", BrowserUserAgent);
+                request.Headers.Referrer = new Uri(referer);
+                if (downloaded > 0)
+                    request.Headers.Range = new RangeHeaderValue(downloaded, null);
 
-            total = response.Content.Headers.ContentRange?.Length
-                ?? Math.Max(total, response.Content.Headers.ContentLength ?? 0);
+                using var response = await HttpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                response.EnsureSuccessStatusCode();
 
-            await using (var source = await response.Content.ReadAsStreamAsync(ct))
-            await using (var target = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.Read))
-            {
-                while (true)
+                if (downloaded > 0 && response.StatusCode == HttpStatusCode.OK)
                 {
-                    var read = await source.ReadAsync(buffer, ct);
-                    if (read == 0)
-                        break;
-
-                    await target.WriteAsync(buffer.AsMemory(0, read), ct);
-                    downloaded += read;
-
-                    var elapsed = Math.Max((DateTime.UtcNow - started).TotalSeconds, 0.1);
-                    var speed = downloaded / elapsed;
-                    var percent = total > 0 ? downloaded * 100d / total : 0;
-                    var eta = total > 0 && speed > 0 ? (total - downloaded) / speed : 0;
-                    progress?.Report(new DownloadProgress
-                    {
-                        Percent = percent,
-                        Downloaded = downloaded,
-                        Total = total,
-                        Speed = speed,
-                        Eta = eta,
-                        RawLine = "[douyin-browser] downloading"
-                    });
+                    downloaded = 0;
+                    fileMode = FileMode.Create;
                 }
+
+                total = response.Content.Headers.ContentRange?.Length
+                    ?? Math.Max(total, response.Content.Headers.ContentLength ?? 0);
+
+                await using (var source = await response.Content.ReadAsStreamAsync(ct))
+                await using (var target = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.Read))
+                {
+                    while (true)
+                    {
+                        var read = await source.ReadAsync(buffer, ct);
+                        if (read == 0)
+                            break;
+
+                        await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                        downloaded += read;
+
+                        var elapsed = Math.Max((DateTime.UtcNow - started).TotalSeconds, 0.1);
+                        var speed = downloaded / elapsed;
+                        var percent = total > 0 ? downloaded * 100d / total : 0;
+                        var eta = total > 0 && speed > 0 ? (total - downloaded) / speed : 0;
+                        progress?.Report(new DownloadProgress
+                        {
+                            Percent = percent,
+                            Downloaded = downloaded,
+                            Total = total,
+                            Speed = speed,
+                            Eta = eta,
+                            RawLine = "[douyin-browser] downloading"
+                        });
+                    }
+                }
+
+                if (total <= 0 || downloaded >= total)
+                    break;
+
+                if (response.StatusCode != HttpStatusCode.PartialContent)
+                    throw new IOException($"抖音兜底下载不完整：已下载 {downloaded} / {total} 字节。");
+
+                fileMode = FileMode.Append;
             }
 
-            if (total <= 0 || downloaded >= total)
-                break;
-
-            if (response.StatusCode != HttpStatusCode.PartialContent)
-                throw new IOException($"抖音兜底下载不完整：已下载 {downloaded} / {total} 字节。");
-
-            fileMode = FileMode.Append;
+            if (total > 0 && downloaded != total)
+                throw new IOException($"抖音兜底下载字节数异常：已下载 {downloaded} / {total} 字节。");
         }
-
-        if (total > 0 && downloaded != total)
-            throw new IOException($"抖音兜底下载字节数异常：已下载 {downloaded} / {total} 字节。");
+        catch
+        {
+            TryDeleteFile(tempPath);
+            throw;
+        }
 
         if (File.Exists(outputPath))
             File.Delete(outputPath);
@@ -667,6 +675,19 @@ internal class DouyinBrowserDownloadService
         {
             if (Directory.Exists(path))
                 Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+            // Best effort cleanup.
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
         }
         catch
         {

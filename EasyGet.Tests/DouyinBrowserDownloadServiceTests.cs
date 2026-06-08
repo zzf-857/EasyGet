@@ -134,6 +134,29 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
         Assert.Equal(10, new FileInfo(outputPath).Length);
     }
 
+    [Fact]
+    public async Task DownloadFileAsync_RemovesTempFileWhenCancelled()
+    {
+        var tempPath = Path.Combine(_tempDir, "cancelled.mp4.part");
+        var outputPath = Path.Combine(_tempDir, "cancelled.mp4");
+        Directory.CreateDirectory(_tempDir);
+
+        using var server = new SlowBodyHttpServer(totalBytes: 64 * 1024, chunkBytes: 1024, delayMs: 20);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(80));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            DouyinBrowserDownloadService.DownloadFileAsync(
+                server.Url,
+                tempPath,
+                outputPath,
+                "https://www.douyin.com/",
+                null,
+                cts.Token));
+
+        Assert.False(File.Exists(tempPath));
+        Assert.False(File.Exists(outputPath));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
@@ -180,7 +203,7 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
             }
         }
 
-        private static async Task ReadRequestAsync(NetworkStream stream, CancellationToken ct)
+        public static async Task ReadRequestAsync(NetworkStream stream, CancellationToken ct)
         {
             var buffer = new byte[1024];
             var request = new StringBuilder();
@@ -202,6 +225,78 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
                 .Replace("\n", "\r\n", StringComparison.Ordinal);
 
             return Encoding.ASCII.GetBytes(normalized);
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _listener.Stop();
+            try
+            {
+                _serverTask.Wait(TimeSpan.FromSeconds(1));
+            }
+            catch (AggregateException)
+            {
+            }
+            _cts.Dispose();
+        }
+    }
+
+    private sealed class SlowBodyHttpServer : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly int _totalBytes;
+        private readonly int _chunkBytes;
+        private readonly int _delayMs;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _serverTask;
+
+        public string Url { get; }
+
+        public SlowBodyHttpServer(int totalBytes, int chunkBytes, int delayMs)
+        {
+            _totalBytes = totalBytes;
+            _chunkBytes = chunkBytes;
+            _delayMs = delayMs;
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            Url = $"http://127.0.0.1:{port}/slow-video.mp4";
+            _serverTask = Task.Run(ServeAsync);
+        }
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                using var client = await _listener.AcceptTcpClientAsync(_cts.Token);
+                var stream = client.GetStream();
+                await ScriptedHttpServer.ReadRequestAsync(stream, _cts.Token);
+
+                var header = Encoding.ASCII.GetBytes(
+                    $"HTTP/1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Length: {_totalBytes}\r\nConnection: close\r\n\r\n");
+                await stream.WriteAsync(header, _cts.Token);
+
+                var chunk = Enumerable.Repeat((byte)'x', _chunkBytes).ToArray();
+                var remaining = _totalBytes;
+                while (remaining > 0 && !_cts.IsCancellationRequested)
+                {
+                    var length = Math.Min(chunk.Length, remaining);
+                    await stream.WriteAsync(chunk.AsMemory(0, length), _cts.Token);
+                    remaining -= length;
+                    await Task.Delay(_delayMs, _cts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (IOException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
 
         public void Dispose()
