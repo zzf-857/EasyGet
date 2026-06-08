@@ -25,6 +25,44 @@ public class XamlBindingTests
             Assert.Contains("StringToVisibility", binding));
     }
 
+    [Theory]
+    [InlineData("CheckEnvironmentCommand", "CanCheckEnvironment")]
+    [InlineData("InstallMissingToolsCommand", "CanInstallMissingTools")]
+    [InlineData("UpdateYtDlpCommand", "CanUpdateYtDlp")]
+    public void SettingsEnvironmentButtonsBindExpectedEnabledState(string commandName, string enabledProperty)
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+
+        var button = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+
+        Assert.NotNull(button);
+        var isEnabled = button!.Attribute("IsEnabled")?.Value ?? "";
+        Assert.Contains(enabledProperty, isEnabled);
+    }
+
+    [Fact]
+    public void SettingsUpdateStatusMessageVisibilityUsesMessageContent()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+
+        var statusTextBlock = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBlock"
+                && element.Attributes("Text").Any(attribute =>
+                    attribute.Value.Contains("UpdateStatusMessage", StringComparison.Ordinal)));
+
+        Assert.NotNull(statusTextBlock);
+        var visibility = statusTextBlock!.Attribute("Visibility")?.Value ?? "";
+        Assert.Contains("UpdateStatusMessage", visibility);
+        Assert.Contains("StringToVisibility", visibility);
+    }
+
     private static string GetViewPath(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

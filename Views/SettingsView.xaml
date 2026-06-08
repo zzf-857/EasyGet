@@ -115,15 +115,16 @@
 
                     <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                         <Button Style="{StaticResource SurfaceButton}" Content="🔄 重新检测"
-                                Command="{Binding CheckEnvironmentCommand}"/>
+                                Command="{Binding CheckEnvironmentCommand}"
+                                IsEnabled="{Binding CanCheckEnvironment}"/>
                         <Button Style="{StaticResource SurfaceButton}" Content="⬇ 安装缺失组件"
                                 Margin="8,0,0,0"
                                 Command="{Binding InstallMissingToolsCommand}"
-                                IsEnabled="{Binding IsInstallingTools, Converter={StaticResource InverseBool}}"/>
+                                IsEnabled="{Binding CanInstallMissingTools}"/>
                         <Button Style="{StaticResource SurfaceButton}" Content="⬆ 更新 yt-dlp"
                                 Margin="8,0,0,0"
                                 Command="{Binding UpdateYtDlpCommand}"
-                                IsEnabled="{Binding YtDlpFound}"/>
+                                IsEnabled="{Binding CanUpdateYtDlp}"/>
                     </StackPanel>
                     <TextBlock Text="{Binding InstallStatusMessage}" FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"
@@ -132,7 +133,7 @@
                     <TextBlock Text="{Binding UpdateStatusMessage}" FontSize="11"
                                Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"
                                TextWrapping="Wrap"
-                               Visibility="{Binding IsUpdatingYtDlp, Converter={StaticResource BoolToVisibility}}"/>
+                               Visibility="{Binding UpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
                 </StackPanel>
             </Border>
 

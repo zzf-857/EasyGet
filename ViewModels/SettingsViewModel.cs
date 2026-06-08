@@ -40,6 +40,10 @@ public partial class SettingsViewModel : ObservableObject
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
     public string[] QualityOptions { get; } = ["最高画质", "2160p", "1080p", "720p", "480p"];
 
+    public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
+    public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
+    public bool CanUpdateYtDlp => CanCheckEnvironment && YtDlpFound;
+
     public SettingsViewModel(ConfigService configService, EnvironmentService envService, DownloadManager downloadManager)
     {
         _configService = configService;
@@ -189,6 +193,11 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnUseAria2cChanged(bool value) => AutoSave();
     partial void OnCookieContentChanged(string value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
+    partial void OnYtDlpFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnFfmpegFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnIsCheckingEnvChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnIsInstallingToolsChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnIsUpdatingYtDlpChanged(bool value) => NotifyEnvironmentActionStateChanged();
 
     private void AutoSave()
     {
@@ -216,6 +225,13 @@ public partial class SettingsViewModel : ObservableObject
         {
             _isInitializing = false;
         }
+    }
+
+    private void NotifyEnvironmentActionStateChanged()
+    {
+        OnPropertyChanged(nameof(CanCheckEnvironment));
+        OnPropertyChanged(nameof(CanInstallMissingTools));
+        OnPropertyChanged(nameof(CanUpdateYtDlp));
     }
 
     [RelayCommand]

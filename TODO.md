@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 优化设置页环境按钮忙碌态与更新反馈显示
+  - 内容：为设置页环境操作增加 `CanCheckEnvironment`、`CanInstallMissingTools`、`CanUpdateYtDlp` 三个可用状态，避免检测、安装、更新期间重复点击；将 yt-dlp 更新状态文本改为按 `UpdateStatusMessage` 内容显示，更新完成后仍能看到结果。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~XamlBindingTests"` 观察到 4 个测试失败；修复后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，27 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
+  - 提交说明：`优化设置页环境操作状态`
+
 - [x] 2026-06-09 增加 aria2c 可用性检测与性能配置上下限保护
   - 内容：为并发分片数和批量同时下载数增加运行时 clamp；启用 aria2c 时优先查找内置 tools 目录和 PATH 中的 `aria2c.exe`，未找到则回退 yt-dlp 内置下载器并输出日志提示；新增配置归一化、PATH 查找和 aria2c 参数拼装测试。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~ConfigServiceTests|FullyQualifiedName~EnvironmentServiceTests|FullyQualifiedName~YtDlpArgsTests"` 观察到缺少目标 API 的编译失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，23 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
