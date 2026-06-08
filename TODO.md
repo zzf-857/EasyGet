@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补齐 Windows 发布脚本与 smoke 检查
+  - 内容：新增 `scripts\publish-win-x64.ps1`，串联 restore、test、self-contained publish、`EasyGet.exe` 存在性 smoke 检查和可选 zip 打包；更新手动打包说明、README 与项目进度分析；将发布产物目录加入 `.gitignore`；固定主项目 NuGet 版本，避免 `8.*` 浮动导致测试/发布依赖冲突。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ReleaseScriptTests` 观察到脚本缺失和文档未引用的 2 个测试失败；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ProjectDependencyTests` 观察到 3 个 `8.*` 包版本未固定的测试失败；实现后两个目标测试均通过；`powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -Configuration Release -Runtime win-x64 -SkipZip` 成功，脚本内 44 个 Release 测试通过并生成 `EasyGet.exe`；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，44 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`补齐 Windows 发布脚本`
+
 - [x] 2026-06-09 在设置页暴露 aria2c 外部下载器开关
   - 内容：在性能设置区增加 `UseAria2c` Toggle 开关，沿用现有 `ToggleSwitch` 样式和自动保存流程，并补充说明“未安装 aria2c 时自动回退到 yt-dlp 内置下载器”，让已有加速配置真正可被用户操作。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests` 观察到缺少 `UseAria2c` Toggle 的测试失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，41 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
@@ -89,4 +94,3 @@
 - [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。
 - [ ] UI 现代化：统一按钮图标和控件圆角/密度，降低 emoji 按钮带来的视觉不一致。
 - [ ] UI 现代化：检查 ComboBox、列表项 hover、导航选中态与队列操作按钮的暗色主题一致性。
-- [ ] 工程化：补齐发布流水线或单文件发布脚本，并加入基础 smoke build。

@@ -119,8 +119,8 @@ dotnet run
 # 运行测试
 dotnet test EasyGet.Tests/EasyGet.Tests.csproj
 
-# 或发布
-dotnet publish -c Release -r win-x64 --self-contained
+# 发布并做 smoke 检查
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -SkipZip
 ```
 
 > **提示：** 首次运行时，EasyGet 会自动检测并下载 yt-dlp 和 ffmpeg，无需手动安装。yt-dlp 来自官方 GitHub Release，ffmpeg Windows 构建来自 FFmpeg 官网链接的 gyan.dev。
@@ -152,6 +152,7 @@ dotnet publish -c Release -r win-x64 --self-contained
 - [x] 日志自动滚动到底部
 - [x] 剪贴板粘贴支持
 - [x] 基础单元测试（文件命名、Cookie、环境辅助函数、XAML 绑定等）
+- [x] Windows 发布脚本与 EasyGet.exe smoke 检查
 
 ### 🔧 待完善
 - [ ] 系统托盘或系统级 Toast 通知
@@ -159,7 +160,7 @@ dotnet publish -c Release -r win-x64 --self-contained
 - [ ] 抖音浏览器兜底的网络中断、Range 续传和取消清理测试
 - [ ] 动态并发调整的服务级测试
 - [ ] 更完整的 UI/UX 重构（暗色 Google Material 风格）
-- [ ] 应用安装包 / 发布流水线
+- [ ] 应用安装包（Inno Setup / MSIX）
 - [ ] 应用自动更新
 - [ ] 国际化支持
 - [ ] 更完整的单元测试和 UI 自动化测试
