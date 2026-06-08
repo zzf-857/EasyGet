@@ -27,6 +27,8 @@ public class DownloadProgress
     public string RawLine { get; set; } = "";
 }
 
+internal sealed record ProcessOutput(string StandardOutput, string StandardError, int ExitCode);
+
 public partial class YtDlpService
 {
     private enum CookieStrategy
@@ -848,9 +850,19 @@ public partial class YtDlpService
 
     private async Task<string> RunAsync(List<string> args, CancellationToken ct = default)
     {
+        var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
+        return result.StandardOutput;
+    }
+
+    internal static async Task<ProcessOutput> RunProcessAsync(
+        string fileName,
+        IEnumerable<string> args,
+        TimeSpan? timeout = null,
+        CancellationToken ct = default)
+    {
         var psi = new ProcessStartInfo
         {
-            FileName = GetYtDlpPath(),
+            FileName = fileName,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -865,23 +877,55 @@ public partial class YtDlpService
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
 
-        using var process = Process.Start(psi)!;
-        using var reg = ct.Register(() =>
-        {
-            try { process.Kill(entireProcessTree: true); } catch { }
-        });
+        using var process = Process.Start(psi)
+            ?? throw new InvalidOperationException($"无法启动命令: {fileName}");
 
-        var output = await process.StandardOutput.ReadToEndAsync(ct);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout ?? TimeSpan.FromSeconds(60));
+
         try
         {
-            await process.WaitForExitAsync();
+            await process.WaitForExitAsync(timeoutCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            TryKill(process);
+            await DrainProcessOutputAsync(stdoutTask, stderrTask);
+            throw new TimeoutException($"yt-dlp 命令执行超时: {fileName}");
+        }
+
+        return new ProcessOutput(
+            await stdoutTask,
+            await stderrTask,
+            process.ExitCode);
+    }
+
+    private static async Task DrainProcessOutputAsync(Task<string> stdoutTask, Task<string> stderrTask)
+    {
+        try
+        {
+            await Task.WhenAny(Task.WhenAll(stdoutTask, stderrTask), Task.Delay(1000));
         }
         catch
         {
-            // ignore
+            // 进程超时后的输出清理是 best effort。
         }
+    }
 
-        return output;
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+                process.Kill(entireProcessTree: true);
+        }
+        catch
+        {
+            // 忽略进程清理失败。
+        }
     }
 
     [GeneratedRegex(@"([\d.]+)%.*?([\d.]+[KMGT]?i?B/s).*?ETA\s+([\w:]+)")]

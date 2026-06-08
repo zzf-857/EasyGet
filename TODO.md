@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 为 yt-dlp 信息解析进程增加 stderr 与超时保护
+  - 内容：新增 `YtDlpService.RunProcessAsync`，用于信息解析和播放列表导入等短命令；并发读取 stdout/stderr，避免 stderr 堵塞；默认 60 秒超时，超时后结束进程并抛出 `TimeoutException`。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProcessTests` 观察到缺少目标 API 的编译失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，31 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
+  - 提交说明：`增强 yt-dlp 短命令执行可靠性`
+
 - [x] 2026-06-09 为环境命令增加超时与 stderr 保护
   - 内容：`EnvironmentService.RunCommandAsync` 改为并发读取 stdout/stderr，避免 stderr 输出过多造成进程等待死锁；增加默认 30 秒超时，超时后结束进程并抛出 `TimeoutException`；保留 stderr 作为失败诊断输出。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~EnvironmentServiceTests` 观察到缺少目标 API 的编译失败；实现后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，29 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
@@ -42,7 +47,7 @@
 
 - [ ] 下载可靠性：为抖音浏览器兜底下载增加网络中断/Range 续传测试，降低大文件失败概率。
 - [ ] 下载可靠性：为动态并发调整增加单元测试或可验证的服务级测试，避免缩小并发时吞掉许可。
-- [ ] 下载可靠性：为 yt-dlp 信息解析与下载进程增加超时、stderr 诊断与卡住保护。
+- [ ] 下载可靠性：为 yt-dlp 长下载进程增加无输出超时、stderr 诊断与卡住保护。
 - [ ] 下载体验：完善设置页安装进度展示，区分“检测中 / 下载中 / 解压中 / 失败原因”。
 - [ ] UI 现代化：统一按钮图标和控件圆角/密度，降低 emoji 按钮带来的视觉不一致。
 - [ ] UI 现代化：检查 ComboBox、列表项 hover、导航选中态与队列操作按钮的暗色主题一致性。
