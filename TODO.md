@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 校准 README 开发进度
+  - 内容：同步 README 已完成/待完善列表，移除窗口持久化和日志自动滚动等过期待办，补充 aria2c 可用性检测、抖音兜底和后续端到端验证事项。
+  - 验证：`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，27 个测试全部通过。
+  - 提交说明：`校准 README 开发进度`
+
 - [x] 2026-06-09 优化设置页环境按钮忙碌态与更新反馈显示
   - 内容：为设置页环境操作增加 `CanCheckEnvironment`、`CanInstallMissingTools`、`CanUpdateYtDlp` 三个可用状态，避免检测、安装、更新期间重复点击；将 yt-dlp 更新状态文本改为按 `UpdateStatusMessage` 内容显示，更新完成后仍能看到结果。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~XamlBindingTests"` 观察到 4 个测试失败；修复后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，27 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个错误，保留现有高 DPI manifest 警告。
