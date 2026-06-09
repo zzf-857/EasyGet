@@ -15,6 +15,10 @@ public partial class HistoryViewModel : ObservableObject
     private readonly HistoryService _historyService;
 
     [ObservableProperty] private string _searchKeyword = "";
+    [ObservableProperty] private string _selectedMediaFilter = "全部";
+    [ObservableProperty] private int _totalHistoryCount;
+
+    public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
 
     public HistoryViewModel(HistoryService historyService)
@@ -31,15 +35,19 @@ public partial class HistoryViewModel : ObservableObject
         var items = await _historyService.GetAllAsync(
             string.IsNullOrWhiteSpace(SearchKeyword) ? null : SearchKeyword);
 
+        TotalHistoryCount = items.Count;
+        var filteredItems = items
+            .Where(item => MatchesMediaFilter(item, SelectedMediaFilter))
+            .ToList();
+
         HistoryItems.Clear();
-        if (items == null) return;
-        foreach (var item in items)
+        foreach (var item in filteredItems)
             HistoryItems.Add(item);
 
         // 异步检查文件是否存在，避免在 UI 线程同步读取磁盘/网络驱动器导致卡顿
         _ = Task.Run(() =>
         {
-            foreach (var item in items)
+            foreach (var item in filteredItems)
             {
                 var exists = !string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath);
                 if (item.FileExists != exists)
@@ -62,6 +70,16 @@ public partial class HistoryViewModel : ObservableObject
         await LoadHistory();
     }
 
+    [RelayCommand]
+    private async Task SetMediaFilter(string filter)
+    {
+        if (string.IsNullOrWhiteSpace(filter))
+            filter = "全部";
+
+        SelectedMediaFilter = filter;
+        await LoadHistory();
+    }
+
     /// <summary>
     /// 清空全部历史
     /// </summary>
@@ -70,6 +88,7 @@ public partial class HistoryViewModel : ObservableObject
     {
         await _historyService.ClearAllAsync();
         HistoryItems.Clear();
+        TotalHistoryCount = 0;
     }
 
     /// <summary>
@@ -81,6 +100,7 @@ public partial class HistoryViewModel : ObservableObject
         await _historyService.DeleteAsync(id);
         var item = HistoryItems.FirstOrDefault(h => h.Id == id);
         if (item != null) HistoryItems.Remove(item);
+        if (TotalHistoryCount > 0) TotalHistoryCount--;
     }
 
     /// <summary>
@@ -109,5 +129,24 @@ public partial class HistoryViewModel : ObservableObject
             }
             catch { }
         });
+    }
+
+    private static bool MatchesMediaFilter(DownloadHistory item, string filter)
+    {
+        return filter switch
+        {
+            "音频" => IsAudioFormat(item.Format),
+            "视频" => !IsAudioFormat(item.Format),
+            _ => true
+        };
+    }
+
+    private static bool IsAudioFormat(string format)
+    {
+        return format.Trim().ToLowerInvariant() switch
+        {
+            "mp3" or "m4a" or "wav" or "flac" or "aac" or "opus" or "ogg" => true,
+            _ => false
+        };
     }
 }

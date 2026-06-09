@@ -316,6 +316,29 @@ public class XamlBindingTests
             && !textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily"));
     }
 
+    [Fact]
+    public void HistoryViewUsesStitchMediaLibraryGrid()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("下载历史", texts);
+        Assert.Contains(texts, text => text.Contains("已完成任务", StringComparison.Ordinal));
+        Assert.Contains("全部", texts);
+        Assert.Contains("视频", texts);
+        Assert.Contains("音频", texts);
+
+        Assert.Contains(document.Descendants(), element => element.Name.LocalName == "WrapPanel");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Button"
+            && element.Attributes("Command").Any(attribute =>
+                attribute.Value.Contains("SetMediaFilterCommand", StringComparison.Ordinal)));
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Image"
+            && element.Attributes("Source").Any(attribute =>
+                attribute.Value.Contains("ThumbnailUrl", StringComparison.Ordinal)));
+    }
+
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]

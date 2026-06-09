@@ -4,51 +4,132 @@
              Background="Transparent"
              Loaded="HistoryView_Loaded">
 
-    <Grid Margin="40,32">
+    <Grid Margin="32,20,32,32">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="32"/>
         </Grid.RowDefinitions>
 
-        <!-- 标题 -->
-        <TextBlock Grid.Row="0" Text="历史记录" FontSize="28" FontWeight="ExtraBold"
-                   Foreground="{StaticResource TextPrimaryBrush}"
-                   FontFamily="Segoe UI Variable, Microsoft YaHei UI"
-                   Margin="0,0,0,24"/>
-
-        <!-- 搜索 + 清空 -->
-        <Grid Grid.Row="1" Margin="0,0,0,16">
+        <Grid Grid.Row="0" Margin="0,0,0,24">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" Style="{StaticResource DarkTextBox}"
-                     Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"/>
-            <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
+            <Border Grid.Column="0"
+                    Background="{StaticResource BgSurfaceBrush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="20"
+                    Padding="12,0"
+                    MaxWidth="620"
+                    HorizontalAlignment="Left">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               Text="&#xE721;"
+                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="14"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"/>
+                    <TextBox Grid.Column="1"
+                             Style="{StaticResource DarkTextBox}"
+                             Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Padding="0,8"
+                             FontSize="13"/>
+                </Grid>
+            </Border>
+            <Button Grid.Column="1"
+                    Style="{StaticResource SurfaceButton}"
                     Margin="8,0,0,0"
+                    ToolTip="搜索下载历史"
+                    AutomationProperties.Name="搜索下载历史"
                     Command="{Binding SearchCommand}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                               FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
                     <TextBlock Text="搜索" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
-            <Button Grid.Column="2" Style="{StaticResource SurfaceButton}"
+            <Button Grid.Column="2"
+                    Style="{StaticResource SurfaceButton}"
                     Margin="8,0,0,0"
+                    ToolTip="清空下载历史"
+                    AutomationProperties.Name="清空下载历史"
                     Command="{Binding ClearAllCommand}">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="清空" VerticalAlignment="Center"/>
+                               FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="清空记录" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
         </Grid>
 
-        <!-- 历史列表与空状态 -->
+        <Grid Grid.Row="1" Margin="38,0,0,28">
+            <StackPanel>
+                <TextBlock Text="下载历史"
+                           Foreground="{StaticResource TextPrimaryBrush}"
+                           FontSize="26"
+                           FontWeight="SemiBold"/>
+                <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                           FontSize="14"
+                           Margin="0,4,0,0">
+                    <Run Text="共计 "/>
+                    <Run Text="{Binding TotalHistoryCount, Mode=OneWay}"/>
+                    <Run Text=" 个已完成任务"/>
+                </TextBlock>
+            </StackPanel>
+
+            <Border HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Background="{StaticResource BgSurfaceBrush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="9"
+                    Padding="4">
+                <StackPanel Orientation="Horizontal">
+                    <Button Style="{StaticResource SurfaceButton}"
+                            Padding="13,5"
+                            FontSize="12"
+                            Command="{Binding SetMediaFilterCommand}"
+                            CommandParameter="全部"
+                            ToolTip="显示全部历史"
+                            AutomationProperties.Name="显示全部历史">
+                        <TextBlock Text="全部"/>
+                    </Button>
+                    <Button Style="{StaticResource SurfaceButton}"
+                            Padding="13,5"
+                            FontSize="12"
+                            Margin="4,0,0,0"
+                            Command="{Binding SetMediaFilterCommand}"
+                            CommandParameter="视频"
+                            ToolTip="只显示视频历史"
+                            AutomationProperties.Name="只显示视频历史">
+                        <TextBlock Text="视频"/>
+                    </Button>
+                    <Button Style="{StaticResource SurfaceButton}"
+                            Padding="13,5"
+                            FontSize="12"
+                            Margin="4,0,0,0"
+                            Command="{Binding SetMediaFilterCommand}"
+                            CommandParameter="音频"
+                            ToolTip="只显示音频历史"
+                            AutomationProperties.Name="只显示音频历史">
+                        <TextBlock Text="音频"/>
+                    </Button>
+                </StackPanel>
+            </Border>
+        </Grid>
+
         <Grid Grid.Row="2">
-            <!-- 空状态提示 -->
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,80">
                 <StackPanel.Style>
                     <Style TargetType="StackPanel">
@@ -60,112 +141,160 @@
                         </Style.Triggers>
                     </Style>
                 </StackPanel.Style>
-                <TextBlock Text="📭" FontSize="56" Foreground="{StaticResource BorderSubtleBrush}" HorizontalAlignment="Center" Opacity="0.5"/>
-                <TextBlock Text="暂无下载历史" FontSize="15" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                <TextBlock Text="&#xE8F9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                           FontSize="56" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
+                <TextBlock Text="无下载历史" FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                <TextBlock Text="快去粘贴链接下载你喜欢的视频吧" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
             </StackPanel>
 
             <ListBox ItemsSource="{Binding HistoryItems}"
-                     Background="Transparent" BorderThickness="0"
+                     Background="Transparent"
+                     BorderThickness="0"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-            <ListBox.ItemContainerStyle>
-                <Style TargetType="ListBoxItem">
-                    <Setter Property="Padding" Value="0"/>
-                    <Setter Property="Margin" Value="0,0,0,8"/>
-                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                    <Setter Property="Template">
-                        <Setter.Value>
-                            <ControlTemplate TargetType="ListBoxItem">
-                                <ContentPresenter/>
-                            </ControlTemplate>
-                        </Setter.Value>
-                    </Setter>
-                </Style>
-            </ListBox.ItemContainerStyle>
-            <ListBox.ItemTemplate>
-                <DataTemplate>
-                    <Border Style="{StaticResource ToolPanelBorder}"
-                            Padding="14,10"
-                            Opacity="{Binding FileExists, Converter={StaticResource FileExistsToOpacity}}"
-                            ToolTip="{Binding FilePath}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="4"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel/>
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="Margin" Value="0,0,22,22"/>
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter/>
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Border Style="{StaticResource ToolPanelBorder}"
+                                Width="286"
+                                Padding="0"
+                                Opacity="{Binding FileExists, Converter={StaticResource FileExistsToOpacity}}"
+                                ToolTip="{Binding FilePath}"
+                                ClipToBounds="True">
+                            <StackPanel>
+                                <Border Height="162"
+                                        CornerRadius="12,12,0,0"
+                                        Background="{StaticResource BgSurfaceHighestBrush}"
+                                        ClipToBounds="True">
+                                    <Grid>
+                                        <Image Source="{Binding ThumbnailUrl}"
+                                               Stretch="UniformToFill"
+                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        <TextBlock Text="&#xEC4F;"
+                                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontSize="44"
+                                                   Opacity="0.22"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                        <Border HorizontalAlignment="Right"
+                                                VerticalAlignment="Bottom"
+                                                Background="#99000000"
+                                                CornerRadius="3"
+                                                Padding="5,2"
+                                                Margin="0,0,8,8">
+                                            <TextBlock Text="{Binding Quality}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                    </Grid>
+                                </Border>
 
-                            <!-- 缩略图 -->
-                            <Border Grid.Column="0" Width="72" Height="46" CornerRadius="4"
-                                    ClipToBounds="True" Background="#222">
-                                <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"
-                                       RenderOptions.BitmapScalingMode="HighQuality"/>
-                            </Border>
+                                <StackPanel Margin="14,12,14,14">
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Title}"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Border Grid.Column="1"
+                                                Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"
+                                                CornerRadius="4"
+                                                Padding="6,2"
+                                                Margin="8,0,0,0"
+                                                Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
+                                            <TextBlock Text="{Binding Platform}" FontSize="9"
+                                                       Foreground="White"
+                                                       FontWeight="Bold"/>
+                                        </Border>
+                                    </Grid>
 
-                            <!-- 平台色条 -->
-                            <Border Grid.Column="1" CornerRadius="2" Width="4" Margin="8,0,0,0"
-                                    Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"/>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                                            <TextBlock Text="&#xE792;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                                            <TextBlock Text="{Binding FileSizeText, Mode=OneWay}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       Margin="0,0,12,0"/>
+                                            <TextBlock Text="&#xE787;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                                            <TextBlock Text="{Binding DownloadTimeText, Mode=OneWay}"
+                                                       FontSize="11"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Format}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource AccentBrush}"
+                                                   FontWeight="Bold"/>
+                                    </Grid>
 
-                            <!-- 内容 -->
-                            <StackPanel Grid.Column="2" Margin="10,0,0,0" VerticalAlignment="Center">
-                                <DockPanel>
-                                    <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                </DockPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                    <!-- 平台标签 -->
-                                    <Border Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"
-                                            CornerRadius="3" Padding="6,1" Margin="0,0,6,0"
-                                            VerticalAlignment="Center"
-                                            Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
-                                        <TextBlock Text="{Binding Platform}" FontSize="10"
-                                                   Foreground="White" FontWeight="Medium"/>
-                                    </Border>
-                                    <TextBlock Text="{Binding Format}" FontSize="11"
-                                               Foreground="{StaticResource TextMutedBrush}"/>
-                                    <TextBlock Text="{Binding FileSizeText, StringFormat=' · {0}', Mode=OneWay}" FontSize="11"
-                                               Foreground="{StaticResource TextMutedBrush}"/>
-                                    <TextBlock Text="{Binding DownloadTimeText, StringFormat=' · {0}', Mode=OneWay}" FontSize="11"
-                                               Foreground="{StaticResource TextMutedBrush}"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                                        <Button Style="{StaticResource SurfaceButton}"
+                                                ToolTip="打开文件夹"
+                                                AutomationProperties.Name="打开文件夹"
+                                                Padding="8,5"
+                                                IsEnabled="{Binding FileExists}"
+                                                Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding FilePath}">
+                                            <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       FontSize="12" VerticalAlignment="Center"/>
+                                        </Button>
+                                        <Button Style="{StaticResource SurfaceButton}"
+                                                ToolTip="删除记录"
+                                                AutomationProperties.Name="删除记录"
+                                                Padding="8,5"
+                                                Margin="6,0,0,0"
+                                                Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Id}">
+                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       FontSize="12" VerticalAlignment="Center"/>
+                                        </Button>
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
-
-                            <!-- 操作 -->
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Background="Transparent" Cursor="Hand">
-                                <StackPanel.Style>
-                                    <Style TargetType="StackPanel">
-                                        <Setter Property="Opacity" Value="0.25"/>
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Opacity" Value="1"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </StackPanel.Style>
-                                <Button Style="{StaticResource SurfaceButton}"
-                                        ToolTip="打开文件夹" AutomationProperties.Name="打开文件夹"
-                                        Padding="8,5"
-                                        IsEnabled="{Binding FileExists}"
-                                        Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding FilePath}">
-                                    <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="12" VerticalAlignment="Center"/>
-                                </Button>
-                                <Button Style="{StaticResource SurfaceButton}"
-                                        ToolTip="删除记录" AutomationProperties.Name="删除记录"
-                                        Padding="8,5" Margin="4,0,0,0"
-                                        Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                        CommandParameter="{Binding Id}">
-                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="12" VerticalAlignment="Center"/>
-                                </Button>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </ListBox.ItemTemplate>
-        </ListBox>
+                        </Border>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
         </Grid>
+
+        <Border Grid.Row="3"
+                HorizontalAlignment="Left"
+                Background="{StaticResource BgSurfaceBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Padding="14,6">
+            <StackPanel Orientation="Horizontal">
+                <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock Text="磁盘空间充足" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10"/>
+                <TextBlock Text="  ·  v1.2.4 Stable" Foreground="{StaticResource TextMutedBrush}" FontSize="10"/>
+            </StackPanel>
+        </Border>
     </Grid>
 </UserControl>
