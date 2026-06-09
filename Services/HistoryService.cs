@@ -1,4 +1,5 @@
 using System.IO;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 using EasyGet.Models;
 
@@ -12,15 +13,26 @@ public class HistoryService : IDisposable
     private readonly SqliteConnection _connection;
 
     public HistoryService()
+        : this(GetDefaultDatabasePath())
     {
-        var dbDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
+    }
+
+    internal HistoryService(string dbPath)
+    {
+        var dbDir = Path.GetDirectoryName(dbPath)
+            ?? throw new ArgumentException("Database path must include a directory.", nameof(dbPath));
         Directory.CreateDirectory(dbDir);
 
-        var dbPath = Path.Combine(dbDir, "history.db");
         _connection = new SqliteConnection($"Data Source={dbPath}");
         _connection.Open();
         InitializeDatabase();
+    }
+
+    private static string GetDefaultDatabasePath()
+    {
+        var dbDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
+        return Path.Combine(dbDir, "history.db");
     }
 
     private void InitializeDatabase()
@@ -69,7 +81,9 @@ public class HistoryService : IDisposable
         cmd.Parameters.AddWithValue("$quality", history.Quality);
         cmd.Parameters.AddWithValue("$fileSize", history.FileSize);
         cmd.Parameters.AddWithValue("$filePath", history.FilePath);
-        cmd.Parameters.AddWithValue("$downloadTime", history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss"));
+        cmd.Parameters.AddWithValue(
+            "$downloadTime",
+            history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$thumbnailUrl", history.ThumbnailUrl ?? "");
         await cmd.ExecuteNonQueryAsync();
     }
@@ -112,7 +126,11 @@ public class HistoryService : IDisposable
                 Quality = reader.GetString(5),
                 FileSize = reader.GetInt64(6),
                 FilePath = reader.GetString(7),
-                DownloadTime = DateTime.Parse(reader.GetString(8)),
+                DownloadTime = DateTime.ParseExact(
+                    reader.GetString(8),
+                    "yyyy-MM-dd HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None),
                 ThumbnailUrl = thumbnailUrl
             });
         }
