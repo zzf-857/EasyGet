@@ -5,6 +5,23 @@ namespace EasyGet.Tests;
 
 public class XamlBindingTests
 {
+    [Fact]
+    public void DownloadViewUsesModernToolPanelStyleForPrimaryPanels()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+
+        var styledPanels = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Border")
+            .Select(element => element.Attribute("Style")?.Value ?? "")
+            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            styledPanels.Count >= 3,
+            $"DownloadView should use ToolPanelBorder for option, progress, and log panels. Found {styledPanels.Count}.");
+    }
+
     [Theory]
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]

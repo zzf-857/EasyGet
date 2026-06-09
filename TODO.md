@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 统一下载页现代工具面板样式
+  - 内容：新增 `ToolPanelBorder` 主题样式，将下载页的选项区、下载进度区和日志区统一到 8px 圆角、细边框、柔和阴影和像素对齐的现代工具面板；减少页面内不同卡片圆角和边框写法不一致的问题，让下载页视觉更整齐。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~ThemeStyleTests|FullyQualifiedName~XamlBindingTests"` 观察到缺少 `ToolPanelBorder` 样式且下载页未使用该样式的 2 个测试失败；实现后同命令 18 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，96 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`统一下载页工具面板样式`
+
 - [x] 2026-06-09 保留 HttpOnly Netscape Cookie 行
   - 内容：修复 `YtDlpService.BuildCookieFileLines` 的 Netscape Cookie 文件转换逻辑，字段合法的 `#HttpOnly_` Cookie 行不再被当作普通注释跳过，普通注释仍继续忽略；浏览器或插件导出的 `cookies.txt` 中的 HttpOnly 登录态 Cookie 可被保留下来，降低粘贴标准 Cookie 文件后仍缺认证信息的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `#HttpOnly_` Netscape Cookie 行被过滤的测试失败；实现后同命令 12 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，94 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

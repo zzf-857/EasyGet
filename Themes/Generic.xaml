@@ -34,6 +34,17 @@
     <DropShadowEffect x:Key="HoverShadow" BlurRadius="16" ShadowDepth="4" Direction="270" Color="Black" Opacity="0.4"/>
     <DropShadowEffect x:Key="PopupShadow" BlurRadius="24" ShadowDepth="6" Direction="270" Color="Black" Opacity="0.5"/>
 
+    <!-- ========== 工具面板样式 ========== -->
+    <Style x:Key="ToolPanelBorder" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="20,16"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Effect" Value="{StaticResource SoftShadow}"/>
+    </Style>
+
     <!-- ========== TextBox 样式 ========== -->
     <Style x:Key="DarkTextBox" TargetType="TextBox">
         <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
