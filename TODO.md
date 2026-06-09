@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补齐 TextBox 禁用态视觉
+  - 内容：为 `DarkTextBox` 增加 `IsEnabled=False` 禁用态触发器，禁用时降低透明度、恢复普通光标并关闭焦点高亮，使代理配置等不可编辑输入框与按钮、ComboBox、ToggleSwitch 的禁用态反馈一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到 `DarkTextBox` 缺少禁用态触发器的测试失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，64 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`补齐 TextBox 禁用态样式`
+
 - [x] 2026-06-09 补齐 ToggleSwitch 禁用态视觉
   - 内容：为 `ToggleSwitch` 增加 `IsEnabled=False` 禁用态触发器，禁用时降低透明度并恢复普通光标，使设置页开关在不可操作时与按钮、ComboBox 的禁用态反馈一致。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到 `ToggleSwitch` 缺少禁用态触发器的测试失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，63 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

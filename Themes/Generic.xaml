@@ -75,6 +75,12 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="BgBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                            <Setter TargetName="FocusRing" Property="Opacity" Value="0"/>
+                            <Setter TargetName="BgBorder" Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
