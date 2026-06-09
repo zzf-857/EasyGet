@@ -481,6 +481,10 @@
                             <Setter TargetName="thumb" Property="Fill" Value="White"/>
                             <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right"/>
                         </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>

@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补齐 ToggleSwitch 禁用态视觉
+  - 内容：为 `ToggleSwitch` 增加 `IsEnabled=False` 禁用态触发器，禁用时降低透明度并恢复普通光标，使设置页开关在不可操作时与按钮、ComboBox 的禁用态反馈一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到 `ToggleSwitch` 缺少禁用态触发器的测试失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，63 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`补齐 ToggleSwitch 禁用态样式`
+
 - [x] 2026-06-09 补齐 ComboBox 禁用态视觉
   - 内容：为 `DarkComboBox` 增加手型光标和 `IsEnabled=False` 禁用态触发器，禁用时降低透明度并恢复普通光标，使格式、清晰度、字幕、设置页下拉框在不可操作时与按钮禁用态保持一致。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到 `DarkComboBox` 缺少禁用态触发器的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，62 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
