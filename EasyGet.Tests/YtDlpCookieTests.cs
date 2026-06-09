@@ -231,6 +231,34 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildCookieStrategies_AddsBrowserStrategiesForYoutubeWhenAvailable()
+    {
+        var strategies = YtDlpService.BuildCookieStrategies(
+            "https://www.youtube.com/watch?v=wFbtM0sfcEw",
+            chromeCookiesAvailable: true,
+            edgeCookiesAvailable: true);
+
+        Assert.Equal(
+            [
+                YtDlpService.CookieStrategy.Default,
+                YtDlpService.CookieStrategy.BrowserChrome,
+                YtDlpService.CookieStrategy.BrowserEdge
+            ],
+            strategies);
+    }
+
+    [Fact]
+    public void BuildCookieStrategies_KeepsGenericSitesOnDefaultStrategy()
+    {
+        var strategies = YtDlpService.BuildCookieStrategies(
+            "https://example.com/video",
+            chromeCookiesAvailable: true,
+            edgeCookiesAvailable: true);
+
+        Assert.Equal([YtDlpService.CookieStrategy.Default], strategies);
+    }
+
+    [Fact]
     public void BuildDownloadFailureMessage_ExplainsDouyinFreshCookiesAfterBrowserCookieFailures()
     {
         var stderrLines = new[]

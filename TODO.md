@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 元数据阶段复用浏览器 Cookie 策略
+  - 内容：将 YouTube/抖音的 Cookie 策略构建抽成 `BuildCookieStrategies`，正式下载、视频信息解析和播放列表导入共用同一套“默认 Cookie → Chrome Cookie → Edge Cookie”策略；元数据或播放列表阶段遇到风控、年龄门槛、403、浏览器 Cookie 读取错误等 stderr 信号时，会继续尝试下一种可用 Cookie 策略，降低解析阶段失败导致任务缺标题、播放列表导入为空或还未下载就中断的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到缺少 `BuildCookieStrategies` 且 `CookieStrategy` 不可访问的编译失败；实现后同命令 14 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，108 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`元数据阶段复用浏览器 Cookie`
+
 - [x] 2026-06-09 为 yt-dlp 短命令增加网络重试参数
   - 内容：将视频信息解析和播放列表导入的 yt-dlp 基础参数抽成可测试入口，并复用长下载已有的 `--retries 20`、`--fragment-retries 30`、`--socket-timeout 30` 和线性 `--retry-sleep`；网络抖动或临时连接失败时，元数据/播放列表阶段也能由 yt-dlp 自身重试，降低还未进入正式下载就失败的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpArgsTests` 观察到缺少短命令基础参数构建入口的编译失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，106 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

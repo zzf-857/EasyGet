@@ -33,7 +33,7 @@ public partial class YtDlpService
 {
     private static readonly TimeSpan DefaultDownloadNoOutputTimeout = TimeSpan.FromMinutes(10);
 
-    private enum CookieStrategy
+    internal enum CookieStrategy
     {
         Default,
         BrowserChrome,
@@ -68,30 +68,41 @@ public partial class YtDlpService
     {
         try
         {
-            var args = BuildVideoInfoBaseArgs();
+            var strategies = GetCookieStrategies(url);
+            for (var i = 0; i < strategies.Count; i++)
+            {
+                var args = BuildVideoInfoBaseArgs();
 
-            AddProxyArgs(args);
-            AddCookieArgs(args, url, CookieStrategy.Default);
-            args.Add(url);
+                AddProxyArgs(args);
+                AddCookieArgs(args, url, strategies[i]);
+                args.Add(url);
 
-            var output = await RunAsync(args, ct);
-            if (string.IsNullOrWhiteSpace(output))
-                return null;
+                var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
+                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                {
+                    var firstJson = result.StandardOutput
+                        .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault(line => line.TrimStart().StartsWith("{"));
 
-            var firstJson = output
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault(line => line.TrimStart().StartsWith("{"));
+                    if (!string.IsNullOrWhiteSpace(firstJson))
+                        return ParseVideoInfoJson(firstJson, url);
+                }
 
-            if (string.IsNullOrWhiteSpace(firstJson))
-                return null;
+                if (i < strategies.Count - 1
+                    && ShouldRetryWithNextCookieStrategy(url, SplitProcessLines(result.StandardError)))
+                {
+                    continue;
+                }
 
-            return ParseVideoInfoJson(firstJson, url);
+                break;
+            }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[YtDlpService] GetVideoInfo failed: {ex.Message}");
-            return null;
         }
+
+        return null;
     }
 
     internal static VideoInfo? ParseVideoInfoJson(string json, string url)
@@ -188,28 +199,42 @@ public partial class YtDlpService
 
         try
         {
-            var args = BuildPlaylistBaseArgs();
-
-            AddProxyArgs(args);
-            AddCookieArgs(args, url, CookieStrategy.Default);
-            args.Add(url);
-
-            var output = await RunAsync(args, ct);
-            if (string.IsNullOrWhiteSpace(output))
-                return urls;
-
-            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            var strategies = GetCookieStrategies(url);
+            for (var i = 0; i < strategies.Count; i++)
             {
-                try
+                var args = BuildPlaylistBaseArgs();
+
+                AddProxyArgs(args);
+                AddCookieArgs(args, url, strategies[i]);
+                args.Add(url);
+
+                var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
+                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
-                    var videoUrl = ExtractPlaylistUrlFromJson(line);
-                    if (!string.IsNullOrWhiteSpace(videoUrl))
-                        urls.Add(videoUrl);
+                    foreach (var line in result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        try
+                        {
+                            var videoUrl = ExtractPlaylistUrlFromJson(line);
+                            if (!string.IsNullOrWhiteSpace(videoUrl))
+                                urls.Add(videoUrl);
+                        }
+                        catch
+                        {
+                            // ignore non-json lines
+                        }
+                    }
+
+                    return urls;
                 }
-                catch
+
+                if (i < strategies.Count - 1
+                    && ShouldRetryWithNextCookieStrategy(url, SplitProcessLines(result.StandardError)))
                 {
-                    // ignore non-json lines
+                    continue;
                 }
+
+                break;
             }
         }
         catch (Exception ex)
@@ -253,12 +278,7 @@ public partial class YtDlpService
     {
         task.Status = DownloadStatus.Downloading;
 
-        var strategies = new List<CookieStrategy> { CookieStrategy.Default };
-        if (IsDouyinUrl(task.Url) || IsYoutubeUrl(task.Url))
-        {
-            if (HasBrowserCookies("chrome")) strategies.Add(CookieStrategy.BrowserChrome);
-            if (HasBrowserCookies("edge")) strategies.Add(CookieStrategy.BrowserEdge);
-        }
+        var strategies = GetCookieStrategies(task.Url);
 
         List<string> lastStderr = [];
         var allStderr = new List<string>();
@@ -500,6 +520,32 @@ public partial class YtDlpService
 
         AddNetworkReliabilityArgs(args);
         return args;
+    }
+
+    internal static List<CookieStrategy> BuildCookieStrategies(
+        string url,
+        bool chromeCookiesAvailable,
+        bool edgeCookiesAvailable)
+    {
+        var strategies = new List<CookieStrategy> { CookieStrategy.Default };
+        if (!IsDouyinUrl(url) && !IsYoutubeUrl(url))
+            return strategies;
+
+        if (chromeCookiesAvailable)
+            strategies.Add(CookieStrategy.BrowserChrome);
+
+        if (edgeCookiesAvailable)
+            strategies.Add(CookieStrategy.BrowserEdge);
+
+        return strategies;
+    }
+
+    private List<CookieStrategy> GetCookieStrategies(string url)
+    {
+        return BuildCookieStrategies(
+            url,
+            HasBrowserCookies("chrome"),
+            HasBrowserCookies("edge"));
     }
 
     private static string BuildFormatString(string format, string quality)
@@ -1043,6 +1089,13 @@ public partial class YtDlpService
     {
         var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
         return result.StandardOutput;
+    }
+
+    private static List<string> SplitProcessLines(string output)
+    {
+        return output
+            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
     }
 
     internal static async Task<ProcessOutput> RunDownloadProcessAsync(
