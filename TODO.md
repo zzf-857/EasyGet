@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错 Cookie JSON 字段类型
+  - 内容：为 `YtDlpService.BuildCookieFileLines` 的浏览器 Cookie JSON 解析增加安全字段读取，支持 `secure`、`hostOnly` 和 `expirationDate` 以字符串或数字形式出现，并继续兼容 `sessionValue`；用户从浏览器插件粘贴的 Cookie JSON 字段类型不标准时，不再整段解析失败后退化为空 Cookie 文件，降低 YouTube/抖音 Cookie 下载失败概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到字符串布尔值导致 JSON Cookie 没有写入的测试失败；实现后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，88 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错 Cookie JSON 字段类型`
+
 - [x] 2026-06-09 规范化 yt-dlp 播放列表裸 YouTube ID
   - 内容：为 `YtDlpService.ExtractPlaylistUrlFromJson` 增加 YouTube 扁平播放列表裸视频 ID 规范化；当 yt-dlp 只输出 `url` 为视频 ID 且 `ie_key/extractor_key` 表明来源是 YouTube 时，会转换为标准 `https://www.youtube.com/watch?v=...`，避免批量下载拿到裸 ID 后失败或误解析。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpMetadataTests` 观察到裸 ID 被原样返回的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，87 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

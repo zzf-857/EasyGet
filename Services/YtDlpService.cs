@@ -762,19 +762,15 @@ public partial class YtDlpService
                 using var doc = JsonDocument.Parse(trimmed);
                 foreach (var item in doc.RootElement.EnumerateArray())
                 {
-                    var domain = item.TryGetProperty("domain", out var d) ? d.GetString() ?? "" : "";
-                    var name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
-                    var value = item.TryGetProperty("value", out var v) ? v.GetString() ?? "" : "";
-                    var path = item.TryGetProperty("path", out var p) ? p.GetString() ?? "/" : "/";
-                    var secure = item.TryGetProperty("secure", out var s) && s.GetBoolean();
-                    var hostOnly = item.TryGetProperty("hostOnly", out var ho) && ho.GetBoolean();
-
-                    long expiry = 0;
-                    if (item.TryGetProperty("expirationDate", out var exp)
-                        && exp.ValueKind == JsonValueKind.Number)
-                    {
-                        expiry = (long)exp.GetDouble();
-                    }
+                    var domain = GetOptionalString(item, "domain");
+                    var name = GetOptionalString(item, "name");
+                    var value = GetCookieValue(item);
+                    var path = GetOptionalString(item, "path");
+                    if (string.IsNullOrWhiteSpace(path))
+                        path = "/";
+                    var secure = GetOptionalBoolean(item, "secure");
+                    var hostOnly = GetOptionalBoolean(item, "hostOnly");
+                    var expiry = GetOptionalUnixTime(item, "expirationDate");
 
                     if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(name))
                         continue;
@@ -819,6 +815,55 @@ public partial class YtDlpService
             foreach (var domain in domains)
                 lines.Add($"{domain}\tTRUE\t/\tTRUE\t0\t{name}\t{value}");
         }
+    }
+
+    private static string GetCookieValue(JsonElement item)
+    {
+        var value = GetOptionalString(item, "value");
+        if (!string.IsNullOrEmpty(value))
+            return value;
+
+        return GetOptionalString(item, "sessionValue");
+    }
+
+    private static bool GetOptionalBoolean(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var value))
+        {
+            return false;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
+            JsonValueKind.Number => value.TryGetInt32(out var number) && number != 0,
+            _ => false
+        };
+    }
+
+    private static long GetOptionalUnixTime(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var value))
+        {
+            return 0;
+        }
+
+        var seconds = value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetDouble(out var number) => number,
+            JsonValueKind.String when double.TryParse(
+                value.GetString(),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var number) => number,
+            _ => 0
+        };
+
+        return Math.Max(0, (long)seconds);
     }
 
     private static bool LooksLikeNetscapeCookieFile(string cookieContent)

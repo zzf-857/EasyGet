@@ -32,6 +32,28 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildCookieFileLines_AcceptsBrowserJsonWithStringBooleanAndExpiryFields()
+    {
+        const string input = """
+            [
+              {
+                "domain": ".youtube.com",
+                "hostOnly": "false",
+                "path": "/",
+                "secure": "true",
+                "expirationDate": "1811688281.75",
+                "name": "__Secure-1PSID",
+                "value": "token-value"
+              }
+            ]
+            """;
+
+        var lines = YtDlpService.BuildCookieFileLines(input);
+
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688281\t__Secure-1PSID\ttoken-value", lines);
+    }
+
+    [Fact]
     public void BuildDownloadFailureMessage_PreservesYoutubeForbiddenCauseAfterBrowserCookieFailures()
     {
         var stderrLines = new[]
