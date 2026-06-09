@@ -95,13 +95,8 @@ internal class DouyinBrowserDownloadService
                 return false;
             }
 
-            var url = response.TryGetProperty("url", out var urlElement)
-                ? urlElement.GetString() ?? ""
-                : "";
-
-            var mimeType = response.TryGetProperty("mimeType", out var mimeElement)
-                ? mimeElement.GetString() ?? ""
-                : "";
+            var url = GetOptionalString(response, "url");
+            var mimeType = GetOptionalString(response, "mimeType");
 
             if (IsDouyinVideoResponse(url, mimeType))
             {
@@ -137,13 +132,8 @@ internal class DouyinBrowserDownloadService
                 return false;
             }
 
-            var url = response.TryGetProperty("url", out var urlElement)
-                ? urlElement.GetString() ?? ""
-                : "";
-
-            var mimeType = response.TryGetProperty("mimeType", out var mimeElement)
-                ? mimeElement.GetString() ?? ""
-                : "";
+            var url = GetOptionalString(response, "url");
+            var mimeType = GetOptionalString(response, "mimeType");
 
             if (IsDouyinThumbnailResponse(url, mimeType))
             {
@@ -350,13 +340,8 @@ internal class DouyinBrowserDownloadService
                 return false;
             }
 
-            var url = response.TryGetProperty("url", out var urlElement)
-                ? urlElement.GetString() ?? ""
-                : "";
-
-            var mimeType = response.TryGetProperty("mimeType", out var mimeElement)
-                ? mimeElement.GetString() ?? ""
-                : "";
+            var url = GetOptionalString(response, "url");
+            var mimeType = GetOptionalString(response, "mimeType");
 
             if (!IsDouyinVideoResponse(url, mimeType))
                 return false;
@@ -390,13 +375,24 @@ internal class DouyinBrowserDownloadService
 
     private static string GetHeader(JsonElement headers, string headerName)
     {
+        if (headers.ValueKind != JsonValueKind.Object)
+            return "";
+
         foreach (var header in headers.EnumerateObject())
         {
             if (header.Name.Equals(headerName, StringComparison.OrdinalIgnoreCase))
-                return header.Value.GetString() ?? "";
+                return header.Value.ValueKind == JsonValueKind.String ? header.Value.GetString() ?? "" : "";
         }
 
         return "";
+    }
+
+    private static string GetOptionalString(JsonElement element, string propertyName)
+    {
+        if (!element.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.String)
+            return "";
+
+        return value.GetString() ?? "";
     }
 
     private static Process StartBrowser(string browserPath, int port, string userDataDir)

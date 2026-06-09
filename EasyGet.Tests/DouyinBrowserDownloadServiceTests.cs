@@ -54,6 +54,30 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryExtractUrlsFromCdpMessage_IgnoresNonStringResponseFields()
+    {
+        const string message = """
+            {
+              "method": "Network.responseReceived",
+              "params": {
+                "response": {
+                  "mimeType": 42,
+                  "url": { "href": "https://v26-web.douyinvod.com/path/video.mp4" }
+                }
+              }
+            }
+            """;
+
+        var foundVideo = DouyinBrowserDownloadService.TryExtractVideoUrlFromCdpMessage(message, out var videoUrl);
+        var foundThumbnail = DouyinBrowserDownloadService.TryExtractThumbnailUrlFromCdpMessage(message, out var thumbnailUrl);
+
+        Assert.False(foundVideo);
+        Assert.Equal("", videoUrl);
+        Assert.False(foundThumbnail);
+        Assert.Equal("", thumbnailUrl);
+    }
+
+    [Fact]
     public void BuildOutputPath_AppendsCounterWhenFileExists()
     {
         Directory.CreateDirectory(_tempDir);

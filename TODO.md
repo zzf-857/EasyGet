@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错抖音兜底捕获异常字段
+  - 内容：为 `DouyinBrowserDownloadService` 的浏览器 DevTools 消息解析增加非字符串字段容错，CDP 响应里的 `url`、`mimeType` 或 headers 形状异常时会按空值跳过，不再抛出 `InvalidOperationException` 中断抖音兜底视频/缩略图捕获，降低浏览器事件噪声导致兜底下载失败的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DouyinBrowserDownloadServiceTests` 观察到非字符串 `url` 字段触发 `InvalidOperationException` 的测试失败；实现后同命令 9 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，84 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错抖音兜底捕获字段`
+
 - [x] 2026-06-09 归一化异常下载配置文本
   - 内容：为 `ConfigService.NormalizeRuntimeConfig` 增加下载配置文本清洗，空白下载目录回退到默认 `Downloads\EasyGet`，格式、画质、字幕按支持白名单归一到默认值，代理地址去除首尾空白，空 Cookie 文本归一为空字符串，避免手改或损坏配置导致启动建目录失败、下载参数异常或设置页出现未知选项。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ConfigServiceTests` 观察到空白下载目录未回退的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，83 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
