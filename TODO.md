@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补充 README 当前界面截图
+  - 内容：从当前运行的 EasyGet 窗口截取视频下载、批量下载、历史记录和设置四个主页面，保存到 `docs/screenshots/`；对截图中的本地下载路径和历史记录内容做示例化脱敏，并在 README 简介后新增“当前界面”截图展示区。
+  - 验证：逐张视觉核对 4 张截图，确认页面内容分别对应视频下载、批量下载、历史记录和设置；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，118 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 首次因截图预览窗口锁定 `EasyGet.exe` 失败，关闭 EasyGet 预览进程后重跑成功，0 个警告、0 个错误。
+  - 提交说明：`补充 README 当前界面截图`
+
 - [x] 2026-06-09 优化主窗口侧栏分隔与导航提示
   - 内容：为主窗口左侧导航栏增加 `BorderSubtleBrush` 右侧细分隔线，让侧栏和内容区边界更清晰；同时为 4 个导航 RadioButton 补齐 `ToolTip` 与 `AutomationProperties.Name`，提升悬浮提示和辅助技术识别效果，主框架第一屏更精致也更可用。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~MainWindowSidebarUsesSubtleContentDivider|FullyQualifiedName~MainWindowNavigationItemsExposeTooltipAndAutomationName"` 观察到侧栏缺少分隔线、4 个导航项缺少提示/无障碍名称的 5 个测试失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，26 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，118 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
