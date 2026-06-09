@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 识别 YouTube 年龄门槛重试 Cookie
+  - 内容：扩展 `YtDlpService.ShouldRetryWithNextCookieStrategy` 的 YouTube 错误识别范围，除 403 和 bot 校验外，也识别 `Sign in to confirm your age`、`This video may be inappropriate for some users` 和 `age-restricted`；遇到 YouTube 年龄/登录门槛时，会继续尝试已有的 Chrome/Edge Cookie 策略，降低有浏览器登录态但首次下载失败的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 YouTube 年龄确认提示未触发 Cookie 策略重试的测试失败；实现后同命令 11 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，93 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`识别 YouTube 年龄门槛重试 Cookie`
+
 - [x] 2026-06-09 兼容 Cookie 域名字段别名
   - 内容：为 `YtDlpService.BuildCookieFileLines` 的浏览器 Cookie JSON 解析增加域名字段别名兼容，缺少 `domain` 时可从 `host` 读取域名，或从 `url` 解析精确主机名；从 DevTools、自动化脚本或非标准 Cookie 导出工具拿到的 JSON 不再因域名字段名不同被整条跳过，降低粘贴 Cookie 后仍无法带登录态下载的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `host`/`url` 域名来源被跳过的测试失败；实现后同命令 10 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，92 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

@@ -672,6 +672,9 @@ public partial class YtDlpService
     {
         return line.Contains("Sign in to confirm you’re not a bot", StringComparison.OrdinalIgnoreCase)
                || line.Contains("Sign in to confirm you're not a bot", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("Sign in to confirm your age", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("This video may be inappropriate for some users", StringComparison.OrdinalIgnoreCase)
+               || line.Contains("age-restricted", StringComparison.OrdinalIgnoreCase)
                || line.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase);
     }
 

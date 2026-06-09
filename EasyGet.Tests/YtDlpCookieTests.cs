@@ -193,6 +193,27 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void ShouldRetryWithNextCookieStrategy_RetriesYoutubeAfterAgeGate()
+    {
+        var method = typeof(YtDlpService).GetMethod(
+            "ShouldRetryWithNextCookieStrategy",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+
+        var shouldRetry = (bool)method!.Invoke(null, new object[]
+        {
+            "https://www.youtube.com/watch?v=wFbtM0sfcEw",
+            new List<string>
+            {
+                "ERROR: [youtube] wFbtM0sfcEw: Sign in to confirm your age. This video may be inappropriate for some users."
+            }
+        })!;
+
+        Assert.True(shouldRetry);
+    }
+
+    [Fact]
     public void BuildDownloadFailureMessage_ExplainsDouyinFreshCookiesAfterBrowserCookieFailures()
     {
         var stderrLines = new[]
