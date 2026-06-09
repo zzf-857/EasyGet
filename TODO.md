@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 统一设置页现代工具面板样式
+  - 内容：将设置页的环境检测、下载设置、代理设置、Cookie 设置和性能设置外层面板统一切换到 `ToolPanelBorder` 主题样式，保留原有布局间距，同时将这些主要设置区收敛到 8px 圆角、统一边框、柔和阴影和像素对齐的现代工具面板视觉；设置页与下载页的卡片语言更一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~SettingsViewUsesModernToolPanelStyleForPrimarySections` 观察到设置页 5 个主要设置面板未使用 `ToolPanelBorder` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，19 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，103 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`统一设置页工具面板样式`
+
 - [x] 2026-06-09 补齐下载页按钮提示与无障碍名称
   - 内容：为下载页主要操作按钮补齐 `ToolTip` 和 `AutomationProperties.Name`，覆盖粘贴链接、开始下载、选择目录、取消下载、复制日志和清空日志；鼠标悬停和辅助技术都能得到明确命令名称，提升界面可用性和现代桌面应用细节体验。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests` 观察到 6 个下载页操作按钮缺少提示/无障碍名称的测试失败；实现后同命令 18 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，102 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

@@ -22,6 +22,23 @@ public class XamlBindingTests
             $"DownloadView should use ToolPanelBorder for option, progress, and log panels. Found {styledPanels.Count}.");
     }
 
+    [Fact]
+    public void SettingsViewUsesModernToolPanelStyleForPrimarySections()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+
+        var styledPanels = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Border")
+            .Select(element => element.Attribute("Style")?.Value ?? "")
+            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            styledPanels.Count >= 5,
+            $"SettingsView should use ToolPanelBorder for environment, download, proxy, cookie, and performance sections. Found {styledPanels.Count}.");
+    }
+
     [Theory]
     [InlineData("PasteUrlCommand")]
     [InlineData("StartDownloadCommand")]

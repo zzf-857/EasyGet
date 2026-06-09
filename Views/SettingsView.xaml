@@ -16,9 +16,7 @@
             <!-- ===== 环境检测 ===== -->
             <TextBlock Text="环境检测" FontSize="18" FontWeight="Bold"
                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Effect="{StaticResource SoftShadow}"
+            <Border Style="{StaticResource ToolPanelBorder}"
                     Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <!-- yt-dlp -->
@@ -146,9 +144,7 @@
             <!-- ===== 下载设置 ===== -->
             <TextBlock Text="下载设置" FontSize="18" FontWeight="Bold"
                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Effect="{StaticResource SoftShadow}"
+            <Border Style="{StaticResource ToolPanelBorder}"
                     Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <!-- 默认下载目录 -->
@@ -213,9 +209,7 @@
             <!-- ===== 代理设置 ===== -->
             <TextBlock Text="代理设置" FontSize="18" FontWeight="Bold"
                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Effect="{StaticResource SoftShadow}"
+            <Border Style="{StaticResource ToolPanelBorder}"
                     Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <Grid Margin="0,0,0,12">
@@ -239,9 +233,7 @@
             <!-- ===== Cookie 设置 ===== -->
             <TextBlock Text="Cookie 设置" FontSize="18" FontWeight="Bold"
                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Effect="{StaticResource SoftShadow}"
+            <Border Style="{StaticResource ToolPanelBorder}"
                     Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <TextBlock Text="X(Twitter)、Instagram 等平台的年龄限制/私密视频需要登录 Cookie 才能下载" FontSize="13"
@@ -294,9 +286,7 @@
             <!-- ===== 性能设置 ===== -->
             <TextBlock Text="性能设置" FontSize="18" FontWeight="Bold"
                        Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,16"/>
-            <Border Background="{StaticResource BgSurfaceBrush}" CornerRadius="12"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                    Effect="{StaticResource SoftShadow}"
+            <Border Style="{StaticResource ToolPanelBorder}"
                     Padding="24,20" Margin="0,0,0,36">
                 <StackPanel>
                     <!-- 并发分片 -->
