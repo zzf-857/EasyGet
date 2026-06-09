@@ -439,8 +439,14 @@ public partial class YtDlpService
         if (match.Success)
         {
             var dp = new DownloadProgress { RawLine = line };
-            if (double.TryParse(match.Groups[1].Value, out var percent))
+            if (double.TryParse(
+                    match.Groups[1].Value,
+                    System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var percent))
+            {
                 dp.Percent = percent;
+            }
 
             dp.Speed = ParseSpeed(match.Groups[2].Value);
             dp.Eta = ParseEta(match.Groups[3].Value);
@@ -471,7 +477,7 @@ public partial class YtDlpService
             return 0;
         }
 
-        var unit = m.Groups[2].Value;
+        var unit = m.Groups[2].Value.Replace("/s", "", StringComparison.OrdinalIgnoreCase);
 
         return unit switch
         {
