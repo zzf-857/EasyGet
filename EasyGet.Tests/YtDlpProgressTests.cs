@@ -52,6 +52,17 @@ public class YtDlpProgressTests
         Assert.Equal(2, progress.Eta);
     }
 
+    [Fact]
+    public void ParseProgressLine_KeepsPercentWhenEtaIsPlaceholder()
+    {
+        var progress = ParseProgressLine("download:45.0% 1.00MiB/s ETA --:--");
+
+        Assert.NotNull(progress);
+        Assert.Equal(45, progress!.Percent);
+        Assert.Equal(1.0 * 1024 * 1024, progress.Speed, precision: 3);
+        Assert.Equal(0, progress.Eta);
+    }
+
     private static DownloadProgress? ParseProgressLine(string line)
     {
         var method = typeof(YtDlpService).GetMethod(

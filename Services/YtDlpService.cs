@@ -1074,7 +1074,7 @@ public partial class YtDlpService
         }
     }
 
-    [GeneratedRegex(@"([\d.]+)%.*?((?:[\d.]+[KMGT]?i?B|Unknown B)/s).*?ETA\s+([\w:]+)")]
+    [GeneratedRegex(@"([\d.]+)%.*?((?:[\d.]+[KMGT]?i?B|Unknown B)/s).*?ETA\s+(\S+)")]
     private static partial Regex UniversalProgressRegex();
 
     [GeneratedRegex(@"([\d.]+)([\w/]+)")]

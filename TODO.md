@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 保留 yt-dlp ETA 占位符下的进度更新
+  - 内容：放宽 yt-dlp 进度行 ETA 字段解析，支持 `--:--` 等非标准 ETA 占位符；当 ETA 无法解析时仍保留百分比和速度，ETA 回落为 0，避免整行进度被丢弃。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProgressTests` 观察到 `ETA --:--` 进度行解析结果为 null 的测试失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，69 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`保留 ETA 占位符进度更新`
+
 - [x] 2026-06-09 保留 yt-dlp 未知速度下的进度更新
   - 内容：放宽 yt-dlp 进度行解析，支持 `Unknown B/s` 速度占位符；当速度未知时仍解析百分比和 ETA，速度回落为 0，避免下载初期或网络抖动时整行进度被丢弃。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProgressTests` 观察到 `Unknown B/s` 进度行解析结果为 null 的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，68 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
