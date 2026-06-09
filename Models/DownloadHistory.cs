@@ -50,7 +50,7 @@ public partial class DownloadHistory : ObservableObject
         get
         {
             string[] sizes = ["B", "KB", "MB", "GB", "TB"];
-            double len = FileSize;
+            double len = Math.Max(0, FileSize);
             int order = 0;
             while (len >= 1024 && order < sizes.Length - 1)
             {

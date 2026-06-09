@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错历史文件大小坏数据
+  - 内容：为历史记录读取增加 `file_size` 容错，旧库或异常数据中的文本/负数文件大小会归零，避免历史页读取异常或显示负文件大小；`DownloadHistory.FileSizeText` 也会将负值显示为 `0 B`。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到负数 `file_size` 被原样读取、负文件大小显示为 `-2048 B` 的 2 个测试失败；实现后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，78 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错历史文件大小数据`
+
 - [x] 2026-06-09 容错损坏历史时间戳
   - 内容：为历史记录读取增加损坏 `download_time` 容错，无法解析的旧库/异常数据不再让历史页整体失败，而是保留记录并将时间标记为未知；`DownloadHistory.DownloadTimeText` 对未知时间显示 `--`，避免 UI 出现 `0001-01-01`。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到损坏时间戳触发 `FormatException`、未知时间显示为 `0001-01-01 00:00` 的 2 个测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，75 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

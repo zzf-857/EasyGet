@@ -124,7 +124,7 @@ public class HistoryService : IDisposable
                 Platform = reader.GetString(3),
                 Format = reader.GetString(4),
                 Quality = reader.GetString(5),
-                FileSize = reader.GetInt64(6),
+                FileSize = ReadNonNegativeInt64(reader, 6),
                 FilePath = reader.GetString(7),
                 DownloadTime = ParseDownloadTime(reader.GetString(8)),
                 ThumbnailUrl = thumbnailUrl
@@ -144,6 +144,30 @@ public class HistoryService : IDisposable
             out var parsed)
             ? parsed
             : DateTime.MinValue;
+    }
+
+    private static long ReadNonNegativeInt64(SqliteDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return 0;
+
+        var value = reader.GetValue(ordinal);
+        var parsed = value switch
+        {
+            long longValue => longValue,
+            int intValue => intValue,
+            short shortValue => shortValue,
+            byte byteValue => byteValue,
+            double doubleValue when doubleValue >= long.MinValue && doubleValue <= long.MaxValue => (long)doubleValue,
+            string text when long.TryParse(
+                text,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var textValue) => textValue,
+            _ => 0
+        };
+
+        return Math.Max(0, parsed);
     }
 
     /// <summary>

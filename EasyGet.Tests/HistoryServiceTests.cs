@@ -77,6 +77,41 @@ public class HistoryServiceTests
         }
     }
 
+    [Theory]
+    [InlineData("not-a-size")]
+    [InlineData(-2048L)]
+    public async Task GetAllAsync_UsesZeroWhenStoredFileSizeIsInvalid(object fileSize)
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using (new HistoryService(dbPath))
+            {
+            }
+
+            await InsertHistoryRowAsync(dbPath, "2026-06-09 12:34:56", fileSize);
+
+            using var readService = new HistoryService(dbPath);
+            var history = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Equal(0, history.FileSize);
+            Assert.Equal("0 B", history.FileSizeText);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public void FileSizeText_ClampsNegativeBytesToZero()
+    {
+        var history = new DownloadHistory { FileSize = -2048 };
+
+        Assert.Equal("0 B", history.FileSizeText);
+    }
+
     [Fact]
     public void DownloadTimeText_ShowsPlaceholderForUnknownTime()
     {
@@ -90,7 +125,10 @@ public class HistoryServiceTests
             Path.GetTempPath(),
             $"easyget-history-{Guid.NewGuid():N}.db");
 
-    private static async Task InsertHistoryRowAsync(string dbPath, string downloadTime)
+    private static async Task InsertHistoryRowAsync(
+        string dbPath,
+        string downloadTime,
+        object? fileSize = null)
     {
         await using var connection = new SqliteConnection($"Data Source={dbPath}");
         await connection.OpenAsync();
@@ -105,7 +143,7 @@ public class HistoryServiceTests
         cmd.Parameters.AddWithValue("$platform", "Example");
         cmd.Parameters.AddWithValue("$format", "mp4");
         cmd.Parameters.AddWithValue("$quality", "best");
-        cmd.Parameters.AddWithValue("$fileSize", 1024);
+        cmd.Parameters.AddWithValue("$fileSize", fileSize ?? 1024);
         cmd.Parameters.AddWithValue("$filePath", @"D:\Videos\example.mp4");
         cmd.Parameters.AddWithValue("$downloadTime", downloadTime);
         cmd.Parameters.AddWithValue("$thumbnailUrl", "");
