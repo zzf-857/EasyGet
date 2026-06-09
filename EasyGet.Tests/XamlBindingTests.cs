@@ -152,6 +152,22 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void MainWindowSidebarFooterDoesNotFillRemainingNavigationSpace()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var sidebarDockPanel = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "DockPanel"
+                && element.Attribute("LastChildFill") is not null
+                && element.Attribute("Margin")?.Value == "14,16");
+
+        Assert.NotNull(sidebarDockPanel);
+        Assert.Equal("False", sidebarDockPanel!.Attribute("LastChildFill")?.Value);
+    }
+
+    [Fact]
     public void MainWindowSidebarLogoUsesApplicationIconAsset()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
@@ -337,6 +353,26 @@ public class XamlBindingTests
             element.Name.LocalName == "Image"
             && element.Attributes("Source").Any(attribute =>
                 attribute.Value.Contains("ThumbnailUrl", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void HistoryViewSearchBoxKeepsStableWideSearchField()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+
+        var searchBox = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Border"
+                && element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name"
+                    && attribute.Value == "HistorySearchBox"));
+
+        Assert.NotNull(searchBox);
+        Assert.True(
+            int.TryParse(searchBox!.Attribute("MinWidth")?.Value, out var minWidth)
+            && minWidth >= 520,
+            "History search field should keep a wide, stable pill shape even when the query is empty.");
     }
 
     [Fact]

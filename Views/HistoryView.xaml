@@ -18,12 +18,14 @@
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border Grid.Column="0"
+            <Border x:Name="HistorySearchBox"
+                    Grid.Column="0"
                     Background="{StaticResource BgSurfaceBrush}"
                     BorderBrush="{StaticResource BorderSubtleBrush}"
                     BorderThickness="1"
                     CornerRadius="20"
                     Padding="12,0"
+                    MinWidth="620"
                     MaxWidth="620"
                     HorizontalAlignment="Left">
                 <Grid>
