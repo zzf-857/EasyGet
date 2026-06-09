@@ -344,10 +344,10 @@ public class DownloadManager
     {
         void Apply()
         {
-            task.Progress = progress.Percent;
-            task.Speed = progress.Speed;
-            task.Eta = progress.Eta;
-            task.DownloadedSize = progress.Downloaded;
+            task.Progress = Math.Clamp(progress.Percent, 0, 100);
+            task.Speed = Math.Max(0, progress.Speed);
+            task.Eta = Math.Max(0, progress.Eta);
+            task.DownloadedSize = Math.Max(0, progress.Downloaded);
         }
 
         var dispatcher = System.Windows.Application.Current?.Dispatcher;

@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 归一化下载进度 UI 数值
+  - 内容：在 `DownloadManager.ApplyProgress` 中对进度百分比、速度、ETA 和已下载字节做边界保护，百分比限制在 0-100，速度/ETA/已下载字节不允许为负，避免异常进度输出让 UI 显示超过 100% 或负数。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadManagerTests` 观察到异常进度值直接写入任务状态的测试失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，70 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`归一化下载进度数值`
+
 - [x] 2026-06-09 保留 yt-dlp ETA 占位符下的进度更新
   - 内容：放宽 yt-dlp 进度行 ETA 字段解析，支持 `--:--` 等非标准 ETA 占位符；当 ETA 无法解析时仍保留百分比和速度，ETA 回落为 0，避免整行进度被丢弃。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProgressTests` 观察到 `ETA --:--` 进度行解析结果为 null 的测试失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，69 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
