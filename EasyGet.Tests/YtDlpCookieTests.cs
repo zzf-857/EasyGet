@@ -54,6 +54,29 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildCookieFileLines_AcceptsBrowserJsonObjectWithCookiesArray()
+    {
+        const string input = """
+            {
+              "url": "https://www.youtube.com/",
+              "cookies": [
+                {
+                  "domain": ".youtube.com",
+                  "path": "/",
+                  "secure": true,
+                  "name": "PREF",
+                  "value": "tz=UTC"
+                }
+              ]
+            }
+            """;
+
+        var lines = YtDlpService.BuildCookieFileLines(input);
+
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\ttz=UTC", lines);
+    }
+
+    [Fact]
     public void BuildDownloadFailureMessage_PreservesYoutubeForbiddenCauseAfterBrowserCookieFailures()
     {
         var stderrLines = new[]

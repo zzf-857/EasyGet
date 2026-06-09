@@ -755,12 +755,12 @@ public partial class YtDlpService
             return lines;
         }
 
-        if (trimmed.StartsWith("["))
+        if (trimmed.StartsWith("[") || trimmed.StartsWith("{"))
         {
             try
             {
                 using var doc = JsonDocument.Parse(trimmed);
-                foreach (var item in doc.RootElement.EnumerateArray())
+                foreach (var item in EnumerateCookieJsonItems(doc.RootElement))
                 {
                     var domain = GetOptionalString(item, "domain");
                     var name = GetOptionalString(item, "name");
@@ -793,6 +793,25 @@ public partial class YtDlpService
         }
 
         return lines;
+    }
+
+    private static IEnumerable<JsonElement> EnumerateCookieJsonItems(JsonElement root)
+    {
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in root.EnumerateArray())
+                yield return item;
+
+            yield break;
+        }
+
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("cookies", out var cookies)
+            && cookies.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in cookies.EnumerateArray())
+                yield return item;
+        }
     }
 
     private static void ParsePlainTextCookies(string cookieContent, List<string> lines)
