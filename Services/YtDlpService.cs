@@ -462,7 +462,15 @@ public partial class YtDlpService
         if (!m.Success)
             return 0;
 
-        var value = double.Parse(m.Groups[1].Value);
+        if (!double.TryParse(
+                m.Groups[1].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var value))
+        {
+            return 0;
+        }
+
         var unit = m.Groups[2].Value;
 
         return unit switch
@@ -482,12 +490,24 @@ public partial class YtDlpService
         var parts = etaStr.Split(':');
         return parts.Length switch
         {
-            3 => int.Parse(parts[0]) * 3600 + int.Parse(parts[1]) * 60 + int.Parse(parts[2]),
-            2 => int.Parse(parts[0]) * 60 + int.Parse(parts[1]),
-            1 => int.Parse(parts[0]),
+            3 when TryParseEtaPart(parts[0], out var hours)
+                   && TryParseEtaPart(parts[1], out var minutes)
+                   && TryParseEtaPart(parts[2], out var seconds)
+                => hours * 3600 + minutes * 60 + seconds,
+            2 when TryParseEtaPart(parts[0], out var minutes)
+                   && TryParseEtaPart(parts[1], out var seconds)
+                => minutes * 60 + seconds,
+            1 when TryParseEtaPart(parts[0], out var seconds) => seconds,
             _ => 0
         };
     }
+
+    private static bool TryParseEtaPart(string value, out int result)
+        => int.TryParse(
+            value,
+            System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out result);
 
     private void AddProxyArgs(List<string> args)
     {

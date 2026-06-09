@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 增强 yt-dlp 进度解析容错
+  - 内容：为 yt-dlp 进度文本解析增加异常 ETA/速度数字容错，遇到 `ETA abc` 这类非标准占位符或无法解析的速度数字时回落为 0，避免单行异常进度输出打断下载流程。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProgressTests` 观察到 `int.Parse("abc")` 抛出 `FormatException` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，66 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`增强 yt-dlp 进度解析容错`
+
 - [x] 2026-06-09 校验环境组件下载完整性
   - 内容：为自动安装 yt-dlp/ffmpeg 的工具下载增加 `Content-Length` 完整性校验；当服务端声明的长度与实际写入字节数不一致时抛出 `IOException`、进入已有重试流程，并在最终失败时删除半截目标文件，避免坏的工具文件被误认为安装成功。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~EnvironmentServiceTests` 观察到短文件未抛异常的测试失败；实现后同命令 8 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，65 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
