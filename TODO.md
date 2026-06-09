@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错 yt-dlp 元数据异常字段
+  - 内容：将 `YtDlpService.GetVideoInfoAsync` 的 JSON 元数据解析抽成可测试的 `ParseVideoInfoJson`，并为标题、平台、缩略图、时长和文件大小增加安全读取；yt-dlp 输出里字段类型异常时会按空值或 0 处理，缩略图列表仍会继续寻找后续可用 URL，避免单个坏字段让视频信息解析整体失败。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpMetadataTests` 观察到缺少 `ParseVideoInfoJson` 的编译失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，85 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错 yt-dlp 元数据字段`
+
 - [x] 2026-06-09 容错抖音兜底捕获异常字段
   - 内容：为 `DouyinBrowserDownloadService` 的浏览器 DevTools 消息解析增加非字符串字段容错，CDP 响应里的 `url`、`mimeType` 或 headers 形状异常时会按空值跳过，不再抛出 `InvalidOperationException` 中断抖音兜底视频/缩略图捕获，降低浏览器事件噪声导致兜底下载失败的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DouyinBrowserDownloadServiceTests` 观察到非字符串 `url` 字段触发 `InvalidOperationException` 的测试失败；实现后同命令 9 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，84 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

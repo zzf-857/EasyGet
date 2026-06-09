@@ -91,51 +91,101 @@ public partial class YtDlpService
             if (string.IsNullOrWhiteSpace(firstJson))
                 return null;
 
-            using var doc = JsonDocument.Parse(firstJson);
-            var root = doc.RootElement;
-
-            var title = root.TryGetProperty("title", out var t) ? t.GetString() ?? "" : "";
-            title = title.Replace("\r", "").Replace("\n", " ").Trim();
-
-            var platform = root.TryGetProperty("extractor_key", out var pk)
-                ? pk.GetString() ?? ""
-                : root.TryGetProperty("extractor", out var p) ? p.GetString() ?? "" : "";
-
-            var thumbnail = root.TryGetProperty("thumbnail", out var th) ? th.GetString() ?? "" : "";
-            if (string.IsNullOrWhiteSpace(thumbnail)
-                && root.TryGetProperty("thumbnails", out var arr)
-                && arr.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in arr.EnumerateArray())
-                {
-                    if (item.TryGetProperty("url", out var thumbUrl))
-                        thumbnail = thumbUrl.GetString() ?? thumbnail;
-                }
-            }
-
-            long fileSize = 0;
-            if (root.TryGetProperty("filesize_approx", out var fsApprox) && fsApprox.ValueKind == JsonValueKind.Number)
-                fileSize = fsApprox.GetInt64();
-            else if (root.TryGetProperty("filesize", out var fs) && fs.ValueKind == JsonValueKind.Number)
-                fileSize = fs.GetInt64();
-
-            return new VideoInfo
-            {
-                Title = title,
-                Platform = platform,
-                Duration = root.TryGetProperty("duration", out var d) && d.ValueKind == JsonValueKind.Number
-                    ? d.GetDouble()
-                    : 0,
-                Thumbnail = thumbnail,
-                FileSize = fileSize,
-                Url = url
-            };
+            return ParseVideoInfoJson(firstJson, url);
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[YtDlpService] GetVideoInfo failed: {ex.Message}");
             return null;
         }
+    }
+
+    internal static VideoInfo? ParseVideoInfoJson(string json, string url)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var title = NormalizeMetadataTitle(GetOptionalString(root, "title"));
+        var platform = GetOptionalString(root, "extractor_key");
+        if (string.IsNullOrWhiteSpace(platform))
+            platform = GetOptionalString(root, "extractor");
+
+        return new VideoInfo
+        {
+            Title = title,
+            Platform = platform,
+            Duration = GetOptionalDouble(root, "duration"),
+            Thumbnail = GetThumbnail(root),
+            FileSize = GetFileSize(root),
+            Url = url
+        };
+    }
+
+    private static string NormalizeMetadataTitle(string title)
+        => title.Replace("\r", "").Replace("\n", " ").Trim();
+
+    private static string GetThumbnail(JsonElement root)
+    {
+        var thumbnail = GetOptionalString(root, "thumbnail");
+        if (!string.IsNullOrWhiteSpace(thumbnail)
+            || !root.TryGetProperty("thumbnails", out var thumbnails)
+            || thumbnails.ValueKind != JsonValueKind.Array)
+        {
+            return thumbnail;
+        }
+
+        foreach (var item in thumbnails.EnumerateArray())
+        {
+            var candidate = GetOptionalString(item, "url");
+            if (!string.IsNullOrWhiteSpace(candidate))
+                thumbnail = candidate;
+        }
+
+        return thumbnail;
+    }
+
+    private static long GetFileSize(JsonElement root)
+    {
+        var fileSize = GetOptionalInt64(root, "filesize_approx");
+        return fileSize > 0 ? fileSize : GetOptionalInt64(root, "filesize");
+    }
+
+    private static string GetOptionalString(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.String)
+        {
+            return "";
+        }
+
+        return value.GetString() ?? "";
+    }
+
+    private static long GetOptionalInt64(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetInt64(out var number))
+        {
+            return 0;
+        }
+
+        return Math.Max(0, number);
+    }
+
+    private static double GetOptionalDouble(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var value)
+            || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetDouble(out var number))
+        {
+            return 0;
+        }
+
+        return Math.Max(0, number);
     }
 
     public async Task<List<string>> GetPlaylistUrlsAsync(string url, CancellationToken ct = default)
