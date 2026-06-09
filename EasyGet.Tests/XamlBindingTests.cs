@@ -90,7 +90,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void MainWindowUsesVibeTrackerCompactIconRail()
+    public void MainWindowUsesStitchBrandSidebarAndTopAppBar()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
 
@@ -100,7 +100,15 @@ public class XamlBindingTests
             .ToList();
 
         Assert.NotEmpty(columns);
-        Assert.Equal("92", columns[0].Attribute("Width")?.Value);
+        Assert.Equal("240", columns[0].Attribute("Width")?.Value);
+
+        var rows = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "RowDefinition")
+            .ToList();
+
+        Assert.Contains(rows, row => row.Attribute("Height")?.Value == "48");
+        Assert.Equal("None", document.Root?.Attribute("WindowStyle")?.Value);
 
         var logoMark = document
             .Descendants()
@@ -111,8 +119,15 @@ public class XamlBindingTests
                     && attribute.Value == "SidebarLogoMark"));
 
         Assert.NotNull(logoMark);
-        Assert.Equal("44", logoMark!.Attribute("Width")?.Value);
-        Assert.Equal("44", logoMark.Attribute("Height")?.Value);
+        Assert.Equal("40", logoMark!.Attribute("Width")?.Value);
+        Assert.Equal("40", logoMark.Attribute("Height")?.Value);
+
+        Assert.Contains(
+            document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
+            text => text == "EasyGet");
+        Assert.Contains(
+            document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
+            text => text.Equals("Pro Account", StringComparison.OrdinalIgnoreCase));
 
         var navItems = document
             .Descendants()
@@ -124,11 +139,16 @@ public class XamlBindingTests
         Assert.All(navItems, item =>
         {
             var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
-            Assert.Single(textBlocks);
-            Assert.Contains("Segoe", textBlocks[0].Attribute("FontFamily")?.Value ?? "");
-            Assert.DoesNotContain(textBlocks, textBlock =>
+            Assert.True(textBlocks.Count >= 2, "Stitch sidebar items should include an icon and a visible text label.");
+            Assert.Contains(textBlocks, textBlock =>
+                (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+            Assert.Contains(textBlocks, textBlock =>
                 (textBlock.Attribute("Text")?.Value ?? "") == item.Attribute("ToolTip")?.Value);
         });
+
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "ContentControl"
+            && (element.Attribute("Content")?.Value ?? "").Contains("CurrentPageTitle", StringComparison.Ordinal));
     }
 
     [Fact]

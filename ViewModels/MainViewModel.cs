@@ -25,6 +25,15 @@ public partial class MainViewModel : ObservableObject
     public HistoryViewModel HistoryVM { get; }
     public SettingsViewModel SettingsVM { get; }
 
+    public string CurrentPageTitle => SelectedNavIndex switch
+    {
+        0 => "单个视频下载",
+        1 => "Batch Operations",
+        2 => "下载历史",
+        3 => "设置中心",
+        _ => "EasyGet"
+    };
+
     public MainViewModel(
         ConfigService configService,
         EnvironmentService envService,
@@ -94,6 +103,11 @@ public partial class MainViewModel : ObservableObject
             "settings" => (SettingsVM, 3),
             _ => (DownloadVM, 0)
         };
+    }
+
+    partial void OnSelectedNavIndexChanged(int value)
+    {
+        OnPropertyChanged(nameof(CurrentPageTitle));
     }
 
     public async Task InitializeAsync()

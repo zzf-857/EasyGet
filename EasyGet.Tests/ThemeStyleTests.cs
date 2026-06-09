@@ -6,7 +6,7 @@ namespace EasyGet.Tests;
 public class ThemeStyleTests
 {
     [Fact]
-    public void ToolPanelBorderStyleUsesVibeTrackerGlassPanelTreatment()
+    public void ToolPanelBorderStyleUsesStitchGlassPanelTreatment()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -33,26 +33,28 @@ public class ThemeStyleTests
             ?.Attribute("Value")?.Value;
 
         Assert.True(double.TryParse(cornerRadius, out var radius), "ToolPanelBorder must set a numeric CornerRadius.");
-        Assert.InRange(radius, 24, 32);
+        Assert.InRange(radius, 8, 12);
     }
 
     [Fact]
-    public void ThemeColorTokensFollowVibeTrackerCalmAppleDarkPalette()
+    public void ThemeColorTokensFollowStitchEasyGetDarkPalette()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
 
-        AssertColor(document, "BgPrimary", "#080A0D");
-        AssertColor(document, "BgSurface", "#12FFFFFF");
-        AssertColor(document, "BgHover", "#1BFFFFFF");
-        AssertColor(document, "TextPrimary", "#F7F8FB");
-        AssertColor(document, "TextSecondary", "#A8B0BD");
-        AssertColor(document, "TextMuted", "#707A8A");
-        AssertColor(document, "BorderPrimary", "#1FFFFFFF");
-        AssertColor(document, "BorderSubtle", "#14FFFFFF");
-        AssertColor(document, "Accent", "#74A9FF");
-        AssertColor(document, "Success", "#63D693");
-        AssertColor(document, "Warning", "#F3BB6C");
-        AssertColor(document, "Error", "#FF6B6B");
+        AssertColor(document, "BgPrimary", "#131313");
+        AssertColor(document, "BgSidebar", "#1B1B1C");
+        AssertColor(document, "BgSurface", "#202020");
+        AssertColor(document, "BgSurfaceHigh", "#2A2A2A");
+        AssertColor(document, "BgSurfaceHighest", "#353535");
+        AssertColor(document, "TextPrimary", "#E5E2E1");
+        AssertColor(document, "TextSecondary", "#BDC8CF");
+        AssertColor(document, "TextMuted", "#889299");
+        AssertColor(document, "BorderPrimary", "#3E484E");
+        AssertColor(document, "BorderSubtle", "#2A3338");
+        AssertColor(document, "Accent", "#60CDFF");
+        AssertColor(document, "Success", "#74D1FF");
+        AssertColor(document, "Warning", "#FFB955");
+        AssertColor(document, "Error", "#FFB4AB");
     }
 
     [Theory]
