@@ -237,10 +237,24 @@ public partial class YtDlpService
         var root = doc.RootElement;
 
         var videoUrl = GetOptionalString(root, "url");
-        return !string.IsNullOrWhiteSpace(videoUrl)
-            ? videoUrl
-            : GetOptionalString(root, "webpage_url");
+        if (string.IsNullOrWhiteSpace(videoUrl))
+            return GetOptionalString(root, "webpage_url");
+
+        if (IsAbsoluteHttpUrl(videoUrl))
+            return videoUrl;
+
+        var extractorKey = GetOptionalString(root, "ie_key");
+        if (string.IsNullOrWhiteSpace(extractorKey))
+            extractorKey = GetOptionalString(root, "extractor_key");
+
+        return string.Equals(extractorKey, "Youtube", StringComparison.OrdinalIgnoreCase)
+            ? $"https://www.youtube.com/watch?v={videoUrl}"
+            : videoUrl;
     }
+
+    private static bool IsAbsoluteHttpUrl(string value)
+        => Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     public async Task DownloadAsync(
         DownloadTask task,

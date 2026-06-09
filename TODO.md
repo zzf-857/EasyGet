@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 规范化 yt-dlp 播放列表裸 YouTube ID
+  - 内容：为 `YtDlpService.ExtractPlaylistUrlFromJson` 增加 YouTube 扁平播放列表裸视频 ID 规范化；当 yt-dlp 只输出 `url` 为视频 ID 且 `ie_key/extractor_key` 表明来源是 YouTube 时，会转换为标准 `https://www.youtube.com/watch?v=...`，避免批量下载拿到裸 ID 后失败或误解析。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpMetadataTests` 观察到裸 ID 被原样返回的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，87 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`规范化播放列表 YouTube ID`
+
 - [x] 2026-06-09 容错 yt-dlp 播放列表 URL 字段
   - 内容：将 `YtDlpService.GetPlaylistUrlsAsync` 的单行 JSON URL 提取抽成 `ExtractPlaylistUrlFromJson`，并改为安全读取 `url`、不可用时回退 `webpage_url`；当 yt-dlp 扁平播放列表输出里 `url` 字段类型异常但 `webpage_url` 仍可用时，不再整行跳过，降低播放列表解析漏项概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpMetadataTests` 观察到缺少 `ExtractPlaylistUrlFromJson` 的编译失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，86 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

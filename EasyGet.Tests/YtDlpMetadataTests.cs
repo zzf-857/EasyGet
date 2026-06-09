@@ -21,6 +21,21 @@ public class YtDlpMetadataTests
     }
 
     [Fact]
+    public void ExtractPlaylistUrlFromJson_ExpandsYoutubeVideoIdWhenFlatPlaylistOmitsWebpageUrl()
+    {
+        const string json = """
+            {
+              "url": "abc123XYZ09",
+              "ie_key": "Youtube"
+            }
+            """;
+
+        var url = YtDlpService.ExtractPlaylistUrlFromJson(json);
+
+        Assert.Equal("https://www.youtube.com/watch?v=abc123XYZ09", url);
+    }
+
+    [Fact]
     public void ParseVideoInfoJson_IgnoresNonStringMetadataFields()
     {
         const string json = """
