@@ -339,6 +339,27 @@ public class XamlBindingTests
                 attribute.Value.Contains("ThumbnailUrl", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public void SettingsViewUsesStitchSettingsCenterInformationArchitecture()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("系统设置", texts);
+        Assert.Contains(texts, text => text.Contains("管理下载环境", StringComparison.Ordinal));
+        Assert.Contains("环境检测", texts);
+        Assert.Contains("下载设置", texts);
+        Assert.Contains("代理设置", texts);
+        Assert.Contains("Cookie 设置", texts);
+        Assert.Contains("性能设置", texts);
+        Assert.Contains("默认保存目录", texts);
+        Assert.Contains("默认下载格式", texts);
+        Assert.Contains("最大下载分辨率", texts);
+        Assert.Contains("启用网络代理", texts);
+        Assert.Contains("启用 aria2c 外部下载器", texts);
+        Assert.Contains("保存配置", texts);
+    }
+
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]
