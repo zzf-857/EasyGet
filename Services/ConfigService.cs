@@ -91,5 +91,36 @@ public class ConfigService
             config.MaxConcurrentDownloads,
             AppConfig.MinConcurrentDownloadLimit,
             AppConfig.MaxConcurrentDownloadLimit);
+
+        NormalizeWindowState(config);
+    }
+
+    private static void NormalizeWindowState(AppConfig config)
+    {
+        config.Window ??= new WindowState();
+
+        if (!double.IsFinite(config.Window.Left))
+            config.Window.Left = double.NaN;
+
+        if (!double.IsFinite(config.Window.Top))
+            config.Window.Top = double.NaN;
+
+        config.Window.Width = NormalizeWindowLength(
+            config.Window.Width,
+            WindowState.MinWidth,
+            WindowState.DefaultWidth);
+
+        config.Window.Height = NormalizeWindowLength(
+            config.Window.Height,
+            WindowState.MinHeight,
+            WindowState.DefaultHeight);
+    }
+
+    private static double NormalizeWindowLength(double value, double minValue, double defaultValue)
+    {
+        if (!double.IsFinite(value) || value <= 0)
+            return defaultValue;
+
+        return Math.Max(minValue, value);
     }
 }

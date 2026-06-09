@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 归一化异常窗口状态配置
+  - 内容：为 `ConfigService.NormalizeRuntimeConfig` 增加窗口位置与尺寸清洗，非有限 Left/Top 会重置为 `NaN` 以继续居中启动；非有限宽高回落到默认 `1280x800`，过小宽高按主窗口 `MinWidth=960`、`MinHeight=600` 拉回安全范围，避免坏配置导致窗口不可见或布局异常。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ConfigServiceTests` 观察到缺少窗口边界常量与归一化逻辑的编译失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，82 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`归一化异常窗口状态配置`
+
 - [x] 2026-06-09 按列名读取历史记录
   - 内容：将 `HistoryService.GetAllAsync` 的历史查询改为显式列清单，并按列名读取字段，避免旧库/迁移表列顺序变化时把 `id`、URL、标题等字段读错，提升历史数据库兼容性。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到乱序列表把 URL 读成 `id` 的测试失败；实现后同命令 9 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，81 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

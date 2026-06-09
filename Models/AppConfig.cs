@@ -58,8 +58,13 @@ public class AppConfig
 /// </summary>
 public class WindowState
 {
+    public const double DefaultWidth = 1280;
+    public const double DefaultHeight = 800;
+    public const double MinWidth = 960;
+    public const double MinHeight = 600;
+
     public double Left { get; set; } = double.NaN;
     public double Top { get; set; } = double.NaN;
-    public double Width { get; set; } = 1280;
-    public double Height { get; set; } = 800;
+    public double Width { get; set; } = DefaultWidth;
+    public double Height { get; set; } = DefaultHeight;
 }
