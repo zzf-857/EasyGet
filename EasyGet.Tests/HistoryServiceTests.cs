@@ -105,6 +105,81 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public async Task GetAllAsync_UsesEmptyStringsWhenStoredTextFieldsAreNull()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            await CreateLegacyNullableHistoryTableAsync(dbPath);
+            await InsertHistoryRowAsync(
+                dbPath,
+                "2026-06-09 12:34:56",
+                url: DBNull.Value,
+                title: DBNull.Value,
+                platform: DBNull.Value,
+                format: DBNull.Value,
+                quality: DBNull.Value,
+                filePath: DBNull.Value,
+                thumbnailUrl: DBNull.Value);
+
+            using var readService = new HistoryService(dbPath);
+            var history = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Equal("", history.Url);
+            Assert.Equal("", history.Title);
+            Assert.Equal("", history.Platform);
+            Assert.Equal("", history.Format);
+            Assert.Equal("", history.Quality);
+            Assert.Equal("", history.FilePath);
+            Assert.Equal("", history.ThumbnailUrl);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task AddAsync_NormalizesNullTextFieldsBeforeSaving()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using (var historyService = new HistoryService(dbPath))
+            {
+                await historyService.AddAsync(new DownloadHistory
+                {
+                    Url = null!,
+                    Title = null!,
+                    Platform = null!,
+                    Format = null!,
+                    Quality = null!,
+                    FilePath = null!,
+                    ThumbnailUrl = null!,
+                    DownloadTime = new DateTime(2026, 6, 9, 12, 34, 56)
+                });
+            }
+
+            using var readService = new HistoryService(dbPath);
+            var history = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Equal("", history.Url);
+            Assert.Equal("", history.Title);
+            Assert.Equal("", history.Platform);
+            Assert.Equal("", history.Format);
+            Assert.Equal("", history.Quality);
+            Assert.Equal("", history.FilePath);
+            Assert.Equal("", history.ThumbnailUrl);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public void FileSizeText_ClampsNegativeBytesToZero()
     {
         var history = new DownloadHistory { FileSize = -2048 };
@@ -128,7 +203,14 @@ public class HistoryServiceTests
     private static async Task InsertHistoryRowAsync(
         string dbPath,
         string downloadTime,
-        object? fileSize = null)
+        object? fileSize = null,
+        object? url = null,
+        object? title = null,
+        object? platform = null,
+        object? format = null,
+        object? quality = null,
+        object? filePath = null,
+        object? thumbnailUrl = null)
     {
         await using var connection = new SqliteConnection($"Data Source={dbPath}");
         await connection.OpenAsync();
@@ -138,17 +220,43 @@ public class HistoryServiceTests
             INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url)
             VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $downloadTime, $thumbnailUrl)
             """;
-        cmd.Parameters.AddWithValue("$url", "https://example.com/video");
-        cmd.Parameters.AddWithValue("$title", "malformed history");
-        cmd.Parameters.AddWithValue("$platform", "Example");
-        cmd.Parameters.AddWithValue("$format", "mp4");
-        cmd.Parameters.AddWithValue("$quality", "best");
+        cmd.Parameters.AddWithValue("$url", ToDbValue(url, "https://example.com/video"));
+        cmd.Parameters.AddWithValue("$title", ToDbValue(title, "malformed history"));
+        cmd.Parameters.AddWithValue("$platform", ToDbValue(platform, "Example"));
+        cmd.Parameters.AddWithValue("$format", ToDbValue(format, "mp4"));
+        cmd.Parameters.AddWithValue("$quality", ToDbValue(quality, "best"));
         cmd.Parameters.AddWithValue("$fileSize", fileSize ?? 1024);
-        cmd.Parameters.AddWithValue("$filePath", @"D:\Videos\example.mp4");
+        cmd.Parameters.AddWithValue("$filePath", ToDbValue(filePath, @"D:\Videos\example.mp4"));
         cmd.Parameters.AddWithValue("$downloadTime", downloadTime);
-        cmd.Parameters.AddWithValue("$thumbnailUrl", "");
+        cmd.Parameters.AddWithValue("$thumbnailUrl", ToDbValue(thumbnailUrl, ""));
         await cmd.ExecuteNonQueryAsync();
     }
+
+    private static async Task CreateLegacyNullableHistoryTableAsync(string dbPath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            CREATE TABLE download_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT,
+                title TEXT,
+                platform TEXT,
+                format TEXT,
+                quality TEXT,
+                file_size INTEGER,
+                file_path TEXT,
+                download_time TEXT,
+                thumbnail_url TEXT
+            )
+            """;
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static object ToDbValue(object? value, object fallback)
+        => value ?? fallback;
 
     private static void TryDeleteDatabase(string dbPath)
     {

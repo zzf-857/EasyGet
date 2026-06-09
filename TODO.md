@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错历史文本字段空值
+  - 内容：为历史记录读写增加文本字段空值容错，旧库或异常数据中的 `url`、标题、平台、格式、画质、文件路径、缩略图等 NULL 文本会读取为空字符串；`AddAsync` 也会将运行期空引用归一为空字符串，避免写入历史时触发 SQLite 参数异常。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到旧库 NULL 文本字段读取触发 `InvalidOperationException`、空引用写入触发 SQLite 参数异常的 2 个测试失败；实现后同命令 8 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，80 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错历史文本空值`
+
 - [x] 2026-06-09 容错历史文件大小坏数据
   - 内容：为历史记录读取增加 `file_size` 容错，旧库或异常数据中的文本/负数文件大小会归零，避免历史页读取异常或显示负文件大小；`DownloadHistory.FileSizeText` 也会将负值显示为 `0 B`。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到负数 `file_size` 被原样读取、负文件大小显示为 `-2048 B` 的 2 个测试失败；实现后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，78 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

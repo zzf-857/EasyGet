@@ -74,17 +74,17 @@ public class HistoryService : IDisposable
             INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url)
             VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $downloadTime, $thumbnailUrl)
             """;
-        cmd.Parameters.AddWithValue("$url", history.Url);
-        cmd.Parameters.AddWithValue("$title", history.Title);
-        cmd.Parameters.AddWithValue("$platform", history.Platform);
-        cmd.Parameters.AddWithValue("$format", history.Format);
-        cmd.Parameters.AddWithValue("$quality", history.Quality);
+        cmd.Parameters.AddWithValue("$url", NormalizeHistoryText(history.Url));
+        cmd.Parameters.AddWithValue("$title", NormalizeHistoryText(history.Title));
+        cmd.Parameters.AddWithValue("$platform", NormalizeHistoryText(history.Platform));
+        cmd.Parameters.AddWithValue("$format", NormalizeHistoryText(history.Format));
+        cmd.Parameters.AddWithValue("$quality", NormalizeHistoryText(history.Quality));
         cmd.Parameters.AddWithValue("$fileSize", history.FileSize);
-        cmd.Parameters.AddWithValue("$filePath", history.FilePath);
+        cmd.Parameters.AddWithValue("$filePath", NormalizeHistoryText(history.FilePath));
         cmd.Parameters.AddWithValue(
             "$downloadTime",
             history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$thumbnailUrl", history.ThumbnailUrl ?? "");
+        cmd.Parameters.AddWithValue("$thumbnailUrl", NormalizeHistoryText(history.ThumbnailUrl));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -119,14 +119,14 @@ public class HistoryService : IDisposable
             results.Add(new DownloadHistory
             {
                 Id = reader.GetInt64(0),
-                Url = reader.GetString(1),
-                Title = reader.GetString(2),
-                Platform = reader.GetString(3),
-                Format = reader.GetString(4),
-                Quality = reader.GetString(5),
+                Url = ReadString(reader, 1),
+                Title = ReadString(reader, 2),
+                Platform = ReadString(reader, 3),
+                Format = ReadString(reader, 4),
+                Quality = ReadString(reader, 5),
                 FileSize = ReadNonNegativeInt64(reader, 6),
-                FilePath = reader.GetString(7),
-                DownloadTime = ParseDownloadTime(reader.GetString(8)),
+                FilePath = ReadString(reader, 7),
+                DownloadTime = ParseDownloadTime(ReadString(reader, 8)),
                 ThumbnailUrl = thumbnailUrl
             });
         }
@@ -144,6 +144,17 @@ public class HistoryService : IDisposable
             out var parsed)
             ? parsed
             : DateTime.MinValue;
+    }
+
+    private static string NormalizeHistoryText(string? value)
+        => value ?? string.Empty;
+
+    private static string ReadString(SqliteDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+            return string.Empty;
+
+        return reader.GetValue(ordinal)?.ToString() ?? string.Empty;
     }
 
     private static long ReadNonNegativeInt64(SqliteDataReader reader, int ordinal)
