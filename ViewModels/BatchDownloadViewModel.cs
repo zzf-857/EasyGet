@@ -174,4 +174,15 @@ public partial class BatchDownloadViewModel : ObservableObject
             _downloadManager.Tasks.Remove(t);
         }
     }
+
+    [RelayCommand]
+    private void PauseAll()
+    {
+        foreach (var task in _downloadManager.Tasks.ToList())
+        {
+            if (task.Status == DownloadStatus.Downloading)
+                _downloadManager.Pause(task.Id);
+        }
+    }
+
 }

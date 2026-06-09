@@ -252,6 +252,70 @@ public class XamlBindingTests
         Assert.NotNull(logRow);
     }
 
+    [Fact]
+    public void DownloadViewUsesStitchSingleDownloadWorkspaceCopy()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("粘贴视频链接", texts);
+        Assert.Contains(texts, text => text.Contains("YouTube", StringComparison.Ordinal)
+            && text.Contains("Bilibili", StringComparison.Ordinal));
+        Assert.Contains("开始下载", texts);
+        Assert.Contains("下载日志", texts);
+        Assert.Contains("网速限制", texts);
+        Assert.Contains("保存目录", texts);
+        Assert.Contains("代理状态", texts);
+    }
+
+    [Fact]
+    public void BatchDownloadViewUsesStitchQueueConsoleCopy()
+    {
+        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains(texts, text => text.Contains("输入多个视频链接", StringComparison.Ordinal));
+        Assert.Contains(texts, text => text.Contains("已检测到", StringComparison.Ordinal));
+        Assert.Contains("开始批量下载", texts);
+        Assert.Contains("下载队列", texts);
+        Assert.Contains("暂停全部", texts);
+        Assert.Contains("取消全部", texts);
+
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Button"
+            && element.Attributes("Command").Any(attribute =>
+                attribute.Value.Contains("PauseAllCommand", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("BatchDownloadView.xaml", "PasteUrlsCommand")]
+    [InlineData("BatchDownloadView.xaml", "StartBatchDownloadCommand")]
+    [InlineData("BatchDownloadView.xaml", "CancelAllCommand")]
+    public void BatchDownloadPrimaryActionButtonsUseFluentIconTextContent(string viewFileName, string commandName)
+    {
+        var document = XDocument.Load(GetViewPath(viewFileName));
+
+        var button = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+
+        Assert.NotNull(button);
+        Assert.Null(button!.Attribute("Content"));
+
+        var textBlocks = button.Descendants()
+            .Where(element => element.Name.LocalName == "TextBlock")
+            .ToList();
+
+        Assert.Contains(textBlocks, textBlock =>
+            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+        Assert.Contains(textBlocks, textBlock =>
+            !string.IsNullOrWhiteSpace(textBlock.Attribute("Text")?.Value)
+            && !textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily"));
+    }
+
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]
