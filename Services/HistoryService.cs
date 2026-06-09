@@ -10,6 +10,8 @@ namespace EasyGet.Services;
 /// </summary>
 public class HistoryService : IDisposable
 {
+    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url";
+
     private readonly SqliteConnection _connection;
 
     public HistoryService()
@@ -97,8 +99,8 @@ public class HistoryService : IDisposable
 
         if (!string.IsNullOrWhiteSpace(searchKeyword))
         {
-            cmd.CommandText = """
-                SELECT * FROM download_history
+            cmd.CommandText = $"""
+                SELECT {HistoryColumns} FROM download_history
                 WHERE title LIKE $keyword OR url LIKE $keyword OR platform LIKE $keyword
                 ORDER BY download_time DESC
                 """;
@@ -106,7 +108,7 @@ public class HistoryService : IDisposable
         }
         else
         {
-            cmd.CommandText = "SELECT * FROM download_history ORDER BY download_time DESC";
+            cmd.CommandText = $"SELECT {HistoryColumns} FROM download_history ORDER BY download_time DESC";
         }
 
         var results = new List<DownloadHistory>();
@@ -118,15 +120,15 @@ public class HistoryService : IDisposable
 
             results.Add(new DownloadHistory
             {
-                Id = reader.GetInt64(0),
-                Url = ReadString(reader, 1),
-                Title = ReadString(reader, 2),
-                Platform = ReadString(reader, 3),
-                Format = ReadString(reader, 4),
-                Quality = ReadString(reader, 5),
-                FileSize = ReadNonNegativeInt64(reader, 6),
-                FilePath = ReadString(reader, 7),
-                DownloadTime = ParseDownloadTime(ReadString(reader, 8)),
+                Id = ReadNonNegativeInt64(reader, "id"),
+                Url = ReadString(reader, "url"),
+                Title = ReadString(reader, "title"),
+                Platform = ReadString(reader, "platform"),
+                Format = ReadString(reader, "format"),
+                Quality = ReadString(reader, "quality"),
+                FileSize = ReadNonNegativeInt64(reader, "file_size"),
+                FilePath = ReadString(reader, "file_path"),
+                DownloadTime = ParseDownloadTime(ReadString(reader, "download_time")),
                 ThumbnailUrl = thumbnailUrl
             });
         }
@@ -157,6 +159,9 @@ public class HistoryService : IDisposable
         return reader.GetValue(ordinal)?.ToString() ?? string.Empty;
     }
 
+    private static string ReadString(SqliteDataReader reader, string columnName)
+        => ReadString(reader, reader.GetOrdinal(columnName));
+
     private static long ReadNonNegativeInt64(SqliteDataReader reader, int ordinal)
     {
         if (reader.IsDBNull(ordinal))
@@ -180,6 +185,9 @@ public class HistoryService : IDisposable
 
         return Math.Max(0, parsed);
     }
+
+    private static long ReadNonNegativeInt64(SqliteDataReader reader, string columnName)
+        => ReadNonNegativeInt64(reader, reader.GetOrdinal(columnName));
 
     /// <summary>
     /// 清空所有历史记录

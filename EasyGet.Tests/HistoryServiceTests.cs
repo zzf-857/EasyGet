@@ -180,6 +180,45 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public async Task GetAllAsync_ReadsHistoryByColumnNameWhenTableColumnOrderDiffers()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            await CreateShuffledHistoryTableAsync(dbPath);
+            await InsertHistoryRowAsync(
+                dbPath,
+                "2026-06-09 12:34:56",
+                url: "https://example.com/shuffled",
+                title: "shuffled title",
+                platform: "Example",
+                format: "mkv",
+                quality: "1080",
+                fileSize: 4096L,
+                filePath: @"D:\Videos\shuffled.mkv",
+                thumbnailUrl: "https://example.com/thumb.jpg");
+
+            using var readService = new HistoryService(dbPath);
+            var history = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Equal("https://example.com/shuffled", history.Url);
+            Assert.Equal("shuffled title", history.Title);
+            Assert.Equal("Example", history.Platform);
+            Assert.Equal("mkv", history.Format);
+            Assert.Equal("1080", history.Quality);
+            Assert.Equal(4096, history.FileSize);
+            Assert.Equal(@"D:\Videos\shuffled.mkv", history.FilePath);
+            Assert.Equal(new DateTime(2026, 6, 9, 12, 34, 56), history.DownloadTime);
+            Assert.Equal("https://example.com/thumb.jpg", history.ThumbnailUrl);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public void FileSizeText_ClampsNegativeBytesToZero()
     {
         var history = new DownloadHistory { FileSize = -2048 };
@@ -250,6 +289,29 @@ public class HistoryServiceTests
                 file_path TEXT,
                 download_time TEXT,
                 thumbnail_url TEXT
+            )
+            """;
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task CreateShuffledHistoryTableAsync(string dbPath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            CREATE TABLE download_history (
+                title TEXT,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thumbnail_url TEXT,
+                download_time TEXT,
+                file_path TEXT,
+                file_size INTEGER,
+                quality TEXT,
+                format TEXT,
+                platform TEXT,
+                url TEXT
             )
             """;
         await cmd.ExecuteNonQueryAsync();
