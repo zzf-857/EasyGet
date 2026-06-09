@@ -64,5 +64,7 @@ public partial class DownloadHistory : ObservableObject
     /// <summary>
     /// 格式化的下载时间
     /// </summary>
-    public string DownloadTimeText => DownloadTime.ToString("yyyy-MM-dd HH:mm");
+    public string DownloadTimeText => DownloadTime == DateTime.MinValue
+        ? "--"
+        : DownloadTime.ToString("yyyy-MM-dd HH:mm");
 }

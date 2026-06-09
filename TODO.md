@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错损坏历史时间戳
+  - 内容：为历史记录读取增加损坏 `download_time` 容错，无法解析的旧库/异常数据不再让历史页整体失败，而是保留记录并将时间标记为未知；`DownloadHistory.DownloadTimeText` 对未知时间显示 `--`，避免 UI 出现 `0001-01-01`。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到损坏时间戳触发 `FormatException`、未知时间显示为 `0001-01-01 00:00` 的 2 个测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，75 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错损坏历史时间戳`
+
 - [x] 2026-06-09 稳定历史记录时间戳持久化
   - 内容：为 `HistoryService` 增加临时数据库测试入口，并将历史记录下载时间的写入与读取统一为 invariant culture 固定格式，避免在泰国佛历等区域设置下写入后切换语言/区域读取时年份漂移，提升历史列表数据稳定性。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryServiceTests` 观察到缺少临时数据库构造入口的编译失败；补入口后同命令观察到 `2026` 被跨区域读取为 `2569` 的测试失败；实现 invariant culture 持久化后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，73 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

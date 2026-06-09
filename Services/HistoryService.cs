@@ -126,16 +126,24 @@ public class HistoryService : IDisposable
                 Quality = reader.GetString(5),
                 FileSize = reader.GetInt64(6),
                 FilePath = reader.GetString(7),
-                DownloadTime = DateTime.ParseExact(
-                    reader.GetString(8),
-                    "yyyy-MM-dd HH:mm:ss",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.None),
+                DownloadTime = ParseDownloadTime(reader.GetString(8)),
                 ThumbnailUrl = thumbnailUrl
             });
         }
 
         return results;
+    }
+
+    private static DateTime ParseDownloadTime(string value)
+    {
+        return DateTime.TryParseExact(
+            value,
+            "yyyy-MM-dd HH:mm:ss",
+            CultureInfo.InvariantCulture,
+            DateTimeStyles.None,
+            out var parsed)
+            ? parsed
+            : DateTime.MinValue;
     }
 
     /// <summary>
