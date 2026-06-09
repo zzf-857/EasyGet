@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补齐下载页按钮提示与无障碍名称
+  - 内容：为下载页主要操作按钮补齐 `ToolTip` 和 `AutomationProperties.Name`，覆盖粘贴链接、开始下载、选择目录、取消下载、复制日志和清空日志；鼠标悬停和辅助技术都能得到明确命令名称，提升界面可用性和现代桌面应用细节体验。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests` 观察到 6 个下载页操作按钮缺少提示/无障碍名称的测试失败；实现后同命令 18 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，102 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`补齐下载页按钮提示`
+
 - [x] 2026-06-09 统一下载页现代工具面板样式
   - 内容：新增 `ToolPanelBorder` 主题样式，将下载页的选项区、下载进度区和日志区统一到 8px 圆角、细边框、柔和阴影和像素对齐的现代工具面板；减少页面内不同卡片圆角和边框写法不一致的问题，让下载页视觉更整齐。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~ThemeStyleTests|FullyQualifiedName~XamlBindingTests"` 观察到缺少 `ToolPanelBorder` 样式且下载页未使用该样式的 2 个测试失败；实现后同命令 18 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，96 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

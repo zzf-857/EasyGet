@@ -23,6 +23,32 @@ public class XamlBindingTests
     }
 
     [Theory]
+    [InlineData("PasteUrlCommand")]
+    [InlineData("StartDownloadCommand")]
+    [InlineData("BrowseDirectoryCommand")]
+    [InlineData("CancelDownloadCommand")]
+    [InlineData("CopyLogCommand")]
+    [InlineData("ClearLogCommand")]
+    public void DownloadViewActionButtonsExposeTooltipAndAutomationName(string commandName)
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+
+        var button = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+
+        Assert.NotNull(button);
+        Assert.False(string.IsNullOrWhiteSpace(button!.Attribute("ToolTip")?.Value));
+        Assert.False(string.IsNullOrWhiteSpace(button
+            .Attributes()
+            .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
+            ?.Value));
+    }
+
+    [Theory]
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]
     public void PlatformLabelsUseStringVisibilityConverter(string viewFileName)

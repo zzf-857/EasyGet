@@ -29,9 +29,13 @@
                          FontSize="14"/>
                 <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
                         Content="📋 粘贴" Margin="8,0,0,0"
+                        ToolTip="粘贴视频链接"
+                        AutomationProperties.Name="粘贴视频链接"
                         Command="{Binding PasteUrlCommand}"/>
                 <Button Grid.Column="2" Style="{StaticResource AccentButton}"
                         Content="⬇ 下载" Margin="8,0,0,0"
+                        ToolTip="开始下载"
+                        AutomationProperties.Name="开始下载"
                         Command="{Binding StartDownloadCommand}"/>
             </Grid>
 
@@ -76,6 +80,8 @@
                          IsReadOnly="True"/>
                 <Button Grid.Column="1" Style="{StaticResource SurfaceButton}"
                         Content="📁 浏览" Margin="8,0,0,0"
+                        ToolTip="选择下载目录"
+                        AutomationProperties.Name="选择下载目录"
                         Command="{Binding BrowseDirectoryCommand}"/>
             </Grid>
 
@@ -124,6 +130,8 @@
                                  Margin="0,12,0,0"/>
                     <Button Style="{StaticResource SurfaceButton}" Content="取消下载"
                             HorizontalAlignment="Right" Margin="0,12,0,0"
+                            ToolTip="取消当前下载"
+                            AutomationProperties.Name="取消当前下载"
                             Command="{Binding CancelDownloadCommand}"/>
                 </StackPanel>
             </Border>
@@ -140,9 +148,13 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Style="{StaticResource SurfaceButton}"
                                 Content="📋 复制日志" FontSize="11" Padding="10,5" Margin="0,0,6,0"
+                                ToolTip="复制下载日志"
+                                AutomationProperties.Name="复制下载日志"
                                 Command="{Binding CopyLogCommand}"/>
                         <Button Style="{StaticResource SurfaceButton}"
                                 Content="清空" FontSize="11" Padding="10,5"
+                                ToolTip="清空下载日志"
+                                AutomationProperties.Name="清空下载日志"
                                 Command="{Binding ClearLogCommand}"/>
                     </StackPanel>
                 </DockPanel>
