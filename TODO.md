@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 保留 yt-dlp 未知速度下的进度更新
+  - 内容：放宽 yt-dlp 进度行解析，支持 `Unknown B/s` 速度占位符；当速度未知时仍解析百分比和 ETA，速度回落为 0，避免下载初期或网络抖动时整行进度被丢弃。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProgressTests` 观察到 `Unknown B/s` 进度行解析结果为 null 的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，68 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`保留未知速度进度更新`
+
 - [x] 2026-06-09 校准 yt-dlp 进度小数与速度单位解析
   - 内容：将 yt-dlp 进度百分比改为使用 invariant culture 解析，避免非英文区域设置下 `12.5%` 被解析成 `125`；同时修正 `MiB/s` 等速度单位换算，让下载速度显示和任务状态计算使用正确的字节/秒数值。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpProgressTests` 观察到 `de-DE` 区域设置下百分比被解析为 `125`、速度未按 `MiB/s` 换算的测试失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，67 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

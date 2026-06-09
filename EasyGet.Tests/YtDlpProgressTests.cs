@@ -41,6 +41,17 @@ public class YtDlpProgressTests
         }
     }
 
+    [Fact]
+    public void ParseProgressLine_KeepsPercentWhenSpeedIsUnknown()
+    {
+        var progress = ParseProgressLine("download:33.3% Unknown B/s ETA 00:02");
+
+        Assert.NotNull(progress);
+        Assert.Equal(33.3, progress!.Percent, precision: 3);
+        Assert.Equal(0, progress.Speed);
+        Assert.Equal(2, progress.Eta);
+    }
+
     private static DownloadProgress? ParseProgressLine(string line)
     {
         var method = typeof(YtDlpService).GetMethod(
