@@ -73,6 +73,45 @@ public class XamlBindingTests
             $"HistoryView should use ToolPanelBorder for history item cards. Found {styledPanels.Count}.");
     }
 
+    [Fact]
+    public void MainWindowSidebarUsesSubtleContentDivider()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var sidebar = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Border"
+                && element.Attribute("Background")?.Value.Contains("BgSidebarBrush", StringComparison.Ordinal) == true);
+
+        Assert.NotNull(sidebar);
+        Assert.Contains("BorderSubtleBrush", sidebar!.Attribute("BorderBrush")?.Value ?? "");
+        Assert.Equal("0,0,1,0", sidebar.Attribute("BorderThickness")?.Value);
+    }
+
+    [Theory]
+    [InlineData("download")]
+    [InlineData("batch")]
+    [InlineData("history")]
+    [InlineData("settings")]
+    public void MainWindowNavigationItemsExposeTooltipAndAutomationName(string commandParameter)
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var navItem = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "RadioButton"
+                && element.Attribute("CommandParameter")?.Value == commandParameter);
+
+        Assert.NotNull(navItem);
+        Assert.False(string.IsNullOrWhiteSpace(navItem!.Attribute("ToolTip")?.Value));
+        Assert.False(string.IsNullOrWhiteSpace(navItem
+            .Attributes()
+            .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
+            ?.Value));
+    }
+
     [Theory]
     [InlineData("PasteUrlCommand")]
     [InlineData("StartDownloadCommand")]
@@ -241,6 +280,21 @@ public class XamlBindingTests
         }
 
         throw new FileNotFoundException($"Could not find Views/{fileName} from test output directory.");
+    }
+
+    private static string GetRootPath(string fileName)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, fileName);
+            if (File.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find {fileName} from test output directory.");
     }
 
     private static bool IsIconOnlyContent(string? content)

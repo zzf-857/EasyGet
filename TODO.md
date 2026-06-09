@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 优化主窗口侧栏分隔与导航提示
+  - 内容：为主窗口左侧导航栏增加 `BorderSubtleBrush` 右侧细分隔线，让侧栏和内容区边界更清晰；同时为 4 个导航 RadioButton 补齐 `ToolTip` 与 `AutomationProperties.Name`，提升悬浮提示和辅助技术识别效果，主框架第一屏更精致也更可用。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~MainWindowSidebarUsesSubtleContentDivider|FullyQualifiedName~MainWindowNavigationItemsExposeTooltipAndAutomationName"` 观察到侧栏缺少分隔线、4 个导航项缺少提示/无障碍名称的 5 个测试失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，26 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，118 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`优化主窗口侧栏导航`
+
 - [x] 2026-06-09 统一历史页现代卡片样式
   - 内容：将历史记录列表项外层卡片切换到 `ToolPanelBorder` 主题样式，保留原有紧凑内边距、文件存在状态透明度和文件路径提示，同时与下载页、批量页、设置页共用 8px 圆角、统一边框、柔和阴影和像素对齐的现代工具面板视觉；历史页与其他主页面的卡片语言更一致。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryViewUsesModernToolPanelStyleForHistoryCards` 观察到历史页历史卡片未使用 `ToolPanelBorder` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，21 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，113 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
