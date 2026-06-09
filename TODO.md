@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 统一下载页主操作按钮图标
+  - 内容：将下载页的粘贴、下载、浏览和复制日志按钮从 emoji 文本改为 Fluent icon + 中文文本的结构化内容，保留原有命令、提示和无障碍名称，让下载页主操作区更接近当前 VibeTracker 风格。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadViewPrimaryActionButtonsUseFluentIconTextContent`，观察到 4 个按钮仍使用 `Content` emoji 文本的测试失败；实现后同命令 4 个测试通过；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，131 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。
+  - 提交说明：`统一下载页操作按钮图标`
+
 - [x] 2026-06-09 优化下载入口图标与可选中文本日志框
   - 内容：将侧栏 logo 与视频下载导航项改为更轻量的 Fluent 下载 glyph，降低原图标的视觉笨重感；把下载页日志区高度从 200 提升到 360，并将日志展示从 `ListBox` 改为只读多行 `TextBox`，支持直接用鼠标框选日志片段并复制，同时保留“复制日志/清空”按钮和自动滚动到底部。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~MainWindowDownloadNavigationUsesCleanerDownloadGlyph|FullyQualifiedName~DownloadViewLogViewerSupportsMouseTextSelection|FullyQualifiedName~DownloadViewLogAreaAllocatesMoreVerticalSpace"`，观察到旧 glyph、旧 `ListBox` 和旧 200 高度的 3 个测试失败；实现后同命令 3 个测试通过；新增 `LogTextJoinsLogLinesForSelectableTextViewer` 验证日志聚合文本；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，127 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。

@@ -254,6 +254,36 @@ public class XamlBindingTests
     }
 
     [Theory]
+    [InlineData("PasteUrlCommand")]
+    [InlineData("StartDownloadCommand")]
+    [InlineData("BrowseDirectoryCommand")]
+    [InlineData("CopyLogCommand")]
+    public void DownloadViewPrimaryActionButtonsUseFluentIconTextContent(string commandName)
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+
+        var button = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+
+        Assert.NotNull(button);
+        Assert.Null(button!.Attribute("Content"));
+
+        var textBlocks = button.Descendants()
+            .Where(element => element.Name.LocalName == "TextBlock")
+            .ToList();
+
+        Assert.Contains(textBlocks, textBlock =>
+            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+        Assert.Contains(textBlocks, textBlock =>
+            !string.IsNullOrWhiteSpace(textBlock.Attribute("Text")?.Value)
+            && !textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily"));
+    }
+
+    [Theory]
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]
     public void PlatformLabelsUseStringVisibilityConverter(string viewFileName)
