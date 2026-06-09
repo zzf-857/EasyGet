@@ -42,6 +42,30 @@ public class YtDlpArgsTests
         AssertOptionValue(args, "--retry-sleep", "fragment:linear=1:5:1");
     }
 
+    [Fact]
+    public void BuildVideoInfoBaseArgs_AddsNetworkReliabilityOptions()
+    {
+        var args = YtDlpService.BuildVideoInfoBaseArgs();
+
+        Assert.Contains("--dump-json", args);
+        Assert.Contains("--no-download", args);
+        AssertOptionValue(args, "--retries", "20");
+        AssertOptionValue(args, "--socket-timeout", "30");
+        AssertOptionValue(args, "--retry-sleep", "linear=1:5:1");
+    }
+
+    [Fact]
+    public void BuildPlaylistBaseArgs_AddsNetworkReliabilityOptions()
+    {
+        var args = YtDlpService.BuildPlaylistBaseArgs();
+
+        Assert.Contains("--flat-playlist", args);
+        Assert.Contains("--dump-json", args);
+        AssertOptionValue(args, "--retries", "20");
+        AssertOptionValue(args, "--socket-timeout", "30");
+        AssertOptionValue(args, "--retry-sleep", "linear=1:5:1");
+    }
+
     private static void AssertOptionValue(List<string> args, string option, string expectedValue)
     {
         var optionIndexes = args

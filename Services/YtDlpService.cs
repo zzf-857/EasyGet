@@ -68,17 +68,11 @@ public partial class YtDlpService
     {
         try
         {
-            var args = new List<string>
-            {
-                "--no-playlist",
-                "--dump-json",
-                "--no-download",
-                "--no-warnings",
-                url
-            };
+            var args = BuildVideoInfoBaseArgs();
 
             AddProxyArgs(args);
             AddCookieArgs(args, url, CookieStrategy.Default);
+            args.Add(url);
 
             var output = await RunAsync(args, ct);
             if (string.IsNullOrWhiteSpace(output))
@@ -194,16 +188,11 @@ public partial class YtDlpService
 
         try
         {
-            var args = new List<string>
-            {
-                "--flat-playlist",
-                "--dump-json",
-                "--no-warnings",
-                url
-            };
+            var args = BuildPlaylistBaseArgs();
 
             AddProxyArgs(args);
             AddCookieArgs(args, url, CookieStrategy.Default);
+            args.Add(url);
 
             var output = await RunAsync(args, ct);
             if (string.IsNullOrWhiteSpace(output))
@@ -484,6 +473,33 @@ public partial class YtDlpService
         args.Add("linear=1:5:1");
         args.Add("--retry-sleep");
         args.Add("fragment:linear=1:5:1");
+    }
+
+    internal static List<string> BuildVideoInfoBaseArgs()
+    {
+        var args = new List<string>
+        {
+            "--no-playlist",
+            "--dump-json",
+            "--no-download",
+            "--no-warnings"
+        };
+
+        AddNetworkReliabilityArgs(args);
+        return args;
+    }
+
+    internal static List<string> BuildPlaylistBaseArgs()
+    {
+        var args = new List<string>
+        {
+            "--flat-playlist",
+            "--dump-json",
+            "--no-warnings"
+        };
+
+        AddNetworkReliabilityArgs(args);
+        return args;
     }
 
     private static string BuildFormatString(string format, string quality)

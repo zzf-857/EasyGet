@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 为 yt-dlp 短命令增加网络重试参数
+  - 内容：将视频信息解析和播放列表导入的 yt-dlp 基础参数抽成可测试入口，并复用长下载已有的 `--retries 20`、`--fragment-retries 30`、`--socket-timeout 30` 和线性 `--retry-sleep`；网络抖动或临时连接失败时，元数据/播放列表阶段也能由 yt-dlp 自身重试，降低还未进入正式下载就失败的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpArgsTests` 观察到缺少短命令基础参数构建入口的编译失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，106 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`增强 yt-dlp 短命令网络重试`
+
 - [x] 2026-06-09 统一批量下载页现代工具面板样式
   - 内容：将批量下载页的链接输入区和下载队列区统一切换到 `ToolPanelBorder` 主题样式，保留原有紧凑内边距，同时与下载页、设置页共用 8px 圆角、统一边框、柔和阴影和像素对齐的现代工具面板视觉；批量流程页面的主面板层级更一致。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~BatchDownloadViewUsesModernToolPanelStyleForPrimarySections` 观察到批量下载页 2 个主要面板未使用 `ToolPanelBorder` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，20 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，104 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
