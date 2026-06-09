@@ -84,6 +84,34 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildCookieFileLines_AcceptsBrowserJsonWithCookieDomainAliases()
+    {
+        const string input = """
+            [
+              {
+                "host": ".youtube.com",
+                "path": "/",
+                "secure": true,
+                "name": "PREF",
+                "value": "tz=UTC"
+              },
+              {
+                "url": "https://www.youtube.com/watch?v=abc123",
+                "path": "/watch",
+                "secure": true,
+                "name": "VISITOR_INFO1_LIVE",
+                "value": "visitor-token"
+              }
+            ]
+            """;
+
+        var lines = YtDlpService.BuildCookieFileLines(input);
+
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\ttz=UTC", lines);
+        Assert.Contains("www.youtube.com\tFALSE\t/watch\tTRUE\t0\tVISITOR_INFO1_LIVE\tvisitor-token", lines);
+    }
+
+    [Fact]
     public void BuildCookieFileLines_AcceptsBrowserJsonObjectWithCookiesArray()
     {
         const string input = """

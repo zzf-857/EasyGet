@@ -762,14 +762,14 @@ public partial class YtDlpService
                 using var doc = JsonDocument.Parse(trimmed);
                 foreach (var item in EnumerateCookieJsonItems(doc.RootElement))
                 {
-                    var domain = GetOptionalString(item, "domain");
+                    var domain = GetCookieDomain(item, out var domainImpliesHostOnly);
                     var name = GetOptionalString(item, "name");
                     var value = GetCookieValue(item);
                     var path = GetOptionalString(item, "path");
                     if (string.IsNullOrWhiteSpace(path))
                         path = "/";
                     var secure = GetOptionalBoolean(item, "secure");
-                    var hostOnly = GetOptionalBoolean(item, "hostOnly");
+                    var hostOnly = GetOptionalBoolean(item, "hostOnly") || domainImpliesHostOnly;
                     var expiry = GetCookieExpiry(item);
 
                     if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(name))
@@ -850,6 +850,32 @@ public partial class YtDlpService
             return value;
 
         return GetOptionalString(item, "sessionValue");
+    }
+
+    private static string GetCookieDomain(JsonElement item, out bool domainImpliesHostOnly)
+    {
+        domainImpliesHostOnly = false;
+
+        var domain = GetOptionalString(item, "domain").Trim();
+        if (!string.IsNullOrWhiteSpace(domain))
+            return domain;
+
+        var host = GetOptionalString(item, "host").Trim();
+        if (!string.IsNullOrWhiteSpace(host))
+        {
+            domainImpliesHostOnly = !host.StartsWith(".", StringComparison.Ordinal);
+            return host;
+        }
+
+        var url = GetOptionalString(item, "url").Trim();
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && !string.IsNullOrWhiteSpace(uri.Host))
+        {
+            domainImpliesHostOnly = true;
+            return uri.Host;
+        }
+
+        return "";
     }
 
     private static long GetCookieExpiry(JsonElement item)

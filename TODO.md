@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 兼容 Cookie 域名字段别名
+  - 内容：为 `YtDlpService.BuildCookieFileLines` 的浏览器 Cookie JSON 解析增加域名字段别名兼容，缺少 `domain` 时可从 `host` 读取域名，或从 `url` 解析精确主机名；从 DevTools、自动化脚本或非标准 Cookie 导出工具拿到的 JSON 不再因域名字段名不同被整条跳过，降低粘贴 Cookie 后仍无法带登录态下载的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `host`/`url` 域名来源被跳过的测试失败；实现后同命令 10 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，92 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`兼容 Cookie 域名字段别名`
+
 - [x] 2026-06-09 兼容 Cookie 过期字段别名
   - 内容：为 `YtDlpService.BuildCookieFileLines` 的浏览器 Cookie JSON 解析增加过期时间字段别名兼容，除 `expirationDate` 外也支持常见的 `expires` 和 `expiry`；从 Chrome DevTools、自动化工具或不同 Cookie 插件导出的 JSON 不再把长期 Cookie 误写成会话 Cookie，降低登录态校验失败概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `expires`/`expiry` 被写成过期时间 `0` 的测试失败；实现后同命令 9 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，91 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
