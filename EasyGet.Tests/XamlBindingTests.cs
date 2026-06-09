@@ -56,6 +56,23 @@ public class XamlBindingTests
             $"BatchDownloadView should use ToolPanelBorder for URL input and queue panels. Found {styledPanels.Count}.");
     }
 
+    [Fact]
+    public void HistoryViewUsesModernToolPanelStyleForHistoryCards()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+
+        var styledPanels = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Border")
+            .Select(element => element.Attribute("Style")?.Value ?? "")
+            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            styledPanels.Count >= 1,
+            $"HistoryView should use ToolPanelBorder for history item cards. Found {styledPanels.Count}.");
+    }
+
     [Theory]
     [InlineData("PasteUrlCommand")]
     [InlineData("StartDownloadCommand")]

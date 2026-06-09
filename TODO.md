@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 统一历史页现代卡片样式
+  - 内容：将历史记录列表项外层卡片切换到 `ToolPanelBorder` 主题样式，保留原有紧凑内边距、文件存在状态透明度和文件路径提示，同时与下载页、批量页、设置页共用 8px 圆角、统一边框、柔和阴影和像素对齐的现代工具面板视觉；历史页与其他主页面的卡片语言更一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryViewUsesModernToolPanelStyleForHistoryCards` 观察到历史页历史卡片未使用 `ToolPanelBorder` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，21 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，113 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`统一历史页卡片样式`
+
 - [x] 2026-06-09 清理粘贴链接尾随分享标点
   - 内容：修正 `DownloadViewModel.ExtractUrl` 的 URL 提取逻辑，干净 URL 和混合分享文案都会在识别后清理中文逗号、句号、右括号以及常见英文尾随标点；单视频下载和批量下载复用该入口，用户从 YouTube、抖音等分享文案中复制带标点的链接时，不再把标点传给 yt-dlp，降低粘贴后解析失败的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadViewModelTests` 观察到 3 个带中文尾随标点的 clean URL 被原样返回的测试失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，112 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
