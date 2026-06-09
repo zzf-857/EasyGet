@@ -6,6 +6,21 @@ namespace EasyGet.Tests;
 public class YtDlpMetadataTests
 {
     [Fact]
+    public void ExtractPlaylistUrlFromJson_FallsBackToWebpageUrlWhenUrlFieldIsNotString()
+    {
+        const string json = """
+            {
+              "url": { "id": "abc123" },
+              "webpage_url": "https://www.youtube.com/watch?v=abc123"
+            }
+            """;
+
+        var url = YtDlpService.ExtractPlaylistUrlFromJson(json);
+
+        Assert.Equal("https://www.youtube.com/watch?v=abc123", url);
+    }
+
+    [Fact]
     public void ParseVideoInfoJson_IgnoresNonStringMetadataFields()
     {
         const string json = """

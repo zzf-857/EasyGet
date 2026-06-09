@@ -213,12 +213,7 @@ public partial class YtDlpService
             {
                 try
                 {
-                    using var doc = JsonDocument.Parse(line);
-                    var root = doc.RootElement;
-                    var videoUrl = root.TryGetProperty("url", out var u)
-                        ? u.GetString() ?? ""
-                        : root.TryGetProperty("webpage_url", out var wu) ? wu.GetString() ?? "" : "";
-
+                    var videoUrl = ExtractPlaylistUrlFromJson(line);
                     if (!string.IsNullOrWhiteSpace(videoUrl))
                         urls.Add(videoUrl);
                 }
@@ -234,6 +229,17 @@ public partial class YtDlpService
         }
 
         return urls;
+    }
+
+    internal static string ExtractPlaylistUrlFromJson(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        var videoUrl = GetOptionalString(root, "url");
+        return !string.IsNullOrWhiteSpace(videoUrl)
+            ? videoUrl
+            : GetOptionalString(root, "webpage_url");
     }
 
     public async Task DownloadAsync(

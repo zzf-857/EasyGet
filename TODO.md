@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 容错 yt-dlp 播放列表 URL 字段
+  - 内容：将 `YtDlpService.GetPlaylistUrlsAsync` 的单行 JSON URL 提取抽成 `ExtractPlaylistUrlFromJson`，并改为安全读取 `url`、不可用时回退 `webpage_url`；当 yt-dlp 扁平播放列表输出里 `url` 字段类型异常但 `webpage_url` 仍可用时，不再整行跳过，降低播放列表解析漏项概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpMetadataTests` 观察到缺少 `ExtractPlaylistUrlFromJson` 的编译失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，86 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`容错 yt-dlp 播放列表 URL`
+
 - [x] 2026-06-09 容错 yt-dlp 元数据异常字段
   - 内容：将 `YtDlpService.GetVideoInfoAsync` 的 JSON 元数据解析抽成可测试的 `ParseVideoInfoJson`，并为标题、平台、缩略图、时长和文件大小增加安全读取；yt-dlp 输出里字段类型异常时会按空值或 0 处理，缩略图列表仍会继续寻找后续可用 URL，避免单个坏字段让视频信息解析整体失败。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpMetadataTests` 观察到缺少 `ParseVideoInfoJson` 的编译失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，85 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
