@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 统一历史页操作按钮图标
+  - 内容：将历史页搜索、清空、打开文件夹和删除记录按钮从 emoji 文本或 emoji-only 内容改为 Fluent icon 结构；保留原有命令绑定、提示和无障碍名称，让历史页操作区与下载页的现代图标语言保持一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~HistoryViewActionButtonsUseFluentIconContent`，观察到 4 个按钮仍使用 `Content` emoji 的测试失败；实现后同命令 4 个测试通过；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，135 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。
+  - 提交说明：`统一历史页操作按钮图标`
+
 - [x] 2026-06-09 统一下载页主操作按钮图标
   - 内容：将下载页的粘贴、下载、浏览和复制日志按钮从 emoji 文本改为 Fluent icon + 中文文本的结构化内容，保留原有命令、提示和无障碍名称，让下载页主操作区更接近当前 VibeTracker 风格。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadViewPrimaryActionButtonsUseFluentIconTextContent`，观察到 4 个按钮仍使用 `Content` emoji 文本的测试失败；实现后同命令 4 个测试通过；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，131 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。

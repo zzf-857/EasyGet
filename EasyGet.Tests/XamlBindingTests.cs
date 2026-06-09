@@ -284,6 +284,33 @@ public class XamlBindingTests
     }
 
     [Theory]
+    [InlineData("SearchCommand")]
+    [InlineData("ClearAllCommand")]
+    [InlineData("OpenFolderCommand")]
+    [InlineData("DeleteItemCommand")]
+    public void HistoryViewActionButtonsUseFluentIconContent(string commandName)
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+
+        var button = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+
+        Assert.NotNull(button);
+        Assert.Null(button!.Attribute("Content"));
+
+        var icon = button.Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBlock"
+                && (element.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+
+        Assert.NotNull(icon);
+    }
+
+    [Theory]
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]
     public void PlatformLabelsUseStringVisibilityConverter(string viewFileName)
