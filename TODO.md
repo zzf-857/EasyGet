@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 修复恢复任务等待取消收尾
+  - 内容：补齐 `DownloadManager.ResumeAsync` 在等待并发下载名额时被取消的处理分支，恢复中的任务如果尚未开始下载就被取消，会像首次入队任务一样进入 `Cancelled` 状态并触发 `TaskFinished`，避免队列卡在等待态。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadManagerTests` 观察到恢复任务等待并发位时取消无法触发 `TaskFinished` 的测试失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，72 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`修复恢复任务等待取消收尾`
+
 - [x] 2026-06-09 清理非有限下载进度值
   - 内容：在 `DownloadManager.ApplyProgress` 中将 `NaN`、正无穷和负无穷等非有限进度数字归零，再进行百分比、速度和 ETA 的边界保护，避免异常进度源把不可显示数值写入任务模型和 UI。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadManagerTests` 观察到 `NaN` 直接写入任务进度的测试失败；实现后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，71 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

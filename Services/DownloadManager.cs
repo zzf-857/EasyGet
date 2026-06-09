@@ -218,7 +218,22 @@ public class DownloadManager
 
         _ = Task.Run(async () =>
         {
-            await _semaphore.WaitAsync(task.Cts.Token);
+            try
+            {
+                await _semaphore.WaitAsync(task.Cts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                if (task.Status != DownloadStatus.Paused)
+                {
+                    task.Status = DownloadStatus.Cancelled;
+                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
+                }
+
+                TaskFinished?.Invoke(task);
+                return;
+            }
+
             try
             {
                 var progress = new Progress<DownloadProgress>(p =>

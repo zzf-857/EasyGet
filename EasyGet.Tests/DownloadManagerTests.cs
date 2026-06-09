@@ -57,6 +57,47 @@ public class DownloadManagerTests
         Assert.Equal(128, task.DownloadedSize);
     }
 
+    [Fact]
+    public async Task ResumeAsync_CancelWhileWaitingForConcurrencyMarksTaskCancelled()
+    {
+        var configService = new ConfigService();
+        configService.Config.MaxConcurrentDownloads = 1;
+        using var historyService = new HistoryService();
+        var manager = new DownloadManager(
+            new YtDlpService(configService, new EnvironmentService()),
+            historyService,
+            configService);
+        var semaphore = GetSemaphore(manager);
+        await semaphore.WaitAsync();
+
+        try
+        {
+            var task = new DownloadTask
+            {
+                Url = "https://example.com/video",
+                Title = "paused",
+                Status = DownloadStatus.Paused
+            };
+            var finished = new TaskCompletionSource<DownloadTask>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            manager.TaskFinished += finishedTask => finished.TrySetResult(finishedTask);
+            manager.Tasks.Add(task);
+
+            await manager.ResumeAsync(task.Id);
+            manager.Cancel(task.Id);
+
+            var completed = await Task.WhenAny(finished.Task, Task.Delay(1000));
+
+            Assert.Same(finished.Task, completed);
+            Assert.Same(task, await finished.Task);
+            Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
     private static void ApplyProgress(DownloadTask task, DownloadProgress progress)
     {
         var method = typeof(DownloadManager).GetMethod(
@@ -65,5 +106,15 @@ public class DownloadManagerTests
 
         Assert.NotNull(method);
         method!.Invoke(null, [task, progress]);
+    }
+
+    private static SemaphoreSlim GetSemaphore(DownloadManager manager)
+    {
+        var field = typeof(DownloadManager).GetField(
+            "_semaphore",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+
+        Assert.NotNull(field);
+        return (SemaphoreSlim)field!.GetValue(manager)!;
     }
 }
