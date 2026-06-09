@@ -29,6 +29,7 @@ public partial class DownloadViewModel : ObservableObject
 
     // 日志
     public ObservableCollection<string> LogLines { get; } = [];
+    public string LogText => string.Join(Environment.NewLine, LogLines);
 
     // 选项列表
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3 (仅音频)", "m4a (仅音频)"];
@@ -39,6 +40,7 @@ public partial class DownloadViewModel : ObservableObject
     {
         _downloadManager = downloadManager;
         _configService = configService;
+        LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
 
         // 转发下载管理器的日志
         _downloadManager.LogReceived += line =>
@@ -193,8 +195,7 @@ public partial class DownloadViewModel : ObservableObject
         {
             try
             {
-                var text = string.Join(Environment.NewLine, LogLines);
-                System.Windows.Clipboard.SetDataObject(text, true);
+                System.Windows.Clipboard.SetDataObject(LogText, true);
             }
             catch
             {

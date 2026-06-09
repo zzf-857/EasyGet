@@ -51,9 +51,9 @@
                         Effect="{StaticResource SoftShadow}"
                         ToolTip="EasyGet"
                         AutomationProperties.Name="EasyGet">
-                    <TextBlock Text="&#xE896;"
+                    <TextBlock Text="&#xE118;"
                                FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="19"
+                               FontSize="18"
                                Foreground="{StaticResource BgPrimaryBrush}"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
@@ -74,7 +74,7 @@
                                  ToolTip="视频下载"
                                  AutomationProperties.Name="视频下载"
                                  IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=OneWay}">
-                        <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                        <TextBlock Text="&#xE118;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                     </RadioButton>
                     <RadioButton Style="{StaticResource NavRadioButton}"
                                  Command="{Binding NavigateCommand}" CommandParameter="batch"

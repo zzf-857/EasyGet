@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 优化下载入口图标与可选中文本日志框
+  - 内容：将侧栏 logo 与视频下载导航项改为更轻量的 Fluent 下载 glyph，降低原图标的视觉笨重感；把下载页日志区高度从 200 提升到 360，并将日志展示从 `ListBox` 改为只读多行 `TextBox`，支持直接用鼠标框选日志片段并复制，同时保留“复制日志/清空”按钮和自动滚动到底部。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~MainWindowDownloadNavigationUsesCleanerDownloadGlyph|FullyQualifiedName~DownloadViewLogViewerSupportsMouseTextSelection|FullyQualifiedName~DownloadViewLogAreaAllocatesMoreVerticalSpace"`，观察到旧 glyph、旧 `ListBox` 和旧 200 高度的 3 个测试失败；实现后同命令 3 个测试通过；新增 `LogTextJoinsLogLinesForSelectableTextViewer` 验证日志聚合文本；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，127 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。
+  - 提交说明：`优化下载图标和日志框体验`
+
 - [x] 2026-06-09 参考 VibeTracker 最新源码重塑 UI 基底
   - 内容：改以 `F:\AI\AIMadeupTools\00_VibeCenter\VibeTracker\src` 最新 UI 源码为准，而不是旧截图；将 EasyGet 主题 token 切到 Calm Apple Dark 色系，工具面板切到 VibeTracker 式玻璃大圆角，主窗口侧栏收窄为 92px 图标 rail，为全局 `ScrollBar` 增加 6px 暗色模板、透明轨道和主题化 Thumb，并通过 DWM 请求系统暗色标题栏；README 同步当前主题方向，四张界面截图重新脱敏并补齐批量下载示例页。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~ToolPanelBorderStyleUsesVibeTrackerGlassPanelTreatment|FullyQualifiedName~ThemeColorTokensFollowVibeTrackerCalmAppleDarkPalette|FullyQualifiedName~MainWindowUsesVibeTrackerCompactIconRail|FullyQualifiedName~ScrollBar"`，观察到旧色板、旧 8px 面板、旧 220px 文字侧栏的 3 个测试失败；为暗色系统标题栏补充 `MainWindowRequestsDarkSystemTitleBar` 红绿测试；实现后 `git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，123 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；逐张视觉核对 README 截图，确认下载、批量、历史、设置四页均为脱敏后的当前深色 UI。

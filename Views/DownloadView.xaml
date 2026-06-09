@@ -140,7 +140,7 @@
             <Grid Margin="0,24,0,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="200"/>
+                    <RowDefinition Height="360"/>
                 </Grid.RowDefinitions>
                 <DockPanel Grid.Row="0" Margin="0,0,0,8">
                     <TextBlock Text="下载日志" FontSize="14" FontWeight="Bold"
@@ -161,19 +161,22 @@
                 <Border Grid.Row="1" Style="{StaticResource ToolPanelBorder}"
                         Background="#11111B"
                         Padding="12,8">
-                    <ListBox ItemsSource="{Binding LogLines}"
-                             Background="Transparent" BorderThickness="0"
-                             Foreground="#A6ADC8"
+                    <TextBox x:Name="LogTextBox"
+                             Text="{Binding LogText, Mode=OneWay}"
+                             IsReadOnly="True"
+                             AcceptsReturn="True"
+                             TextWrapping="NoWrap"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             Foreground="#A8B0BD"
+                             CaretBrush="{StaticResource TextPrimaryBrush}"
+                             SelectionBrush="{StaticResource AccentBrush}"
                              FontFamily="Cascadia Code, Consolas, Courier New"
                              FontSize="11"
-                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                             x:Name="LogList">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}" TextWrapping="NoWrap"/>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                             Padding="0"
+                             Cursor="IBeam"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Auto"/>
                 </Border>
             </Grid>
 

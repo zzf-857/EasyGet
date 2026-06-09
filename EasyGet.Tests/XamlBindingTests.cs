@@ -141,6 +141,69 @@ public class XamlBindingTests
         Assert.Contains("DWMWA_USE_IMMERSIVE_DARK_MODE", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void MainWindowDownloadNavigationUsesCleanerDownloadGlyph()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var downloadNavItem = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "RadioButton"
+                && element.Attribute("CommandParameter")?.Value == "download");
+
+        Assert.NotNull(downloadNavItem);
+        var icon = downloadNavItem!
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "TextBlock");
+
+        Assert.NotNull(icon);
+        Assert.Equal("\uE118", icon!.Attribute("Text")?.Value);
+        Assert.Contains("Segoe", icon.Attribute("FontFamily")?.Value ?? "");
+    }
+
+    [Fact]
+    public void DownloadViewLogViewerSupportsMouseTextSelection()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+
+        var logTextBox = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBox"
+                && element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name"
+                    && attribute.Value == "LogTextBox"));
+
+        Assert.NotNull(logTextBox);
+        Assert.Equal("True", logTextBox!.Attribute("IsReadOnly")?.Value);
+        Assert.Equal("True", logTextBox.Attribute("AcceptsReturn")?.Value);
+        Assert.Contains("LogText", logTextBox.Attribute("Text")?.Value ?? "");
+        Assert.Equal("Auto", logTextBox.Attribute("VerticalScrollBarVisibility")?.Value);
+        Assert.Equal("Auto", logTextBox.Attribute("HorizontalScrollBarVisibility")?.Value);
+
+        Assert.DoesNotContain(document.Descendants(), element =>
+            element.Name.LocalName == "ListBox"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "LogList"));
+    }
+
+    [Fact]
+    public void DownloadViewLogAreaAllocatesMoreVerticalSpace()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+
+        var logRow = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "RowDefinition")
+            .FirstOrDefault(element => element.Attribute("Height")?.Value is string height
+                && int.TryParse(height, out var value)
+                && value >= 300);
+
+        Assert.NotNull(logRow);
+    }
+
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]

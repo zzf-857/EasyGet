@@ -17,7 +17,7 @@ public partial class DownloadView : System.Windows.Controls.UserControl
                 {
                     if (vm.LogLines.Count > 0)
                     {
-                        LogList.ScrollIntoView(vm.LogLines[^1]);
+                        LogTextBox.Dispatcher.BeginInvoke(() => LogTextBox.ScrollToEnd());
                     }
                 };
             }
