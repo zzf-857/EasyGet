@@ -16,7 +16,7 @@ public class AppConfig
     public string DefaultDownloadPath { get; set; } = 
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "EasyGet");
 
-    /// <summary>默认格式 (mp4, mkv, webm, mp3)</summary>
+    /// <summary>默认格式 (mp4, mkv, webm, mp3, m4a)</summary>
     public string DefaultFormat { get; set; } = "mp4";
 
     /// <summary>默认画质 (best, 2160, 1080, 720, 480)</summary>

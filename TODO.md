@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 归一化异常下载配置文本
+  - 内容：为 `ConfigService.NormalizeRuntimeConfig` 增加下载配置文本清洗，空白下载目录回退到默认 `Downloads\EasyGet`，格式、画质、字幕按支持白名单归一到默认值，代理地址去除首尾空白，空 Cookie 文本归一为空字符串，避免手改或损坏配置导致启动建目录失败、下载参数异常或设置页出现未知选项。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ConfigServiceTests` 观察到空白下载目录未回退的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，83 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`归一化异常下载配置文本`
+
 - [x] 2026-06-09 归一化异常窗口状态配置
   - 内容：为 `ConfigService.NormalizeRuntimeConfig` 增加窗口位置与尺寸清洗，非有限 Left/Top 会重置为 `NaN` 以继续居中启动；非有限宽高回落到默认 `1280x800`，过小宽高按主窗口 `MinWidth=960`、`MinHeight=600` 拉回安全范围，避免坏配置导致窗口不可见或布局异常。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ConfigServiceTests` 观察到缺少窗口边界常量与归一化逻辑的编译失败；实现后同命令 2 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，82 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

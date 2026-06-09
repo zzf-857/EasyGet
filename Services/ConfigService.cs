@@ -9,6 +9,10 @@ namespace EasyGet.Services;
 /// </summary>
 public class ConfigService
 {
+    private static readonly string[] SupportedFormats = ["mp4", "mkv", "webm", "mp3", "m4a"];
+    private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
+    private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
+
     private static readonly string ConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
 
@@ -82,6 +86,8 @@ public class ConfigService
 
     internal static void NormalizeRuntimeConfig(AppConfig config)
     {
+        NormalizeDownloadOptions(config);
+
         config.ConcurrentFragments = Math.Clamp(
             config.ConcurrentFragments,
             AppConfig.MinConcurrentFragments,
@@ -93,6 +99,36 @@ public class ConfigService
             AppConfig.MaxConcurrentDownloadLimit);
 
         NormalizeWindowState(config);
+    }
+
+    private static void NormalizeDownloadOptions(AppConfig config)
+    {
+        var defaults = new AppConfig();
+
+        config.DefaultDownloadPath = string.IsNullOrWhiteSpace(config.DefaultDownloadPath)
+            ? defaults.DefaultDownloadPath
+            : config.DefaultDownloadPath.Trim();
+
+        config.DefaultFormat = NormalizeOption(config.DefaultFormat, SupportedFormats, defaults.DefaultFormat);
+        config.DefaultQuality = NormalizeOption(config.DefaultQuality, SupportedQualities, defaults.DefaultQuality);
+        config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
+        config.ProxyAddress = config.ProxyAddress?.Trim() ?? "";
+        config.CookieContent ??= "";
+    }
+
+    private static string NormalizeOption(string? value, string[] supportedValues, string defaultValue)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return defaultValue;
+
+        var candidate = value.Trim();
+        foreach (var supported in supportedValues)
+        {
+            if (string.Equals(candidate, supported, StringComparison.OrdinalIgnoreCase))
+                return supported;
+        }
+
+        return defaultValue;
     }
 
     private static void NormalizeWindowState(AppConfig config)

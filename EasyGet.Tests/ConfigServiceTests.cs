@@ -42,4 +42,28 @@ public class ConfigServiceTests
         Assert.Equal(WindowState.MinWidth, config.Window.Width);
         Assert.Equal(WindowState.DefaultHeight, config.Window.Height);
     }
+
+    [Fact]
+    public void NormalizeRuntimeConfig_SanitizesInvalidDownloadOptionText()
+    {
+        var defaultConfig = new AppConfig();
+        var config = new AppConfig
+        {
+            DefaultDownloadPath = "   ",
+            DefaultFormat = "avi",
+            DefaultQuality = "144",
+            DefaultSubtitle = "manual",
+            ProxyAddress = null!,
+            CookieContent = null!
+        };
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        Assert.Equal(defaultConfig.DefaultDownloadPath, config.DefaultDownloadPath);
+        Assert.Equal(defaultConfig.DefaultFormat, config.DefaultFormat);
+        Assert.Equal(defaultConfig.DefaultQuality, config.DefaultQuality);
+        Assert.Equal(defaultConfig.DefaultSubtitle, config.DefaultSubtitle);
+        Assert.Equal("", config.ProxyAddress);
+        Assert.Equal("", config.CookieContent);
+    }
 }
