@@ -46,17 +46,17 @@
                         Width="44" Height="44"
                         Margin="0,24,0,36"
                         HorizontalAlignment="Center"
-                        Background="{StaticResource TextPrimaryBrush}"
+                        Background="Transparent"
                         CornerRadius="16"
                         Effect="{StaticResource SoftShadow}"
                         ToolTip="EasyGet"
                         AutomationProperties.Name="EasyGet">
-                    <TextBlock Text="&#xE118;"
-                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="18"
-                               Foreground="{StaticResource BgPrimaryBrush}"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center"/>
+                    <Image Source="/Assets/app.png"
+                           Width="44"
+                           Height="44"
+                           Stretch="Uniform"
+                           SnapsToDevicePixels="True"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Border>
 
                 <!-- 底部状态（必须在导航菜单之前声明，确保 DockPanel 为其预留空间） -->

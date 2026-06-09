@@ -36,6 +36,14 @@ public class AssetTests
             ?.Value;
 
         Assert.Equal(@"Assets\app.ico", applicationIcon);
+
+        var appPngResource = project
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Resource"
+                && element.Attribute("Include")?.Value == @"Assets\app.png");
+
+        Assert.NotNull(appPngResource);
     }
 
     private static void AssertPngSize(byte[] bytes, int expectedWidth, int expectedHeight)

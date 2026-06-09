@@ -132,6 +132,34 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void MainWindowSidebarLogoUsesApplicationIconAsset()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var logoMark = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Border"
+                && element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name"
+                    && attribute.Value == "SidebarLogoMark"));
+
+        Assert.NotNull(logoMark);
+
+        var image = logoMark!
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "Image");
+
+        Assert.NotNull(image);
+        Assert.Equal("/Assets/app.png", image!.Attribute("Source")?.Value);
+        Assert.Equal("Uniform", image.Attribute("Stretch")?.Value);
+
+        Assert.DoesNotContain(logoMark.Descendants(), element =>
+            element.Name.LocalName == "TextBlock"
+            && (element.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MainWindowRequestsDarkSystemTitleBar()
     {
         var source = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));

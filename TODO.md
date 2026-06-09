@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 左侧栏 Logo 替换为当前软件图标
+  - 内容：将主窗口左侧栏顶部的白底下载 glyph 改为当前应用图标 `Assets/app.png`，并把该 PNG 显式打包为 WPF Resource，确保运行时 Logo 位和 Windows/README 使用的应用图标保持一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter "FullyQualifiedName~MainWindowSidebarLogoUsesApplicationIconAsset|FullyQualifiedName~ApplicationIconAssetsUseModernEasyGetLogo"`，观察到旧 Logo 仍为 Segoe 下载 glyph 且 `app.png` 未作为 WPF Resource 打包的 2 个测试失败；实现后同命令 2 个测试通过；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，137 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 首次因旧 EasyGet 预览进程锁定 `EasyGet.exe` 失败，关闭旧进程后重跑成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。
+  - 提交说明：`左侧栏使用应用图标`
+
 - [x] 2026-06-09 替换应用图标资产
   - 内容：联网对比 Microsoft Fluent UI System Icons、Tabler Icons 和 Lucide 的下载类图标方向后，采用更贴合当前深色 UI 的 EasyGet 自定义彩色应用图标；新增可编辑源文件 `Assets/app-icon-source.svg` 和生成脚本 `scripts/generate-app-icon.py`，重新生成 README 使用的 `Assets/app.png` 与 Windows 可执行文件使用的 `Assets/app.ico`，让应用主图标从旧的单色蓝圆粗箭头升级为带视频卡片、下载箭头和保存线语义的现代图标。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ApplicationIconAssetsUseModernEasyGetLogo`，观察到旧图标缺少可编辑 SVG 源文件而失败；生成新图标资产后同命令 1 个测试通过；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，136 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 首次因旧 EasyGet 预览进程锁定 `EasyGet.exe` 失败，关闭旧进程后重跑成功，0 个警告、0 个错误；启动 Release 版预览当前 UI。

@@ -23,6 +23,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Assets\app.png" />
+    <Resource Include="Assets\app.png" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="EasyGet.Tests\**\*.cs" />
     <Compile Remove="handoff\**\*.cs" />
     <EmbeddedResource Remove="EasyGet.Tests\**\*" />
