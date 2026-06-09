@@ -805,12 +805,19 @@ public partial class YtDlpService
             yield break;
         }
 
-        if (root.ValueKind == JsonValueKind.Object
-            && root.TryGetProperty("cookies", out var cookies)
-            && cookies.ValueKind == JsonValueKind.Array)
+        if (root.ValueKind != JsonValueKind.Object)
+            yield break;
+
+        foreach (var propertyName in new[] { "cookies", "data" })
         {
-            foreach (var item in cookies.EnumerateArray())
-                yield return item;
+            if (root.TryGetProperty(propertyName, out var cookies)
+                && cookies.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in cookies.EnumerateArray())
+                    yield return item;
+
+                yield break;
+            }
         }
     }
 
