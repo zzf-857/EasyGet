@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 保留 HttpOnly Netscape Cookie 行
+  - 内容：修复 `YtDlpService.BuildCookieFileLines` 的 Netscape Cookie 文件转换逻辑，字段合法的 `#HttpOnly_` Cookie 行不再被当作普通注释跳过，普通注释仍继续忽略；浏览器或插件导出的 `cookies.txt` 中的 HttpOnly 登录态 Cookie 可被保留下来，降低粘贴标准 Cookie 文件后仍缺认证信息的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `#HttpOnly_` Netscape Cookie 行被过滤的测试失败；实现后同命令 12 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，94 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`保留 HttpOnly Cookie 行`
+
 - [x] 2026-06-09 识别 YouTube 年龄门槛重试 Cookie
   - 内容：扩展 `YtDlpService.ShouldRetryWithNextCookieStrategy` 的 YouTube 错误识别范围，除 403 和 bot 校验外，也识别 `Sign in to confirm your age`、`This video may be inappropriate for some users` 和 `age-restricted`；遇到 YouTube 年龄/登录门槛时，会继续尝试已有的 Chrome/Edge Cookie 策略，降低有浏览器登录态但首次下载失败的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 YouTube 年龄确认提示未触发 Cookie 策略重试的测试失败；实现后同命令 11 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，93 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

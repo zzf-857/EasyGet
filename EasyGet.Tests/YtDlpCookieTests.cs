@@ -22,6 +22,23 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildCookieFileLines_PreservesHttpOnlyNetscapeCookieRows()
+    {
+        var input = """
+            # Netscape HTTP Cookie File
+            #HttpOnly_.youtube.com	TRUE	/	TRUE	1811688281	__Secure-3PSID	http-only-token
+            # A normal comment should stay ignored
+            .youtube.com	TRUE	/	FALSE	0	PREF	tz=UTC
+            """;
+
+        var lines = YtDlpService.BuildCookieFileLines(input);
+
+        Assert.Contains("#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t1811688281\t__Secure-3PSID\thttp-only-token", lines);
+        Assert.Contains(".youtube.com\tTRUE\t/\tFALSE\t0\tPREF\ttz=UTC", lines);
+        Assert.DoesNotContain(lines, line => line.Contains("A normal comment", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void BuildCookieFileLines_StripsCookieHeaderNameAndMarksYoutubeCookiesSecure()
     {
         var lines = YtDlpService.BuildCookieFileLines("Cookie: __Secure-1PSID=token-value; PREF=tz=UTC");

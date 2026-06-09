@@ -748,10 +748,15 @@ public partial class YtDlpService
         {
             foreach (var line in trimmed.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             {
-                if (line.StartsWith("#") || string.IsNullOrWhiteSpace(line))
+                if (string.IsNullOrWhiteSpace(line))
                     continue;
 
-                if (line.Split('\t').Length >= 7)
+                var fields = line.Split('\t');
+                if (line.StartsWith("#", StringComparison.Ordinal)
+                    && !IsHttpOnlyNetscapeCookieLine(line, fields))
+                    continue;
+
+                if (fields.Length >= 7)
                     lines.Add(line);
             }
 
@@ -942,6 +947,10 @@ public partial class YtDlpService
             .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Any(line => !line.StartsWith("#") && line.Split('\t').Length >= 7);
     }
+
+    private static bool IsHttpOnlyNetscapeCookieLine(string line, string[] fields)
+        => line.StartsWith("#HttpOnly_", StringComparison.Ordinal)
+           && fields.Length >= 7;
 
     private static string ExtractCookieHeaderValue(string cookieContent)
     {
