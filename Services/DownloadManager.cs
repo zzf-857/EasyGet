@@ -344,9 +344,9 @@ public class DownloadManager
     {
         void Apply()
         {
-            task.Progress = Math.Clamp(progress.Percent, 0, 100);
-            task.Speed = Math.Max(0, progress.Speed);
-            task.Eta = Math.Max(0, progress.Eta);
+            task.Progress = Math.Clamp(NormalizeFiniteProgressValue(progress.Percent), 0, 100);
+            task.Speed = Math.Max(0, NormalizeFiniteProgressValue(progress.Speed));
+            task.Eta = Math.Max(0, NormalizeFiniteProgressValue(progress.Eta));
             task.DownloadedSize = Math.Max(0, progress.Downloaded);
         }
 
@@ -356,4 +356,7 @@ public class DownloadManager
         else
             dispatcher.Invoke(Apply);
     }
+
+    private static double NormalizeFiniteProgressValue(double value)
+        => double.IsFinite(value) ? value : 0;
 }

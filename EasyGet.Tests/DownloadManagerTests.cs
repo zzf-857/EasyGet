@@ -37,6 +37,26 @@ public class DownloadManagerTests
         Assert.Equal(0, task.DownloadedSize);
     }
 
+    [Fact]
+    public void ApplyProgress_ReplacesNonFiniteNumbersWithZero()
+    {
+        var task = new DownloadTask();
+        var progress = new DownloadProgress
+        {
+            Percent = double.NaN,
+            Speed = double.PositiveInfinity,
+            Eta = double.NegativeInfinity,
+            Downloaded = 128
+        };
+
+        ApplyProgress(task, progress);
+
+        Assert.Equal(0, task.Progress);
+        Assert.Equal(0, task.Speed);
+        Assert.Equal(0, task.Eta);
+        Assert.Equal(128, task.DownloadedSize);
+    }
+
     private static void ApplyProgress(DownloadTask task, DownloadProgress progress)
     {
         var method = typeof(DownloadManager).GetMethod(

@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 清理非有限下载进度值
+  - 内容：在 `DownloadManager.ApplyProgress` 中将 `NaN`、正无穷和负无穷等非有限进度数字归零，再进行百分比、速度和 ETA 的边界保护，避免异常进度源把不可显示数值写入任务模型和 UI。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadManagerTests` 观察到 `NaN` 直接写入任务进度的测试失败；实现后同命令 6 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，71 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`清理非有限下载进度值`
+
 - [x] 2026-06-09 归一化下载进度 UI 数值
   - 内容：在 `DownloadManager.ApplyProgress` 中对进度百分比、速度、ETA 和已下载字节做边界保护，百分比限制在 0-100，速度/ETA/已下载字节不允许为负，避免异常进度输出让 UI 显示超过 100% 或负数。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadManagerTests` 观察到异常进度值直接写入任务状态的测试失败；实现后同命令 5 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，70 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
