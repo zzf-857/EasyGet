@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 统一批量下载页现代工具面板样式
+  - 内容：将批量下载页的链接输入区和下载队列区统一切换到 `ToolPanelBorder` 主题样式，保留原有紧凑内边距，同时与下载页、设置页共用 8px 圆角、统一边框、柔和阴影和像素对齐的现代工具面板视觉；批量流程页面的主面板层级更一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~BatchDownloadViewUsesModernToolPanelStyleForPrimarySections` 观察到批量下载页 2 个主要面板未使用 `ToolPanelBorder` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，20 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，104 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`统一批量页工具面板样式`
+
 - [x] 2026-06-09 统一设置页现代工具面板样式
   - 内容：将设置页的环境检测、下载设置、代理设置、Cookie 设置和性能设置外层面板统一切换到 `ToolPanelBorder` 主题样式，保留原有布局间距，同时将这些主要设置区收敛到 8px 圆角、统一边框、柔和阴影和像素对齐的现代工具面板视觉；设置页与下载页的卡片语言更一致。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~SettingsViewUsesModernToolPanelStyleForPrimarySections` 观察到设置页 5 个主要设置面板未使用 `ToolPanelBorder` 的测试失败；实现后同命令 1 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~XamlBindingTests`，19 个测试全部通过；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，103 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

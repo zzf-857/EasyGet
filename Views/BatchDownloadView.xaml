@@ -19,8 +19,7 @@
                    Margin="0,0,0,24"/>
 
         <!-- URL 文本框 -->
-        <Border Grid.Row="1" Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+        <Border Grid.Row="1" Style="{StaticResource ToolPanelBorder}"
                 Padding="16">
             <StackPanel>
                 <DockPanel Margin="0,0,0,8">
@@ -82,8 +81,7 @@
         </DockPanel>
 
         <!-- 下载队列 -->
-        <Border Grid.Row="4" Background="{StaticResource BgSurfaceBrush}" CornerRadius="10"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+        <Border Grid.Row="4" Style="{StaticResource ToolPanelBorder}"
                 Padding="16">
             <DockPanel>
                 <DockPanel DockPanel.Dock="Top" Margin="0,0,0,12">
