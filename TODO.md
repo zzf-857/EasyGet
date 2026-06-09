@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 清理粘贴链接尾随分享标点
+  - 内容：修正 `DownloadViewModel.ExtractUrl` 的 URL 提取逻辑，干净 URL 和混合分享文案都会在识别后清理中文逗号、句号、右括号以及常见英文尾随标点；单视频下载和批量下载复用该入口，用户从 YouTube、抖音等分享文案中复制带标点的链接时，不再把标点传给 yt-dlp，降低粘贴后解析失败的概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~DownloadViewModelTests` 观察到 3 个带中文尾随标点的 clean URL 被原样返回的测试失败；实现后同命令 4 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，112 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`清理粘贴链接尾随标点`
+
 - [x] 2026-06-09 元数据阶段复用浏览器 Cookie 策略
   - 内容：将 YouTube/抖音的 Cookie 策略构建抽成 `BuildCookieStrategies`，正式下载、视频信息解析和播放列表导入共用同一套“默认 Cookie → Chrome Cookie → Edge Cookie”策略；元数据或播放列表阶段遇到风控、年龄门槛、403、浏览器 Cookie 读取错误等 stderr 信号时，会继续尝试下一种可用 Cookie 策略，降低解析阶段失败导致任务缺标题、播放列表导入为空或还未下载就中断的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到缺少 `BuildCookieStrategies` 且 `CookieStrategy` 不可访问的编译失败；实现后同命令 14 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，108 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

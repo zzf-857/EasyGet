@@ -231,12 +231,41 @@ public partial class DownloadViewModel : ObservableObject
             trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
             // 取到第一个空白或中文字符为止
-            var match = Regex.Match(trimmed, @"^https?://\S+");
-            if (match.Success) return match.Value;
+            var match = Regex.Match(trimmed, @"^https?://[^\s\u4e00-\u9fff]+");
+            if (match.Success) return TrimTrailingSharePunctuation(match.Value);
         }
         // 从混合文本中提取第一个 URL
-        var urlMatch = Regex.Match(input, @"https?://[^\s\u4e00-\u9fff\uff0c\u3001\u3002]+");
-        return urlMatch.Success ? urlMatch.Value : null;
+        var urlMatch = Regex.Match(input, @"https?://[^\s\u4e00-\u9fff]+");
+        return urlMatch.Success ? TrimTrailingSharePunctuation(urlMatch.Value) : null;
+    }
+
+    private static string TrimTrailingSharePunctuation(string url)
+    {
+        return url.TrimEnd(
+            ',',
+            '.',
+            ';',
+            ':',
+            ')',
+            ']',
+            '}',
+            '>',
+            '!',
+            '?',
+            '"',
+            '\'',
+            '，',
+            '。',
+            '、',
+            '；',
+            '：',
+            '）',
+            '】',
+            '》',
+            '！',
+            '？',
+            '”',
+            '’');
     }
 
     private static string ParseQuality(string display) => display switch
