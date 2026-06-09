@@ -6,7 +6,7 @@ namespace EasyGet.Tests;
 public class ThemeStyleTests
 {
     [Fact]
-    public void ToolPanelBorderStyleKeepsPanelsCompactAndThemed()
+    public void ToolPanelBorderStyleUsesVibeTrackerGlassPanelTreatment()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -21,7 +21,7 @@ public class ThemeStyleTests
         Assert.NotNull(style);
 
         AssertStyleSetter(style!, "Background", "{StaticResource BgSurfaceBrush}");
-        AssertStyleSetter(style, "BorderBrush", "{StaticResource BorderSubtleBrush}");
+        AssertStyleSetter(style, "BorderBrush", "{StaticResource BorderPrimaryBrush}");
         AssertStyleSetter(style, "BorderThickness", "1");
         AssertStyleSetter(style, "SnapsToDevicePixels", "True");
 
@@ -33,7 +33,26 @@ public class ThemeStyleTests
             ?.Attribute("Value")?.Value;
 
         Assert.True(double.TryParse(cornerRadius, out var radius), "ToolPanelBorder must set a numeric CornerRadius.");
-        Assert.True(radius <= 8, "Tool panel cards should keep corner radius at 8px or less.");
+        Assert.InRange(radius, 24, 32);
+    }
+
+    [Fact]
+    public void ThemeColorTokensFollowVibeTrackerCalmAppleDarkPalette()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+
+        AssertColor(document, "BgPrimary", "#080A0D");
+        AssertColor(document, "BgSurface", "#12FFFFFF");
+        AssertColor(document, "BgHover", "#1BFFFFFF");
+        AssertColor(document, "TextPrimary", "#F7F8FB");
+        AssertColor(document, "TextSecondary", "#A8B0BD");
+        AssertColor(document, "TextMuted", "#707A8A");
+        AssertColor(document, "BorderPrimary", "#1FFFFFFF");
+        AssertColor(document, "BorderSubtle", "#14FFFFFF");
+        AssertColor(document, "Accent", "#74A9FF");
+        AssertColor(document, "Success", "#63D693");
+        AssertColor(document, "Warning", "#F3BB6C");
+        AssertColor(document, "Error", "#FF6B6B");
     }
 
     [Theory]
@@ -162,6 +181,80 @@ public class ThemeStyleTests
             && element.Attribute("Value")?.Value == "Arrow");
     }
 
+    [Fact]
+    public void ScrollBarStyleUsesDarkTemplateInsteadOfNativeChrome()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+
+        var style = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && IsTargetType(element, "ScrollBar"));
+
+        Assert.NotNull(style);
+        AssertStyleSetter(style!, "Background", "Transparent");
+        AssertStyleSetter(style, "Width", "6");
+
+        var templateSetter = style
+            .Elements()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Setter"
+                && element.Attribute("Property")?.Value == "Template");
+
+        Assert.NotNull(templateSetter);
+        Assert.Contains(templateSetter!.Descendants(), element =>
+            element.Name.LocalName == "Track"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "PART_Track"));
+        Assert.Contains(templateSetter.Descendants(), element =>
+            element.Name.LocalName == "Thumb"
+            && (element.Attribute("Style")?.Value ?? "").Contains("ScrollBarThumb", StringComparison.Ordinal));
+        Assert.Contains(templateSetter.Descendants(), element =>
+            element.Name.LocalName == "Trigger"
+            && element.Attribute("Property")?.Value == "Orientation"
+            && element.Attribute("Value")?.Value == "Horizontal");
+    }
+
+    [Fact]
+    public void ScrollBarThumbStyleDefinesHoverAndDisabledStates()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var thumbStyle = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && element.Attribute(x + "Key")?.Value == "ScrollBarThumb"
+                && IsTargetType(element, "Thumb"));
+
+        Assert.NotNull(thumbStyle);
+
+        var templateSetter = thumbStyle!
+            .Elements()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Setter"
+                && element.Attribute("Property")?.Value == "Template");
+
+        Assert.NotNull(templateSetter);
+        Assert.Contains(templateSetter!.Descendants(), element =>
+            element.Name.LocalName == "Border"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "ThumbBorder"));
+
+        Assert.Contains(thumbStyle.Descendants(), element =>
+            element.Name.LocalName == "Trigger"
+            && element.Attribute("Property")?.Value == "IsMouseOver"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Contains(thumbStyle.Descendants(), element =>
+            element.Name.LocalName == "Trigger"
+            && element.Attribute("Property")?.Value == "IsEnabled"
+            && element.Attribute("Value")?.Value == "False");
+    }
+
     private static string GetThemePath(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -183,5 +276,25 @@ public class ThemeStyleTests
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == property
             && element.Attribute("Value")?.Value == expectedValue);
+    }
+
+    private static void AssertColor(XDocument document, string key, string expectedValue)
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var color = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Color"
+                && element.Attribute(x + "Key")?.Value == key);
+
+        Assert.NotNull(color);
+        Assert.Equal(expectedValue, color!.Value.Trim());
+    }
+
+    private static bool IsTargetType(XElement element, string expected)
+    {
+        var targetType = element.Attribute("TargetType")?.Value ?? "";
+        return targetType == expected || targetType == $"{{x:Type {expected}}}";
     }
 }

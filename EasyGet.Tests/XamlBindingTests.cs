@@ -89,6 +89,58 @@ public class XamlBindingTests
         Assert.Equal("0,0,1,0", sidebar.Attribute("BorderThickness")?.Value);
     }
 
+    [Fact]
+    public void MainWindowUsesVibeTrackerCompactIconRail()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var columns = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .ToList();
+
+        Assert.NotEmpty(columns);
+        Assert.Equal("92", columns[0].Attribute("Width")?.Value);
+
+        var logoMark = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Border"
+                && element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name"
+                    && attribute.Value == "SidebarLogoMark"));
+
+        Assert.NotNull(logoMark);
+        Assert.Equal("44", logoMark!.Attribute("Width")?.Value);
+        Assert.Equal("44", logoMark.Attribute("Height")?.Value);
+
+        var navItems = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => element.Attribute("CommandParameter") is not null)
+            .ToList();
+
+        Assert.Equal(4, navItems.Count);
+        Assert.All(navItems, item =>
+        {
+            var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
+            Assert.Single(textBlocks);
+            Assert.Contains("Segoe", textBlocks[0].Attribute("FontFamily")?.Value ?? "");
+            Assert.DoesNotContain(textBlocks, textBlock =>
+                (textBlock.Attribute("Text")?.Value ?? "") == item.Attribute("ToolTip")?.Value);
+        });
+    }
+
+    [Fact]
+    public void MainWindowRequestsDarkSystemTitleBar()
+    {
+        var source = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
+
+        Assert.Contains("SourceInitialized", source, StringComparison.Ordinal);
+        Assert.Contains("DwmSetWindowAttribute", source, StringComparison.Ordinal);
+        Assert.Contains("DWMWA_USE_IMMERSIVE_DARK_MODE", source, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]

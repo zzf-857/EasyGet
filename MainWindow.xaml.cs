@@ -1,4 +1,6 @@
-﻿using System.Windows;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Interop;
 using Microsoft.Extensions.DependencyInjection;
 using EasyGet.Services;
 using EasyGet.ViewModels;
@@ -7,6 +9,8 @@ namespace EasyGet;
 
 public partial class MainWindow : Window
 {
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
     private readonly MainViewModel _viewModel;
     private readonly ConfigService _configService;
 
@@ -16,6 +20,8 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         _configService = configService;
         DataContext = _viewModel;
+
+        SourceInitialized += (_, _) => TryEnableDarkSystemTitleBar();
 
         Loaded += async (_, _) =>
         {
@@ -28,6 +34,28 @@ public partial class MainWindow : Window
             SaveWindowState();
             await _configService.SaveAsync();
         };
+    }
+
+    private void TryEnableDarkSystemTitleBar()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+
+        var handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero)
+            return;
+
+        var useDarkMode = 1;
+        try
+        {
+            _ = DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
+        }
+        catch (DllNotFoundException)
+        {
+        }
+        catch (EntryPointNotFoundException)
+        {
+        }
     }
 
     private void RestoreWindowState()
@@ -52,4 +80,11 @@ public partial class MainWindow : Window
             _configService.Config.Window.Height = Height;
         }
     }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(
+        IntPtr hwnd,
+        int dwAttribute,
+        ref int pvAttribute,
+        int cbAttribute);
 }

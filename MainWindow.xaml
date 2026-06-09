@@ -31,7 +31,7 @@
 
     <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="220"/>
+            <ColumnDefinition Width="92"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
@@ -41,69 +41,64 @@
             <DockPanel LastChildFill="True">
 
                 <!-- Logo 区域 -->
-                <StackPanel DockPanel.Dock="Top" Margin="20,24,20,32" Orientation="Horizontal">
-                    <TextBlock Text="⬇" FontSize="24" Foreground="{StaticResource AccentBrush}" 
-                               VerticalAlignment="Center" Margin="0,0,10,0"/>
-                    <TextBlock Text="EasyGet" FontSize="22" FontWeight="ExtraBold"
-                               Foreground="{StaticResource TextPrimaryBrush}"
-                               FontFamily="Segoe UI Variable, Microsoft YaHei UI"
+                <Border x:Name="SidebarLogoMark"
+                        DockPanel.Dock="Top"
+                        Width="44" Height="44"
+                        Margin="0,24,0,36"
+                        HorizontalAlignment="Center"
+                        Background="{StaticResource TextPrimaryBrush}"
+                        CornerRadius="16"
+                        Effect="{StaticResource SoftShadow}"
+                        ToolTip="EasyGet"
+                        AutomationProperties.Name="EasyGet">
+                    <TextBlock Text="&#xE896;"
+                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="19"
+                               Foreground="{StaticResource BgPrimaryBrush}"
+                               HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
-                </StackPanel>
+                </Border>
 
                 <!-- 底部状态（必须在导航菜单之前声明，确保 DockPanel 为其预留空间） -->
-                <StackPanel DockPanel.Dock="Bottom" Margin="20,0,20,20">
-                    <Separator Background="{StaticResource BorderSubtleBrush}" Margin="0,0,0,12"/>
-                    <TextBlock Text="{Binding StatusMessage}"
-                               Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="11" TextTrimming="CharacterEllipsis"/>
+                <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,20" HorizontalAlignment="Center"
+                            ToolTip="{Binding StatusMessage}">
                     <TextBlock Text="v1.0.0" Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="10" Margin="0,4,0,0" Opacity="0.5"/>
+                               FontSize="10" Opacity="0.55"
+                               FontFamily="Cascadia Code, Consolas, Courier New"/>
                 </StackPanel>
 
                 <!-- 导航菜单（LastChildFill 填充剩余空间） -->
-                <StackPanel Margin="12,0">
+                <StackPanel Margin="0" HorizontalAlignment="Center">
                     <RadioButton Style="{StaticResource NavRadioButton}"
                                  Command="{Binding NavigateCommand}" CommandParameter="download"
                                  ToolTip="视频下载"
                                  AutomationProperties.Name="视频下载"
                                  IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=OneWay}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="📥" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="视频下载" VerticalAlignment="Center"/>
-                        </StackPanel>
+                        <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                     </RadioButton>
                     <RadioButton Style="{StaticResource NavRadioButton}"
                                  Command="{Binding NavigateCommand}" CommandParameter="batch"
                                  ToolTip="批量下载"
                                  AutomationProperties.Name="批量下载"
                                  IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=OneWay}"
-                                 Margin="0,4,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="📋" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="批量下载" VerticalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="0,12,0,0">
+                        <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                     </RadioButton>
                     <RadioButton Style="{StaticResource NavRadioButton}"
                                  Command="{Binding NavigateCommand}" CommandParameter="history"
                                  ToolTip="历史记录"
                                  AutomationProperties.Name="历史记录"
                                  IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
-                                 Margin="0,4,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="📜" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="历史记录" VerticalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="0,12,0,0">
+                        <TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                     </RadioButton>
                     <RadioButton Style="{StaticResource NavRadioButton}"
                                  Command="{Binding NavigateCommand}" CommandParameter="settings"
                                  ToolTip="设置"
                                  AutomationProperties.Name="设置"
                                  IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
-                                 Margin="0,4,0,0">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="⚙" FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="设置" VerticalAlignment="Center"/>
-                        </StackPanel>
+                                 Margin="0,12,0,0">
+                        <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
                     </RadioButton>
                 </StackPanel>
 
