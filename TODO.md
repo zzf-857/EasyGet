@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 兼容 Cookie 过期字段别名
+  - 内容：为 `YtDlpService.BuildCookieFileLines` 的浏览器 Cookie JSON 解析增加过期时间字段别名兼容，除 `expirationDate` 外也支持常见的 `expires` 和 `expiry`；从 Chrome DevTools、自动化工具或不同 Cookie 插件导出的 JSON 不再把长期 Cookie 误写成会话 Cookie，降低登录态校验失败概率。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `expires`/`expiry` 被写成过期时间 `0` 的测试失败；实现后同命令 9 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，91 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`兼容 Cookie 过期字段别名`
+
 - [x] 2026-06-09 支持 data 包装 Cookie JSON
   - 内容：扩展 `YtDlpService.BuildCookieFileLines` 的浏览器 Cookie JSON 根结构识别，在 `{ "cookies": [...] }` 之外兼容 `{ "data": [...] }` 对象包装格式；部分 Cookie 导出工具使用 `data` 作为数组字段时，不再被误判为普通文本 Cookie，降低用户粘贴 Cookie 后仍下载失败的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~YtDlpCookieTests` 观察到 `{ "data": [...] }` 无法生成 `VISITOR_INFO1_LIVE` Cookie 的测试失败；实现后同命令 8 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，90 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

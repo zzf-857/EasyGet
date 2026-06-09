@@ -54,6 +54,36 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildCookieFileLines_AcceptsBrowserJsonWithCookieExpiryAliases()
+    {
+        const string input = """
+            [
+              {
+                "domain": ".youtube.com",
+                "path": "/",
+                "secure": true,
+                "expires": 1811688281,
+                "name": "PREF",
+                "value": "tz=UTC"
+              },
+              {
+                "domain": ".youtube.com",
+                "path": "/",
+                "secure": true,
+                "expiry": "1811688299",
+                "name": "VISITOR_INFO1_LIVE",
+                "value": "visitor-token"
+              }
+            ]
+            """;
+
+        var lines = YtDlpService.BuildCookieFileLines(input);
+
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688281\tPREF\ttz=UTC", lines);
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688299\tVISITOR_INFO1_LIVE\tvisitor-token", lines);
+    }
+
+    [Fact]
     public void BuildCookieFileLines_AcceptsBrowserJsonObjectWithCookiesArray()
     {
         const string input = """

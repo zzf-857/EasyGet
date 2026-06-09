@@ -770,7 +770,7 @@ public partial class YtDlpService
                         path = "/";
                     var secure = GetOptionalBoolean(item, "secure");
                     var hostOnly = GetOptionalBoolean(item, "hostOnly");
-                    var expiry = GetOptionalUnixTime(item, "expirationDate");
+                    var expiry = GetCookieExpiry(item);
 
                     if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(name))
                         continue;
@@ -850,6 +850,18 @@ public partial class YtDlpService
             return value;
 
         return GetOptionalString(item, "sessionValue");
+    }
+
+    private static long GetCookieExpiry(JsonElement item)
+    {
+        foreach (var propertyName in new[] { "expirationDate", "expires", "expiry" })
+        {
+            var expiry = GetOptionalUnixTime(item, propertyName);
+            if (expiry > 0)
+                return expiry;
+        }
+
+        return 0;
     }
 
     private static bool GetOptionalBoolean(JsonElement element, string propertyName)
