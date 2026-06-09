@@ -228,9 +228,12 @@ public class EnvironmentService
                 await DownloadFileOnceAsync(uri, targetPath, toolName, log, ct, httpClient ?? HttpClient);
                 return;
             }
-            catch (Exception ex) when (ShouldRetryToolDownload(ex, attempt, ct))
+            catch (Exception ex) when (!ct.IsCancellationRequested)
             {
                 TryDeleteFile(targetPath);
+                if (!ShouldRetryToolDownload(ex, attempt, ct))
+                    throw;
+
                 var delay = GetToolDownloadRetryDelay(attempt);
                 log?.Report($"{toolName} 下载失败，准备重试 ({attempt}/{ToolDownloadMaxAttempts}): {ex.Message}");
                 await retryDelayAsync(delay, ct);
@@ -276,6 +279,9 @@ public class EnvironmentService
                 }
             }
         }
+
+        if (totalBytes is > 0 && totalRead != totalBytes.Value)
+            throw new IOException($"{toolName} 下载不完整：已下载 {totalRead} / {totalBytes.Value} 字节。");
     }
 
     private static bool ShouldRetryToolDownload(Exception ex, int attempt, CancellationToken ct)

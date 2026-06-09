@@ -114,6 +114,39 @@ public class EnvironmentServiceTests : IDisposable
         Assert.Contains(progress.Messages, message => message.Contains("准备重试", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task DownloadFileAsync_ThrowsIOExceptionAndCleansTargetWhenContentLengthIsShort()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var targetPath = Path.Combine(_tempDir, "tool.exe");
+        var attempts = 0;
+        var handler = new SequenceHandler(_ =>
+        {
+            attempts++;
+            var content = new ByteArrayContent([1, 2]);
+            content.Headers.ContentLength = 3;
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = content
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+
+        await Assert.ThrowsAsync<IOException>(() =>
+            EnvironmentService.DownloadFileAsync(
+                new Uri("https://example.test/tool.exe"),
+                targetPath,
+                "yt-dlp",
+                log: null,
+                CancellationToken.None,
+                httpClient,
+                (_, _) => Task.CompletedTask));
+
+        Assert.Equal(3, attempts);
+        Assert.False(File.Exists(targetPath));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
