@@ -8,6 +8,11 @@
 
 ## 已完成
 
+- [x] 2026-06-09 补齐 ComboBox 禁用态视觉
+  - 内容：为 `DarkComboBox` 增加手型光标和 `IsEnabled=False` 禁用态触发器，禁用时降低透明度并恢复普通光标，使格式、清晰度、字幕、设置页下拉框在不可操作时与按钮禁用态保持一致。
+  - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~ThemeStyleTests` 观察到 `DarkComboBox` 缺少禁用态触发器的测试失败；实现后同命令 3 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，62 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。
+  - 提交说明：`补齐 ComboBox 禁用态样式`
+
 - [x] 2026-06-09 为环境组件下载增加瞬时失败重试
   - 内容：为自动安装 yt-dlp/ffmpeg 的工具下载增加最多 3 次瞬时失败重试，覆盖网络异常、IO 中断、HTTP 408/429/5xx 等临时故障；重试前清理半截目标文件，并在安装进度中输出“准备重试”提示，降低首次环境安装因网络抖动失败的概率。
   - 验证：先运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj --filter FullyQualifiedName~EnvironmentServiceTests` 观察到缺少 `DownloadFileAsync` 可测试重试入口的编译失败；实现后同命令 7 个测试通过；再运行 `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，61 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 成功，0 个警告、0 个错误；`git diff --check` 无空白错误。

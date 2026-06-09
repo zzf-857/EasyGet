@@ -38,6 +38,37 @@ public class ThemeStyleTests
             && element.Attribute("Value")?.Value == "Arrow");
     }
 
+    [Fact]
+    public void ComboBoxStyleDefinesDisabledVisualState()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && element.Attribute(x + "Key")?.Value == "DarkComboBox");
+
+        Assert.NotNull(style);
+
+        var disabledTrigger = style!
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Trigger"
+                && element.Attribute("Property")?.Value == "IsEnabled"
+                && element.Attribute("Value")?.Value == "False");
+
+        Assert.NotNull(disabledTrigger);
+        Assert.Contains(disabledTrigger!.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Opacity");
+        Assert.Contains(disabledTrigger.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Cursor"
+            && element.Attribute("Value")?.Value == "Arrow");
+    }
+
     private static string GetThemePath(string fileName)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
