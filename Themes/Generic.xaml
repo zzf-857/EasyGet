@@ -35,6 +35,11 @@
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
+    <!-- ========== Motion 系统 (Stitch-inspired restrained motion) ========== -->
+    <Duration x:Key="MotionDurationFast">0:0:0.15</Duration>
+    <Duration x:Key="MotionDurationMedium">0:0:0.22</Duration>
+    <CubicEase x:Key="MotionEaseOut" EasingMode="EaseOut"/>
+
     <!-- ========== 全局特效 (Fluent Shadows) ========== -->
     <DropShadowEffect x:Key="SoftShadow" BlurRadius="12" ShadowDepth="2" Direction="270" Color="Black" Opacity="0.2"/>
     <DropShadowEffect x:Key="HoverShadow" BlurRadius="16" ShadowDepth="4" Direction="270" Color="Black" Opacity="0.4"/>
@@ -49,6 +54,12 @@
         <Setter Property="Padding" Value="24,20"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="Effect" Value="{StaticResource SoftShadow}"/>
+        <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <TranslateTransform Y="0"/>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ========== TextBox 样式 ========== -->
@@ -119,8 +130,12 @@
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
                             CornerRadius="8"
+                            RenderTransformOrigin="0.5,0.5"
                             SnapsToDevicePixels="True"
                             Effect="{StaticResource SoftShadow}">
+                        <Border.RenderTransform>
+                            <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
+                        </Border.RenderTransform>
                         <Grid>
                             <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="8" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -134,7 +149,9 @@
                                 <Storyboard>
                                     <DoubleAnimation Storyboard.TargetName="HoverOverlay"
                                                      Storyboard.TargetProperty="Opacity"
-                                                     To="0.2" Duration="0:0:0.15"/>
+                                                     To="0.2"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
                                 </Storyboard>
                             </BeginStoryboard>
                         </EventTrigger>
@@ -143,7 +160,51 @@
                                 <Storyboard>
                                     <DoubleAnimation Storyboard.TargetName="HoverOverlay"
                                                      Storyboard.TargetProperty="Opacity"
-                                                     To="0" Duration="0:0:0.25"/>
+                                                     To="0"
+                                                     Duration="{StaticResource MotionDurationMedium}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseDown">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="0.97"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="0.97"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseUp">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
                                 </Storyboard>
                             </BeginStoryboard>
                         </EventTrigger>
@@ -151,11 +212,6 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="HoverOverlay" Property="Background" Value="Black"/>
                             <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.15"/>
-                            <Setter TargetName="border" Property="RenderTransform">
-                                <Setter.Value>
-                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
-                                </Setter.Value>
-                            </Setter>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -183,8 +239,12 @@
                             BorderBrush="{StaticResource BorderSubtleBrush}"
                             BorderThickness="1"
                             CornerRadius="8"
+                            RenderTransformOrigin="0.5,0.5"
                             SnapsToDevicePixels="True"
                             Effect="{StaticResource SoftShadow}">
+                        <Border.RenderTransform>
+                            <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
+                        </Border.RenderTransform>
                         <Grid>
                             <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="8" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -197,7 +257,9 @@
                                 <Storyboard>
                                     <DoubleAnimation Storyboard.TargetName="HoverOverlay"
                                                      Storyboard.TargetProperty="Opacity"
-                                                     To="0.05" Duration="0:0:0.15"/>
+                                                     To="0.06"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
                                 </Storyboard>
                             </BeginStoryboard>
                         </EventTrigger>
@@ -206,7 +268,51 @@
                                 <Storyboard>
                                     <DoubleAnimation Storyboard.TargetName="HoverOverlay"
                                                      Storyboard.TargetProperty="Opacity"
-                                                     To="0" Duration="0:0:0.25"/>
+                                                     To="0"
+                                                     Duration="{StaticResource MotionDurationMedium}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseDown">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="0.97"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="0.97"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseUp">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="ButtonScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
                                 </Storyboard>
                             </BeginStoryboard>
                         </EventTrigger>
@@ -216,11 +322,6 @@
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="HoverOverlay" Property="Background" Value="Black"/>
                             <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.15"/>
-                            <Setter TargetName="border" Property="RenderTransform">
-                                <Setter.Value>
-                                    <ScaleTransform ScaleX="0.97" ScaleY="0.97"/>
-                                </Setter.Value>
-                            </Setter>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -246,10 +347,35 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}">
-                        <ContentPresenter HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
+                        <Grid>
+                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.05"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
@@ -269,10 +395,35 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}">
-                        <ContentPresenter HorizontalAlignment="Center"
-                                          VerticalAlignment="Center"/>
+                        <Grid>
+                            <Border x:Name="HoverOverlay" Background="{StaticResource ErrorBrush}" Opacity="0" IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.12"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="border" Property="Background" Value="#4A1515"/>
                             <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
@@ -473,12 +624,21 @@
                 <ControlTemplate TargetType="RadioButton">
                     <Grid Width="{TemplateBinding Width}"
                           Height="{TemplateBinding Height}"
+                          RenderTransformOrigin="0.5,0.5"
                           SnapsToDevicePixels="True">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="NavScale" ScaleX="1" ScaleY="1"/>
+                        </Grid.RenderTransform>
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
                                 CornerRadius="8"
                                 BorderBrush="Transparent"
                                 BorderThickness="1"/>
+                        <Border x:Name="HoverOverlay"
+                                Background="White"
+                                CornerRadius="8"
+                                Opacity="0"
+                                IsHitTestVisible="False"/>
                         <Border x:Name="ActiveIndicator"
                                 Width="4"
                                 Height="22"
@@ -486,24 +646,115 @@
                                 Background="{StaticResource AccentBrush}"
                                 HorizontalAlignment="Left"
                                 VerticalAlignment="Center"
-                                Opacity="0"/>
+                                RenderTransformOrigin="0,0.5"
+                                Opacity="0">
+                            <Border.RenderTransform>
+                                <ScaleTransform x:Name="ActiveIndicatorScale" ScaleX="1" ScaleY="1"/>
+                            </Border.RenderTransform>
+                        </Border>
                         <ContentPresenter HorizontalAlignment="Stretch"
                                           VerticalAlignment="Center"
                                           Margin="16,0,12,0"/>
                     </Grid>
                     <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.05"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="NavScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="NavScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseDown">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="NavScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="0.97"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="NavScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="0.97"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="PreviewMouseUp">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="NavScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="NavScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
-                        <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="RenderTransform">
-                                <Setter.Value>
-                                    <ScaleTransform ScaleX="0.96" ScaleY="0.96"/>
-                                </Setter.Value>
-                            </Setter>
-                        </Trigger>
                         <Trigger Property="IsChecked" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ActiveIndicator"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         From="0"
+                                                         To="1"
+                                                         Duration="{StaticResource MotionDurationFast}"
+                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
+                                        <DoubleAnimation Storyboard.TargetName="ActiveIndicatorScale"
+                                                         Storyboard.TargetProperty="ScaleX"
+                                                         From="0.55"
+                                                         To="1"
+                                                         Duration="{StaticResource MotionDurationFast}"
+                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ActiveIndicator"
+                                                         Storyboard.TargetProperty="Opacity"
+                                                         To="0"
+                                                         Duration="{StaticResource MotionDurationFast}"
+                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                             <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
                             <Setter TargetName="border" Property="Effect" Value="{StaticResource SoftShadow}"/>
@@ -532,17 +783,45 @@
                             Width="44" Height="24"
                             CornerRadius="12"
                             Background="#313244">
-                        <Ellipse x:Name="thumb"
-                                 Width="20" Height="20"
-                                 Fill="#585B70"
-                                 HorizontalAlignment="Left"
-                                 Margin="2,0"/>
+                        <Grid>
+                            <Ellipse x:Name="thumb"
+                                     Width="20" Height="20"
+                                     Fill="#585B70"
+                                     HorizontalAlignment="Left"
+                                     VerticalAlignment="Center"
+                                     Margin="2,0">
+                                <Ellipse.RenderTransform>
+                                    <TranslateTransform x:Name="ThumbTranslate" X="0"/>
+                                </Ellipse.RenderTransform>
+                            </Ellipse>
+                        </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
+                                                         Storyboard.TargetProperty="X"
+                                                         To="20"
+                                                         Duration="{StaticResource MotionDurationFast}"
+                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
+                                                         Storyboard.TargetProperty="X"
+                                                         To="0"
+                                                         Duration="{StaticResource MotionDurationFast}"
+                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
                             <Setter TargetName="track" Property="Background" Value="{StaticResource AccentBrush}"/>
                             <Setter TargetName="thumb" Property="Fill" Value="White"/>
-                            <Setter TargetName="thumb" Property="HorizontalAlignment" Value="Right"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>

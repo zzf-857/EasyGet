@@ -1,7 +1,9 @@
 <UserControl x:Class="EasyGet.Views.BatchDownloadView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             Background="Transparent">
+             xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
+             Background="Transparent"
+             behaviors:Motion.PageEnter="True">
 
     <Grid Margin="32,28,32,0">
         <Grid.RowDefinitions>

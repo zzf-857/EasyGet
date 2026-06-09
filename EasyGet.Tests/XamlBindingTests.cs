@@ -89,6 +89,45 @@ public class XamlBindingTests
         Assert.Equal("0,0,1,0", sidebar.Attribute("BorderThickness")?.Value);
     }
 
+    [Theory]
+    [InlineData("DownloadView.xaml")]
+    [InlineData("BatchDownloadView.xaml")]
+    [InlineData("HistoryView.xaml")]
+    [InlineData("SettingsView.xaml")]
+    public void PageRootUsesMotionPageEnterBehavior(string viewFileName)
+    {
+        var document = XDocument.Load(GetViewPath(viewFileName));
+
+        Assert.Equal("UserControl", document.Root?.Name.LocalName);
+        Assert.Contains(document.Root!.Attributes(), attribute =>
+            attribute.Name.LocalName == "Motion.PageEnter"
+            && attribute.Value == "True");
+    }
+
+    [Fact]
+    public void MainWindowToastUsesAnimatedVisibilityStates()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+
+        var toast = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Border"
+                && element.Attributes().Any(attribute =>
+                    attribute.Name.LocalName == "Name"
+                    && attribute.Value == "NotificationToast"));
+
+        Assert.NotNull(toast);
+        Assert.DoesNotContain(toast!.Attributes("Visibility"), attribute =>
+            attribute.Value.Contains("BoolToVisibility", StringComparison.Ordinal));
+        Assert.Contains(toast.Descendants(), element =>
+            element.Name.LocalName == "DataTrigger"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Contains(toast.Descendants(), element =>
+            element.Name.LocalName == "DoubleAnimation"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity");
+    }
+
     [Fact]
     public void MainWindowUsesStitchBrandSidebarAndTopAppBar()
     {

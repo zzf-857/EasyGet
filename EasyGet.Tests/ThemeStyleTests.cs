@@ -57,6 +57,67 @@ public class ThemeStyleTests
         AssertColor(document, "Error", "#FFB4AB");
     }
 
+    [Fact]
+    public void ThemeDefinesSharedMotionResources()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "CubicEase"
+            && element.Attribute(x + "Key")?.Value == "MotionEaseOut"
+            && element.Attribute("EasingMode")?.Value == "EaseOut");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Duration"
+            && element.Attribute(x + "Key")?.Value == "MotionDurationFast"
+            && element.Value.Trim() == "0:0:0.15");
+    }
+
+    [Theory]
+    [InlineData("AccentButton")]
+    [InlineData("SurfaceButton")]
+    [InlineData("NavRadioButton")]
+    public void InteractiveStylesUseMotionStoryboards(string styleKey)
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && element.Attribute(x + "Key")?.Value == styleKey);
+
+        Assert.NotNull(style);
+        Assert.Contains(style!.Descendants(), element => element.Name.LocalName == "Storyboard");
+        Assert.Contains(style.Descendants().Attributes("EasingFunction"), attribute =>
+            attribute.Value.Contains("MotionEaseOut", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ToggleSwitchAnimatesThumbWithTransform()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && element.Attribute(x + "Key")?.Value == "ToggleSwitch");
+
+        Assert.NotNull(style);
+        Assert.Contains(style!.Descendants(), element =>
+            element.Name.LocalName == "TranslateTransform"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "ThumbTranslate"));
+        Assert.Contains(style.Descendants(), element =>
+            element.Name.LocalName == "DoubleAnimation"
+            && element.Attribute("Storyboard.TargetName")?.Value == "ThumbTranslate"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "X");
+    }
+
     [Theory]
     [InlineData("AccentButton")]
     [InlineData("SurfaceButton")]

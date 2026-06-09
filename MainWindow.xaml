@@ -224,14 +224,51 @@
             <Grid Grid.Row="1" Background="{StaticResource BgPrimaryBrush}">
                 <ContentControl Content="{Binding CurrentPage}"/>
 
-                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                <Border x:Name="NotificationToast"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
                         Margin="24" CornerRadius="10" Padding="20,14"
-                        Visibility="{Binding ShowNotification, Converter={StaticResource BoolToVisibility}}"
                         Cursor="Hand" Effect="{StaticResource PopupShadow}">
+                    <Border.RenderTransform>
+                        <TranslateTransform Y="12"/>
+                    </Border.RenderTransform>
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="#2D4A2D"/>
+                            <Setter Property="Opacity" Value="0"/>
+                            <Setter Property="IsHitTestVisible" Value="False"/>
                             <Style.Triggers>
+                                <DataTrigger Binding="{Binding ShowNotification}" Value="True">
+                                    <DataTrigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                 To="1"
+                                                                 Duration="{StaticResource MotionDurationFast}"
+                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                 To="0"
+                                                                 Duration="{StaticResource MotionDurationFast}"
+                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.EnterActions>
+                                    <DataTrigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                 To="0"
+                                                                 Duration="{StaticResource MotionDurationMedium}"
+                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
+                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                 To="12"
+                                                                 Duration="{StaticResource MotionDurationMedium}"
+                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </DataTrigger.ExitActions>
+                                    <Setter Property="Opacity" Value="1"/>
+                                    <Setter Property="IsHitTestVisible" Value="True"/>
+                                </DataTrigger>
                                 <DataTrigger Binding="{Binding IsNotificationSuccess}" Value="False">
                                     <Setter Property="Background" Value="#4A2D2D"/>
                                 </DataTrigger>
