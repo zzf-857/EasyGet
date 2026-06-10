@@ -54,6 +54,58 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryExtractThumbnailUrlFromCdpMessage_IgnoresDouyinNavigationAsset()
+    {
+        const string message = """
+            {
+              "method": "Network.responseReceived",
+              "params": {
+                "response": {
+                  "mimeType": "image/png",
+                  "url": "https://lf-douyin-pc-web.douyinstatic.com/obj/douyin-pc-web/ies/douyin_web/media/nav_dark_entry_optimize_v6.3762f532cf05363f.png"
+                }
+              }
+            }
+            """;
+
+        var found = DouyinBrowserDownloadService.TryExtractThumbnailUrlFromCdpMessage(message, out var url);
+
+        Assert.False(found);
+        Assert.Equal("", url);
+    }
+
+    [Fact]
+    public void ExtractMobileShareCoverUrl_PrefersAwemeVideoCover()
+    {
+        const string mobileShareHtml = """
+            <script>
+            window.__DATA__ = {
+              "origin_cover": "https:\u002F\u002Fp3-pc-sign.douyinpic.com\u002Ftos-cn-p-0015\u002Forigin~tplv-dy-360p.jpeg?sc=origin_cover&biz_tag=pcweb_cover",
+              "cover": "https:\u002F\u002Fp26-sign.douyinpic.com\u002Ftos-cn-i-dy\u002Fd766c797bda64a7db036d3d53979e160~tplv-dy-resize-walign-adapt-aq:540:q75.webp?lk3s=138a59ce&x-expires=1782266400&x-signature=oA7fqVz3Mx2gzAIYPfynpSSDYd4%3D&from=327834062&s=PackSourceEnum_DOUYIN_REFLOW&se=false&sc=cover&biz_tag=aweme_video"
+            };
+            </script>
+            """;
+
+        var coverUrl = DouyinBrowserDownloadService.ExtractMobileShareCoverUrl(mobileShareHtml);
+
+        Assert.Contains("d766c797bda64a7db036d3d53979e160", coverUrl);
+        Assert.Contains("biz_tag=aweme_video", coverUrl);
+        Assert.Contains("sc=cover", coverUrl);
+    }
+
+    [Fact]
+    public void SelectBestDouyinThumbnailCandidate_PrefersCardCoverOverVideoFrame()
+    {
+        var selected = DouyinBrowserDownloadService.SelectBestDouyinThumbnailCandidate([
+            "https://p3-pc-sign.douyinpic.com/tos-cn-p-0015/origin~tplv-dy-360p.jpeg?biz_tag=pcweb_cover&sc=origin_cover",
+            "https://p3-pc-sign.douyinpic.com/image-cut-tos-priv/detail~tplv-dy-resize-origshort-autoq-75:330.jpeg?biz_tag=pcweb_cover&sc=cover",
+            "https://p26-sign.douyinpic.com/tos-cn-i-dy/d766c797bda64a7db036d3d53979e160~tplv-dy-resize-walign-adapt-aq:540:q75.webp?biz_tag=aweme_video&s=PackSourceEnum_DOUYIN_REFLOW&sc=cover"
+        ]);
+
+        Assert.Contains("d766c797bda64a7db036d3d53979e160", selected);
+    }
+
+    [Fact]
     public void TryExtractUrlsFromCdpMessage_IgnoresNonStringResponseFields()
     {
         const string message = """

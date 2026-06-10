@@ -192,6 +192,24 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildDownloadFailureMessage_ExplainsBilibiliPreconditionFailure()
+    {
+        var stderrLines = new[]
+        {
+            "ERROR: [BiliBili] 1V5Eu68E5m: Unable to download JSON metadata: HTTP Error 412: Precondition Failed"
+        };
+
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://www.bilibili.com/video/BV1V5Eu68E5m/",
+            stderrLines,
+            1);
+
+        Assert.Contains("B 站", message);
+        Assert.Contains("412", message);
+        Assert.Contains("请求头", message);
+    }
+
+    [Fact]
     public void ShouldRetryWithNextCookieStrategy_RetriesDouyinAfterBrowserCookieDatabaseFailure()
     {
         var method = typeof(YtDlpService).GetMethod(

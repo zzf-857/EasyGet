@@ -73,6 +73,7 @@ public partial class YtDlpService
             {
                 var args = BuildVideoInfoBaseArgs();
 
+                AddSiteCompatibilityArgs(args, url);
                 AddProxyArgs(args);
                 AddCookieArgs(args, url, strategies[i]);
                 args.Add(url);
@@ -204,6 +205,7 @@ public partial class YtDlpService
             {
                 var args = BuildPlaylistBaseArgs();
 
+                AddSiteCompatibilityArgs(args, url);
                 AddProxyArgs(args);
                 AddCookieArgs(args, url, strategies[i]);
                 args.Add(url);
@@ -463,6 +465,7 @@ public partial class YtDlpService
 
         AddAria2cArgs(args, _configService.Config.UseAria2c, aria2cPath);
 
+        AddSiteCompatibilityArgs(args, task.Url);
         AddProxyArgs(args);
         AddCookieArgs(args, task.Url, cookieStrategy);
 
@@ -493,6 +496,19 @@ public partial class YtDlpService
         args.Add("linear=1:5:1");
         args.Add("--retry-sleep");
         args.Add("fragment:linear=1:5:1");
+    }
+
+    internal static void AddSiteCompatibilityArgs(List<string> args, string url)
+    {
+        if (!IsBilibiliUrl(url))
+            return;
+
+        args.Add("--user-agent");
+        args.Add("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+        args.Add("--referer");
+        args.Add("https://www.bilibili.com/");
+        args.Add("--add-header");
+        args.Add("Origin:https://www.bilibili.com");
     }
 
     internal static List<string> BuildVideoInfoBaseArgs()
@@ -712,6 +728,15 @@ public partial class YtDlpService
             || uri.Host.Contains("youtu.be", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsBilibiliUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return false;
+
+        return uri.Host.Contains("bilibili.com", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Contains("b23.tv", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool ShouldRetryWithNextCookieStrategy(string url, List<string> stderrLines)
     {
         if (IsDouyinUrl(url))
@@ -762,9 +787,20 @@ public partial class YtDlpService
             return "YouTube 下载被风控拦截（403/需要登录验证）。请在设置中粘贴最新 YouTube Cookie，或关闭浏览器后重试。";
         }
 
+        if (IsBilibiliUrl(url) && lines.Any(IsBilibiliPreconditionFailedError))
+        {
+            return "B 站返回 412 Precondition Failed，通常是请求头或站点风控校验导致。EasyGet 已自动补充 B 站请求头；如果仍失败，请稍后重试或更新 yt-dlp。";
+        }
+
         return lines.LastOrDefault(line =>
                    line.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
                ?? $"yt-dlp exit code: {exitCode}";
+    }
+
+    private static bool IsBilibiliPreconditionFailedError(string line)
+    {
+        return line.Contains("BiliBili", StringComparison.OrdinalIgnoreCase)
+               && line.Contains("HTTP Error 412", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasBrowserCookies(string browser)

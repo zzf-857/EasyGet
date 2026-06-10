@@ -66,6 +66,28 @@ public class YtDlpArgsTests
         AssertOptionValue(args, "--retry-sleep", "linear=1:5:1");
     }
 
+    [Fact]
+    public void AddSiteCompatibilityArgs_AddsBilibiliBrowserHeaders()
+    {
+        var args = new List<string>();
+
+        YtDlpService.AddSiteCompatibilityArgs(args, "https://www.bilibili.com/video/BV1V5Eu68E5m/");
+
+        AssertOptionValue(args, "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+        AssertOptionValue(args, "--referer", "https://www.bilibili.com/");
+        AssertOptionValue(args, "--add-header", "Origin:https://www.bilibili.com");
+    }
+
+    [Fact]
+    public void AddSiteCompatibilityArgs_LeavesGenericSitesUnchanged()
+    {
+        var args = new List<string>();
+
+        YtDlpService.AddSiteCompatibilityArgs(args, "https://example.com/video");
+
+        Assert.Empty(args);
+    }
+
     private static void AssertOptionValue(List<string> args, string option, string expectedValue)
     {
         var optionIndexes = args

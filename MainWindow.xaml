@@ -137,36 +137,6 @@
                     </StackPanel>
                 </StackPanel>
 
-                <Border DockPanel.Dock="Bottom"
-                        Background="{StaticResource BgSurfaceBrush}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="10,9">
-                    <StackPanel Orientation="Horizontal">
-                        <Border Width="32" Height="32"
-                                Background="{StaticResource BgSurfaceHighestBrush}"
-                                CornerRadius="16">
-                            <Image Source="/Assets/app.png"
-                                   Width="24" Height="24"
-                                   Stretch="Uniform"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                        </Border>
-                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="Power User"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="12"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding StatusMessage}"
-                                       Foreground="{StaticResource TextMutedBrush}"
-                                       FontSize="10"
-                                       TextTrimming="CharacterEllipsis"
-                                       MaxWidth="150"/>
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
             </DockPanel>
         </Border>
 

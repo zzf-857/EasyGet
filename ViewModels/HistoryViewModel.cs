@@ -13,6 +13,7 @@ namespace EasyGet.ViewModels;
 public partial class HistoryViewModel : ObservableObject
 {
     private readonly HistoryService _historyService;
+    private readonly Action<ProcessStartInfo> _startProcess;
 
     [ObservableProperty] private string _searchKeyword = "";
     [ObservableProperty] private string _selectedMediaFilter = "全部";
@@ -22,8 +23,14 @@ public partial class HistoryViewModel : ObservableObject
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
 
     public HistoryViewModel(HistoryService historyService)
+        : this(historyService, StartProcess)
+    {
+    }
+
+    internal HistoryViewModel(HistoryService historyService, Action<ProcessStartInfo> startProcess)
     {
         _historyService = historyService;
+        _startProcess = startProcess;
     }
 
     /// <summary>
@@ -129,6 +136,63 @@ public partial class HistoryViewModel : ObservableObject
             }
             catch { }
         });
+    }
+
+    [RelayCommand]
+    private async Task PreviewFile(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath)) return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                if (!System.IO.File.Exists(filePath))
+                    return;
+
+                _startProcess(new ProcessStartInfo
+                {
+                    FileName = filePath,
+                    UseShellExecute = true,
+                    WorkingDirectory = System.IO.Path.GetDirectoryName(filePath) ?? ""
+                });
+            }
+            catch
+            {
+            }
+        });
+    }
+
+    [RelayCommand(CanExecute = nameof(CanOpenSourceUrl))]
+    private async Task OpenSourceUrl(string url)
+    {
+        if (!CanOpenSourceUrl(url)) return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                _startProcess(new ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+            }
+        });
+    }
+
+    private static bool CanOpenSourceUrl(string url)
+    {
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    private static void StartProcess(ProcessStartInfo startInfo)
+    {
+        Process.Start(startInfo);
     }
 
     private static bool MatchesMediaFilter(DownloadHistory item, string filter)

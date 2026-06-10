@@ -7,13 +7,14 @@ using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using EasyGet.Models;
 
 namespace EasyGet.Services;
 
 internal sealed record DouyinBrowserCaptureResult(string VideoUrl, string Title, string ThumbnailUrl);
 
-internal class DouyinBrowserDownloadService
+internal partial class DouyinBrowserDownloadService
 {
     private const string BrowserUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
@@ -49,6 +50,15 @@ internal class DouyinBrowserDownloadService
         }
 
         logCallback?.Invoke("[douyin-browser] captured playable mp4 URL.");
+        var mobileShareCoverUrl = await FetchMobileShareCoverUrlAsync(task.Url, ct);
+        if (!string.IsNullOrWhiteSpace(mobileShareCoverUrl))
+        {
+            capture = capture with
+            {
+                ThumbnailUrl = SelectBestDouyinThumbnailCandidate([mobileShareCoverUrl, capture.ThumbnailUrl])
+            };
+        }
+
         ApplyCapturedMetadata(task, capture);
         if (!string.IsNullOrWhiteSpace(task.Title))
             logCallback?.Invoke($"[douyin-browser] title: {task.Title}");
@@ -223,8 +233,105 @@ internal class DouyinBrowserDownloadService
         return (mimeType.Contains("image/jpeg", StringComparison.OrdinalIgnoreCase)
                 || mimeType.Contains("image/webp", StringComparison.OrdinalIgnoreCase)
                 || mimeType.Contains("image/png", StringComparison.OrdinalIgnoreCase))
-            && (url.Contains("douyinpic.com", StringComparison.OrdinalIgnoreCase)
-                || url.Contains("douyinstatic.com", StringComparison.OrdinalIgnoreCase));
+            && IsLikelyDouyinThumbnailUrl(url);
+    }
+
+    private static bool IsLikelyDouyinThumbnailUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        if (url.Contains("douyin-pc-web", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("/douyin_web/", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("/media/nav_", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("/media/logo", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("/media/icon", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("/media/sprite", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return url.Contains("douyinpic.com", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("douyinstatic.com", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("byteimg.com", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("pstatp.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static string SelectBestDouyinThumbnailCandidate(IEnumerable<string?> candidates)
+    {
+        return candidates
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate))
+            .Select(candidate => candidate!.Replace("\\u002F", "/", StringComparison.Ordinal).Replace("&amp;", "&", StringComparison.Ordinal))
+            .Where(IsLikelyDouyinThumbnailUrl)
+            .Select((url, index) => new { Url = url, Score = ScoreDouyinThumbnailUrl(url), Index = index })
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.Index)
+            .FirstOrDefault()
+            ?.Url ?? "";
+    }
+
+    private static int ScoreDouyinThumbnailUrl(string url)
+    {
+        var score = 0;
+
+        if (url.Contains("biz_tag=aweme_video", StringComparison.OrdinalIgnoreCase))
+            score += 10_000;
+        if (url.Contains("PackSourceEnum_DOUYIN_REFLOW", StringComparison.OrdinalIgnoreCase))
+            score += 8_000;
+        if (url.Contains("/tos-cn-i-dy/", StringComparison.OrdinalIgnoreCase))
+            score += 6_000;
+        if (url.Contains("sc=cover", StringComparison.OrdinalIgnoreCase))
+            score += 4_000;
+        if (url.Contains("image-cut-tos-priv", StringComparison.OrdinalIgnoreCase))
+            score += 2_000;
+        if (url.Contains("image-cut-tos", StringComparison.OrdinalIgnoreCase))
+            score += 1_000;
+        if (url.Contains("tplv-dy-resize", StringComparison.OrdinalIgnoreCase))
+            score += 500;
+        if (url.Contains("sc=origin_cover", StringComparison.OrdinalIgnoreCase))
+            score -= 5_000;
+        if (url.Contains("aweme-avatar", StringComparison.OrdinalIgnoreCase))
+            score -= 2_000;
+
+        return score;
+    }
+
+    internal static string ExtractMobileShareCoverUrl(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html))
+            return "";
+
+        var normalized = html
+            .Replace("\\u002F", "/", StringComparison.Ordinal)
+            .Replace("&amp;", "&", StringComparison.Ordinal);
+
+        var matches = DouyinImageUrlRegex()
+            .Matches(normalized)
+            .Select(match => match.Value.TrimEnd('\\', '"', '\'', '<', '>'));
+
+        return SelectBestDouyinThumbnailCandidate(matches);
+    }
+
+    private static async Task<string> FetchMobileShareCoverUrlAsync(string url, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.TryAddWithoutValidation(
+                "User-Agent",
+                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1");
+            request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+
+            using var response = await HttpClient.SendAsync(request, ct);
+            response.EnsureSuccessStatusCode();
+
+            var html = await response.Content.ReadAsStringAsync(ct);
+            return ExtractMobileShareCoverUrl(html);
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     private static async Task<DouyinBrowserCaptureResult?> CaptureVideoAsync(
@@ -272,8 +379,8 @@ internal class DouyinBrowserDownloadService
                     continue;
 
                 var message = await receiveTask;
-                if (thumbnailUrl is null && TryExtractThumbnailUrlFromCdpMessage(message, out var capturedThumbnail))
-                    thumbnailUrl = capturedThumbnail;
+                if (TryExtractThumbnailUrlFromCdpMessage(message, out var capturedThumbnail))
+                    thumbnailUrl = SelectBestDouyinThumbnailCandidate([thumbnailUrl, capturedThumbnail]);
 
                 if (TryExtractVideoCandidateFromCdpMessage(message, out var videoUrl, out var sizeHint))
                 {
@@ -292,14 +399,11 @@ internal class DouyinBrowserDownloadService
             if (!string.IsNullOrWhiteSpace(bestVideoUrl))
             {
                 var title = await EvaluateStringAsync(socket, id++, "document.title", ct);
-                var thumbnail = await EvaluateStringAsync(socket, id++, """
-                    document.querySelector('meta[property="og:image"]')?.content
-                      || document.querySelector('meta[name="twitter:image"]')?.content
-                      || document.querySelector('video')?.poster
-                      || ''
-                    """, ct);
-
-                return new DouyinBrowserCaptureResult(bestVideoUrl, title, string.IsNullOrWhiteSpace(thumbnail) ? thumbnailUrl ?? "" : thumbnail);
+                var thumbnail = await WaitForThumbnailAsync(socket, id, ct);
+                return new DouyinBrowserCaptureResult(
+                    bestVideoUrl,
+                    title,
+                    SelectBestDouyinThumbnailCandidate([thumbnail, thumbnailUrl]));
             }
         }
         catch (OperationCanceledException)
@@ -318,6 +422,52 @@ internal class DouyinBrowserDownloadService
 
         return null;
     }
+
+    private static async Task<string> WaitForThumbnailAsync(ClientWebSocket socket, int id, CancellationToken ct)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (DateTime.UtcNow < deadline)
+        {
+            var thumbnail = await EvaluateStringAsync(socket, id++, """
+                (() => {
+                  const direct = [
+                    document.querySelector('meta[name="lark:url:video_cover_image_url"]')?.content,
+                    document.querySelector('meta[property="og:image"]')?.content,
+                    document.querySelector('meta[name="twitter:image"]')?.content,
+                    document.querySelector('video')?.poster
+                  ].filter(Boolean);
+                  const imageUrls = Array.from(document.images || [])
+                    .map(img => ({
+                      url: img.currentSrc || img.src || '',
+                      width: img.naturalWidth || img.width || 0,
+                      height: img.naturalHeight || img.height || 0
+                    }))
+                    .filter(img => img.url && img.width >= 120 && img.height >= 120)
+                    .filter(img => {
+                      const ratio = img.width / img.height;
+                      return ratio >= 0.35 && ratio <= 3.2;
+                    })
+                    .sort((a, b) => (b.width * b.height) - (a.width * a.height))
+                    .map(img => img.url);
+                  return [...direct, ...imageUrls]
+                    .filter(url => /(douyinpic\.com|douyinstatic\.com|byteimg\.com|pstatp\.com)/i.test(url))
+                    .join('\n');
+                })()
+                """, ct);
+
+            var selectedThumbnail = SelectBestDouyinThumbnailCandidate(
+                thumbnail.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+            if (!string.IsNullOrWhiteSpace(selectedThumbnail))
+                return selectedThumbnail;
+
+            await Task.Delay(250, ct);
+        }
+
+        return "";
+    }
+
+    [GeneratedRegex(@"https?:[^""'\s<>]+(?:douyinpic|douyinstatic|byteimg|pstatp)[^""'\s<>]*", RegexOptions.IgnoreCase)]
+    private static partial Regex DouyinImageUrlRegex();
 
     private static bool TryExtractVideoCandidateFromCdpMessage(string message, out string videoUrl, out long sizeHint)
     {

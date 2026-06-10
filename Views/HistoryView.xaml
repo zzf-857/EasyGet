@@ -175,7 +175,8 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <Border Style="{StaticResource ToolPanelBorder}"
+                        <Border x:Name="HistoryCard"
+                                Style="{StaticResource ToolPanelBorder}"
                                 Width="286"
                                 Padding="0"
                                 Opacity="{Binding FileExists, Converter={StaticResource FileExistsToOpacity}}"
@@ -187,9 +188,14 @@
                                         Background="{StaticResource BgSurfaceHighestBrush}"
                                         ClipToBounds="True">
                                     <Grid>
-                                        <Image Source="{Binding ThumbnailUrl}"
+                                        <Image x:Name="ThumbnailImage"
+                                               Source="{Binding ThumbnailUrl}"
                                                Stretch="UniformToFill"
-                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                               RenderOptions.BitmapScalingMode="HighQuality">
+                                            <Image.Effect>
+                                                <BlurEffect x:Name="ThumbnailBlur" Radius="0"/>
+                                            </Image.Effect>
+                                        </Image>
                                         <TextBlock Text="&#xEC4F;"
                                                    FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                                    Foreground="{StaticResource AccentBrush}"
@@ -204,6 +210,77 @@
                                                 Padding="5,2"
                                                 Margin="0,0,8,8">
                                             <TextBlock Text="{Binding Quality}" Foreground="White" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                        <Border x:Name="HoverOverlay"
+                                                Background="#AA101416"
+                                                CornerRadius="12,12,0,0"
+                                                Opacity="0"
+                                                IsHitTestVisible="False"
+                                                RenderTransformOrigin="0.5,0.5">
+                                            <Border.RenderTransform>
+                                                <TranslateTransform x:Name="HoverOverlayTranslate" Y="6"/>
+                                            </Border.RenderTransform>
+                                            <StackPanel Orientation="Horizontal"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center">
+                                                <Button Style="{StaticResource SurfaceButton}"
+                                                        Width="36"
+                                                        Height="36"
+                                                        Padding="0"
+                                                        ToolTip="打开文件夹"
+                                                        AutomationProperties.Name="打开文件夹"
+                                                        IsEnabled="{Binding FileExists}"
+                                                        Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding FilePath}">
+                                                    <TextBlock Text="&#xE838;"
+                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                               FontSize="15"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                                <Button Style="{StaticResource AccentButton}"
+                                                        Width="42"
+                                                        Height="42"
+                                                        Padding="0"
+                                                        Margin="10,0"
+                                                        ToolTip="预览文件"
+                                                        AutomationProperties.Name="预览文件"
+                                                        IsEnabled="{Binding FileExists}"
+                                                        Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding FilePath}">
+                                                    <TextBlock Text="&#xE768;"
+                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                               FontSize="17"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                                <Button Style="{StaticResource SurfaceButton}"
+                                                        Width="36"
+                                                        Height="36"
+                                                        Padding="0"
+                                                        Margin="0,0,10,0"
+                                                        ToolTip="打开原网页"
+                                                        AutomationProperties.Name="打开原网页"
+                                                        IsEnabled="{Binding Url, Converter={StaticResource HttpUrlToBool}}"
+                                                        Command="{Binding DataContext.OpenSourceUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding Url}">
+                                                    <TextBlock Text="&#xE8A7;"
+                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                               FontSize="15"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                                <Button Style="{StaticResource SurfaceButton}"
+                                                        Width="36"
+                                                        Height="36"
+                                                        Padding="0"
+                                                        ToolTip="删除记录"
+                                                        AutomationProperties.Name="删除记录"
+                                                        Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        CommandParameter="{Binding Id}">
+                                                    <TextBlock Text="&#xE74D;"
+                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                               FontSize="15"
+                                                               VerticalAlignment="Center"/>
+                                                </Button>
+                                            </StackPanel>
                                         </Border>
                                     </Grid>
                                 </Border>
@@ -257,31 +334,59 @@
                                                    FontWeight="Bold"/>
                                     </Grid>
 
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                                        <Button Style="{StaticResource SurfaceButton}"
-                                                ToolTip="打开文件夹"
-                                                AutomationProperties.Name="打开文件夹"
-                                                Padding="8,5"
-                                                IsEnabled="{Binding FileExists}"
-                                                Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding FilePath}">
-                                            <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       FontSize="12" VerticalAlignment="Center"/>
-                                        </Button>
-                                        <Button Style="{StaticResource SurfaceButton}"
-                                                ToolTip="删除记录"
-                                                AutomationProperties.Name="删除记录"
-                                                Padding="8,5"
-                                                Margin="6,0,0,0"
-                                                Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding Id}">
-                                            <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       FontSize="12" VerticalAlignment="Center"/>
-                                        </Button>
-                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </Border>
+                        <DataTemplate.Triggers>
+                            <Trigger SourceName="HistoryCard" Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             From="0"
+                                                             To="1"
+                                                             Duration="{StaticResource MotionDurationFast}"
+                                                             EasingFunction="{StaticResource MotionEaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="HoverOverlayTranslate"
+                                                             Storyboard.TargetProperty="Y"
+                                                             From="6"
+                                                             To="0"
+                                                             Duration="{StaticResource MotionDurationFast}"
+                                                             EasingFunction="{StaticResource MotionEaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="ThumbnailBlur"
+                                                             Storyboard.TargetProperty="Radius"
+                                                             To="7"
+                                                             Duration="{StaticResource MotionDurationFast}"
+                                                             EasingFunction="{StaticResource MotionEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                             Storyboard.TargetProperty="Opacity"
+                                                             To="0"
+                                                             Duration="{StaticResource MotionDurationMedium}"
+                                                             EasingFunction="{StaticResource MotionEaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="HoverOverlayTranslate"
+                                                             Storyboard.TargetProperty="Y"
+                                                             To="6"
+                                                             Duration="{StaticResource MotionDurationMedium}"
+                                                             EasingFunction="{StaticResource MotionEaseOut}"/>
+                                            <DoubleAnimation Storyboard.TargetName="ThumbnailBlur"
+                                                             Storyboard.TargetProperty="Radius"
+                                                             To="0"
+                                                             Duration="{StaticResource MotionDurationMedium}"
+                                                             EasingFunction="{StaticResource MotionEaseOut}"/>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                                <Setter TargetName="HoverOverlay" Property="Opacity" Value="1"/>
+                                <Setter TargetName="HoverOverlay" Property="IsHitTestVisible" Value="True"/>
+                            </Trigger>
+                        </DataTemplate.Triggers>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

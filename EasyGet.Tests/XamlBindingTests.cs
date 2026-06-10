@@ -191,7 +191,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void MainWindowSidebarFooterDoesNotFillRemainingNavigationSpace()
+    public void MainWindowSidebarDoesNotRenderAccountStatusFooter()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
 
@@ -204,6 +204,14 @@ public class XamlBindingTests
 
         Assert.NotNull(sidebarDockPanel);
         Assert.Equal("False", sidebarDockPanel!.Attribute("LastChildFill")?.Value);
+
+        var textAttributes = document.Descendants()
+            .Attributes("Text")
+            .Select(attribute => attribute.Value)
+            .ToList();
+
+        Assert.DoesNotContain("Power User", textAttributes);
+        Assert.DoesNotContain(textAttributes, text => text.Contains("StatusMessage", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -415,6 +423,82 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewCardsRevealFullQuickActionsOnHover()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Trigger"
+            && element.Attribute("SourceName")?.Value == "HistoryCard"
+            && element.Attribute("Property")?.Value == "IsMouseOver"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "BlurEffect"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "ThumbnailBlur"));
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "TranslateTransform"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "HoverOverlayTranslate")
+            && element.Attribute("Y")?.Value == "6");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("TargetName")?.Value == "HoverOverlay"
+            && element.Attribute("Property")?.Value == "Opacity"
+            && element.Attribute("Value")?.Value == "1");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "DoubleAnimation"
+            && element.Attribute("Storyboard.TargetName")?.Value == "HoverOverlay"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity"
+            && element.Attribute("To")?.Value == "1"
+            && element.Attribute("Duration")?.Value?.Contains("MotionDurationFast", StringComparison.Ordinal) == true);
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "DoubleAnimation"
+            && element.Attribute("Storyboard.TargetName")?.Value == "ThumbnailBlur"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Radius"
+            && element.Attribute("To")?.Value == "7");
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "DoubleAnimation"
+            && element.Attribute("Storyboard.TargetName")?.Value == "HoverOverlayTranslate"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Y"
+            && element.Attribute("To")?.Value == "0");
+
+        var commands = document.Descendants()
+            .Attributes("Command")
+            .Select(attribute => attribute.Value)
+            .ToList();
+
+        Assert.Contains(commands, command => command.Contains("OpenFolderCommand", StringComparison.Ordinal));
+        Assert.Contains(commands, command => command.Contains("PreviewFileCommand", StringComparison.Ordinal));
+        Assert.Contains(commands, command => command.Contains("OpenSourceUrlCommand", StringComparison.Ordinal));
+        Assert.Contains(commands, command => command.Contains("DeleteItemCommand", StringComparison.Ordinal));
+
+        var previewButton = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains("PreviewFileCommand", StringComparison.Ordinal)));
+
+        Assert.NotNull(previewButton);
+        Assert.Equal("预览文件", previewButton!.Attribute("ToolTip")?.Value);
+        Assert.Contains("FileExists", previewButton.Attribute("IsEnabled")?.Value ?? "");
+
+        var sourceButton = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attributes("Command").Any(attribute =>
+                    attribute.Value.Contains("OpenSourceUrlCommand", StringComparison.Ordinal)));
+
+        Assert.NotNull(sourceButton);
+        Assert.Equal("打开原网页", sourceButton!.Attribute("ToolTip")?.Value);
+        Assert.Contains("HttpUrlToBool", sourceButton.Attribute("IsEnabled")?.Value ?? "");
+    }
+
+    [Fact]
     public void SettingsViewUsesStitchSettingsCenterInformationArchitecture()
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
@@ -518,6 +602,8 @@ public class XamlBindingTests
     [InlineData("SearchCommand")]
     [InlineData("ClearAllCommand")]
     [InlineData("OpenFolderCommand")]
+    [InlineData("PreviewFileCommand")]
+    [InlineData("OpenSourceUrlCommand")]
     [InlineData("DeleteItemCommand")]
     public void HistoryViewActionButtonsUseFluentIconContent(string commandName)
     {

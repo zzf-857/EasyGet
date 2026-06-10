@@ -139,6 +139,22 @@ public class StringToVisibilityConverter : IValueConverter
 }
 
 /// <summary>
+/// HTTP(S) URL -> true; other values -> false.
+/// </summary>
+public class HttpUrlToBooleanConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        return value is string url
+            && Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => throw new NotImplementedException();
+}
+
+/// <summary>
 /// 整数 → 布尔转换器（比较 ConverterParameter）
 /// </summary>
 public class IntToBoolConverter : IValueConverter
