@@ -147,6 +147,16 @@ public static class Motion
         fadeAnim.Completed += (s, ev) =>
         {
             ExecuteRemoveCommand(button);
+            parentItem.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var listBox = FindAncestor<System.Windows.Controls.ListBox>(parentItem);
+                if (listBox != null && listBox.Items.Contains(parentItem.DataContext))
+                {
+                    var durationFast = new Duration(TimeSpan.FromMilliseconds(150));
+                    parentItem.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation(1, durationFast) { EasingFunction = easing });
+                    translate.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(0, durationFast) { EasingFunction = easing });
+                }
+            }));
         };
 
         parentItem.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
