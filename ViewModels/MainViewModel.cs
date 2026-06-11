@@ -1,3 +1,4 @@
+using System.Windows.Shell;
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
@@ -21,6 +22,8 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private bool _showNotification;
     [ObservableProperty] private string _notificationMessage = "";
     [ObservableProperty] private bool _isNotificationSuccess;
+    [ObservableProperty] private TaskbarItemProgressState _taskbarState = TaskbarItemProgressState.None;
+    [ObservableProperty] private double _taskbarValue;
 
     public DownloadViewModel DownloadVM { get; }
     public BatchDownloadViewModel BatchDownloadVM { get; }
@@ -66,6 +69,12 @@ public partial class MainViewModel : ObservableObject
         _downloadManager.TaskFinished += OnTaskFinished;
         SettingsVM.PropertyChanged += OnSettingsViewModelPropertyChanged;
         SettingsVM.SettingsSaved += OnSettingsSaved;
+
+        _downloadManager.Tasks.CollectionChanged += OnTasksCollectionChanged;
+        foreach (var task in _downloadManager.Tasks)
+        {
+            task.PropertyChanged += OnTaskPropertyChanged;
+        }
     }
 
     private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -165,6 +174,72 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = status.IsReady
             ? "Ready"
             : "环境未就绪，请检查设置。";
+    }
+
+    private void OnTasksCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.NewItems != null)
+        {
+            foreach (DownloadTask task in e.NewItems)
+            {
+                task.PropertyChanged += OnTaskPropertyChanged;
+            }
+        }
+        if (e.OldItems != null)
+        {
+            foreach (DownloadTask task in e.OldItems)
+            {
+                task.PropertyChanged -= OnTaskPropertyChanged;
+            }
+        }
+        UpdateTaskbarProgress();
+    }
+
+    private void OnTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(DownloadTask.Progress) or nameof(DownloadTask.Status))
+        {
+            var app = System.Windows.Application.Current;
+            if (app is not null)
+            {
+                app.Dispatcher.Invoke(() => UpdateTaskbarProgress());
+            }
+            else
+            {
+                UpdateTaskbarProgress();
+            }
+        }
+    }
+
+    private void UpdateTaskbarProgress()
+    {
+        var activeTasks = _downloadManager.Tasks
+            .Where(t => t.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging)
+            .ToList();
+
+        var failedTasks = _downloadManager.Tasks
+            .Where(t => t.Status == DownloadStatus.Failed)
+            .ToList();
+
+        if (activeTasks.Count > 0)
+        {
+            if (failedTasks.Count > 0)
+            {
+                TaskbarState = TaskbarItemProgressState.Error;
+            }
+            else
+            {
+                TaskbarState = TaskbarItemProgressState.Normal;
+            }
+
+            double totalProgress = activeTasks.Sum(t => t.Progress);
+            TaskbarValue = totalProgress / (activeTasks.Count * 100.0);
+        }
+        else
+        {
+            TaskbarState = TaskbarItemProgressState.None;
+            TaskbarValue = 0.0;
+        }
     }
 
     private static string GetAssemblyVersion()

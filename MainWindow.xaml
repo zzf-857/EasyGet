@@ -24,6 +24,10 @@
                             UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
 
+        <Window.TaskbarItemInfo>
+        <TaskbarItemInfo ProgressState="{Binding TaskbarState}" ProgressValue="{Binding TaskbarValue}"/>
+    </Window.TaskbarItemInfo>
+
     <Window.Resources>
         <DataTemplate DataType="{x:Type vm:DownloadViewModel}">
             <views:DownloadView/>
