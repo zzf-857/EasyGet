@@ -114,6 +114,15 @@ public class ConfigService
         config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
         config.ProxyAddress = config.ProxyAddress?.Trim() ?? "";
         config.CookieContent ??= "";
+
+        config.ThemeColor = string.IsNullOrWhiteSpace(config.ThemeColor)
+            ? "Indigo"
+            : config.ThemeColor.Trim();
+
+        if (!ThemeManager.Palettes.Any(p => p.Name.Equals(config.ThemeColor, StringComparison.OrdinalIgnoreCase)))
+        {
+            config.ThemeColor = "Indigo";
+        }
     }
 
     private static string NormalizeOption(string? value, string[] supportedValues, string defaultValue)

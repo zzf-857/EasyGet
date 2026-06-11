@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using System.Text.RegularExpressions;
 using Xunit;
+using EasyGet.Services;
 
 namespace EasyGet.Tests;
 
@@ -626,5 +627,20 @@ public class ThemeStyleTests
             offenders.Count == 0,
             "FontWeight=\"Bold\" is globally banned. Use FontWeightSemiBold or FontWeightNormal instead: "
                 + string.Join("; ", offenders));
+    }
+
+    [Fact]
+    public void ThemeManagerCanApplyThemes()
+    {
+        Assert.NotEmpty(ThemeManager.Palettes);
+        Assert.Contains(ThemeManager.Palettes, p => p.Name == "Indigo");
+        Assert.Contains(ThemeManager.Palettes, p => p.Name == "Teal");
+        Assert.Contains(ThemeManager.Palettes, p => p.Name == "Rose");
+        Assert.Contains(ThemeManager.Palettes, p => p.Name == "Amber");
+        Assert.Contains(ThemeManager.Palettes, p => p.Name == "Blue");
+
+        ThemeManager.ApplyTheme("Teal");
+        ThemeManager.ApplyTheme("Rose");
+        ThemeManager.ApplyTheme("InvalidThemeName");
     }
 }

@@ -1,4 +1,5 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using System.Collections.Generic;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Services;
 
@@ -37,6 +38,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _isInstallingTools;
     [ObservableProperty] private string _installStatusStage = "";
     [ObservableProperty] private string _installStatusMessage = "";
+
+    [ObservableProperty] private string _selectedThemeColor = "Indigo";
+    public List<ThemePalette> ThemeOptions => ThemeManager.Palettes;
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
     public string[] QualityOptions { get; } = ["最高画质", "2160p", "1080p", "720p", "480p"];
@@ -79,6 +83,7 @@ public partial class SettingsViewModel : ObservableObject
             UseAria2c = c.UseAria2c;
             CookieContent = c.CookieContent;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
+            SelectedThemeColor = c.ThemeColor;
         }
         finally
         {
@@ -178,6 +183,7 @@ public partial class SettingsViewModel : ObservableObject
         c.UseAria2c = UseAria2c;
         c.CookieContent = CookieContent;
         c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
+        c.ThemeColor = SelectedThemeColor;
 
         ConfigService.NormalizeRuntimeConfig(c);
         SyncNormalizedPerformanceValues(c);
@@ -197,6 +203,11 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnUseAria2cChanged(bool value) => AutoSave();
     partial void OnCookieContentChanged(string value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
+    partial void OnSelectedThemeColorChanged(string value)
+    {
+        ThemeManager.ApplyTheme(value);
+        AutoSave();
+    }
     partial void OnYtDlpFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnFfmpegFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnIsCheckingEnvChanged(bool value) => NotifyEnvironmentActionStateChanged();

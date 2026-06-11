@@ -44,11 +44,11 @@
     <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}"/>
     <SolidColorBrush x:Key="BorderPrimaryBrush" Color="{StaticResource BorderPrimary}"/>
     <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderSubtle}"/>
-    <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource Accent}"/>
+    <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource Accent}"/>
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Success}"/>
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource Error}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
-    <SolidColorBrush x:Key="AccentContainerBrush" Color="{StaticResource AccentContainer}"/>
+    <SolidColorBrush x:Key="AccentContainerBrush" Color="{DynamicResource AccentContainer}"/>
     <SolidColorBrush x:Key="SuccessContainerBrush" Color="{StaticResource SuccessContainer}"/>
     <SolidColorBrush x:Key="ErrorContainerBrush" Color="{StaticResource ErrorContainer}"/>
     <SolidColorBrush x:Key="ScrimBrush" Color="{StaticResource Scrim}"/>

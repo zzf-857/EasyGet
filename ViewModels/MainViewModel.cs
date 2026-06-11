@@ -230,6 +230,7 @@ public partial class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         await _configService.LoadAsync();
+        ThemeManager.ApplyTheme(_configService.Config.ThemeColor);
 
         SettingsVM.Initialize();
         DownloadVM.Initialize();

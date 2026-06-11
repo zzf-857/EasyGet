@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 
 namespace EasyGet.Models;
@@ -43,11 +44,14 @@ public class AppConfig
     /// <summary>是否启用 aria2c 加速</summary>
     public bool UseAria2c { get; set; } = false;
 
-    /// <summary>Cookie 原始内容（从浏览器复制的 cookie 字符串）</summary>
+    /// <summary>Cookie 原始内容（从浏览器复制 of cookie 字符串）</summary>
     public string CookieContent { get; set; } = "";
 
     /// <summary>是否按平台自动归类下载文件到子文件夹</summary>
     public bool AutoCategorizeByPlatform { get; set; } = true;
+
+    /// <summary>主题配色名称 (Indigo, Teal, Rose, Amber, Blue)</summary>
+    public string ThemeColor { get; set; } = "Indigo";
 
     /// <summary>应用窗口位置和大小</summary>
     public WindowState Window { get; set; } = new();
