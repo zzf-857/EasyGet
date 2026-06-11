@@ -17,8 +17,8 @@
             <StackPanel>
                 <TextBlock Text="批量下载"
                            Foreground="{StaticResource TextPrimaryBrush}"
-                           FontSize="34"
-                           FontWeight="ExtraBold"
+                           FontSize="28"
+                           FontWeight="SemiBold"
                            FontFamily="Segoe UI Variable, Microsoft YaHei UI"/>
                 <TextBlock Text="输入多个视频链接，我们将自动为您解析并加入下载队列。"
                            Foreground="{StaticResource TextSecondaryBrush}"

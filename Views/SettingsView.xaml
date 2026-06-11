@@ -11,8 +11,8 @@
             <StackPanel Margin="0,0,0,28">
                 <TextBlock Text="系统设置"
                            Foreground="{StaticResource TextPrimaryBrush}"
-                           FontSize="36"
-                           FontWeight="ExtraBold"
+                           FontSize="28"
+                           FontWeight="SemiBold"
                            FontFamily="Segoe UI Variable, Microsoft YaHei UI"/>
                 <TextBlock Text="管理下载环境、全局偏好及网络连接设置。"
                            Foreground="{StaticResource TextSecondaryBrush}"

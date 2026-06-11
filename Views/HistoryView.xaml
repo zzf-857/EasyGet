@@ -81,7 +81,7 @@
             <StackPanel>
                 <TextBlock Text="下载历史"
                            Foreground="{StaticResource TextPrimaryBrush}"
-                           FontSize="26"
+                           FontSize="28"
                            FontWeight="SemiBold"/>
                 <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
                            FontSize="14"

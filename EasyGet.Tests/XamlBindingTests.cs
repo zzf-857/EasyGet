@@ -534,6 +534,28 @@ public class XamlBindingTests
         Assert.Contains("HttpUrlToBool", sourceButton.Attribute("IsEnabled")?.Value ?? "");
     }
 
+    [Theory]
+    [InlineData("DownloadView.xaml", "粘贴视频链接", "支持 YouTube")]
+    [InlineData("BatchDownloadView.xaml", "批量下载", "输入多个视频链接")]
+    [InlineData("HistoryView.xaml", "下载历史", "共计")]
+    [InlineData("SettingsView.xaml", "系统设置", "管理下载环境")]
+    public void PageMainTitlesUseUnifiedTypography(string viewFileName, string titleText, string subtitleText)
+    {
+        var document = XDocument.Load(GetViewPath(viewFileName));
+
+        var title = FindTextBlockByText(document, titleText);
+
+        Assert.NotNull(title);
+        Assert.Equal("28", title!.Attribute("FontSize")?.Value);
+        Assert.Equal("SemiBold", title.Attribute("FontWeight")?.Value);
+
+        var subtitle = FindTextBlockByText(document, subtitleText);
+
+        Assert.NotNull(subtitle);
+        Assert.Equal("14", subtitle!.Attribute("FontSize")?.Value);
+        Assert.Contains("TextSecondaryBrush", subtitle.Attribute("Foreground")?.Value ?? "");
+    }
+
     [Fact]
     public void SettingsViewUsesStitchSettingsCenterInformationArchitecture()
     {
@@ -829,5 +851,25 @@ public class XamlBindingTests
 
         var value = content.Trim();
         return value.Length <= 3 && value.All(character => !char.IsLetterOrDigit(character));
+    }
+
+    private static XElement? FindTextBlockByText(XDocument document, string text)
+    {
+        return document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBlock"
+                && TextBlockText(element).Contains(text, StringComparison.Ordinal));
+    }
+
+    private static string TextBlockText(XElement textBlock)
+    {
+        var directText = textBlock.Attribute("Text")?.Value ?? "";
+        var runText = string.Concat(textBlock
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Run")
+            .Select(element => element.Attribute("Text")?.Value ?? ""));
+
+        return directText + runText;
     }
 }

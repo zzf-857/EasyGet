@@ -17,11 +17,11 @@
                         <StackPanel Margin="0,0,0,20">
                             <TextBlock Text="粘贴视频链接"
                                        Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="24"
+                                       FontSize="28"
                                        FontWeight="SemiBold"/>
                             <TextBlock Text="支持 YouTube, Bilibili, Twitter, TikTok 等平台"
                                        Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="13"
+                                       FontSize="14"
                                        Margin="0,6,0,0"/>
                         </StackPanel>
 
