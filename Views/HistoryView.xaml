@@ -276,7 +276,7 @@
                                                 CornerRadius="3"
                                                 Padding="5,2"
                                                 Margin="0,0,8,8">
-                                            <TextBlock Text="{Binding Quality}" Foreground="{StaticResource ScrimLightBrush}" FontSize="10" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding Quality}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="10" FontWeight="Bold"/>
                                         </Border>
                                         <Border x:Name="HoverOverlay"
                                                 Background="{StaticResource ScrimOverlayBrush}"

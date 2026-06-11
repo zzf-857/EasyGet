@@ -73,6 +73,51 @@ public class ThemeStyleTests
         AssertColor(document, "ToggleThumb", "#585B70");
     }
 
+    [Fact]
+    public void ThemeDefinesTypographyTokens()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+
+        AssertDoubleToken(document, "FontSizeCaption", 11);
+        AssertDoubleToken(document, "FontSizeBody", 12);
+        AssertDoubleToken(document, "FontSizeBodyStrong", 14);
+        AssertDoubleToken(document, "FontSizeSection", 16);
+        AssertDoubleToken(document, "FontSizeCardTitle", 20);
+        AssertDoubleToken(document, "FontSizePageTitle", 28);
+
+        AssertDoubleToken(document, "IconSizeSmall", 12);
+        AssertDoubleToken(document, "IconSizeBody", 16);
+        AssertDoubleToken(document, "IconSizeLarge", 18);
+        AssertDoubleToken(document, "IconSizeEmptyState", 48);
+
+        AssertFontFamily(document, "FontFamilyUI", "Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
+        AssertFontFamily(document, "FontFamilyMono", "Cascadia Code, Consolas, Microsoft YaHei UI");
+        AssertFontFamily(document, "FontFamilyIcon", "Segoe Fluent Icons, Segoe MDL2 Assets");
+    }
+
+    [Theory]
+    [InlineData("TextPageTitle")]
+    [InlineData("TextCardTitle")]
+    [InlineData("TextSection")]
+    [InlineData("TextBodyStrong")]
+    [InlineData("TextBody")]
+    [InlineData("TextCaption")]
+    [InlineData("TextMono")]
+    [InlineData("IconGlyph")]
+    public void ThemeDefinesNamedStyles(string styleKey)
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && element.Attribute(x + "Key")?.Value == styleKey);
+
+        Assert.NotNull(style);
+    }
+
     [Theory]
     [InlineData("Views")]
     [InlineData("MainWindow.xaml")]
@@ -455,6 +500,32 @@ public class ThemeStyleTests
     private static bool IsTargetType(XElement element, string expected)
     {
         var targetType = element.Attribute("TargetType")?.Value ?? "";
-        return targetType == expected || targetType == $"{{x:Type {expected}}}";
+        return targetType == expected || targetType == $"{expected}" || targetType == $"{{x:Type {expected}}}";
+    }
+
+    private static void AssertDoubleToken(XDocument document, string key, double expectedValue)
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var token = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Double"
+                && element.Attribute(x + "Key")?.Value == key);
+
+        Assert.NotNull(token);
+        Assert.Equal(expectedValue, double.Parse(token!.Value.Trim()));
+    }
+
+    private static void AssertFontFamily(XDocument document, string key, string expectedValue)
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var token = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "FontFamily"
+                && element.Attribute(x + "Key")?.Value == key);
+
+        Assert.NotNull(token);
+        Assert.Equal(expectedValue, token!.Value.Trim());
     }
 }

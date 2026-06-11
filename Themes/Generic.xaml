@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
     <!-- ========== 颜色系统 (Stitch EasyGet Dark) ========== -->
     <Color x:Key="BgPrimary">#131313</Color>
@@ -60,6 +61,88 @@
     <SolidColorBrush x:Key="ToggleTrackBrush" Color="{StaticResource ToggleTrack}"/>
     <SolidColorBrush x:Key="ToggleThumbBrush" Color="{StaticResource ToggleThumb}"/>
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
+
+    <!-- ========== 排版系统 Tokens (Typography Tokens) ========== -->
+    <sys:Double x:Key="FontSizeCaption">11</sys:Double>
+    <sys:Double x:Key="FontSizeBody">12</sys:Double>
+    <sys:Double x:Key="FontSizeBodyStrong">14</sys:Double>
+    <sys:Double x:Key="FontSizeSection">16</sys:Double>
+    <sys:Double x:Key="FontSizeCardTitle">20</sys:Double>
+    <sys:Double x:Key="FontSizePageTitle">28</sys:Double>
+
+    <sys:Double x:Key="IconSizeSmall">12</sys:Double>
+    <sys:Double x:Key="IconSizeBody">16</sys:Double>
+    <sys:Double x:Key="IconSizeLarge">18</sys:Double>
+    <sys:Double x:Key="IconSizeEmptyState">48</sys:Double>
+
+    <FontFamily x:Key="FontFamilyUI">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
+    <FontFamily x:Key="FontFamilyMono">Cascadia Code, Consolas, Microsoft YaHei UI</FontFamily>
+    <FontFamily x:Key="FontFamilyIcon">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- ========== 隐式排版样式 ========== -->
+    <Style TargetType="{x:Type Window}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="UseLayoutRounding" Value="True"/>
+    </Style>
+    <Style TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+    </Style>
+    <Style TargetType="{x:Type Control}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+    </Style>
+
+    <!-- ========== 命名文本样式套件 ========== -->
+    <Style x:Key="TextPageTitle" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizePageTitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style x:Key="TextCardTitle" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCardTitle}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style x:Key="TextSection" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSection}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style x:Key="TextBodyStrong" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
+    <Style x:Key="TextBody" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+    </Style>
+    <Style x:Key="TextCaption" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+    </Style>
+    <Style x:Key="TextMono" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyMono}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+    </Style>
+
+    <!-- ========== 图标样式 ========== -->
+    <Style x:Key="IconGlyph" TargetType="{x:Type TextBlock}">
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyIcon}"/>
+        <Setter Property="FontSize" Value="{StaticResource IconSizeBody}"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
 
     <!-- ========== Motion 系统 (Stitch-inspired restrained motion) ========== -->
     <Duration x:Key="MotionDurationFast">0:0:0.15</Duration>
