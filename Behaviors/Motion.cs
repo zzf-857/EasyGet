@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -58,6 +60,122 @@ public static class Motion
             {
                 EasingFunction = easing
             });
+    }
+
+    // ========== AnimateRemove 附加属性 ==========
+
+    public static readonly DependencyProperty AnimateRemoveProperty =
+        DependencyProperty.RegisterAttached(
+            "AnimateRemove",
+            typeof(bool),
+            typeof(Motion),
+            new PropertyMetadata(false, OnAnimateRemoveChanged));
+
+    public static readonly DependencyProperty RemoveCommandProperty =
+        DependencyProperty.RegisterAttached(
+            "RemoveCommand",
+            typeof(System.Windows.Input.ICommand),
+            typeof(Motion),
+            new PropertyMetadata(null));
+
+    public static readonly DependencyProperty RemoveParameterProperty =
+        DependencyProperty.RegisterAttached(
+            "RemoveParameter",
+            typeof(object),
+            typeof(Motion),
+            new PropertyMetadata(null));
+
+    public static void SetAnimateRemove(DependencyObject element, bool value)
+    {
+        element.SetValue(AnimateRemoveProperty, value);
+    }
+
+    public static bool GetAnimateRemove(DependencyObject element)
+    {
+        return (bool)element.GetValue(AnimateRemoveProperty);
+    }
+
+    public static void SetRemoveCommand(DependencyObject element, System.Windows.Input.ICommand value)
+    {
+        element.SetValue(RemoveCommandProperty, value);
+    }
+
+    public static System.Windows.Input.ICommand GetRemoveCommand(DependencyObject element)
+    {
+        return (System.Windows.Input.ICommand)element.GetValue(RemoveCommandProperty);
+    }
+
+    public static void SetRemoveParameter(DependencyObject element, object value)
+    {
+        element.SetValue(RemoveParameterProperty, value);
+    }
+
+    public static object GetRemoveParameter(DependencyObject element)
+    {
+        return element.GetValue(RemoveParameterProperty);
+    }
+
+    private static void OnAnimateRemoveChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs e)
+    {
+        if (dependencyObject is not System.Windows.Controls.Button button)
+            return;
+
+        button.Click -= OnRemoveButtonClick;
+        if (e.NewValue is true)
+            button.Click += OnRemoveButtonClick;
+    }
+
+    private static void OnRemoveButtonClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button button || !GetAnimateRemove(button))
+            return;
+
+        var parentItem = FindAncestor<System.Windows.Controls.ListBoxItem>(button);
+        if (parentItem == null)
+        {
+            ExecuteRemoveCommand(button);
+            return;
+        }
+
+        var translate = EnsureTranslateTransform(parentItem);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var duration = new Duration(TimeSpan.FromMilliseconds(180));
+
+        var fadeAnim = new DoubleAnimation(0, duration) { EasingFunction = easing };
+        var slideAnim = new DoubleAnimation(-50, duration) { EasingFunction = easing };
+
+        fadeAnim.Completed += (s, ev) =>
+        {
+            ExecuteRemoveCommand(button);
+        };
+
+        parentItem.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+        translate.BeginAnimation(TranslateTransform.XProperty, slideAnim);
+    }
+
+    private static void ExecuteRemoveCommand(System.Windows.Controls.Button button)
+    {
+        var command = GetRemoveCommand(button);
+        if (command != null)
+        {
+            var parameter = GetRemoveParameter(button);
+            if (command.CanExecute(parameter))
+            {
+                command.Execute(parameter);
+            }
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject current) where T : DependencyObject
+    {
+        do
+        {
+            if (current is T ancestor)
+                return ancestor;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        while (current != null);
+        return null;
     }
 
     private static TranslateTransform EnsureTranslateTransform(UIElement element)

@@ -75,6 +75,23 @@ public partial class MainViewModel : ObservableObject
         {
             task.PropertyChanged += OnTaskPropertyChanged;
         }
+
+        BatchDownloadVM.RequestShowNotification += (msg, isSuccess) =>
+        {
+            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            {
+                NotificationMessage = msg;
+                IsNotificationSuccess = isSuccess;
+                ShowNotification = true;
+                _notificationTimer?.Stop();
+                _notificationTimer = new System.Timers.Timer(4000) { AutoReset = false };
+                _notificationTimer.Elapsed += (_, _) =>
+                {
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() => ShowNotification = false);
+                };
+                _notificationTimer.Start();
+            });
+        };
     }
 
     private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

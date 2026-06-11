@@ -19,7 +19,7 @@
 | UX-302 | 历史筛选选中态 + 搜索即筛 | ✅ 完成 | `86ae345` | 2026-06-11 11:25 | build 0 警告 / test 197/197 |
 | UX-303 | 破坏性操作确认 | ✅ 完成 | `eec3ace` | 2026-06-11 11:27 | build 0 警告 / test 201/201 |
 | UX-304 | 历史空状态区分 | ✅ 完成 | `2bcd466` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
-| UX-305 | 批量拖拽导入 + 队列动效 | ⬜ 未开始 | - | - | - |
+| UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `25ea26c` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
 | UX-401 | Toast 堆叠队列 | ⬜ 未开始 | - | - | - |
 | UX-402 | 剪贴板智能检测 | ⬜ 未开始 | - | - | - |
 | UX-403 | 键盘快捷键 | ⬜ 未开始 | - | - | - |
@@ -362,6 +362,34 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - 新增测试：`IsSearchOrFilterActive_ReturnsCorrectStatus`, `ClearFilterAndSearchCommand_ResetsFiltersAndKeyword`
 
 **截图**：`docs/screenshots/uiux-v2/UX-304-empty-state.png`
+
+**遗留问题**：无
+
+### UX-305 批量页拖拽导入 + 队列动效 + 播放列表输入修缮 — ✅ 完成（2026-06-11 11:30）
+
+**Commit**：`25ea26c`
+
+**修改文件**：
+- `ViewModels/BatchDownloadViewModel.cs`（修改）
+- `Views/BatchDownloadView.xaml`（修改）
+- `Views/BatchDownloadView.xaml.cs`（修改）
+- `Behaviors/Motion.cs`（修改）
+- `ViewModels/MainViewModel.cs`（修改）
+- `EasyGet.Tests/BatchDownloadViewModelTests.cs`（修改）
+- `docs/screenshots/uiux-v2/UX-305-drag-import.png`（新增）
+
+**实现说明**：
+1. 实现了批量下载页面对拖拽文本和 `.txt` 文件的接收解析功能。拖拽 hover 时触发高亮虚线框的 `DragDropOverlay`，Drop 时通过 VM 的 `ImportText` 提取链接文本，过滤无效行并以 Toast 反馈忽略数。
+2. 扩展了 `Behaviors/Motion.cs`，实现 `AnimateRemove`, `RemoveCommand` 及 `RemoveParameter` 附加属性. 在点击取消（删除）任务卡片时播放向左平滑滑出且渐隐的动效（180ms，CubicEaseOut），完毕后回调移除逻辑。同时，在卡片列表 ListBoxItem 增加 `PageEnter` 特性，使任务新增入场时展示淡入滑入动画。
+3. 修缮了播放列表 URL 输入框：添加了“播放列表链接”的明确 Label，并添加了在输入为空时显示占位符的 TextBlock 覆盖。
+4. 偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：205/205 通过（基线 197）
+- 新增测试：`ImportText_WithValidAndInvalidUrls_ImportsValidAndRaisesNotificationForInvalid`, `ImportText_WithOnlyValidUrls_ImportsAllAndDoesNotRaiseNotification`
+
+**截图**：`docs/screenshots/uiux-v2/UX-305-drag-import.png`
 
 **遗留问题**：无
 

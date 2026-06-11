@@ -101,4 +101,75 @@ public class BatchDownloadViewModelTests
             TryDeleteDatabase(dbPath);
         }
     }
+
+    [Fact]
+    public void ImportText_WithValidAndInvalidUrls_ImportsValidAndRaisesNotificationForInvalid()
+    {
+        var dbPath = CreateTempDatabasePath();
+        using var history = new HistoryService(dbPath);
+        var configService = new ConfigService();
+        var ytDlp = new YtDlpService(configService, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, configService);
+        var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
+
+        try
+        {
+            string? receivedMsg = null;
+            viewModel.RequestShowNotification += (msg, success) =>
+            {
+                receivedMsg = msg;
+            };
+
+            string inputText = "https://example.com/video1\nthis is invalid line\nhttps://example.com/video2";
+            viewModel.ImportText(inputText);
+
+            // 验证有效的 2 个 URL 被导入，并以换行符连接
+            Assert.Contains("https://example.com/video1", viewModel.UrlsText);
+            Assert.Contains("https://example.com/video2", viewModel.UrlsText);
+            Assert.Equal(2, viewModel.LinkCount);
+
+            // 验证 1 个无效行触发了通知提示
+            Assert.NotNull(receivedMsg);
+            Assert.Contains("已导入 2 个链接", receivedMsg);
+            Assert.Contains("忽略了 1 行无效文本", receivedMsg);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public void ImportText_WithOnlyValidUrls_ImportsAllAndDoesNotRaiseNotification()
+    {
+        var dbPath = CreateTempDatabasePath();
+        using var history = new HistoryService(dbPath);
+        var configService = new ConfigService();
+        var ytDlp = new YtDlpService(configService, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, configService);
+        var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
+
+        try
+        {
+            string? receivedMsg = null;
+            viewModel.RequestShowNotification += (msg, success) =>
+            {
+                receivedMsg = msg;
+            };
+
+            string inputText = "https://example.com/video1\nhttps://example.com/video2";
+            viewModel.ImportText(inputText);
+
+            Assert.Contains("https://example.com/video1", viewModel.UrlsText);
+            Assert.Contains("https://example.com/video2", viewModel.UrlsText);
+            Assert.Equal(2, viewModel.LinkCount);
+
+            // 验证没有触发忽略警告通知
+            Assert.Null(receivedMsg);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
 }

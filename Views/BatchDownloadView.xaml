@@ -3,7 +3,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
              Background="Transparent"
-             behaviors:Motion.PageEnter="True">
+             behaviors:Motion.PageEnter="True"
+             AllowDrop="True"
+             DragOver="UserControl_DragOver"
+             DragLeave="UserControl_DragLeave"
+             Drop="UserControl_Drop">
 
     <Grid Margin="32,28,32,0">
         <Grid.RowDefinitions>
@@ -12,6 +16,28 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="32"/>
         </Grid.RowDefinitions>
+
+        <!-- Drag & Drop Overlay -->
+        <Border x:Name="DragDropOverlay"
+                Grid.RowSpan="4"
+                Background="{StaticResource ScrimHeavyBrush}"
+                BorderBrush="{StaticResource AccentBrush}"
+                BorderThickness="2"
+                CornerRadius="16"
+                Opacity="0"
+                Visibility="Collapsed"
+                IsHitTestVisible="False"
+                Margin="-8"
+                Panel.ZIndex="100">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xE78A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                           FontSize="48" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                <TextBlock Text="拖入链接文本或 .txt 文件以批量导入"
+                           FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                <TextBlock Text="释放以提取所有视频链接"
+                           FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+            </StackPanel>
+        </Border>
 
         <Grid Grid.Row="0" Margin="0,0,0,24">
             <StackPanel>
@@ -111,30 +137,53 @@
                     </Button>
                 </Grid>
 
-                <Grid Margin="0,16,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBox Grid.Column="0"
-                             Style="{StaticResource DarkTextBox}"
-                             Text="{Binding PlaylistUrl, UpdateSourceTrigger=PropertyChanged}"
-                             FontSize="12"/>
-                    <Button Grid.Column="1"
-                            Style="{StaticResource SurfaceButton}"
-                            Margin="8,0,0,0"
-                            FontSize="12"
-                            ToolTip="导入播放列表"
-                            AutomationProperties.Name="导入播放列表"
-                            Command="{Binding ImportPlaylistCommand}"
-                            IsEnabled="{Binding IsImportingPlaylist, Converter={StaticResource InverseBool}}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="导入播放列表" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </Grid>
+                <StackPanel Margin="0,16,0,0">
+                    <TextBlock Text="播放列表链接" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <TextBox Style="{StaticResource DarkTextBox}"
+                                     Text="{Binding PlaylistUrl, UpdateSourceTrigger=PropertyChanged}"
+                                     FontSize="12"/>
+                            <TextBlock Text="粘贴播放列表 URL (例如 YouTube, Bilibili 列表)..." 
+                                       FontSize="12" Foreground="{StaticResource TextMutedBrush}"
+                                       IsHitTestVisible="False"
+                                       Margin="12,8,12,8"
+                                       VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding PlaylistUrl}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding PlaylistUrl}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <Button Grid.Column="1"
+                                Style="{StaticResource SurfaceButton}"
+                                Margin="8,0,0,0"
+                                FontSize="12"
+                                ToolTip="导入播放列表"
+                                AutomationProperties.Name="导入播放列表"
+                                Command="{Binding ImportPlaylistCommand}"
+                                IsEnabled="{Binding IsImportingPlaylist, Converter={StaticResource InverseBool}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="导入播放列表" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -223,6 +272,7 @@
                                 <Setter Property="Padding" Value="0"/>
                                 <Setter Property="Margin" Value="0,0,0,10"/>
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="behaviors:Motion.PageEnter" Value="True"/>
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="ListBoxItem">
@@ -408,8 +458,9 @@
                                                         AutomationProperties.Name="取消任务"
                                                         Padding="8,5"
                                                         FontSize="11"
-                                                        Command="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Id}">
+                                                        behaviors:Motion.AnimateRemove="True"
+                                                        behaviors:Motion.RemoveCommand="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                        behaviors:Motion.RemoveParameter="{Binding Id}">
                                                     <Button.Style>
                                                         <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
                                                             <Setter Property="Visibility" Value="Collapsed"/>

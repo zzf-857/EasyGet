@@ -32,6 +32,41 @@ public partial class BatchDownloadViewModel : ObservableObject
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3 (仅音频)"];
     public string[] QualityOptions { get; } = ["最高画质", "1080p", "720p", "480p"];
 
+    public event Action<string, bool>? RequestShowNotification;
+
+    public void ImportText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+
+        var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var validUrls = new List<string>();
+        int ignoredCount = 0;
+
+        foreach (var line in lines)
+        {
+            var url = DownloadViewModel.ExtractUrl(line);
+            if (url != null)
+            {
+                validUrls.Add(url);
+            }
+            else
+            {
+                ignoredCount++;
+            }
+        }
+
+        if (validUrls.Count > 0)
+        {
+            var newText = string.Join("\n", validUrls);
+            UrlsText = string.IsNullOrEmpty(UrlsText) ? newText : UrlsText + "\n" + newText;
+        }
+
+        if (ignoredCount > 0)
+        {
+            RequestShowNotification?.Invoke($"已导入 {validUrls.Count} 个链接，忽略了 {ignoredCount} 行无效文本", false);
+        }
+    }
+
     public BatchDownloadViewModel(DownloadManager downloadManager, ConfigService configService, YtDlpService ytDlpService)
     {
         _downloadManager = downloadManager;
