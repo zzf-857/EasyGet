@@ -59,10 +59,10 @@
                                 <Border HorizontalAlignment="Right" VerticalAlignment="Top" CornerRadius="5" Padding="8,2">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#1A4250"/>
+                                            <Setter Property="Background" Value="{StaticResource AccentContainerBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding YtDlpFound}" Value="False">
-                                                    <Setter Property="Background" Value="#4A1E1E"/>
+                                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>
@@ -123,10 +123,10 @@
                                 <Border HorizontalAlignment="Right" VerticalAlignment="Top" CornerRadius="5" Padding="8,2">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#1A4250"/>
+                                            <Setter Property="Background" Value="{StaticResource AccentContainerBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding FfmpegFound}" Value="False">
-                                                    <Setter Property="Background" Value="#4A1E1E"/>
+                                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

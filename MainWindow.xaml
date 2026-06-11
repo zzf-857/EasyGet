@@ -203,7 +203,7 @@
                     </Border.RenderTransform>
                     <Border.Style>
                         <Style TargetType="Border">
-                            <Setter Property="Background" Value="#2D4A2D"/>
+                            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
                             <Setter Property="Opacity" Value="0"/>
                             <Setter Property="IsHitTestVisible" Value="False"/>
                             <Style.Triggers>
@@ -240,7 +240,7 @@
                                     <Setter Property="IsHitTestVisible" Value="True"/>
                                 </DataTrigger>
                                 <DataTrigger Binding="{Binding IsNotificationSuccess}" Value="False">
-                                    <Setter Property="Background" Value="#4A2D2D"/>
+                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>

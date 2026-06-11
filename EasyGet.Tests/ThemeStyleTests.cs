@@ -1,4 +1,5 @@
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -52,9 +53,64 @@ public class ThemeStyleTests
         AssertColor(document, "BorderPrimary", "#3E484E");
         AssertColor(document, "BorderSubtle", "#2A3338");
         AssertColor(document, "Accent", "#60CDFF");
-        AssertColor(document, "Success", "#74D1FF");
+        AssertColor(document, "Success", "#6CCB77");
         AssertColor(document, "Warning", "#FFB955");
         AssertColor(document, "Error", "#FFB4AB");
+
+        AssertColor(document, "AccentContainer", "#1A4250");
+        AssertColor(document, "SuccessContainer", "#2D4A2D");
+        AssertColor(document, "ErrorContainer", "#4A1E1E");
+        AssertColor(document, "Scrim", "#66000000");
+        AssertColor(document, "ScrimLight", "#99FFFFFF");
+        AssertColor(document, "ScrimHeavy", "#99000000");
+        AssertColor(document, "ScrimOverlay", "#AA101416");
+        AssertColor(document, "BgConsole", "#0E0E0E");
+        AssertColor(document, "WindowCloseHover", "#4A1515");
+        AssertColor(document, "WindowClosePressed", "#5A1A1A");
+        AssertColor(document, "AccentGradientStart", "#89B4FA");
+        AssertColor(document, "AccentGradientEnd", "#74C7EC");
+        AssertColor(document, "ToggleTrack", "#313244");
+        AssertColor(document, "ToggleThumb", "#585B70");
+    }
+
+    [Theory]
+    [InlineData("Views")]
+    [InlineData("MainWindow.xaml")]
+    public void ViewsAndMainWindowDoNotUseHexColorLiterals(string relativePath)
+    {
+        var path = GetRootPath(relativePath);
+        var files = Directory.Exists(path)
+            ? Directory.EnumerateFiles(path, "*.xaml", SearchOption.AllDirectories)
+            : [path];
+
+        var offenders = files
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => new { file, line, lineNumber = index + 1 }))
+            .Where(item => Regex.IsMatch(item.line, @"#[0-9A-Fa-f]{3,8}"))
+            .Select(item => $"{Path.GetFileName(item.file)}:{item.lineNumber}:{item.line.Trim()}")
+            .ToList();
+
+        Assert.True(
+            offenders.Count == 0,
+            "Views and MainWindow must use theme color tokens instead of hex literals: "
+                + string.Join("; ", offenders));
+    }
+
+    [Fact]
+    public void ThemeHexColorLiteralsAreOnlyColorTokenValues()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        var offenders = document
+            .Descendants()
+            .Attributes()
+            .Where(attribute => Regex.IsMatch(attribute.Value, @"#[0-9A-Fa-f]{3,8}"))
+            .Select(attribute => $"{attribute.Parent?.Name.LocalName}.{attribute.Name.LocalName}={attribute.Value}")
+            .ToList();
+
+        Assert.True(
+            offenders.Count == 0,
+            "Generic.xaml hex literals must be promoted to Color tokens: "
+                + string.Join("; ", offenders));
     }
 
     [Fact]
@@ -331,6 +387,21 @@ public class ThemeStyleTests
         }
 
         throw new FileNotFoundException($"Could not find Themes/{fileName} from test output directory.");
+    }
+
+    private static string GetRootPath(string relativePath)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, relativePath);
+            if (File.Exists(candidate) || Directory.Exists(candidate))
+                return candidate;
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException($"Could not find {relativePath} from test output directory.");
     }
 
     private static void AssertStyleSetter(XElement style, string property, string expectedValue)

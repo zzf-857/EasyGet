@@ -14,9 +14,23 @@
     <Color x:Key="BorderPrimary">#3E484E</Color>
     <Color x:Key="BorderSubtle">#2A3338</Color>
     <Color x:Key="Accent">#60CDFF</Color>
-    <Color x:Key="Success">#74D1FF</Color>
+    <Color x:Key="Success">#6CCB77</Color>
     <Color x:Key="Error">#FFB4AB</Color>
     <Color x:Key="Warning">#FFB955</Color>
+    <Color x:Key="AccentContainer">#1A4250</Color>
+    <Color x:Key="SuccessContainer">#2D4A2D</Color>
+    <Color x:Key="ErrorContainer">#4A1E1E</Color>
+    <Color x:Key="Scrim">#66000000</Color>
+    <Color x:Key="ScrimLight">#99FFFFFF</Color>
+    <Color x:Key="ScrimHeavy">#99000000</Color>
+    <Color x:Key="ScrimOverlay">#AA101416</Color>
+    <Color x:Key="BgConsole">#0E0E0E</Color>
+    <Color x:Key="WindowCloseHover">#4A1515</Color>
+    <Color x:Key="WindowClosePressed">#5A1A1A</Color>
+    <Color x:Key="AccentGradientStart">#89B4FA</Color>
+    <Color x:Key="AccentGradientEnd">#74C7EC</Color>
+    <Color x:Key="ToggleTrack">#313244</Color>
+    <Color x:Key="ToggleThumb">#585B70</Color>
 
     <SolidColorBrush x:Key="BgPrimaryBrush" Color="{StaticResource BgPrimary}"/>
     <SolidColorBrush x:Key="BgSidebarBrush" Color="{StaticResource BgSidebar}"/>
@@ -33,6 +47,18 @@
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Success}"/>
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource Error}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
+    <SolidColorBrush x:Key="AccentContainerBrush" Color="{StaticResource AccentContainer}"/>
+    <SolidColorBrush x:Key="SuccessContainerBrush" Color="{StaticResource SuccessContainer}"/>
+    <SolidColorBrush x:Key="ErrorContainerBrush" Color="{StaticResource ErrorContainer}"/>
+    <SolidColorBrush x:Key="ScrimBrush" Color="{StaticResource Scrim}"/>
+    <SolidColorBrush x:Key="ScrimLightBrush" Color="{StaticResource ScrimLight}"/>
+    <SolidColorBrush x:Key="ScrimHeavyBrush" Color="{StaticResource ScrimHeavy}"/>
+    <SolidColorBrush x:Key="ScrimOverlayBrush" Color="{StaticResource ScrimOverlay}"/>
+    <SolidColorBrush x:Key="BgConsoleBrush" Color="{StaticResource BgConsole}"/>
+    <SolidColorBrush x:Key="WindowCloseHoverBrush" Color="{StaticResource WindowCloseHover}"/>
+    <SolidColorBrush x:Key="WindowClosePressedBrush" Color="{StaticResource WindowClosePressed}"/>
+    <SolidColorBrush x:Key="ToggleTrackBrush" Color="{StaticResource ToggleTrack}"/>
+    <SolidColorBrush x:Key="ToggleThumbBrush" Color="{StaticResource ToggleThumb}"/>
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
     <!-- ========== Motion 系统 (Stitch-inspired restrained motion) ========== -->
@@ -425,11 +451,11 @@
                             </BeginStoryboard>
                         </EventTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#4A1515"/>
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource WindowCloseHoverBrush}"/>
                             <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="#5A1A1A"/>
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource WindowClosePressedBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -564,8 +590,8 @@
                                 CornerRadius="4">
                             <Border.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#89B4FA" Offset="0"/>
-                                    <GradientStop Color="#74C7EC" Offset="1"/>
+                                    <GradientStop Color="{StaticResource AccentGradientStart}" Offset="0"/>
+                                    <GradientStop Color="{StaticResource AccentGradientEnd}" Offset="1"/>
                                 </LinearGradientBrush>
                             </Border.Background>
                         </Border>
@@ -782,11 +808,11 @@
                     <Border x:Name="track"
                             Width="44" Height="24"
                             CornerRadius="12"
-                            Background="#313244">
+                            Background="{StaticResource ToggleTrackBrush}">
                         <Grid>
                             <Ellipse x:Name="thumb"
                                      Width="20" Height="20"
-                                     Fill="#585B70"
+                                     Fill="{StaticResource ToggleThumbBrush}"
                                      HorizontalAlignment="Left"
                                      VerticalAlignment="Center"
                                      Margin="2,0">

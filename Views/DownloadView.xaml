@@ -281,7 +281,7 @@
 
                     <Border Grid.Row="1"
                             Style="{StaticResource ToolPanelBorder}"
-                            Background="#0E0E0E"
+                            Background="{StaticResource BgConsoleBrush}"
                             Padding="14,10">
                         <TextBox x:Name="LogTextBox"
                                  Text="{Binding LogText, Mode=OneWay}"

@@ -48,7 +48,7 @@
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"/>
                     <Border HorizontalAlignment="Right"
-                            Background="#1A4250"
+                            Background="{StaticResource AccentContainerBrush}"
                             CornerRadius="5"
                             Padding="8,2">
                         <TextBlock Foreground="{StaticResource AccentBrush}"
@@ -255,9 +255,9 @@
                                                 <Image Source="{Binding ThumbnailUrl}"
                                                        Stretch="UniformToFill"
                                                        RenderOptions.BitmapScalingMode="HighQuality"/>
-                                                <Border Background="#66000000">
+                                                <Border Background="{StaticResource ScrimBrush}">
                                                     <TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                               Foreground="#99FFFFFF"
+                                                               Foreground="{StaticResource ScrimLightBrush}"
                                                                FontSize="24"
                                                                HorizontalAlignment="Center"
                                                                VerticalAlignment="Center"/>
@@ -268,7 +268,7 @@
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center" MinWidth="0">
                                             <DockPanel LastChildFill="True">
                                                 <Border DockPanel.Dock="Right"
-                                                        Background="#1A4250"
+                                                        Background="{StaticResource AccentContainerBrush}"
                                                         CornerRadius="4"
                                                         Padding="6,2"
                                                         Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
