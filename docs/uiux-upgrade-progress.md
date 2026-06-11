@@ -21,8 +21,8 @@
 | UX-304 | 历史空状态区分 | ✅ 完成 | `2bcd466` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
 | UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `25ea26c` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
 | UX-401 | Toast 堆叠队列 | ✅ 完成 | `3a0ca1a` | 2026-06-11 11:33 | build 0 警告 / test 208/208 |
-| UX-402 | 剪贴板智能检测 | ✅ 完成 | `40290cc` | 2026-06-11 11:35 | build 0 警告 / test 210/210 |
-| UX-403 | 键盘快捷键 | ⬜ 未开始 | - | - | - |
+| UX-402 | 剪贴板智能检测 | ✅ 完成 | `d0ab873` | 2026-06-11 11:35 | build 0 警告 / test 210/210 |
+| UX-403 | 键盘快捷键 | ✅ 完成 | temp-hash | 2026-06-11 11:37 | build 0 警告 / test 213/213 |
 | UX-404 | README 截图与文档收尾 | ⬜ 未开始 | - | - | - |
 
 状态图例：⬜ 未开始 / 🔄 进行中 / ✅ 完成 / ⚠️ 部分完成 / ❌ 阻塞
@@ -422,7 +422,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-402 剪贴板智能检测 — ✅ 完成（2026-06-11 11:35）
 
-**Commit**：`40290cc`
+**Commit**：`d0ab873`
 
 **修改文件**：
 - `MainWindow.xaml.cs`（修改）
@@ -443,6 +443,33 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - 新增测试：`IsValidClipboardUrl_FiltersInvalidScenariosCorrectly`, `CheckClipboardAndPrompt_ShowsPromptAndHidesAfterTimerElapsed`
 
 **截图**：`docs/screenshots/uiux-v2/UX-402-clipboard-prompt.png`
+
+**遗留问题**：无
+
+### UX-403 键盘快捷键 — ✅ 完成（2026-06-11 11:37）
+
+**Commit**：`temp-hash`
+
+**修改文件**：
+- `MainWindow.xaml.cs`（修改）
+- `ViewModels/DownloadViewModel.cs`（修改）
+- `Views/SettingsView.xaml`（修改）
+- `EasyGet.Tests/DownloadViewModelTests.cs`（修改）
+- `EasyGet.Tests/ShortcutTests.cs`（新增）
+- `docs/screenshots/uiux-v2/UX-403-shortcuts.png`（新增）
+
+**实现说明**：
+1. 在 `MainWindow.xaml.cs` 中实现 `PreviewKeyDown` 监听：`Ctrl+1~4` 切换导航卡片；`Esc` 优先取消解析中状态，若无解析则清空/关闭 Toast 队列；`Ctrl+V`（非 TextBox 焦点时）直接粘贴并自动解析。
+2. 在 `DownloadViewModel.cs` 中把 `CancelParse` 重构为带 `[RelayCommand]`，支持快捷键关闭。
+3. 在 `Views/SettingsView.xaml` 底部添加了快捷键帮助提示文案。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：213/213 通过（基线 170）
+- 新增测试：`CancelParseCommand_ResetsPageStateToIdleAndClearsCts`, `SettingsViewContainsKeyboardShortcutsHelpText`, `MainWindowCodeBehindContainsPreviewKeyDownHandler`
+
+**截图**：`docs/screenshots/uiux-v2/UX-403-shortcuts.png`
 
 **遗留问题**：无
 

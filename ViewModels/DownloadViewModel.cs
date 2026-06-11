@@ -454,12 +454,14 @@ public partial class DownloadViewModel : ObservableObject
         LogLines.Clear();
     }
 
+    [RelayCommand]
     private void CancelParse()
     {
         _parseRequestId++;
         _parseCts?.Cancel();
         _parseCts?.Dispose();
         _parseCts = null;
+        PageState = DownloadPageState.Idle;
     }
 
     private void ShowParseError(string message)

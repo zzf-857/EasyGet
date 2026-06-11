@@ -37,6 +37,97 @@ public partial class MainWindow : Window
         };
 
         Activated += MainWindow_Activated;
+        PreviewKeyDown += MainWindow_PreviewKeyDown;
+    }
+
+    private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        // 1. Ctrl + 1~4
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is >= Key.D1 and <= Key.D4)
+        {
+            int index = e.Key - Key.D1;
+            string page = index switch
+            {
+                0 => "download",
+                1 => "batch",
+                2 => "history",
+                3 => "settings",
+                _ => "download"
+            };
+            if (_viewModel.NavigateCommand.CanExecute(page))
+            {
+                _viewModel.NavigateCommand.Execute(page);
+            }
+            e.Handled = true;
+            return;
+        }
+
+        // 2. Escape
+        if (e.Key == Key.Escape)
+        {
+            if (_viewModel.DownloadVM.IsParsing)
+            {
+                if (_viewModel.DownloadVM.CancelParseCommand.CanExecute(null))
+                {
+                    _viewModel.DownloadVM.CancelParseCommand.Execute(null);
+                }
+                e.Handled = true;
+                return;
+            }
+
+            if (_viewModel.Notifications.Count > 0)
+            {
+                if (_viewModel.DismissNotificationCommand.CanExecute(null))
+                {
+                    _viewModel.DismissNotificationCommand.Execute(null);
+                }
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // 3. Ctrl + V (when focus is NOT in a TextBox)
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.V)
+        {
+            var focused = Keyboard.FocusedElement;
+            if (focused is not System.Windows.Controls.TextBox)
+            {
+                // Switch to download tab first
+                if (_viewModel.NavigateCommand.CanExecute("download"))
+                {
+                    _viewModel.NavigateCommand.Execute("download");
+                }
+
+                // Read clipboard and parse
+                try
+                {
+                    if (System.Windows.Clipboard.ContainsText())
+                    {
+                        var text = System.Windows.Clipboard.GetText().Trim();
+                        var extracted = DownloadViewModel.ExtractUrl(text);
+                        if (!string.IsNullOrWhiteSpace(extracted))
+                        {
+                            _viewModel.DownloadVM.Url = extracted;
+                            if (_viewModel.DownloadVM.ParseCommand.CanExecute(null))
+                            {
+                                _viewModel.DownloadVM.ParseCommand.Execute(null);
+                            }
+                        }
+                    }
+                }
+                catch (COMException)
+                {
+                    // Safe clipboard reading
+                }
+                catch (Exception)
+                {
+                    // Safety net
+                }
+
+                e.Handled = true;
+                return;
+            }
+        }
     }
 
     private void MainWindow_Activated(object? sender, EventArgs e)

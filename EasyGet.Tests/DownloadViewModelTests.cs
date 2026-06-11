@@ -261,6 +261,18 @@ public class DownloadViewModelTests
         Assert.False(viewModel.ShowClipboardPrompt);
     }
 
+    [Fact]
+    public void CancelParseCommand_ResetsPageStateToIdleAndClearsCts()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+        viewModel.PageState = DownloadPageState.Parsing;
+
+        viewModel.CancelParseCommand.Execute(null);
+
+        Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
+    }
+
     private static DownloadContext CreateDownloadContext()
     {
         var configService = new ConfigService();
