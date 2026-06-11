@@ -18,7 +18,7 @@
 | UX-301 | 批量任务卡状态化 | ✅ 完成 | `e1d93fa` | 2026-06-11 11:23 | build 0 警告 / test 196/196 |
 | UX-302 | 历史筛选选中态 + 搜索即筛 | ✅ 完成 | `86ae345` | 2026-06-11 11:25 | build 0 警告 / test 197/197 |
 | UX-303 | 破坏性操作确认 | ✅ 完成 | `eec3ace` | 2026-06-11 11:27 | build 0 警告 / test 201/201 |
-| UX-304 | 历史空状态区分 | ⬜ 未开始 | - | - | - |
+| UX-304 | 历史空状态区分 | ✅ 完成 | `2bcd466` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
 | UX-305 | 批量拖拽导入 + 队列动效 | ⬜ 未开始 | - | - | - |
 | UX-401 | Toast 堆叠队列 | ⬜ 未开始 | - | - | - |
 | UX-402 | 剪贴板智能检测 | ⬜ 未开始 | - | - | - |
@@ -337,6 +337,31 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - 新增测试：`ClearAll_WhenConfirmed_ClearsHistory`, `ClearAll_WhenCancelled_KeepsHistory`, `CancelAll_WhenConfirmed_CancelsAndClearsTasks`, `CancelAll_WhenCancelled_KeepsTasks`
 
 **截图**：`docs/screenshots/uiux-v2/UX-303-confirm.png`
+
+**遗留问题**：无
+
+### UX-304 历史空状态区分 — ✅ 完成（2026-06-11 11:28）
+
+**Commit**：`2bcd466`
+
+**修改文件**：
+- `ViewModels/HistoryViewModel.cs`（修改）
+- `Views/HistoryView.xaml`（修改）
+- `EasyGet.Tests/HistoryViewModelTests.cs`（修改）
+- `docs/screenshots/uiux-v2/UX-304-empty-state.png`（新增）
+
+**实现说明**：
+1. 扩展了 `HistoryViewModel`，暴露 `IsSearchOrFilterActive` 属性（使用 `NotifyPropertyChangedFor` 关联关键字和筛选类型）。
+2. 在 `HistoryView.xaml` 中实现了双状态的空态展示。当无任何下载历史时显示“无下载历史”，提供下载引导；当通过筛选或搜索没有找到结果时显示“未找到匹配的记录”，并提供“清除筛选”按钮。
+3. 增加 `ClearFilterAndSearchCommand`，一键重置筛选与关键字并触发数据重新加载。
+4. 偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：203/203 通过（基线 197）
+- 新增测试：`IsSearchOrFilterActive_ReturnsCorrectStatus`, `ClearFilterAndSearchCommand_ResetsFiltersAndKeyword`
+
+**截图**：`docs/screenshots/uiux-v2/UX-304-empty-state.png`
 
 **遗留问题**：无
 

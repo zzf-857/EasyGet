@@ -290,4 +290,62 @@ public class HistoryViewModelTests
             TryDeleteDatabase(dbPath);
         }
     }
+
+    [Fact]
+    public void IsSearchOrFilterActive_ReturnsCorrectStatus()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            var viewModel = new HistoryViewModel(service);
+
+            // 默认状态
+            Assert.False(viewModel.IsSearchOrFilterActive);
+
+            // 仅关键字被修改
+            viewModel.SearchKeyword = "test";
+            Assert.True(viewModel.IsSearchOrFilterActive);
+
+            // 仅筛选被修改
+            viewModel.SearchKeyword = "";
+            viewModel.SelectedMediaFilter = "视频";
+            Assert.True(viewModel.IsSearchOrFilterActive);
+
+            // 恢复默认
+            viewModel.SelectedMediaFilter = "全部";
+            Assert.False(viewModel.IsSearchOrFilterActive);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task ClearFilterAndSearchCommand_ResetsFiltersAndKeyword()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            var viewModel = new HistoryViewModel(service)
+            {
+                SearchKeyword = "some query",
+                SelectedMediaFilter = "音频"
+            };
+
+            Assert.True(viewModel.IsSearchOrFilterActive);
+
+            await viewModel.ClearFilterAndSearchCommand.ExecuteAsync(null);
+
+            Assert.Equal("", viewModel.SearchKeyword);
+            Assert.Equal("全部", viewModel.SelectedMediaFilter);
+            Assert.False(viewModel.IsSearchOrFilterActive);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
 }

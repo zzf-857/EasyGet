@@ -129,9 +129,9 @@
         </Grid>
 
         <Grid Grid.Row="2">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,80">
-                <StackPanel.Style>
-                    <Style TargetType="StackPanel">
+            <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,80">
+                <Grid.Style>
+                    <Style TargetType="Grid">
                         <Setter Property="Visibility" Value="Collapsed"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding HistoryItems.Count}" Value="0">
@@ -139,12 +139,52 @@
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>
-                </StackPanel.Style>
-                <TextBlock Text="&#xE8F9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="56" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
-                <TextBlock Text="无下载历史" FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
-                <TextBlock Text="快去粘贴链接下载你喜欢的视频吧" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-            </StackPanel>
+                </Grid.Style>
+
+                <!-- 纯空态：无任何下载历史记录 -->
+                <StackPanel x:Name="PureEmptyPanel">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSearchOrFilterActive}" Value="False">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="&#xE8F9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="56" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="无下载历史" FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                    <TextBlock Text="快去粘贴链接下载你喜欢的视频吧" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <!-- 无匹配态：有筛选或搜索但无匹配结果 -->
+                <StackPanel x:Name="NoMatchPanel">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSearchOrFilterActive}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="&#xE11A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               FontSize="56" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="未找到匹配的记录" FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                    <TextBlock Text="尝试清除筛选或搜索词以显示全部历史" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    <Button Style="{StaticResource AccentButton}"
+                            Content="清除筛选"
+                            Command="{Binding ClearFilterAndSearchCommand}"
+                            HorizontalAlignment="Center"
+                            Margin="0,16,0,0"
+                            Padding="16,6"
+                            ToolTip="清除筛选与搜索"
+                            AutomationProperties.Name="清除筛选与搜索"/>
+                </StackPanel>
+            </Grid>
 
             <ListBox ItemsSource="{Binding HistoryItems}"
                      Background="Transparent"

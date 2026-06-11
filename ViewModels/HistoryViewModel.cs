@@ -18,8 +18,16 @@ public partial class HistoryViewModel : ObservableObject
     private readonly Action<ProcessStartInfo> _startProcess;
     private CancellationTokenSource? _searchCts;
 
-    [ObservableProperty] private string _searchKeyword = "";
-    [ObservableProperty] private string _selectedMediaFilter = "全部";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
+    private string _searchKeyword = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
+    private string _selectedMediaFilter = "全部";
+
+    public bool IsSearchOrFilterActive => !string.IsNullOrEmpty(SearchKeyword) || SelectedMediaFilter != "全部";
+
     [ObservableProperty] private int _totalHistoryCount;
     [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
 
@@ -169,6 +177,17 @@ public partial class HistoryViewModel : ObservableObject
         await _historyService.ClearAllAsync();
         HistoryItems.Clear();
         TotalHistoryCount = 0;
+    }
+
+    /// <summary>
+    /// 清除筛选和搜索词
+    /// </summary>
+    [RelayCommand]
+    private async Task ClearFilterAndSearch()
+    {
+        SearchKeyword = "";
+        SelectedMediaFilter = "全部";
+        await LoadHistory();
     }
 
     /// <summary>
