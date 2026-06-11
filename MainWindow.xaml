@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:EasyGet.ViewModels"
         xmlns:views="clr-namespace:EasyGet.Views"
+        xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="EasyGet"
         Width="1280" Height="800"
@@ -211,6 +212,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:NotificationItem}">
                             <Border x:Name="ToastCard"
+                                    behaviors:Motion.PageEnter="True"
                                     Margin="0,8,0,0" CornerRadius="10" Padding="0"
                                     Cursor="Hand" Effect="{StaticResource PopupShadow}"
                                     MouseEnter="ToastCard_MouseEnter"

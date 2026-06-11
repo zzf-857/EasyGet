@@ -628,6 +628,22 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：218/218 通过
 - 新增测试：`ImportText_WithOnlyInvalidUrls_ImportsNoneAndRaisesErrorNotification`
 
+### REV-08 Toast 堆叠卡片缺出入场动效 — ✅ 完成（2026-06-11 13:38）
+
+**Commit**：`65781d9`
+
+**修改文件**：
+- `MainWindow.xaml`（修改）
+
+**实现说明**：
+在 `MainWindow.xaml` 的 `Notifications` `ItemsControl` 的 `DataTemplate` 中，为 Toast 卡片的根 `Border` 容器加上了 `behaviors:Motion.PageEnter="True"` 附加属性，并在 Window 根节点中声明了 `behaviors` XML 命名空间。这使得每一个 Toast 卡片在新增入场时都会播放平滑的渐显（Opacity 0 -> 1）与向上滑入（Y 10 -> 0）过渡动效（160ms，CubicEaseOut），完美补全了 Toast 的动画，符合动效规格。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：218/218 通过
+- 新增测试：无
+
 ---
 
 ## 审核记录
