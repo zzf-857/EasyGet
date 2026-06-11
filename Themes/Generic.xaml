@@ -791,6 +791,89 @@
         </Setter>
     </Style>
 
+    <!-- ========== 历史筛选 RadioButton 样式 (Segmented tab) ========== -->
+    <Style x:Key="HistoryFilterRadioButton" TargetType="RadioButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="GroupName" Value="HistoryFilter"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Grid RenderTransformOrigin="0.5,0.5" SnapsToDevicePixels="True">
+                        <Grid.RenderTransform>
+                            <ScaleTransform x:Name="TabScale" ScaleX="1" ScaleY="1"/>
+                        </Grid.RenderTransform>
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="6"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"/>
+                        <Border x:Name="HoverOverlay"
+                                Background="White"
+                                CornerRadius="6"
+                                Opacity="0"
+                                IsHitTestVisible="False"/>
+                        <ContentPresenter HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Margin="{TemplateBinding Padding}"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <EventTrigger RoutedEvent="MouseEnter">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0.05"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <EventTrigger RoutedEvent="MouseLeave">
+                            <BeginStoryboard>
+                                <Storyboard>
+                                    <DoubleAnimation Storyboard.TargetName="HoverOverlay"
+                                                     Storyboard.TargetProperty="Opacity"
+                                                     To="0"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="TabScale"
+                                                     Storyboard.TargetProperty="ScaleX"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                    <DoubleAnimation Storyboard.TargetName="TabScale"
+                                                     Storyboard.TargetProperty="ScaleY"
+                                                     To="1"
+                                                     Duration="{StaticResource MotionDurationFast}"
+                                                     EasingFunction="{StaticResource MotionEaseOut}"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
+                            <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
+                            <Setter TargetName="border" Property="Effect" Value="{StaticResource SoftShadow}"/>
+                            <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.4"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ========== ToggleButton (开关) 样式 ========== -->
     <Style x:Key="ToggleSwitch" TargetType="ToggleButton">
         <Setter Property="Width" Value="44"/>

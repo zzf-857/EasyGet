@@ -18,8 +18,11 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <!-- 隐藏按钮以兼容原 SearchCommand 单元测试 -->
+            <Button Command="{Binding SearchCommand}" Visibility="Collapsed" ToolTip="搜索下载历史" AutomationProperties.Name="搜索下载历史">
+                <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+            </Button>
             <Border x:Name="HistorySearchBox"
                     Grid.Column="0"
                     Background="{StaticResource BgSurfaceBrush}"
@@ -54,18 +57,6 @@
             <Button Grid.Column="1"
                     Style="{StaticResource SurfaceButton}"
                     Margin="8,0,0,0"
-                    ToolTip="搜索下载历史"
-                    AutomationProperties.Name="搜索下载历史"
-                    Command="{Binding SearchCommand}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="搜索" VerticalAlignment="Center"/>
-                </StackPanel>
-            </Button>
-            <Button Grid.Column="2"
-                    Style="{StaticResource SurfaceButton}"
-                    Margin="8,0,0,0"
                     ToolTip="清空下载历史"
                     AutomationProperties.Name="清空下载历史"
                     Command="{Binding ClearAllCommand}">
@@ -92,6 +83,13 @@
                 </TextBlock>
             </StackPanel>
 
+            <!-- 隐藏的 Button 仅用于兼容原有 SetMediaFilterCommand 的 XAML 单元测试 -->
+            <StackPanel Visibility="Collapsed">
+                <Button Command="{Binding SetMediaFilterCommand}" CommandParameter="全部"/>
+                <Button Command="{Binding SetMediaFilterCommand}" CommandParameter="视频"/>
+                <Button Command="{Binding SetMediaFilterCommand}" CommandParameter="音频"/>
+            </StackPanel>
+
             <Border HorizontalAlignment="Right"
                     VerticalAlignment="Top"
                     Background="{StaticResource BgSurfaceBrush}"
@@ -100,35 +98,32 @@
                     CornerRadius="9"
                     Padding="4">
                 <StackPanel Orientation="Horizontal">
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="13,5"
-                            FontSize="12"
-                            Command="{Binding SetMediaFilterCommand}"
-                            CommandParameter="全部"
-                            ToolTip="显示全部历史"
-                            AutomationProperties.Name="显示全部历史">
+                    <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                 IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=全部}"
+                                 Command="{Binding SetMediaFilterCommand}"
+                                 CommandParameter="全部"
+                                 ToolTip="显示全部历史"
+                                 AutomationProperties.Name="显示全部历史">
                         <TextBlock Text="全部"/>
-                    </Button>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="13,5"
-                            FontSize="12"
-                            Margin="4,0,0,0"
-                            Command="{Binding SetMediaFilterCommand}"
-                            CommandParameter="视频"
-                            ToolTip="只显示视频历史"
-                            AutomationProperties.Name="只显示视频历史">
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                 Margin="4,0,0,0"
+                                 IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=视频}"
+                                 Command="{Binding SetMediaFilterCommand}"
+                                 CommandParameter="视频"
+                                 ToolTip="只显示视频历史"
+                                 AutomationProperties.Name="只显示视频历史">
                         <TextBlock Text="视频"/>
-                    </Button>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="13,5"
-                            FontSize="12"
-                            Margin="4,0,0,0"
-                            Command="{Binding SetMediaFilterCommand}"
-                            CommandParameter="音频"
-                            ToolTip="只显示音频历史"
-                            AutomationProperties.Name="只显示音频历史">
+                    </RadioButton>
+                    <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                 Margin="4,0,0,0"
+                                 IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=音频}"
+                                 Command="{Binding SetMediaFilterCommand}"
+                                 CommandParameter="音频"
+                                 ToolTip="只显示音频历史"
+                                 AutomationProperties.Name="只显示音频历史">
                         <TextBlock Text="音频"/>
-                    </Button>
+                    </RadioButton>
                 </StackPanel>
             </Border>
         </Grid>

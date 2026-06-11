@@ -204,3 +204,22 @@ public class FileExistsToOpacityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         => throw new NotImplementedException();
 }
+
+/// <summary>
+/// 对象值与参数相等 → 布尔值转换器（用于 RadioButton 选中状态绑定）
+/// </summary>
+public class EqualsToBoolConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value == null || parameter == null) return false;
+        return value.ToString() == parameter.ToString();
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is true && parameter != null)
+            return parameter.ToString()!;
+        return System.Windows.Data.Binding.DoNothing;
+    }
+}

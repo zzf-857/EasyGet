@@ -16,11 +16,35 @@ public partial class HistoryViewModel : ObservableObject
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly Action<ProcessStartInfo> _startProcess;
+    private CancellationTokenSource? _searchCts;
 
     [ObservableProperty] private string _searchKeyword = "";
     [ObservableProperty] private string _selectedMediaFilter = "全部";
     [ObservableProperty] private int _totalHistoryCount;
     [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
+
+    partial void OnSearchKeywordChanged(string value)
+    {
+        _searchCts?.Cancel();
+        _searchCts = new CancellationTokenSource();
+        var token = _searchCts.Token;
+
+        _ = Task.Delay(300, token).ContinueWith(async t =>
+        {
+            if (t.IsCompletedSuccessfully && !token.IsCancellationRequested)
+            {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher != null)
+                {
+                    await dispatcher.InvokeAsync(async () => await LoadHistory());
+                }
+                else
+                {
+                    await LoadHistory();
+                }
+            }
+        }, token);
+    }
 
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];

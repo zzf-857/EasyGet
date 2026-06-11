@@ -187,4 +187,41 @@ public class HistoryViewModelTests
         {
         }
     }
+
+    [Fact]
+    public async Task SearchKeywordChange_TriggersDebouncedSearch()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/test",
+                Title = "special query match",
+                Format = "mp4",
+                DownloadTime = DateTime.Now
+            });
+
+            var viewModel = new HistoryViewModel(service);
+            await viewModel.LoadHistory();
+            Assert.Single(viewModel.HistoryItems);
+
+            // 改变 SearchKeyword 触发防抖
+            viewModel.SearchKeyword = "no match expected";
+            
+            // 此时由于有 300ms 延时，列表应该还没有刷新
+            Assert.Single(viewModel.HistoryItems);
+
+            // 等待 350ms 让防抖定时任务执行完毕
+            await Task.Delay(350);
+
+            // 此时防抖自动查询应该已执行完毕，列表应当变空
+            Assert.Empty(viewModel.HistoryItems);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
 }
