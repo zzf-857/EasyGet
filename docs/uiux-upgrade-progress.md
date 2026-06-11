@@ -22,8 +22,8 @@
 | UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `25ea26c` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
 | UX-401 | Toast 堆叠队列 | ✅ 完成 | `3a0ca1a` | 2026-06-11 11:33 | build 0 警告 / test 208/208 |
 | UX-402 | 剪贴板智能检测 | ✅ 完成 | `d0ab873` | 2026-06-11 11:35 | build 0 警告 / test 210/210 |
-| UX-403 | 键盘快捷键 | ✅ 完成 | temp-hash | 2026-06-11 11:37 | build 0 警告 / test 213/213 |
-| UX-404 | README 截图与文档收尾 | ⬜ 未开始 | - | - | - |
+| UX-403 | 键盘快捷键 | ✅ 完成 | `63733e4` | 2026-06-11 11:37 | build 0 警告 / test 213/213 |
+| UX-404 | README 截图与文档收尾 | ✅ 完成 | `ec01ace` | 2026-06-11 11:40 | build 0 警告 / test 213/213 |
 
 状态图例：⬜ 未开始 / 🔄 进行中 / ✅ 完成 / ⚠️ 部分完成 / ❌ 阻塞
 
@@ -448,7 +448,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-403 键盘快捷键 — ✅ 完成（2026-06-11 11:37）
 
-**Commit**：`temp-hash`
+**Commit**：`63733e4`
 
 **修改文件**：
 - `MainWindow.xaml.cs`（修改）
@@ -470,6 +470,31 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - 新增测试：`CancelParseCommand_ResetsPageStateToIdleAndClearsCts`, `SettingsViewContainsKeyboardShortcutsHelpText`, `MainWindowCodeBehindContainsPreviewKeyDownHandler`
 
 **截图**：`docs/screenshots/uiux-v2/UX-403-shortcuts.png`
+
+**遗留问题**：无
+
+### UX-404 README 截图与文档收尾 — ✅ 完成（2026-06-11 11:40）
+
+**Commit**：`ec01ace`
+
+**修改文件**：
+- `docs/screenshots/download-view.png`（修改）
+- `docs/screenshots/batch-download-view.png`（修改）
+- `docs/screenshots/history-view.png`（修改）
+- `docs/screenshots/settings-view.png`（修改）
+- `docs/uiux-upgrade-progress.md`（修改）
+
+**实现说明**：
+1. 重新生成并覆盖了 `docs/screenshots/` 下的四张主界面截图，修复了 README 中的图片链接。
+2. 核对并确保进度文档总览表中全部 16 个任务均标记为 ✅ 完成。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：213/213 通过（基线 170）
+- 新增测试：无
+
+**截图**：无单独过程图（四张主图已更新到 docs/screenshots 并在 README 展现）
 
 **遗留问题**：无
 

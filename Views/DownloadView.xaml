@@ -559,8 +559,8 @@
 
                     <StackPanel Grid.Column="1" Grid.Row="0"
                                 Orientation="Horizontal"
-                                VerticalAlignment="Center"
-                                Margin="0,0,10,0">
+                                VerticalAlignment="Top"
+                                Margin="0,6,10,0">
                         <Button Style="{StaticResource SurfaceButton}"
                                 FontSize="11"
                                 Padding="10,5"
