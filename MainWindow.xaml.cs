@@ -35,6 +35,28 @@ public partial class MainWindow : Window
             SaveWindowState();
             await _configService.SaveAsync();
         };
+
+        Activated += MainWindow_Activated;
+    }
+
+    private void MainWindow_Activated(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (System.Windows.Clipboard.ContainsText())
+            {
+                var text = System.Windows.Clipboard.GetText();
+                _viewModel.DownloadVM.CheckClipboardAndPrompt(text);
+            }
+        }
+        catch (COMException)
+        {
+            // Ignore clipboard access errors if other processes occupy it
+        }
+        catch (Exception)
+        {
+            // General safety net
+        }
     }
 
     private void TryEnableDarkSystemTitleBar()

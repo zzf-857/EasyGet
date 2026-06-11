@@ -21,7 +21,7 @@
 | UX-304 | 历史空状态区分 | ✅ 完成 | `2bcd466` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
 | UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `25ea26c` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
 | UX-401 | Toast 堆叠队列 | ✅ 完成 | `3a0ca1a` | 2026-06-11 11:33 | build 0 警告 / test 208/208 |
-| UX-402 | 剪贴板智能检测 | ⬜ 未开始 | - | - | - |
+| UX-402 | 剪贴板智能检测 | ✅ 完成 | `40290cc` | 2026-06-11 11:35 | build 0 警告 / test 210/210 |
 | UX-403 | 键盘快捷键 | ⬜ 未开始 | - | - | - |
 | UX-404 | README 截图与文档收尾 | ⬜ 未开始 | - | - | - |
 
@@ -417,6 +417,32 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - 新增测试：`NotificationItem_SelfDestructsAfter4Seconds`, `NotificationItem_PauseAndResumeTimer`, `MainViewModel_LimitsStackToThreeToasts`
 
 **截图**：`docs/screenshots/uiux-v2/UX-401-toast-stack.png`
+
+**遗留问题**：无
+
+### UX-402 剪贴板智能检测 — ✅ 完成（2026-06-11 11:35）
+
+**Commit**：`40290cc`
+
+**修改文件**：
+- `MainWindow.xaml.cs`（修改）
+- `ViewModels/DownloadViewModel.cs`（修改）
+- `Views/DownloadView.xaml`（修改）
+- `EasyGet.Tests/DownloadViewModelTests.cs`（修改）
+- `docs/screenshots/uiux-v2/UX-402-clipboard-prompt.png`（新增）
+
+**实现说明**：
+1. 在 `MainWindow.xaml.cs` 中监听 `Window.Activated` 事件。
+2. 窗口激活时获取并用 try-catch 保护读取剪贴板，使用 `DownloadViewModel.CheckClipboardAndPrompt` 过滤判定。
+3. 提示条显示 8 秒后由 Timer 触发，并通过 Dispatcher 线程安全地关闭展示。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：210/210 通过（基线 170）
+- 新增测试：`IsValidClipboardUrl_FiltersInvalidScenariosCorrectly`, `CheckClipboardAndPrompt_ShowsPromptAndHidesAfterTimerElapsed`
+
+**截图**：`docs/screenshots/uiux-v2/UX-402-clipboard-prompt.png`
 
 **遗留问题**：无
 

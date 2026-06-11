@@ -200,6 +200,67 @@ public class DownloadViewModelTests
         Assert.Null(viewModel.UrlError);
     }
 
+    [Fact]
+    public void IsValidClipboardUrl_FiltersInvalidScenariosCorrectly()
+    {
+        // 1. Empty/Null text
+        Assert.False(DownloadViewModel.IsValidClipboardUrl("", "https://a.com", "https://b.com"));
+        Assert.False(DownloadViewModel.IsValidClipboardUrl(null!, "https://a.com", "https://b.com"));
+
+        // 2. Non-URL text
+        Assert.False(DownloadViewModel.IsValidClipboardUrl("hello world", "https://a.com", "https://b.com"));
+
+        // 3. FTP/Invalid Scheme URL
+        Assert.False(DownloadViewModel.IsValidClipboardUrl("ftp://example.com", "https://a.com", "https://b.com"));
+
+        // 4. Same as current URL
+        Assert.False(DownloadViewModel.IsValidClipboardUrl("https://a.com", "https://a.com", "https://b.com"));
+        Assert.False(DownloadViewModel.IsValidClipboardUrl(" https://a.com ", "https://a.com", "https://b.com"));
+
+        // 5. Same as last prompted URL
+        Assert.False(DownloadViewModel.IsValidClipboardUrl("https://b.com", "https://a.com", "https://b.com"));
+
+        // 6. Valid URL from share text
+        Assert.True(DownloadViewModel.IsValidClipboardUrl("分享链接 https://c.com/video 给你", "https://a.com", "https://b.com"));
+    }
+
+    [Fact]
+    public async Task CheckClipboardAndPrompt_ShowsPromptAndHidesAfterTimerElapsed()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+        viewModel.Url = "https://current.com";
+
+        // Call CheckClipboardAndPrompt with a valid new URL
+        viewModel.CheckClipboardAndPrompt("Check this: https://new.com");
+
+        // Verify it sets ShowClipboardPrompt to true and sets the URL
+        Assert.True(viewModel.ShowClipboardPrompt);
+        Assert.Equal("https://new.com", viewModel.ClipboardPromptUrl);
+
+        // Retrieve the private timer via reflection and shorten its interval
+        var timerField = typeof(DownloadViewModel).GetField("_clipboardPromptTimer", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.NotNull(timerField);
+
+        var timer = (System.Timers.Timer?)timerField.GetValue(viewModel);
+        Assert.NotNull(timer);
+
+        // Set interval to 50ms and wait for elapsed
+        timer.Interval = 50;
+        
+        // Wait up to 1 second for the background timer to trigger
+        int elapsedMs = 0;
+        while (viewModel.ShowClipboardPrompt && elapsedMs < 1000)
+        {
+            await Task.Delay(20);
+            elapsedMs += 20;
+        }
+
+        // Verify the prompt is now hidden
+        Assert.False(viewModel.ShowClipboardPrompt);
+    }
+
     private static DownloadContext CreateDownloadContext()
     {
         var configService = new ConfigService();

@@ -25,6 +25,36 @@
                                        Margin="0,6,0,0"/>
                         </StackPanel>
 
+                        <!-- 剪贴板智能检测提示条 -->
+                        <Border Background="{StaticResource AccentContainerBrush}"
+                                BorderBrush="{StaticResource AccentBrush}"
+                                BorderThickness="1"
+                                CornerRadius="8"
+                                Padding="16,10"
+                                Margin="0,0,0,16"
+                                Visibility="{Binding ShowClipboardPrompt, Converter={StaticResource BoolToVisibility}}">
+                            <Border.InputBindings>
+                                <MouseBinding MouseAction="LeftClick" Command="{Binding UseClipboardPromptCommand}"/>
+                            </Border.InputBindings>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="&#xE77F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="14" Foreground="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="13" TextTrimming="CharacterEllipsis">
+                                    <Run Text="检测到剪贴板链接: " Foreground="{StaticResource TextSecondaryBrush}"/>
+                                    <Run Text="{Binding ClipboardPromptUrl}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
+                                    <Run Text="，点击直接解析" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                </TextBlock>
+                                <Button Grid.Column="2" Style="{StaticResource SurfaceButton}" Padding="6,3" FontSize="10"
+                                        Content="忽略"
+                                        Command="{Binding DismissClipboardPromptCommand}"/>
+                            </Grid>
+                        </Border>
+
                         <Border Background="{StaticResource BgPrimaryBrush}"
                                 BorderThickness="2"
                                 CornerRadius="12"

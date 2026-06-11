@@ -51,6 +51,11 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string? _urlError;
     [ObservableProperty] private bool _isLogExpanded; // Default is false (collapsed)
 
+    [ObservableProperty] private bool _showClipboardPrompt;
+    [ObservableProperty] private string _clipboardPromptUrl = "";
+    private string _lastClipboardPromptUrl = "";
+    private System.Timers.Timer? _clipboardPromptTimer;
+
     // 当前任务状态
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsProgressCardVisible))]
@@ -576,4 +581,72 @@ public partial class DownloadViewModel : ObservableObject
         "全部字幕" => "all",
         _ => "none"
     };
+
+    [RelayCommand]
+    private async Task UseClipboardPrompt()
+    {
+        ShowClipboardPrompt = false;
+        Url = ClipboardPromptUrl;
+        await ParseCommand.ExecuteAsync(null);
+    }
+
+    [RelayCommand]
+    private void DismissClipboardPrompt()
+    {
+        ShowClipboardPrompt = false;
+    }
+
+    public static bool IsValidClipboardUrl(string text, string currentUrl, string lastPromptedUrl)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return false;
+
+        var extracted = ExtractUrl(text);
+        if (extracted == null)
+            return false;
+
+        if (!Uri.TryCreate(extracted, UriKind.Absolute, out var uri) || 
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return false;
+        }
+
+        if (extracted.Trim().Equals(currentUrl?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        if (extracted.Trim().Equals(lastPromptedUrl?.Trim(), StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return true;
+    }
+
+    public void CheckClipboardAndPrompt(string clipboardText)
+    {
+        if (IsValidClipboardUrl(clipboardText, Url, _lastClipboardPromptUrl))
+        {
+            var extracted = ExtractUrl(clipboardText)!;
+            ClipboardPromptUrl = extracted;
+            _lastClipboardPromptUrl = extracted;
+            ShowClipboardPrompt = true;
+
+            _clipboardPromptTimer?.Stop();
+            _clipboardPromptTimer?.Dispose();
+
+            _clipboardPromptTimer = new System.Timers.Timer(8000) { AutoReset = false };
+            _clipboardPromptTimer.Elapsed += (s, e) =>
+            {
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                var action = new Action(() => ShowClipboardPrompt = false);
+                if (dispatcher is null || dispatcher.CheckAccess())
+                {
+                    action();
+                }
+                else
+                {
+                    dispatcher.Invoke(action);
+                }
+            };
+            _clipboardPromptTimer.Start();
+        }
+    }
 }
