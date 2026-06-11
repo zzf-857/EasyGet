@@ -17,13 +17,13 @@
 | UX-204 | 任务栏下载进度 | ✅ 完成 | `303d01f` | 2026-06-11 11:17 | build 0 警告 / test 195/195 |
 | UX-301 | 批量任务卡状态化 | ✅ 完成 | `e1d93fa` | 2026-06-11 11:23 | build 0 警告 / test 196/196 |
 | UX-302 | 历史筛选选中态 + 搜索即筛 | ✅ 完成 | `86ae345` | 2026-06-11 11:25 | build 0 警告 / test 197/197 |
-| UX-303 | 破坏性操作确认 | ✅ 完成 | `eec3ace` | 2026-06-11 11:27 | build 0 警告 / test 201/201 |
-| UX-304 | 历史空状态区分 | ✅ 完成 | `2bcd466` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
-| UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `25ea26c` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
-| UX-401 | Toast 堆叠队列 | ✅ 完成 | `3a0ca1a` | 2026-06-11 11:33 | build 0 警告 / test 208/208 |
+| UX-303 | 破坏性操作确认 | ✅ 完成 | `037bde2` | 2026-06-11 11:27 | build 0 警告 / test 201/201 |
+| UX-304 | 历史空状态区分 | ✅ 完成 | `5498d0c` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
+| UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `e78a2c9` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
+| UX-401 | Toast 堆叠队列 | ✅ 完成 | `0e256af` | 2026-06-11 11:33 | build 0 警告 / test 208/208 |
 | UX-402 | 剪贴板智能检测 | ✅ 完成 | `d0ab873` | 2026-06-11 11:35 | build 0 警告 / test 210/210 |
 | UX-403 | 键盘快捷键 | ✅ 完成 | `63733e4` | 2026-06-11 11:37 | build 0 警告 / test 213/213 |
-| UX-404 | README 截图与文档收尾 | ✅ 完成 | `ec01ace` | 2026-06-11 11:40 | build 0 警告 / test 213/213 |
+| UX-404 | README 截图与文档收尾 | ✅ 完成 | `94c4651` | 2026-06-11 11:40 | build 0 警告 / test 213/213 |
 
 状态图例：⬜ 未开始 / 🔄 进行中 / ✅ 完成 / ⚠️ 部分完成 / ❌ 阻塞
 
@@ -317,7 +317,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-303 破坏性操作确认 — ✅ 完成（2026-06-11 11:27）
 
-**Commit**：`eec3ace`
+**Commit**：`037bde2`
 
 **修改文件**：
 - `ViewModels/HistoryViewModel.cs`（修改）
@@ -342,7 +342,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-304 历史空状态区分 — ✅ 完成（2026-06-11 11:28）
 
-**Commit**：`2bcd466`
+**Commit**：`5498d0c`
 
 **修改文件**：
 - `ViewModels/HistoryViewModel.cs`（修改）
@@ -367,7 +367,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-305 批量页拖拽导入 + 队列动效 + 播放列表输入修缮 — ✅ 完成（2026-06-11 11:30）
 
-**Commit**：`25ea26c`
+**Commit**：`e78a2c9`
 
 **修改文件**：
 - `ViewModels/BatchDownloadViewModel.cs`（修改）
@@ -395,7 +395,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-401 Toast 堆叠队列 — ✅ 完成（2026-06-11 11:33）
 
-**Commit**：`3a0ca1a`
+**Commit**：`0e256af`
 
 **修改文件**：
 - `ViewModels/NotificationItem.cs`（新增）
@@ -475,7 +475,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ### UX-404 README 截图与文档收尾 — ✅ 完成（2026-06-11 11:40）
 
-**Commit**：`ec01ace`
+**Commit**：`94c4651`
 
 **修改文件**：
 - `docs/screenshots/download-view.png`（修改）
@@ -653,6 +653,25 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 **实现说明**：
 在 `MainWindow.xaml.cs` 的 `MainWindow_Activated` 事件处理程序中，将剪贴板检测的触发条件修改为只有在下载页（`_viewModel.SelectedNavIndex == 0`）为当前页时才会执行。这就避免了用户在其他功能页面（如批量下载、设置页）时激活窗口静默消耗剪贴板检测状态（更新 `_lastClipboardPromptUrl`）导致用户无法在下载页看到提示条的体验问题。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：218/218 通过
+- 新增测试：无
+
+### REV-10 台账与文档规范修正 — ✅ 完成（2026-06-11 13:45）
+
+**Commit**：`cada8b6`
+
+**修改文件**：
+- `docs/uiux-upgrade-progress.md`（修改）
+- `docs/uiux-upgrade-plan.md`（修改/跟踪）
+
+**实现说明**：
+1. 修正了 `docs/uiux-upgrade-progress.md` 总览表与明细记录中 5 个与实际 Git 记录不符的 commit hash：将 UX-303 修正为 `037bde2`，UX-304 修正为 `5498d0c`，UX-305 修正为 `e78a2c9`，UX-401 修正为 `0e256af`，UX-404 修正为 `94c4651`。
+2. 说明重复 commit：在开发期间，UX-301 曾进行过一次修正提交，生成了两个同名 commit。实际最终版本以 `e1d93fa` 为主，重复 commit `7cf90e1` 为开发过程遗留。
+3. 将 `docs/uiux-upgrade-plan.md` 文件加入 Git 暂存区以便正式版本管理。
 偏离点：无偏离。
 
 **自测结果**：
