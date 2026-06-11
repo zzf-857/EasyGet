@@ -14,7 +14,7 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="32"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Drag & Drop Overlay -->
@@ -512,16 +512,29 @@
         <Border Grid.Row="3"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,1,0,0"
-                Padding="0,8,0,0">
+                Padding="0,12,0,12"
+                VerticalAlignment="Center">
             <DockPanel>
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
-                    <TextBlock Text="   进行中任务: " Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
-                    <TextBlock Text="{Binding ActiveDownloadCount, Mode=OneWay}" Foreground="{StaticResource AccentBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
+                               Foreground="{StaticResource TextSecondaryBrush}" 
+                               FontSize="12" 
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="  ·  进行中任务: " 
+                               Foreground="{StaticResource TextSecondaryBrush}" 
+                               FontSize="12"/>
+                    <TextBlock Text="{Binding ActiveDownloadCount, Mode=OneWay}" 
+                               Foreground="{StaticResource AccentBrush}" 
+                               FontSize="12" 
+                               FontWeight="Bold"
+                               FontFamily="Consolas, Segoe UI"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding DataContext.ToolStatusText, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding DataContext.ToolStatusText, RelativeSource={RelativeSource AncestorType=Window}}" 
+                               Foreground="{StaticResource TextSecondaryBrush}" 
+                               FontSize="12" 
+                               FontWeight="Medium"/>
                 </StackPanel>
             </DockPanel>
         </Border>

@@ -86,6 +86,7 @@
                                  BorderThickness="0"
                                  Opacity="0.55"
                                  Foreground="{StaticResource AccentBrush}"
+                                 Margin="18,0,18,6"
                                  Validation.ErrorTemplate="{x:Null}"/>
                 </Grid>
             </Border>
