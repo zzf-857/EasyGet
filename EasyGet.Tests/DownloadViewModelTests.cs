@@ -111,6 +111,54 @@ public class DownloadViewModelTests
         Assert.Equal("新结果", viewModel.PreviewInfo?.Title);
     }
 
+    [Theory]
+    [InlineData(DownloadPageState.Downloading, true, false, false)]
+    [InlineData(DownloadPageState.Completed, true, true, false)]
+    [InlineData(DownloadPageState.Failed, true, false, true)]
+    [InlineData(DownloadPageState.Idle, false, false, false)]
+    public void ProgressCardVisibilityFollowsFullLifecycleState(
+        DownloadPageState state,
+        bool isProgressVisible,
+        bool isCompleted,
+        bool isTaskFailed)
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+
+        if (isProgressVisible)
+            viewModel.CurrentTask = new DownloadTask();
+
+        viewModel.PageState = state;
+
+        Assert.Equal(isProgressVisible, viewModel.IsProgressCardVisible);
+        Assert.Equal(isCompleted, viewModel.IsCompleted);
+        Assert.Equal(isTaskFailed, viewModel.IsTaskFailed);
+    }
+
+    [Fact]
+    public void UrlChangedOrClearedResetsProgressCard()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+
+        // Scene 1: Completed state, change URL, progress card is hidden, state returns to Idle
+        viewModel.CurrentTask = new DownloadTask();
+        viewModel.PageState = DownloadPageState.Completed;
+        viewModel.Url = "https://example.com/new-url";
+
+        Assert.Null(viewModel.CurrentTask);
+        Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
+        Assert.False(viewModel.IsProgressCardVisible);
+
+        // Scene 2: Clear URL, progress card is hidden, state returns to Idle
+        viewModel.CurrentTask = new DownloadTask();
+        viewModel.PageState = DownloadPageState.Ready;
+        viewModel.Url = "";
+
+        Assert.Null(viewModel.CurrentTask);
+        Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
+    }
+
     private static DownloadContext CreateDownloadContext()
     {
         var configService = new ConfigService();

@@ -302,10 +302,19 @@
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource ToolPanelBorder}"
-                        Padding="22,18"
+                <Border Padding="22,18"
                         Margin="0,0,0,16"
-                        Visibility="{Binding IsDownloading, Converter={StaticResource BoolToVisibility}}">
+                        Visibility="{Binding IsProgressCardVisible, Converter={StaticResource BoolToVisibility}}">
+                    <Border.Style>
+                        <Style TargetType="Border" BasedOn="{StaticResource ToolPanelBorder}">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsTaskFailed}" Value="True">
+                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
+                                    <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -329,7 +338,10 @@
                                            FontWeight="SemiBold"
                                            Foreground="{StaticResource TextPrimaryBrush}"
                                            TextTrimming="CharacterEllipsis"/>
-                                <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,6,0,0">
+                                <TextBlock FontSize="12"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,6,0,0"
+                                           Visibility="{Binding IsDownloadActive, Converter={StaticResource BoolToVisibility}}">
                                     <Run Text="{Binding CurrentTask.Platform, FallbackValue='', Mode=OneWay}"/>
                                     <Run Text=" · "/>
                                     <Run Text="{Binding CurrentTask.DurationText, FallbackValue='', Mode=OneWay}"/>
@@ -338,29 +350,107 @@
                                     <Run Text=" · 剩余 "/>
                                     <Run Text="{Binding CurrentTask.EtaText, FallbackValue='--:--', Mode=OneWay}"/>
                                 </TextBlock>
+                                <TextBlock FontSize="12"
+                                           Foreground="{StaticResource SuccessBrush}"
+                                           Margin="0,6,0,0"
+                                           Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}">
+                                    <Run Text="已保存到 "/>
+                                    <Run Text="{Binding CurrentOutputLocationText, Mode=OneWay}"/>
+                                </TextBlock>
+                                <TextBlock Text="{Binding CurrentErrorMessage}"
+                                           FontSize="12"
+                                           Foreground="{StaticResource ErrorBrush}"
+                                           Margin="0,6,0,0"
+                                           TextTrimming="CharacterEllipsis"
+                                           Visibility="{Binding IsTaskFailed, Converter={StaticResource BoolToVisibility}}"/>
                             </StackPanel>
 
-                            <Button Grid.Column="2"
-                                    Style="{StaticResource SurfaceButton}"
-                                    Padding="12,7"
-                                    ToolTip="取消当前下载"
-                                    AutomationProperties.Name="取消当前下载"
-                                    Command="{Binding CancelDownloadCommand}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="取消" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
+                            <StackPanel Grid.Column="2"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <Button Style="{StaticResource SurfaceButton}"
+                                        Padding="12,7"
+                                        ToolTip="取消当前下载"
+                                        AutomationProperties.Name="取消当前下载"
+                                        Command="{Binding CancelDownloadCommand}"
+                                        Visibility="{Binding IsDownloadActive, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="取消" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource SurfaceButton}"
+                                        Padding="12,7"
+                                        Margin="0,0,8,0"
+                                        ToolTip="打开文件夹"
+                                        AutomationProperties.Name="打开文件夹"
+                                        Command="{Binding OpenCurrentFolderCommand}"
+                                        Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE838;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="打开文件夹" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource AccentButton}"
+                                        Padding="12,7"
+                                        ToolTip="播放"
+                                        AutomationProperties.Name="播放已下载文件"
+                                        Command="{Binding PlayCurrentFileCommand}"
+                                        Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="播放" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource SurfaceButton}"
+                                        Padding="12,7"
+                                        ToolTip="重试下载"
+                                        AutomationProperties.Name="重试当前下载"
+                                        Command="{Binding RetryCurrentDownloadCommand}"
+                                        Visibility="{Binding IsTaskFailed, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="重试" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
                         </Grid>
                         <Grid Margin="0,14,0,0">
-                            <ProgressBar Style="{StaticResource AccentProgressBar}"
-                                         Value="{Binding CurrentTask.Progress}"
-                                         Maximum="100"/>
+                            <ProgressBar Value="{Binding CurrentTask.Progress}"
+                                         Maximum="100">
+                                <ProgressBar.Style>
+                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource AccentProgressBar}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsTaskFailed}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ProgressBar.Style>
+                            </ProgressBar>
                             <TextBlock HorizontalAlignment="Right"
                                        Margin="0,10,0,0"
-                                       Foreground="{StaticResource AccentBrush}"
                                        FontWeight="SemiBold">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsTaskFailed}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
                                 <Run Text="{Binding CurrentTask.Progress, StringFormat={}{0:F1}, FallbackValue='0'}"/>
                                 <Run Text="%"/>
                             </TextBlock>

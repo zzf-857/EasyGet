@@ -587,14 +587,8 @@
                     <Border Background="{TemplateBinding Background}" CornerRadius="4">
                         <Border x:Name="PART_Indicator"
                                 HorizontalAlignment="Left"
-                                CornerRadius="4">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="{StaticResource AccentGradientStart}" Offset="0"/>
-                                    <GradientStop Color="{StaticResource AccentGradientEnd}" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
+                                CornerRadius="4"
+                                Background="{TemplateBinding Foreground}"/>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>

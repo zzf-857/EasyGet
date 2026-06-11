@@ -316,6 +316,23 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void DownloadProgressCardStaysVisibleForCompletedAndFailedStates()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.Contains("IsProgressCardVisible", source);
+        Assert.DoesNotContain("Visibility=\"{Binding IsDownloading", source);
+        Assert.Contains("IsCompleted", source);
+        Assert.Contains("IsTaskFailed", source);
+        Assert.Contains("OpenCurrentFolderCommand", source);
+        Assert.Contains("PlayCurrentFileCommand", source);
+        Assert.Contains("RetryCurrentDownloadCommand", source);
+        Assert.Contains("SuccessBrush", source);
+        Assert.Contains("ErrorContainerBrush", source);
+    }
+
+    [Fact]
     public void DownloadViewUsesStitchSingleDownloadWorkspaceCopy()
     {
         var document = XDocument.Load(GetViewPath("DownloadView.xaml"));

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.IO;
 using System.Text.RegularExpressions;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -33,6 +35,10 @@ public partial class DownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsReady))]
     [NotifyPropertyChangedFor(nameof(IsFailed))]
     [NotifyPropertyChangedFor(nameof(IsParseActionVisible))]
+    [NotifyPropertyChangedFor(nameof(IsDownloadActive))]
+    [NotifyPropertyChangedFor(nameof(IsCompleted))]
+    [NotifyPropertyChangedFor(nameof(IsTaskFailed))]
+    [NotifyPropertyChangedFor(nameof(IsProgressCardVisible))]
     private DownloadPageState _pageState = DownloadPageState.Idle;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreviewTitle))]
@@ -44,7 +50,13 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string _parseErrorMessage = "";
 
     // 当前任务状态
-    [ObservableProperty] private DownloadTask? _currentTask;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsProgressCardVisible))]
+    [NotifyPropertyChangedFor(nameof(CurrentOutputLocationText))]
+    [NotifyPropertyChangedFor(nameof(CurrentErrorMessage))]
+    [NotifyPropertyChangedFor(nameof(IsCompleted))]
+    [NotifyPropertyChangedFor(nameof(IsTaskFailed))]
+    private DownloadTask? _currentTask;
     [ObservableProperty] private bool _isDownloading;
 
     // 日志
@@ -61,11 +73,20 @@ public partial class DownloadViewModel : ObservableObject
     public bool IsReady => PageState == DownloadPageState.Ready;
     public bool IsFailed => PageState == DownloadPageState.Failed;
     public bool IsParseActionVisible => PageState is DownloadPageState.Idle or DownloadPageState.Parsing or DownloadPageState.Failed;
+    public bool IsDownloadActive => PageState == DownloadPageState.Downloading;
+    public bool IsCompleted => CurrentTask is not null && PageState == DownloadPageState.Completed;
+    public bool IsTaskFailed => CurrentTask is not null && PageState == DownloadPageState.Failed;
+    public bool IsProgressCardVisible => CurrentTask is not null
+        && PageState is DownloadPageState.Downloading or DownloadPageState.Completed or DownloadPageState.Failed;
     public string PreviewTitle => PreviewInfo?.Title ?? "";
     public string PreviewPlatform => PreviewInfo?.Platform ?? "";
     public string PreviewThumbnailUrl => PreviewInfo?.Thumbnail ?? "";
     public string PreviewDurationText => FormatDuration(PreviewInfo?.Duration ?? 0);
     public string PreviewFileSizeText => FormatBytes(PreviewInfo?.FileSize ?? 0);
+    public string CurrentOutputLocationText => string.IsNullOrWhiteSpace(CurrentTask?.OutputFilePath)
+        ? CurrentTask?.OutputDirectory ?? ""
+        : CurrentTask.OutputFilePath;
+    public string CurrentErrorMessage => CurrentTask?.ErrorMessage ?? "";
 
     public DownloadViewModel(DownloadManager downloadManager, ConfigService configService, IVideoInfoProvider videoInfoProvider)
     {
@@ -93,8 +114,19 @@ public partial class DownloadViewModel : ObservableObject
         PreviewInfo = null;
         ParseErrorMessage = "";
 
-        if (PageState is DownloadPageState.Parsing or DownloadPageState.Ready or DownloadPageState.Failed)
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            CurrentTask = null;
             PageState = DownloadPageState.Idle;
+        }
+        else
+        {
+            if (!IsDownloading)
+            {
+                CurrentTask = null;
+                PageState = DownloadPageState.Idle;
+            }
+        }
     }
 
     /// <summary>
@@ -183,6 +215,7 @@ public partial class DownloadViewModel : ObservableObject
         _parseCts = cts;
         PreviewInfo = null;
         ParseErrorMessage = "";
+        CurrentTask = null;
         PageState = DownloadPageState.Parsing;
 
         try
@@ -259,6 +292,16 @@ public partial class DownloadViewModel : ObservableObject
         // 监听任务状态变化以准确更新 IsDownloading
         task.PropertyChanged += (s, e) =>
         {
+            if (e.PropertyName is nameof(DownloadTask.OutputFilePath) or nameof(DownloadTask.ErrorMessage))
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    if (CurrentTask != task) return;
+                    OnPropertyChanged(nameof(CurrentOutputLocationText));
+                    OnPropertyChanged(nameof(CurrentErrorMessage));
+                });
+            }
+
             if (e.PropertyName == nameof(DownloadTask.Status))
             {
                 System.Windows.Application.Current?.Dispatcher.Invoke(() =>
@@ -298,6 +341,82 @@ public partial class DownloadViewModel : ObservableObject
             IsDownloading = false;
             PageState = DownloadPageState.Idle;
         }
+    }
+
+    [RelayCommand]
+    private async Task OpenCurrentFolder()
+    {
+        var task = CurrentTask;
+        if (task is null)
+            return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(task.OutputFilePath) && File.Exists(task.OutputFilePath))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = $"/select,\"{task.OutputFilePath}\"",
+                        UseShellExecute = true
+                    });
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(task.OutputDirectory) && Directory.Exists(task.OutputDirectory))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = task.OutputDirectory,
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch
+            {
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async Task PlayCurrentFile()
+    {
+        var filePath = CurrentTask?.OutputFilePath;
+        if (string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                if (File.Exists(filePath))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = filePath,
+                        UseShellExecute = true,
+                        WorkingDirectory = Path.GetDirectoryName(filePath) ?? ""
+                    });
+                }
+            }
+            catch
+            {
+            }
+        });
+    }
+
+    [RelayCommand]
+    private async Task RetryCurrentDownload()
+    {
+        var task = CurrentTask;
+        if (task is null)
+            return;
+
+        IsDownloading = true;
+        PageState = DownloadPageState.Downloading;
+        await _downloadManager.RetryAsync(task.Id);
     }
 
     /// <summary>
