@@ -43,10 +43,25 @@ public static class ThemeManager
             var gradStart = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(palette.GradientStartColor);
             var gradEnd = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(palette.GradientEndColor);
 
+            // 1. Mutate existing brush instances to trigger instant UI refresh for already loaded elements
+            if (app.Resources["AccentBrush"] is System.Windows.Media.SolidColorBrush accentBrush && !accentBrush.IsFrozen)
+            {
+                accentBrush.Color = accent;
+            }
+            if (app.Resources["AccentContainerBrush"] is System.Windows.Media.SolidColorBrush containerBrush && !containerBrush.IsFrozen)
+            {
+                containerBrush.Color = container;
+            }
+
+            // 2. Update resource color keys
             app.Resources["Accent"] = accent;
             app.Resources["AccentContainer"] = container;
             app.Resources["AccentGradientStart"] = gradStart;
             app.Resources["AccentGradientEnd"] = gradEnd;
+
+            // 3. Register new brush objects in resources for any newly loaded controls
+            app.Resources["AccentBrush"] = new System.Windows.Media.SolidColorBrush(accent);
+            app.Resources["AccentContainerBrush"] = new System.Windows.Media.SolidColorBrush(container);
         }
         catch (Exception ex)
         {

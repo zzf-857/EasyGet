@@ -20,7 +20,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE756;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
-                               Foreground="{StaticResource AccentBrush}"
+                               Foreground="{DynamicResource AccentBrush}"
                                Margin="0,0,8,0"
                                VerticalAlignment="Center"/>
                     <TextBlock Text="环境检测"
@@ -41,7 +41,7 @@
                                     <Border Width="42" Height="42" CornerRadius="8" Background="{StaticResource BgSurfaceHighestBrush}" Margin="0,0,12,0">
                                         <TextBlock Text="&#xE943;" Style="{StaticResource IconGlyph}"
                                                    FontSize="{StaticResource IconSizeLarge}"
-                                                   Foreground="{StaticResource AccentBrush}"
+                                                   Foreground="{DynamicResource AccentBrush}"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
                                     </Border>
@@ -53,7 +53,7 @@
                                 <Border HorizontalAlignment="Right" VerticalAlignment="Top" CornerRadius="5" Padding="8,2">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{StaticResource AccentContainerBrush}"/>
+                                            <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding YtDlpFound}" Value="False">
                                                     <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
@@ -65,7 +65,7 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
                                                 <Setter Property="Text" Value="已安装"/>
-                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding YtDlpFound}" Value="False">
                                                         <Setter Property="Text" Value="未安装"/>
@@ -116,7 +116,7 @@
                                 <Border HorizontalAlignment="Right" VerticalAlignment="Top" CornerRadius="5" Padding="8,2">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{StaticResource AccentContainerBrush}"/>
+                                            <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding FfmpegFound}" Value="False">
                                                     <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
@@ -128,7 +128,7 @@
                                         <TextBlock.Style>
                                             <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
                                                 <Setter Property="Text" Value="已安装"/>
-                                                <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
                                                 <Style.Triggers>
                                                     <DataTrigger Binding="{Binding FfmpegFound}" Value="False">
                                                         <Setter Property="Text" Value="未安装"/>
@@ -173,7 +173,7 @@
                     </Button>
                     <TextBlock Text="{Binding InstallStatusStage}"
                                Style="{StaticResource TextBodyStrong}"
-                               Foreground="{StaticResource AccentBrush}"
+                               Foreground="{DynamicResource AccentBrush}"
                                Margin="14,0,0,0"
                                VerticalAlignment="Center"
                                Visibility="{Binding InstallStatusStage, Converter={StaticResource StringToVisibility}}"/>
@@ -194,7 +194,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
-                               Foreground="{StaticResource AccentBrush}" Margin="0,0,8,0"/>
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
                     <TextBlock Text="下载设置" Style="{StaticResource TextSection}"/>
                 </StackPanel>
                 <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
@@ -274,7 +274,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE790;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
-                               Foreground="{StaticResource AccentBrush}" Margin="0,0,8,0"/>
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
                     <TextBlock Text="外观设置" Style="{StaticResource TextSection}"/>
                 </StackPanel>
                 <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
@@ -292,8 +292,13 @@
                                       Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding ThemeOptions}"
                                       SelectedValuePath="Name"
-                                      DisplayMemberPath="DisplayName"
-                                      SelectedValue="{Binding SelectedThemeColor}"/>
+                                      SelectedValue="{Binding SelectedThemeColor}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding DisplayName}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -303,7 +308,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE72E;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
-                               Foreground="{StaticResource AccentBrush}" Margin="0,0,8,0"/>
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
                     <TextBlock Text="代理设置" Style="{StaticResource TextSection}"/>
                 </StackPanel>
                 <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
@@ -347,7 +352,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE8D7;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
-                               Foreground="{StaticResource AccentBrush}" Margin="0,0,8,0"/>
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
                     <TextBlock Text="Cookie 设置" Style="{StaticResource TextSection}"/>
                 </StackPanel>
                 <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
@@ -389,7 +394,7 @@
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
-                               Foreground="{StaticResource AccentBrush}" Margin="0,0,8,0"/>
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
                     <TextBlock Text="性能设置" Style="{StaticResource TextSection}"/>
                 </StackPanel>
                 <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
