@@ -352,9 +352,6 @@
                                                         <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
                                                             <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Waiting">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
                                                                 <DataTrigger Binding="{Binding Status}" Value="Resolving">
                                                                     <Setter Property="Visibility" Value="Visible"/>
                                                                 </DataTrigger>
@@ -430,6 +427,15 @@
                                                                     <Setter Property="Visibility" Value="Visible"/>
                                                                 </DataTrigger>
                                                                 <DataTrigger Binding="{Binding Status}" Value="Paused">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Status}" Value="Cancelled">
                                                                     <Setter Property="Visibility" Value="Visible"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
