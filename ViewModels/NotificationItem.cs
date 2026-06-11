@@ -12,6 +12,9 @@ public partial class NotificationItem : ObservableObject
     private const double TotalMs = 4000;
     private const double IntervalMs = 50;
 
+    private readonly object _lock = new();
+    private bool _isDisposed;
+
     [ObservableProperty] private string _message = "";
     [ObservableProperty] private bool _isSuccess;
     [ObservableProperty] private double _remainingRatio = 1.0;
@@ -31,11 +34,23 @@ public partial class NotificationItem : ObservableObject
 
     private void OnTimerElapsed(object? sender, ElapsedEventArgs e)
     {
+        lock (_lock)
+        {
+            if (_isDisposed) return;
+        }
+
         _remainingMs -= IntervalMs;
         if (_remainingMs <= 0)
         {
-            _timer.Stop();
-            _timer.Dispose();
+            lock (_lock)
+            {
+                if (!_isDisposed)
+                {
+                    _isDisposed = true;
+                    _timer.Stop();
+                    _timer.Dispose();
+                }
+            }
             RemainingRatio = 0;
             Expired?.Invoke(this);
         }
@@ -48,18 +63,31 @@ public partial class NotificationItem : ObservableObject
     [RelayCommand]
     public void Close()
     {
-        _timer.Stop();
-        _timer.Dispose();
+        lock (_lock)
+        {
+            if (_isDisposed) return;
+            _isDisposed = true;
+            _timer.Stop();
+            _timer.Dispose();
+        }
         Closed?.Invoke(this);
     }
 
     public void Pause()
     {
-        _timer.Stop();
+        lock (_lock)
+        {
+            if (_isDisposed) return;
+            _timer.Stop();
+        }
     }
 
     public void Resume()
     {
-        _timer.Start();
+        lock (_lock)
+        {
+            if (_isDisposed) return;
+            _timer.Start();
+        }
     }
 }

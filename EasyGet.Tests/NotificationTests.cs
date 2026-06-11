@@ -123,4 +123,30 @@ public class NotificationTests
             }
         }
     }
+
+    [Fact]
+    public void NotificationItem_MultipleCloseCallsAreSafeAndIdempotent()
+    {
+        var item = new NotificationItem("Concurrent Close Test", true);
+        
+        var exceptionCount = 0;
+        var threads = Enumerable.Range(0, 10).Select(_ => new Thread(() =>
+        {
+            try
+            {
+                item.Pause();
+                item.Resume();
+                item.Close();
+            }
+            catch (Exception)
+            {
+                Interlocked.Increment(ref exceptionCount);
+            }
+        })).ToList();
+
+        foreach (var thread in threads) thread.Start();
+        foreach (var thread in threads) thread.Join();
+
+        Assert.Equal(0, exceptionCount);
+    }
 }

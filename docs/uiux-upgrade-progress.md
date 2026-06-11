@@ -556,6 +556,23 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：214/214 通过
 - 新增测试：`DeadControlsAreCompletelyRemovedFromXaml`
 
+### REV-04 NotificationItem 计时器竞态可抛 ObjectDisposedException — ✅ 完成（2026-06-11 13:28）
+
+**Commit**：`d16ab43`
+
+**修改文件**：
+- `ViewModels/NotificationItem.cs`（修改）
+- `EasyGet.Tests/NotificationTests.cs`（修改）
+
+**实现说明**：
+在 `NotificationItem.cs` 中增加了一个 `_lock` 线程锁对象与一个 `_isDisposed` 状态标志，以防止超时自动清理逻辑与用户手动点击关闭（或按 Esc 键关闭）的并发竞态。对 `Close()`、`Pause()` 和 `Resume()` 操作使用 lock 块进行了多线程安全保护，并确保了它们对底层的 `Timer` 访问具有幂等性，完全杜绝了发生 `ObjectDisposedException` 的风险。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：215/215 通过
+- 新增测试：`NotificationItem_MultipleCloseCallsAreSafeAndIdempotent`
+
 ---
 
 ## 审核记录
