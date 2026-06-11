@@ -386,6 +386,7 @@
                                 <TextBlock FontSize="12"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            Margin="0,6,0,0"
+                                           FontFamily="Consolas, Segoe UI, Microsoft YaHei UI"
                                            Visibility="{Binding IsDownloadActive, Converter={StaticResource BoolToVisibility}}">
                                     <Run Text="{Binding CurrentTask.Platform, FallbackValue='', Mode=OneWay}"/>
                                     <Run Text=" · "/>
@@ -465,8 +466,9 @@
                             </StackPanel>
                         </Grid>
                         <Grid Margin="0,14,0,0">
-                            <ProgressBar Value="{Binding CurrentTask.Progress}"
-                                         Maximum="100">
+                            <ProgressBar Value="{Binding CurrentTask.Progress, FallbackValue=0, TargetNullValue=0}"
+                                         Maximum="100"
+                                         Validation.ErrorTemplate="{x:Null}">
                                 <ProgressBar.Style>
                                     <Style TargetType="ProgressBar" BasedOn="{StaticResource AccentProgressBar}">
                                         <Style.Triggers>
@@ -482,7 +484,8 @@
                             </ProgressBar>
                             <TextBlock HorizontalAlignment="Right"
                                        Margin="0,10,0,0"
-                                       FontWeight="SemiBold">
+                                       FontWeight="SemiBold"
+                                       FontFamily="Consolas, Segoe UI, Microsoft YaHei UI">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>

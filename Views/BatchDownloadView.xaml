@@ -369,7 +369,11 @@
                                                         <Run Text=" · "/>
                                                         <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
                                                     </TextBlock>
-                                                    <TextBlock HorizontalAlignment="Right" Foreground="{StaticResource AccentBrush}" FontSize="11" FontWeight="Bold">
+                                                    <TextBlock HorizontalAlignment="Right" 
+                                                               Foreground="{StaticResource AccentBrush}" 
+                                                               FontSize="11" 
+                                                               FontWeight="Bold"
+                                                               FontFamily="Consolas, Segoe UI, Microsoft YaHei UI">
                                                         <Run Text="{Binding Progress, StringFormat={}{0:F0}}"/>
                                                         <Run Text="% · "/>
                                                         <Run Text="{Binding SpeedText, Mode=OneWay}"/>
