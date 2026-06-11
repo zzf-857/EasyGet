@@ -573,7 +573,21 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：215/215 通过
 - 新增测试：`NotificationItem_MultipleCloseCallsAreSafeAndIdempotent`
 
----
+### REV-05 下载页选项卡片静态标签违反真实性原则 — ✅ 完成（2026-06-11 13:30）
+
+**Commit**：`4f2d0aa`
+
+**修改文件**：
+- `Views/DownloadView.xaml`（修改）
+
+**实现说明**：
+将下载选项预览卡片中的视频格式、首选画质和字幕三个文本块的写死文案分别改为了绑定 `{Binding SelectedFormat}`、`{Binding SelectedQuality}` 和 `{Binding SelectedSubtitle}`，使其完美跟随右侧 ComboBox 实际的选中值进行动态联动更新，符合 UI 真实性设计原则。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：217/217 通过
+- 新增测试：无
 
 ## 审核记录
 

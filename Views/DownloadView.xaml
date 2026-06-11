@@ -248,7 +248,7 @@
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="视频格式" Foreground="{StaticResource TextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="MP4 Video" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding SelectedFormat}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="2"
                                               Style="{StaticResource DarkComboBox}"
@@ -275,7 +275,7 @@
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="首选画质" Foreground="{StaticResource TextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="最高可用画质" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding SelectedQuality}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="2"
                                               Style="{StaticResource DarkComboBox}"
@@ -302,7 +302,7 @@
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock Text="字幕" Foreground="{StaticResource TextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="可选字幕" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="{Binding SelectedSubtitle}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="2"
                                               Style="{StaticResource DarkComboBox}"
