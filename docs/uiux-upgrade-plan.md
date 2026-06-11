@@ -239,4 +239,65 @@ UX-001（独立，最先）
 
 ---
 
+## 12. 第三轮（P5）：字体排版与文字渲染规范（TYP 系列）
+
+> 立项依据：用户在真机人工审查中确认两类问题——**文字大小不一、无梯度规范**；**部分文字明显发糊**。审核 Agent 已完成代码取证（2026-06-11），本节规范全部建立在实测数据上。第 3 节全局约束与第 10 节汇报机制对本轮继续生效。
+
+### 12.1 取证结论（执行 Agent 必读）
+
+1. **模糊根因 = 容器级 DropShadowEffect**。WPF 对设置了 `Effect` 的元素会把**整个子树离屏栅格化为位图**，ClearType/Display 模式失效，文字变成缩放位图。当前违规位置（全部在 `Themes/Generic.xaml`）：
+   - L82：`ToolPanelBorder` 样式自带 `Effect=SoftShadow` —— 全应用所有内容卡片的文字因此模糊，**这是主因**；
+   - L161 / L270：`AccentButton` / `SurfaceButton` 模板根 Border 带 SoftShadow —— 所有按钮文字模糊，且与按压 ScaleTransform 叠加加剧；
+   - L784 / L868：`NavRadioButton` / 筛选 RadioButton 选中态触发器追加 SoftShadow —— 选中导航项文字模糊（用户截图可见）；
+   - `MainWindow.xaml`：Toast 卡片 `PopupShadow`（含文字，违规）；侧栏 Logo 的 SoftShadow（仅含 Image，可保留）。
+2. **字号失控**：Views+MainWindow+Generic 中 FontSize 字面量共 16 种（9/10/11/12/13/14/15/16/17/18/20/24/28/44/48/56），其中文本与图标字形混用同一属性无任何区分。
+3. **字重滥用**：15 处 `FontWeight="Bold"`，多压在 10-11px 中文小字上（中文小字加粗 = 发糊второй来源）；46 处 SemiBold 分布尚可。
+4. **字体族失控**：74 处内联 `FontFamily` 字面量（每处自写 fallback 列表），无单一来源。
+
+### 12.2 排版规范（Typography Tokens）
+
+**A. 文本字号梯度 —— 只允许 6 级**，在 `Generic.xaml` 定义为 `sys:Double` 资源：
+
+| Token | 值 | 用途 |
+|---|---|---|
+| `FontSizeCaption` | 11 | 徽章、底栏状态、辅助小标签（现有 9/10/11 全部归并到此） |
+| `FontSizeBody` | 12 | 正文、列表次要信息、说明文字（现有 12/13 按语义归并到 12 或 14） |
+| `FontSizeBodyStrong` | 14 | 按钮文字、副标题、输入框、强调正文（现有 13/14/15 归并） |
+| `FontSizeSection` | 16 | 区块标题（如设置页"环境检测"，现有 16/17/18 文本归并） |
+| `FontSizeCardTitle` | 20 | 卡片级标题、批量页"下载队列"（现有 20/24 归并） |
+| `FontSizePageTitle` | 28 | 页面主标题（维持 UX-102 的 28 不变） |
+
+**B. 图标字形与文本分离**：图标（Segoe Fluent Icons 的 TextBlock）不占用上述梯度，定义独立 token：`IconSizeSmall=12`、`IconSizeBody=16`、`IconSizeLarge=18`、`IconSizeEmptyState=48`（空状态 44/48/56 归并为 48）。图标 TextBlock 必须套用基础样式 `IconGlyph`（内含 FontFamilyIcon + 默认尺寸），不得散写。
+
+**C. 字重规则**：
+- 只允许 `Normal` 与 `SemiBold` 两档；**`Bold` 全面禁用**（现有 15 处全部降为 SemiBold），`ExtraBold` 维持禁用；
+- **11px 及以下不允许任何加粗**（小号中文加粗必糊），现有 10-11px Bold 徽章一律改为 11px Normal 或 SemiBold 提级到 12px。
+
+**D. 字体族 token**（三个，禁止其他字面量）：
+- `FontFamilyUI`：`Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI`
+- `FontFamilyMono`：`Cascadia Code, Consolas, Microsoft YaHei UI`（日志、速度/百分比等高频刷新数字）
+- `FontFamilyIcon`：`Segoe Fluent Icons, Segoe MDL2 Assets`
+在窗口级隐式样式设默认 `FontFamilyUI`，74 处内联字面量全部清除。
+
+**E. 文本样式套件**：基于上述 token 在 `Generic.xaml` 提供 7 个命名样式：`TextPageTitle / TextCardTitle / TextSection / TextBodyStrong / TextBody / TextCaption / TextMono`（含 Foreground 默认值：标题 TextPrimary、正文 TextSecondary、Caption TextMuted）。**Views 与 MainWindow 中禁止出现任何 `FontSize=`、`FontFamily=`、`FontWeight=` 字面量**——文本一律 `Style="{StaticResource Text*}"`（个别需覆盖 Foreground 允许），图标一律 `IconGlyph`（覆盖 FontSize 时只能引用 `IconSize*` token）。
+
+### 12.3 文字渲染规范（模糊治理）
+
+- **R1（最高优先）：含文字子树的元素禁止设置 `DropShadowEffect`。** 整改方案：内容卡片与按钮走**扁平化**（删除容器级 SoftShadow，靠 1px 边框 + 背景分层表达层次，Stitch 设计稿本就接近扁平）；确需阴影的弹层（Toast、下拉）改用**垫层方案**——同尺寸同圆角、无子内容的兄弟 Border 单独承载 Effect，文字容器保持无 Effect。
+- **R2：动画终值落整像素**。Translate 类动画终值必须为 0/整数；禁止常驻非整数 RenderTransform。按压 ScaleTransform 瞬态豁免。
+- **R3：Popup 类视觉树显式补渲染设置**。`TextOptions.TextFormattingMode="Display"`、`UseLayoutRounding="True"` 不会穿透到独立 HwndSource——ComboBox 下拉、ToolTip、右键菜单的 Popup 根元素需显式设置。
+- **R4：最小文本字号 11px**（R1 完成后若 11px 仍显糊，允许该处提级到 12，并在汇报中说明）。
+
+### 12.4 任务拆分与验收
+
+**TYP-01 排版 token 与样式套件**：在 `Generic.xaml` 新增 12.2 全部 token + 7 个文本样式 + `IconGlyph`；窗口级默认字体族。验收：token/样式存在性测试。
+**TYP-02 全量字号字重替换**：按 12.2 梯度替换 Views/MainWindow/Generic 内部的全部字面量；**汇报中必须附"旧值→新 token"映射表**（逐字号说明归并去向）。验收：`rg 'FontSize="|FontFamily="|FontWeight="' Views MainWindow.xaml` 零命中（样式引用 `{StaticResource …}` 除外）；`rg 'FontWeight="Bold"'` 全仓库（含 Generic.xaml）零命中。
+**TYP-03 阴影治理**：按 12.3-R1 执行；ToolPanelBorder/按钮/导航选中态去容器 Effect，Toast 改垫层；Popup 补 R3 设置。验收：`Generic.xaml` 中 `Effect=` 仅出现在无文字子树的垫层或图形元素上（每处保留须在汇报中列明并证明无文字子树）；新增静态测试断言 `ToolPanelBorder`、两个按钮样式、Nav 样式不含 Effect setter。
+**TYP-04 防回归测试与收尾**：把 TYP-02/03 的 grep 规则固化为单元测试（沿用 ThemeStyleTests 模式）；全量跑测试；用户做最终人工目检（截图由用户提供，执行 Agent 不得伪造）。
+
+执行顺序：TYP-01 → TYP-02 → TYP-03 → TYP-04，每任务一个 commit（`TYP-xx` 开头），进度追加到 `docs/uiux-upgrade-progress.md` 的"## 第三轮排版返工记录"区，规则同第 10 节。当前测试基线 **218**，只增不减。
+
+---
+
 *计划制定：2026-06-11 · 审核 Agent（Claude）· 基于 commit `1a7bd42` 的代码调研，取代 v1.0 计划*
+*第 12 节（P5 排版与渲染规范）追加：2026-06-11 · 基于第二轮验收后真机截图与代码取证*

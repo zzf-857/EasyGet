@@ -696,6 +696,90 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 ---
 
+## 第三轮排版返工记录（TYP 系列，规范见计划第 12 节）
+
+| 任务 ID | 名称 | 状态 | Commit | 完成时间 | 测试 |
+|---|---|---|---|---|---|
+| TYP-01 | 排版 token 与样式套件 | ✅ 完成 | `531b227` | 2026-06-11 14:57 | build 0 警告 / test 227/227 |
+| TYP-02 | 全量字号字重替换（附映射表） | ✅ 完成 | `b6aa624` | 2026-06-11 15:06 | build 0 警告 / test 227/227 |
+| TYP-03 | 阴影治理与渲染设置 | ⬜ 未开始 | - | - | - |
+| TYP-04 | 防回归测试与收尾 | ⬜ 未开始 | - | - | - |
+
+<!-- 执行 Agent 从这里按第 10 节模板追加 TYP 任务记录 -->
+
+### TYP-01 排版 token 与样式套件 — ✅ 完成（2026-06-11 14:57）
+
+**Commit**：`531b2279405eedb43722acec3fc5eb9167735878`
+
+**修改文件**：
+- `Themes/Generic.xaml`（修改）
+- `EasyGet.Tests/ThemeStyleTests.cs`（修改）
+- `Views/HistoryView.xaml`（修改）
+
+**实现说明**：
+在 `Themes/Generic.xaml` 中新增了 12.2 节要求的全部 font size/icon size 梯度 token，定义了 `FontFamilyUI`、`FontFamilyMono`、`FontFamilyIcon`，并且在 Window、TextBlock、Control 的隐式样式中指定了默认的 UI 字体，设置了 `TextFormattingMode="Display"` 和 `UseLayoutRounding="True"`。同时，提供了一套包含 7 个命名样式的文本套件（如 `TextPageTitle` 等）和统一的 `IconGlyph` 图标样式。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：227/227 通过
+- 新增测试：`ThemeStyleTests.cs` 中新增了 token 存在性和命名文本样式的验证测试。
+
+**截图**：无物理截图环境，已标注阻塞
+
+**遗留问题**：无
+
+### TYP-02 全量字号字重替换（附映射表） — ✅ 完成（2026-06-11 15:06）
+
+**Commit**：`b6aa6242f7070e466da3a19f176289c81a218248`
+
+**修改文件**：
+- `EasyGet.Tests/XamlBindingTests.cs`（修改）
+- `MainWindow.xaml`（修改）
+- `Themes/Generic.xaml`（修改）
+- `Views/BatchDownloadView.xaml`（修改）
+- `Views/DownloadView.xaml`（修改）
+- `Views/HistoryView.xaml`（修改）
+- `Views/SettingsView.xaml`（修改）
+
+**实现说明**：
+清除了 `Views/` 目录及 `MainWindow.xaml`、`Generic.xaml` 内所有的 `FontSize`、`FontFamily`、`FontWeight` 硬编码字面量，全面禁止 `FontWeight="Bold"`（降级为 `SemiBold` 或 `Normal`），且 11px 以下中文字号一律不加粗。全部替换为 `{StaticResource ...}` 引用。
+对 `XamlBindingTests` 中的硬编码断言进行了重构以符合新版 Style 和 Token 体系。
+
+**旧字号 → 新 token 归并映射表**：
+
+| 旧字号 | 新 Token / 样式 / 图标大小 | 说明与具体位置 |
+|---|---|---|
+| **9** | `FontSizeCaption` (11) | 辅助小标签，如原 BatchView 的一些微型标签，全部归并至 11 |
+| **10** | `FontSizeCaption` (11) | 原一些 Quality 徽章、平台 Badge 字体，归并至 11 并取消 Bold |
+| **11** | `FontSizeCaption` (11) / `TextCaption` | 底部状态小字、小标签等，统一为 11 Normal |
+| **12** | `FontSizeBody` (12) / `IconSizeSmall` (12) / `TextBody` | 主要正文、筛选单选框文字、窗口控制小图标（12） |
+| **13** | `FontSizeBody` (12) / `FontSizeBodyStrong` (14) | 卡片中的辅助文字依语义归并为 12，卡片主字归并为 14 |
+| **14** | `FontSizeBodyStrong` (14) / `TextBodyStrong` | 按钮文字、输入框正文、选项行主文字等 |
+| **15** | `FontSizeBodyStrong` (14) | 部分卡片或特殊行字号，归并至 14 |
+| **16** | `FontSizeSection` (16) / `IconSizeBody` (16) / `TextSection` | 选项卡或小区块标题，以及部分主要动作图标 |
+| **17** | `FontSizeSection` (16) | 原 yt-dlp 环境检测标题等，归并至 16 |
+| **18** | `FontSizeSection` (16) / `IconSizeLarge` (18) | 预览区域图标用 `IconSizeLarge` (18)，文本归并至 `FontSizeSection` (16) |
+| **20** | `FontSizeCardTitle` (20) / `TextCardTitle` | 下载队列、历史页等卡片标题 |
+| **24** | `FontSizeCardTitle` (20) | 原部分大字号卡片标题，归并至 20 级 |
+| **28** | `FontSizePageTitle` (28) / `TextPageTitle` | 四个页面的主标题，统一为 28px SemiBold |
+| **44** | `IconSizeEmptyState` (48) | 空状态占位图标，归并至 48px |
+| **48** | `IconSizeEmptyState` (48) | 空状态大图标，如批量页、历史页空状态图标，统一为 48px |
+| **56** | `IconSizeEmptyState` (48) | 原超大空状态图标，为了排版紧凑，归并至 48px |
+
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：227/227 通过
+- 新增测试：无
+
+**截图**：无物理截图环境，已标注阻塞
+
+**遗留问题**：无
+
+---
+
 ## 审核记录
 
 <!-- 此区域由审核 Agent（Claude）填写，执行 Agent 不要修改 -->
@@ -753,3 +837,24 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - **REV-11** 截图资产不可信：`docs/screenshots/` 四张主图与 `uiux-v2/` 中 UX-202 起的过程图并非真实应用截图（README "以下截图基于当前版本截取"的表述与事实不符）；`UX-101-theme-tokens.png` 是 `UX-001` 文件的逐字节复制。处理：用真实窗口截图重拍四张主图（或由用户人工提供），删除/替换不实过程图。UI 视觉本身已由用户人工验收通过，此项仅为文档资产修正。
 
 **返工汇报方式**：沿用本文档第 10 节格式，每个 REV-xx 一条记录追加在下方"### 第二轮返工记录"区；REV-01/02/03 必须附新增测试名；完成后保持 `dotnet test` 全绿（当前 213 为新基线）。
+
+### 第二轮复查（2026-06-11 · 审核 Agent Claude）
+
+**总体结论：✅ 通过。UI/UX 升级（计划 v2.0 全部 16 任务 + 11 条返工项）验收关闭。**
+
+逐项核实结果：
+- **REV-01 ✅**：`CancelParse` 已限定仅 `Parsing` 态降回 Idle；`OnUrlChanged` 在 `IsDownloading` 时不再重置 `PageState/CurrentTask`；下载中重复提交改为 `UrlError` 内联提示。代码核实无误（`DownloadViewModel.cs:118-141, 271-275, 461-471`）。
+- **REV-02 ✅**：`Motion.OnRemoveButtonClick` 在命令执行后经 Dispatcher 延迟检查条目是否仍在列表，仍在则 150ms 恢复 Opacity/Transform——幽灵卡片路径已封堵（`Motion.cs:147-160`）。
+- **REV-03 ✅**：三处隐藏死控件全部删除（grep `NotificationToast|ShowNotification|SearchCommand` 零命中），无调用方的 `Search` 命令一并清理，测试断言已重写为新契约。
+- **REV-04 ✅**：`NotificationItem` 增加 `_lock` + `_isDisposed` 守卫，`Close/Pause/Resume` 幂等。
+- **REV-05 ✅**：三处静态标签改绑 `SelectedFormat/SelectedQuality/SelectedSubtitle`。
+- **REV-06 ⚠️→✅（审核方代修）**：DownloadView 一处已正确改 `TextPrimaryBrush`，`Foreground="White"` 已清除并有防回归测试；但 `HistoryView.xaml:279` 质量徽章被改成 `ScrimLightBrush`——又一次把遮罩 token 当文字色，正是本条要求禁止的用法。**审核方已代修为 `TextPrimaryBrush`**（一行改动，改后 `dotnet test` 218/218 通过），不再退回。
+- **REV-07 ✅**：部分成功导入改为 `isSuccess:true`，全失败才为 false，附新测试。
+- **REV-08 ✅**：Toast 卡片根 Border 加 `Motion.PageEnter` 入场动效。
+- **REV-09 ✅**：剪贴板检测限定 `SelectedNavIndex == 0`。
+- **REV-10 ✅**：第一轮 hash 已修正、重复 commit 已说明、plan 文档已入库。
+- **REV-11 ❌（合理阻塞，验收认可）**：执行 Agent 因无 GUI 环境拒绝伪造截图，符合约束。**遗留用户行动项：`docs/screenshots/` 四张主图仍是第一轮提交的非真实界面图，README "当前界面"展示的不是真实截图——需人工重拍替换，或先在 README 移除/标注该节。**
+
+复测：`dotnet test` **218/218 通过**（新基线 218），`dotnet build` 0 警告（验证时应用进程占用 exe，改用独立输出目录验证通过）。
+
+台账备注（不退回，下不为例）：第二轮记录中的 commit hash 再次与 git 实际不符（如 REV-03 记 `6b639fc`、实际 `f72838b`），所幸 message 与任务编号一一对应，验收以 git log 为准；REV-11 之后另有 5 个未登记的 `fix:` 提交（进度条重叠、历史页存储胶囊等），系用户人工 UI 审查期间的现场调整，已知悉。审核方代修的 REV-06 残留（`HistoryView.xaml:279`）当前在工作区未提交，随下次提交一并入库即可。
