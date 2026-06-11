@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -25,6 +27,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     [ObservableProperty] private string _playlistUrl = "";
 
     public ObservableCollection<DownloadTask> QueueTasks => _downloadManager.Tasks;
+    public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3 (仅音频)"];
     public string[] QualityOptions { get; } = ["最高画质", "1080p", "720p", "480p"];
@@ -34,6 +37,30 @@ public partial class BatchDownloadViewModel : ObservableObject
         _downloadManager = downloadManager;
         _configService = configService;
         _ytDlpService = ytDlpService;
+        QueueTasks.CollectionChanged += OnQueueTasksChanged;
+    }
+
+    private void OnQueueTasksChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (DownloadTask task in e.OldItems)
+                task.PropertyChanged -= OnQueueTaskPropertyChanged;
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (DownloadTask task in e.NewItems)
+                task.PropertyChanged += OnQueueTaskPropertyChanged;
+        }
+
+        OnPropertyChanged(nameof(ActiveDownloadCount));
+    }
+
+    private void OnQueueTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DownloadTask.Status))
+            OnPropertyChanged(nameof(ActiveDownloadCount));
     }
 
     partial void OnUrlsTextChanged(string value)

@@ -22,6 +22,8 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string _selectedQuality = "best";
     [ObservableProperty] private string _selectedSubtitle = "none";
     [ObservableProperty] private string _downloadDirectory = "";
+    [ObservableProperty] private string _proxyStatusText = "未启用";
+    [ObservableProperty] private string _concurrentFragmentsText = "";
 
     // 当前任务状态
     [ObservableProperty] private DownloadTask? _currentTask;
@@ -79,6 +81,15 @@ public partial class DownloadViewModel : ObservableObject
             "all" => "全部字幕",
             _ => "不下载"
         };
+        RefreshRuntimeConfigDisplay();
+    }
+
+    public void RefreshRuntimeConfigDisplay()
+    {
+        var config = _configService.Config;
+        DownloadDirectory = config.DefaultDownloadPath;
+        ProxyStatusText = DescribeProxyStatus(config);
+        ConcurrentFragmentsText = DescribeConcurrentFragments(config);
     }
 
     /// <summary>
@@ -219,6 +230,19 @@ public partial class DownloadViewModel : ObservableObject
         "m4a (仅音频)" => "m4a",
         _ => display
     };
+
+    internal static string DescribeProxyStatus(AppConfig config)
+    {
+        if (!config.UseProxy)
+            return "未启用";
+
+        return string.IsNullOrWhiteSpace(config.ProxyAddress)
+            ? "已启用，地址未配置"
+            : config.ProxyAddress.Trim();
+    }
+
+    internal static string DescribeConcurrentFragments(AppConfig config)
+        => $"{config.ConcurrentFragments} 分片";
 
     /// <summary>
     /// 从粘贴文本中提取第一个 http/https URL（支持抖音分享文本等）

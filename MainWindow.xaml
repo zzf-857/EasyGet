@@ -75,7 +75,7 @@
                                        FontSize="18"
                                        FontWeight="SemiBold"
                                        FontFamily="Segoe UI Variable, Microsoft YaHei UI"/>
-                            <TextBlock Text="PRO ACCOUNT"
+                            <TextBlock Text="{Binding AppVersion}"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        FontSize="10"
                                        FontWeight="SemiBold"/>

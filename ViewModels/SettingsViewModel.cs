@@ -45,6 +45,8 @@ public partial class SettingsViewModel : ObservableObject
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
     public bool CanUpdateYtDlp => CanCheckEnvironment && YtDlpFound;
 
+    public event Action? SettingsSaved;
+
     public SettingsViewModel(ConfigService configService, EnvironmentService envService, DownloadManager downloadManager)
     {
         _configService = configService;
@@ -182,6 +184,7 @@ public partial class SettingsViewModel : ObservableObject
 
         _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
         await _configService.SaveAsync();
+        SettingsSaved?.Invoke();
     }
 
     partial void OnDefaultDownloadPathChanged(string value) => AutoSave();

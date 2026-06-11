@@ -166,7 +166,7 @@ public class XamlBindingTests
             text => text == "EasyGet");
         Assert.Contains(
             document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
-            text => text.Equals("Pro Account", StringComparison.OrdinalIgnoreCase));
+            text => text.Contains("AppVersion", StringComparison.Ordinal));
 
         var navItems = document
             .Descendants()
@@ -326,9 +326,11 @@ public class XamlBindingTests
             && text.Contains("Bilibili", StringComparison.Ordinal));
         Assert.Contains("开始下载", texts);
         Assert.Contains("下载日志", texts);
-        Assert.Contains("网速限制", texts);
+        Assert.Contains("并发分片", texts);
         Assert.Contains("保存目录", texts);
         Assert.Contains("代理状态", texts);
+        Assert.DoesNotContain("无限制", texts);
+        Assert.DoesNotContain("系统默认", texts);
     }
 
     [Fact]
@@ -343,11 +345,45 @@ public class XamlBindingTests
         Assert.Contains("下载队列", texts);
         Assert.Contains("暂停全部", texts);
         Assert.Contains("取消全部", texts);
+        Assert.DoesNotContain(texts, text => text.Contains("SERVER STATUS", StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, text => text.Contains("ACTIVE THREADS", StringComparison.Ordinal));
+        Assert.DoesNotContain(texts, text => text.Contains("V1.0.8", StringComparison.Ordinal));
 
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "Button"
             && element.Attributes("Command").Any(attribute =>
                 attribute.Value.Contains("PauseAllCommand", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void ViewsDoNotRenderStitchPlaceholderStatusCopy()
+    {
+        var files = new[]
+        {
+            GetRootPath("MainWindow.xaml"),
+            GetViewPath("DownloadView.xaml"),
+            GetViewPath("BatchDownloadView.xaml"),
+            GetViewPath("HistoryView.xaml")
+        };
+
+        var forbidden = new[]
+        {
+            "PRO ACCOUNT",
+            "SERVER STATUS",
+            "V1.0.8",
+            "v1.2.4",
+            "磁盘空间充足",
+            "Batch Operations",
+            "无限制",
+            "系统默认"
+        };
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            foreach (var text in forbidden)
+                Assert.DoesNotContain(text, source, StringComparison.Ordinal);
+        }
     }
 
     [Theory]

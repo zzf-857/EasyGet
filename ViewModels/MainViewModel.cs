@@ -2,6 +2,8 @@
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
 using EasyGet.Services;
+using System.ComponentModel;
+using System.Reflection;
 
 namespace EasyGet.ViewModels;
 
@@ -25,14 +27,20 @@ public partial class MainViewModel : ObservableObject
     public HistoryViewModel HistoryVM { get; }
     public SettingsViewModel SettingsVM { get; }
 
+    public string AppVersion { get; } = $"v{GetAssemblyVersion()}";
+
     public string CurrentPageTitle => SelectedNavIndex switch
     {
         0 => "单个视频下载",
-        1 => "Batch Operations",
+        1 => "批量下载",
         2 => "下载历史",
         3 => "设置中心",
         _ => "EasyGet"
     };
+
+    public string ToolStatusText => SettingsVM.YtDlpFound && SettingsVM.FfmpegFound
+        ? "下载工具已就绪"
+        : "下载工具未就绪";
 
     public MainViewModel(
         ConfigService configService,
@@ -56,6 +64,20 @@ public partial class MainViewModel : ObservableObject
         SelectedNavIndex = 0;
 
         _downloadManager.TaskFinished += OnTaskFinished;
+        SettingsVM.PropertyChanged += OnSettingsViewModelPropertyChanged;
+        SettingsVM.SettingsSaved += OnSettingsSaved;
+    }
+
+    private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(SettingsViewModel.YtDlpFound) or nameof(SettingsViewModel.FfmpegFound))
+            OnPropertyChanged(nameof(ToolStatusText));
+    }
+
+    private void OnSettingsSaved()
+    {
+        DownloadVM.RefreshRuntimeConfigDisplay();
+        HistoryVM.RefreshStorageStatus();
     }
 
     private void OnTaskFinished(DownloadTask task)
@@ -116,6 +138,7 @@ public partial class MainViewModel : ObservableObject
 
         SettingsVM.Initialize();
         DownloadVM.Initialize();
+        HistoryVM.RefreshStorageStatus();
 
         StatusMessage = "正在检查运行环境...";
         var status = await _envService.CheckEnvironmentAsync();
@@ -142,5 +165,20 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = status.IsReady
             ? "Ready"
             : "环境未就绪，请检查设置。";
+    }
+
+    private static string GetAssemblyVersion()
+    {
+        var version = typeof(MainViewModel).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion
+            ?? typeof(MainViewModel).Assembly.GetName().Version?.ToString()
+            ?? "1.0.0";
+
+        var metadataIndex = version.IndexOf('+');
+        if (metadataIndex >= 0)
+            version = version[..metadataIndex];
+
+        return version;
     }
 }

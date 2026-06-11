@@ -366,13 +366,13 @@
                 Padding="0,8,0,0">
             <DockPanel>
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="V1.0.8 STABLE" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
-                    <TextBlock Text="   ACTIVE THREADS: " Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
-                    <TextBlock Text="{Binding QueueTasks.Count, Mode=OneWay}" Foreground="{StaticResource AccentBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
+                    <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
+                    <TextBlock Text="   进行中任务: " Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
+                    <TextBlock Text="{Binding ActiveDownloadCount, Mode=OneWay}" Foreground="{StaticResource AccentBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Ellipse Width="6" Height="6" Fill="{StaticResource AccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="SERVER STATUS: ONLINE" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
+                    <TextBlock Text="{Binding DataContext.ToolStatusText, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10" FontFamily="Cascadia Code, Consolas"/>
                 </StackPanel>
             </DockPanel>
         </Border>

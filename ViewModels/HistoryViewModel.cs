@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
@@ -13,24 +14,56 @@ namespace EasyGet.ViewModels;
 public partial class HistoryViewModel : ObservableObject
 {
     private readonly HistoryService _historyService;
+    private readonly ConfigService _configService;
     private readonly Action<ProcessStartInfo> _startProcess;
 
     [ObservableProperty] private string _searchKeyword = "";
     [ObservableProperty] private string _selectedMediaFilter = "全部";
     [ObservableProperty] private int _totalHistoryCount;
+    [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
 
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
 
     public HistoryViewModel(HistoryService historyService)
-        : this(historyService, StartProcess)
+        : this(historyService, new ConfigService(), StartProcess)
+    {
+    }
+
+    public HistoryViewModel(HistoryService historyService, ConfigService configService)
+        : this(historyService, configService, StartProcess)
     {
     }
 
     internal HistoryViewModel(HistoryService historyService, Action<ProcessStartInfo> startProcess)
+        : this(historyService, new ConfigService(), startProcess)
+    {
+    }
+
+    internal HistoryViewModel(HistoryService historyService, ConfigService configService, Action<ProcessStartInfo> startProcess)
     {
         _historyService = historyService;
+        _configService = configService;
         _startProcess = startProcess;
+    }
+
+    public void RefreshStorageStatus()
+    {
+        var downloadPath = _configService.Config.DefaultDownloadPath;
+
+        _ = Task.Run(() =>
+        {
+            var status = DescribeStorageStatus(downloadPath);
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is null || dispatcher.CheckAccess())
+            {
+                StorageStatusText = status;
+            }
+            else
+            {
+                dispatcher.InvokeAsync(() => StorageStatusText = status);
+            }
+        });
     }
 
     /// <summary>
@@ -193,6 +226,43 @@ public partial class HistoryViewModel : ObservableObject
     private static void StartProcess(ProcessStartInfo startInfo)
     {
         Process.Start(startInfo);
+    }
+
+    private static string DescribeStorageStatus(string downloadPath)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(downloadPath);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrWhiteSpace(root))
+                return "磁盘空间不可用";
+
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady)
+                return "磁盘空间不可用";
+
+            return $"{drive.Name} {FormatAvailableSpace(drive.AvailableFreeSpace)}";
+        }
+        catch
+        {
+            return "磁盘空间不可用";
+        }
+    }
+
+    internal static string FormatAvailableSpace(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = Math.Max(0, bytes);
+        var unitIndex = 0;
+        var displayValue = (double)value;
+
+        while (displayValue >= 1024 && unitIndex < units.Length - 1)
+        {
+            displayValue /= 1024;
+            unitIndex++;
+        }
+
+        return $"{displayValue:0.#} {units[unitIndex]} 可用";
     }
 
     private static bool MatchesMediaFilter(DownloadHistory item, string filter)

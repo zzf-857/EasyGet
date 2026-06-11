@@ -308,8 +308,8 @@
                             <TextBlock Text="&#xEC4A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                        Foreground="{StaticResource AccentBrush}" FontSize="18" Margin="0,0,12,0"/>
                             <StackPanel>
-                                <TextBlock Text="网速限制" Foreground="{StaticResource TextMutedBrush}" FontSize="10" FontWeight="SemiBold"/>
-                                <TextBlock Text="无限制" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                <TextBlock Text="并发分片" Foreground="{StaticResource TextMutedBrush}" FontSize="10" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding ConcurrentFragmentsText}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -347,7 +347,7 @@
                                        Foreground="{StaticResource WarningBrush}" FontSize="18" Margin="0,0,12,0"/>
                             <StackPanel>
                                 <TextBlock Text="代理状态" Foreground="{StaticResource TextMutedBrush}" FontSize="10" FontWeight="SemiBold"/>
-                                <TextBlock Text="系统默认" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding ProxyStatusText}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>

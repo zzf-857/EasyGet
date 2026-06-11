@@ -401,8 +401,9 @@
                 Padding="14,6">
             <StackPanel Orientation="Horizontal">
                 <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                <TextBlock Text="磁盘空间充足" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10"/>
-                <TextBlock Text="  ·  v1.2.4 Stable" Foreground="{StaticResource TextMutedBrush}" FontSize="10"/>
+                <TextBlock Text="{Binding StorageStatusText}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10"/>
+                <TextBlock Text="  ·  " Foreground="{StaticResource TextMutedBrush}" FontSize="10"/>
+                <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextMutedBrush}" FontSize="10"/>
             </StackPanel>
         </Border>
     </Grid>
