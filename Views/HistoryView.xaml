@@ -6,12 +6,12 @@
              behaviors:Motion.PageEnter="True"
              Loaded="HistoryView_Loaded">
 
-    <Grid Margin="32,20,32,32">
+    <Grid Margin="32,20,32,16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="32"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,24">
@@ -421,16 +421,27 @@
 
         <Border Grid.Row="3"
                 HorizontalAlignment="Left"
-                Background="{StaticResource BgSurfaceBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}"
+                VerticalAlignment="Bottom"
+                Background="{StaticResource BgSurfaceHighBrush}"
+                BorderBrush="{StaticResource BorderPrimaryBrush}"
                 BorderThickness="1"
-                CornerRadius="16"
-                Padding="14,6">
+                CornerRadius="18"
+                Padding="18,8">
             <StackPanel Orientation="Horizontal">
-                <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding StorageStatusText}" Foreground="{StaticResource TextSecondaryBrush}" FontSize="10"/>
-                <TextBlock Text="  ·  " Foreground="{StaticResource TextMutedBrush}" FontSize="10"/>
-                <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" Foreground="{StaticResource TextMutedBrush}" FontSize="10"/>
+                <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding StorageStatusText}" 
+                           Foreground="{StaticResource TextPrimaryBrush}" 
+                           FontSize="12" 
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="  ·  " 
+                           Foreground="{StaticResource TextMutedBrush}" 
+                           FontSize="12" 
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
+                           Foreground="{StaticResource TextSecondaryBrush}" 
+                           FontSize="11" 
+                           VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
     </Grid>
