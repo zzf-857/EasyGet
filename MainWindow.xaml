@@ -204,73 +204,83 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="{x:Type vm:NotificationItem}">
-                            <Border x:Name="ToastCard"
-                                    behaviors:Motion.PageEnter="True"
-                                    Margin="0,8,0,0" CornerRadius="10" Padding="0"
-                                    Cursor="Hand" Effect="{StaticResource PopupShadow}"
-                                    MouseEnter="ToastCard_MouseEnter"
-                                    MouseLeave="ToastCard_MouseLeave"
-                                    Width="360"
-                                    ClipToBounds="True">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Border.InputBindings>
+                            <Grid x:Name="ToastGrid"
+                                  behaviors:Motion.PageEnter="True"
+                                  Margin="0,8,0,0"
+                                  Width="360"
+                                  Cursor="Hand"
+                                  MouseEnter="ToastCard_MouseEnter"
+                                  MouseLeave="ToastCard_MouseLeave">
+                                <Grid.InputBindings>
                                     <MouseBinding MouseAction="LeftClick" Command="{Binding CloseCommand}"/>
-                                </Border.InputBindings>
-                                <Grid>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*"/>
-                                        <RowDefinition Height="Auto"/>
-                                    </Grid.RowDefinitions>
-                                    
-                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
-                                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
-                                                    <Setter Property="Text" Value="✓"/>
+                                </Grid.InputBindings>
+                                
+                                <!-- Shadow Layer (R1 模糊治理) -->
+                                <Border CornerRadius="10"
+                                        Background="{Binding ElementName=ToastCard, Path=Background}"
+                                        Effect="{StaticResource PopupShadow}"/>
+                                
+                                <!-- Text Content Container (Without shadow to preserve ClearType) -->
+                                <Border x:Name="ToastCard"
+                                        CornerRadius="10" Padding="0"
+                                        ClipToBounds="True">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
+                                            <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
+                                                        <Setter Property="Text" Value="✓"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                <Setter Property="Text" Value="✗"/>
+                                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Text="{Binding Message}"
+                                                       Style="{StaticResource TextBody}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                        </StackPanel>
+
+                                        <!-- Bottom progress line (2px) -->
+                                        <ProgressBar Grid.Row="1" Height="2"
+                                                     Background="Transparent"
+                                                     BorderThickness="0"
+                                                     Value="{Binding RemainingRatio, Mode=OneWay}"
+                                                     Maximum="1.0">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
                                                     <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Text" Value="✗"/>
                                                             <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Text="{Binding Message}"
-                                                   Style="{StaticResource TextBody}"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                    </StackPanel>
-
-                                    <!-- Bottom progress line (2px) -->
-                                    <ProgressBar Grid.Row="1" Height="2"
-                                                 Background="Transparent"
-                                                 BorderThickness="0"
-                                                 Value="{Binding RemainingRatio, Mode=OneWay}"
-                                                 Maximum="1.0">
-                                        <ProgressBar.Style>
-                                            <Style TargetType="ProgressBar">
-                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                        <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </ProgressBar.Style>
-                                    </ProgressBar>
-                                </Grid>
-                            </Border>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
+                                    </Grid>
+                                </Border>
+                            </Grid>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

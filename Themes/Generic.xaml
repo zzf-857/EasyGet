@@ -96,6 +96,55 @@
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
     </Style>
 
+    <!-- ========== ToolTip 与 ContextMenu 隐式样式 (R3 模糊治理) ========== -->
+    <Style TargetType="{x:Type ToolTip}">
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="UseLayoutRounding" Value="True"/>
+        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ToolTip}">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="{TemplateBinding Padding}">
+                        <ContentPresenter TextOptions.TextFormattingMode="Display"
+                                          UseLayoutRounding="True"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="{x:Type ContextMenu}">
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="UseLayoutRounding" Value="True"/>
+        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type ContextMenu}">
+                    <Border Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="6"
+                            Padding="2"
+                            TextOptions.TextFormattingMode="Display"
+                            UseLayoutRounding="True">
+                        <ItemsPresenter />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ========== 命名文本样式套件 ========== -->
     <Style x:Key="TextPageTitle" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
@@ -166,7 +215,6 @@
         <Setter Property="CornerRadius" Value="12"/>
         <Setter Property="Padding" Value="24,20"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
-        <Setter Property="Effect" Value="{StaticResource SoftShadow}"/>
         <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
         <Setter Property="RenderTransform">
             <Setter.Value>
@@ -244,8 +292,7 @@
                             Background="{TemplateBinding Background}"
                             CornerRadius="8"
                             RenderTransformOrigin="0.5,0.5"
-                            SnapsToDevicePixels="True"
-                            Effect="{StaticResource SoftShadow}">
+                            SnapsToDevicePixels="True">
                         <Border.RenderTransform>
                             <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
                         </Border.RenderTransform>
@@ -353,8 +400,7 @@
                             BorderThickness="1"
                             CornerRadius="8"
                             RenderTransformOrigin="0.5,0.5"
-                            SnapsToDevicePixels="True"
-                            Effect="{StaticResource SoftShadow}">
+                            SnapsToDevicePixels="True">
                         <Border.RenderTransform>
                             <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
                         </Border.RenderTransform>
@@ -638,7 +684,9 @@
                             <Grid x:Name="DropDown"
                                   SnapsToDevicePixels="True"
                                   MinWidth="{TemplateBinding ActualWidth}"
-                                  MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                  MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                  TextOptions.TextFormattingMode="Display"
+                                  UseLayoutRounding="True">
                                 <Border x:Name="DropDownBorder"
                                         Background="{StaticResource BgSurfaceBrush}"
                                         BorderBrush="{StaticResource BorderSubtleBrush}"
@@ -868,7 +916,6 @@
                             </Trigger.ExitActions>
                             <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
-                            <Setter TargetName="border" Property="Effect" Value="{StaticResource SoftShadow}"/>
                             <Setter TargetName="ActiveIndicator" Property="Opacity" Value="1"/>
                             <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
                         </Trigger>
@@ -952,7 +999,6 @@
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
-                            <Setter TargetName="border" Property="Effect" Value="{StaticResource SoftShadow}"/>
                             <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">

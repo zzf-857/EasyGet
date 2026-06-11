@@ -221,6 +221,44 @@ public class ThemeStyleTests
             attribute.Value.Contains("MotionEaseOut", StringComparison.Ordinal));
     }
 
+    [Theory]
+    [InlineData("ToolPanelBorder")]
+    [InlineData("AccentButton")]
+    [InlineData("SurfaceButton")]
+    [InlineData("NavRadioButton")]
+    [InlineData("HistoryFilterRadioButton")]
+    public void CheckedStylesDoNotContainEffectSettersOrAttributes(string styleKey)
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var style = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Style"
+                && element.Attribute(x + "Key")?.Value == styleKey);
+
+        Assert.NotNull(style);
+
+        // Ensure there is no Setter for Property="Effect"
+        var effectSetters = style!
+            .Descendants()
+            .Where(element =>
+                element.Name.LocalName == "Setter"
+                && element.Attribute("Property")?.Value == "Effect")
+            .ToList();
+
+        Assert.Empty(effectSetters);
+
+        // Ensure there is no inline Effect attribute on any element inside the template
+        var elementsWithEffectAttribute = style!
+            .Descendants()
+            .Where(element => element.Attribute("Effect") != null)
+            .ToList();
+
+        Assert.Empty(elementsWithEffectAttribute);
+    }
+
     [Fact]
     public void ToggleSwitchAnimatesThumbWithTransform()
     {
