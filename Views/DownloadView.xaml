@@ -67,7 +67,125 @@
                             </Grid>
                         </Border>
 
-                        <UniformGrid Columns="3" Margin="0,0,0,24">
+                        <Border Style="{StaticResource ToolPanelBorder}"
+                                Padding="18,16"
+                                Margin="0,0,0,18"
+                                Visibility="{Binding IsParsing, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <ProgressBar Width="96"
+                                             Height="6"
+                                             Margin="0,0,16,0"
+                                             IsIndeterminate="True"
+                                             VerticalAlignment="Center"/>
+                                <StackPanel>
+                                    <TextBlock Text="正在解析视频信息"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="正在获取封面、标题、时长和预估大小"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="12"
+                                               Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource ToolPanelBorder}"
+                                Padding="18,16"
+                                Margin="0,0,0,18"
+                                Tag="{Binding PreviewInfo}"
+                                Visibility="{Binding IsReady, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel>
+                                <TextBlock Text="视频预览"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="11"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,10"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="168"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0"
+                                            Width="152"
+                                            Height="86"
+                                            CornerRadius="8"
+                                            Background="{StaticResource BgSurfaceHighestBrush}"
+                                            ClipToBounds="True"
+                                            HorizontalAlignment="Left">
+                                        <Grid>
+                                            <Image Source="{Binding PreviewThumbnailUrl}"
+                                                   Stretch="UniformToFill"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                            <TextBlock Text="&#xE8B2;"
+                                                       FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="28"
+                                                       Opacity="0.35"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <DockPanel LastChildFill="True">
+                                            <Border DockPanel.Dock="Right"
+                                                    Background="{Binding PreviewPlatform, Converter={StaticResource PlatformToColor}}"
+                                                    CornerRadius="4"
+                                                    Padding="7,2"
+                                                    Margin="12,0,0,0"
+                                                    Visibility="{Binding PreviewPlatform, Converter={StaticResource StringToVisibility}}">
+                                                <TextBlock Text="{Binding PreviewPlatform}"
+                                                           Foreground="{StaticResource ScrimLightBrush}"
+                                                           FontSize="10"
+                                                           FontWeight="Bold"/>
+                                            </Border>
+                                            <TextBlock Text="{Binding PreviewTitle}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="15"
+                                                       FontWeight="SemiBold"
+                                                       TextWrapping="Wrap"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxHeight="44"/>
+                                        </DockPanel>
+                                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="12"
+                                                   Margin="0,8,0,0">
+                                            <Run Text="{Binding PreviewDurationText, Mode=OneWay}"/>
+                                            <Run Text=" · "/>
+                                            <Run Text="{Binding PreviewFileSizeText, Mode=OneWay}"/>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Style="{StaticResource ToolPanelBorder}"
+                                Background="{StaticResource ErrorContainerBrush}"
+                                BorderBrush="{StaticResource ErrorBrush}"
+                                Padding="18,16"
+                                Margin="0,0,0,18"
+                                Visibility="{Binding IsFailed, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE783;"
+                                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           Foreground="{StaticResource ErrorBrush}"
+                                           FontSize="18"
+                                           Margin="0,0,12,0"
+                                           VerticalAlignment="Center"/>
+                                <StackPanel>
+                                    <TextBlock Text="解析失败"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding ParseErrorMessage}"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="12"
+                                               Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <UniformGrid Columns="3"
+                                     Margin="0,0,0,24"
+                                     Visibility="{Binding IsReady, Converter={StaticResource BoolToVisibility}}">
                             <Border Style="{StaticResource ToolPanelBorder}" Padding="14,10" Margin="0,0,8,0">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -154,9 +272,27 @@
                                 HorizontalAlignment="Center"
                                 MinWidth="260"
                                 Padding="28,12"
+                                Margin="0,0,0,0"
+                                ToolTip="解析视频信息"
+                                AutomationProperties.Name="解析视频"
+                                Command="{Binding ParseCommand}"
+                                IsEnabled="{Binding IsParsing, Converter={StaticResource InverseBool}}"
+                                Visibility="{Binding IsParseActionVisible, Converter={StaticResource BoolToVisibility}}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="解析视频" FontSize="16" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <Button Style="{StaticResource AccentButton}"
+                                HorizontalAlignment="Center"
+                                MinWidth="260"
+                                Padding="28,12"
                                 ToolTip="开始下载"
                                 AutomationProperties.Name="开始下载"
-                                Command="{Binding StartDownloadCommand}">
+                                Command="{Binding StartDownloadCommand}"
+                                Visibility="{Binding IsReady, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                            FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>

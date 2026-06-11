@@ -70,7 +70,10 @@ public class UiTruthfulnessViewModelTests
             batchContext.Config,
             batchContext.Environment,
             batchContext.Manager);
-        var download = new DownloadViewModel(batchContext.Manager, batchContext.Config);
+        var download = new DownloadViewModel(
+            batchContext.Manager,
+            batchContext.Config,
+            new YtDlpVideoInfoProvider(batchContext.YtDlp));
         var history = new HistoryViewModel(batchContext.History, batchContext.Config);
         var main = new MainViewModel(
             batchContext.Config,
@@ -98,13 +101,14 @@ public class UiTruthfulnessViewModelTests
         var manager = new DownloadManager(ytDlp, history, config);
         var batch = new BatchDownloadViewModel(manager, config, ytDlp);
 
-        return new BatchContext(config, environment, history, manager, batch);
+        return new BatchContext(config, environment, history, ytDlp, manager, batch);
     }
 
     private sealed record BatchContext(
         ConfigService Config,
         EnvironmentService Environment,
         HistoryService History,
+        YtDlpService YtDlp,
         DownloadManager Manager,
         BatchDownloadViewModel Batch) : IDisposable
     {

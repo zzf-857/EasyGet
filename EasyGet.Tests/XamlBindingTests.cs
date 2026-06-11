@@ -334,6 +334,27 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void DownloadViewExposesParsePreviewWorkflow()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("解析视频", texts);
+        Assert.Contains("开始下载", texts);
+        Assert.Contains("视频预览", texts);
+        Assert.Contains("解析失败", texts);
+        Assert.Contains("ParseCommand", source);
+        Assert.Contains("StartDownloadCommand", source);
+        Assert.Contains("PreviewInfo", source);
+        Assert.Contains("IsParsing", source);
+        Assert.Contains("IsReady", source);
+        Assert.Contains("IsFailed", source);
+        Assert.Contains("PreviewDurationText, Mode=OneWay", source);
+        Assert.Contains("PreviewFileSizeText, Mode=OneWay", source);
+    }
+
+    [Fact]
     public void BatchDownloadViewUsesStitchQueueConsoleCopy()
     {
         var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));

@@ -15,6 +15,9 @@ public partial class DownloadViewModel : ObservableObject
 {
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
+    private readonly IVideoInfoProvider _videoInfoProvider;
+    private CancellationTokenSource? _parseCts;
+    private int _parseRequestId;
 
     // 输入
     [ObservableProperty] private string _url = "";
@@ -24,6 +27,21 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string _downloadDirectory = "";
     [ObservableProperty] private string _proxyStatusText = "未启用";
     [ObservableProperty] private string _concurrentFragmentsText = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsIdle))]
+    [NotifyPropertyChangedFor(nameof(IsParsing))]
+    [NotifyPropertyChangedFor(nameof(IsReady))]
+    [NotifyPropertyChangedFor(nameof(IsFailed))]
+    [NotifyPropertyChangedFor(nameof(IsParseActionVisible))]
+    private DownloadPageState _pageState = DownloadPageState.Idle;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviewTitle))]
+    [NotifyPropertyChangedFor(nameof(PreviewPlatform))]
+    [NotifyPropertyChangedFor(nameof(PreviewThumbnailUrl))]
+    [NotifyPropertyChangedFor(nameof(PreviewDurationText))]
+    [NotifyPropertyChangedFor(nameof(PreviewFileSizeText))]
+    private VideoInfo? _previewInfo;
+    [ObservableProperty] private string _parseErrorMessage = "";
 
     // 当前任务状态
     [ObservableProperty] private DownloadTask? _currentTask;
@@ -38,10 +56,22 @@ public partial class DownloadViewModel : ObservableObject
     public string[] QualityOptions { get; } = ["最高画质", "2160p (4K)", "1080p", "720p", "480p"];
     public string[] SubtitleOptions { get; } = ["不下载", "自动字幕", "全部字幕"];
 
-    public DownloadViewModel(DownloadManager downloadManager, ConfigService configService)
+    public bool IsIdle => PageState == DownloadPageState.Idle;
+    public bool IsParsing => PageState == DownloadPageState.Parsing;
+    public bool IsReady => PageState == DownloadPageState.Ready;
+    public bool IsFailed => PageState == DownloadPageState.Failed;
+    public bool IsParseActionVisible => PageState is DownloadPageState.Idle or DownloadPageState.Parsing or DownloadPageState.Failed;
+    public string PreviewTitle => PreviewInfo?.Title ?? "";
+    public string PreviewPlatform => PreviewInfo?.Platform ?? "";
+    public string PreviewThumbnailUrl => PreviewInfo?.Thumbnail ?? "";
+    public string PreviewDurationText => FormatDuration(PreviewInfo?.Duration ?? 0);
+    public string PreviewFileSizeText => FormatBytes(PreviewInfo?.FileSize ?? 0);
+
+    public DownloadViewModel(DownloadManager downloadManager, ConfigService configService, IVideoInfoProvider videoInfoProvider)
     {
         _downloadManager = downloadManager;
         _configService = configService;
+        _videoInfoProvider = videoInfoProvider;
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
 
         // 转发下载管理器的日志
@@ -55,6 +85,16 @@ public partial class DownloadViewModel : ObservableObject
                     LogLines.RemoveAt(0);
             });
         };
+    }
+
+    partial void OnUrlChanged(string value)
+    {
+        CancelParse();
+        PreviewInfo = null;
+        ParseErrorMessage = "";
+
+        if (PageState is DownloadPageState.Parsing or DownloadPageState.Ready or DownloadPageState.Failed)
+            PageState = DownloadPageState.Idle;
     }
 
     /// <summary>
@@ -124,6 +164,60 @@ public partial class DownloadViewModel : ObservableObject
         }
     }
 
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task Parse()
+    {
+        if (IsParsing)
+            return;
+
+        var cleanUrl = ExtractUrl(Url);
+        if (string.IsNullOrWhiteSpace(cleanUrl))
+        {
+            ShowParseError("未能从输入中识别出有效链接");
+            return;
+        }
+
+        CancelParse();
+        var requestId = ++_parseRequestId;
+        using var cts = new CancellationTokenSource();
+        _parseCts = cts;
+        PreviewInfo = null;
+        ParseErrorMessage = "";
+        PageState = DownloadPageState.Parsing;
+
+        try
+        {
+            var info = await _videoInfoProvider.GetVideoInfoAsync(cleanUrl, cts.Token);
+            if (cts.IsCancellationRequested || requestId != _parseRequestId)
+                return;
+
+            if (info is null)
+            {
+                ShowParseError("解析失败，请检查链接或稍后重试。");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(info.Url))
+                info.Url = cleanUrl;
+
+            PreviewInfo = info;
+            PageState = DownloadPageState.Ready;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            if (requestId == _parseRequestId)
+                ShowParseError($"解析失败: {ex.Message}");
+        }
+        finally
+        {
+            if (_parseCts == cts)
+                _parseCts = null;
+        }
+    }
+
     /// <summary>
     /// 开始下载
     /// </summary>
@@ -142,15 +236,16 @@ public partial class DownloadViewModel : ObservableObject
             return;
         }
 
-        IsDownloading = true;
-
         var cleanUrl = ExtractUrl(Url);
         if (string.IsNullOrWhiteSpace(cleanUrl))
         {
             LogLines.Add("[错误] 未能从输入中识别出有效链接");
-            IsDownloading = false;
+            ShowParseError("未能从输入中识别出有效链接");
             return;
         }
+
+        IsDownloading = true;
+        PageState = DownloadPageState.Downloading;
 
         var task = new DownloadTask
         {
@@ -175,6 +270,14 @@ public partial class DownloadViewModel : ObservableObject
                         or DownloadStatus.Resolving
                         or DownloadStatus.Downloading
                         or DownloadStatus.Merging;
+                    PageState = status switch
+                    {
+                        DownloadStatus.Completed => DownloadPageState.Completed,
+                        DownloadStatus.Failed => DownloadPageState.Failed,
+                        DownloadStatus.Cancelled => DownloadPageState.Idle,
+                        _ when IsDownloading => DownloadPageState.Downloading,
+                        _ => PageState
+                    };
                 });
             }
         };
@@ -193,6 +296,7 @@ public partial class DownloadViewModel : ObservableObject
         {
             _downloadManager.Cancel(CurrentTask.Id);
             IsDownloading = false;
+            PageState = DownloadPageState.Idle;
         }
     }
 
@@ -224,6 +328,21 @@ public partial class DownloadViewModel : ObservableObject
         LogLines.Clear();
     }
 
+    private void CancelParse()
+    {
+        _parseRequestId++;
+        _parseCts?.Cancel();
+        _parseCts?.Dispose();
+        _parseCts = null;
+    }
+
+    private void ShowParseError(string message)
+    {
+        PreviewInfo = null;
+        ParseErrorMessage = message;
+        PageState = DownloadPageState.Failed;
+    }
+
     private static string ParseFormat(string display) => display switch
     {
         "mp3 (仅音频)" => "mp3",
@@ -243,6 +362,32 @@ public partial class DownloadViewModel : ObservableObject
 
     internal static string DescribeConcurrentFragments(AppConfig config)
         => $"{config.ConcurrentFragments} 分片";
+
+    private static string FormatDuration(double seconds)
+    {
+        if (seconds <= 0)
+            return "时长未知";
+
+        var ts = TimeSpan.FromSeconds(seconds);
+        return ts.Hours > 0 ? $"{ts:hh\\:mm\\:ss}" : $"{ts:mm\\:ss}";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0)
+            return "大小未知";
+
+        string[] sizes = ["B", "KB", "MB", "GB", "TB"];
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len /= 1024;
+        }
+
+        return $"{len:0.#} {sizes[order]}";
+    }
 
     /// <summary>
     /// 从粘贴文本中提取第一个 http/https URL（支持抖音分享文本等）

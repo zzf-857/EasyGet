@@ -38,6 +38,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
             services.AddSingleton<YtDlpService>();
+            services.AddSingleton<IVideoInfoProvider, YtDlpVideoInfoProvider>();
             services.AddSingleton<DownloadManager>();
 
             // ViewModel 层
