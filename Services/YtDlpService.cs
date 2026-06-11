@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -101,6 +101,21 @@ public partial class YtDlpService
         catch (Exception ex)
         {
             Debug.WriteLine($"[YtDlpService] GetVideoInfo failed: {ex.Message}");
+        }
+
+        if (IsXiaohongshuUrl(url))
+        {
+            try
+            {
+                var fallback = new XiaohongshuImageDownloadService(_configService);
+                var info = await fallback.GetImageNoteInfoAsync(url, ct);
+                if (info != null)
+                    return info;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[YtDlpService] Xiaohongshu image fallback failed: {ex.Message}");
+            }
         }
 
         return null;
@@ -387,6 +402,14 @@ public partial class YtDlpService
         {
             logCallback?.Invoke("[yt-dlp] Douyin extractor failed; trying browser fallback...");
             var fallback = new DouyinBrowserDownloadService();
+            if (await fallback.TryDownloadAsync(task, progress, logCallback, ct))
+                return;
+        }
+
+        if (IsXiaohongshuUrl(task.Url))
+        {
+            logCallback?.Invoke("[yt-dlp] Xiaohongshu extractor failed; trying image fallback...");
+            var fallback = new XiaohongshuImageDownloadService(_configService);
             if (await fallback.TryDownloadAsync(task, progress, logCallback, ct))
                 return;
         }
@@ -735,6 +758,15 @@ public partial class YtDlpService
 
         return uri.Host.Contains("bilibili.com", StringComparison.OrdinalIgnoreCase)
             || uri.Host.Contains("b23.tv", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsXiaohongshuUrl(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return false;
+
+        return url.Contains("xiaohongshu.com", StringComparison.OrdinalIgnoreCase)
+            || url.Contains("xhslink.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ShouldRetryWithNextCookieStrategy(string url, List<string> stderrLines)

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#393939",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#353535",
+                        "secondary": "#cfbdff",
+                        "primary-fixed": "#c1e8ff",
+                        "surface-container": "#202020",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed": "#21005d",
+                        "secondary-fixed-dim": "#cfbdff",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-fixed-variant": "#004d67",
+                        "inverse-on-surface": "#303030",
+                        "surface-container-lowest": "#0e0e0e",
+                        "error-container": "#93000a",
+                        "on-background": "#e5e2e1",
+                        "on-error": "#690005",
+                        "on-secondary-fixed-variant": "#5127ad",
+                        "on-tertiary-fixed": "#291800",
+                        "primary-container": "#60cdff",
+                        "on-surface": "#e5e2e1",
+                        "on-secondary-container": "#bfa8ff",
+                        "primary": "#b4e4ff",
+                        "on-primary-fixed": "#001e2b",
+                        "outline-variant": "#3e484e",
+                        "surface-tint": "#74d1ff",
+                        "on-tertiary": "#452b00",
+                        "tertiary-fixed": "#ffddb4",
+                        "inverse-primary": "#006687",
+                        "on-secondary": "#390093",
+                        "surface-variant": "#353535",
+                        "tertiary": "#ffd6a4",
+                        "on-surface-variant": "#bdc8cf",
+                        "on-tertiary-fixed-variant": "#633f00",
+                        "background": "#131313",
+                        "surface-container-low": "#1b1b1c",
+                        "primary-fixed-dim": "#74d1ff",
+                        "on-primary-container": "#005572",
+                        "surface-dim": "#131313",
+                        "tertiary-fixed-dim": "#ffb955",
+                        "tertiary-container": "#fcb347",
+                        "secondary-fixed": "#e8ddff",
+                        "outline": "#889299",
+                        "secondary-container": "#5127ad",
+                        "on-primary": "#003548",
+                        "inverse-surface": "#e5e2e1",
+                        "surface": "#131313",
+                        "on-tertiary-container": "#6e4700"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "component-padding-y": "8px",
+                        "gutter": "16px",
+                        "component-padding-x": "12px",
+                        "margin-page": "32px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "title-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background: #0e0e0e;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .mica-effect {
+            background: rgba(19, 19, 19, 0.8);
+            backdrop-filter: blur(40px) saturate(180%);
+        }
+        .acrylic-card {
+            background: rgba(57, 57, 57, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+        }
+        .acrylic-card:hover {
+            background: rgba(57, 57, 57, 0.6);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar -->
+<aside class="h-screen w-[240px] fixed left-0 top-0 bg-surface-container-low/60 dark:bg-surface-container-low/60 backdrop-blur-xl border-r border-outline-variant/30 flex flex-col py-6 px-3 z-50">
+<div class="px-3 mb-10 flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">download</span>
+</div>
+<div>
+<h1 class="font-title-sm text-title-sm font-semibold text-on-surface">EasyGet</h1>
+<p class="text-[10px] text-on-surface-variant font-medium tracking-wider uppercase">Pro Account</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-4 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined">download</span>
+<span class="font-body-md text-body-md">单个下载</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined">library_add</span>
+<span class="font-body-md text-body-md">批量下载</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined">history</span>
+<span class="font-body-md text-body-md">下载历史</span>
+</a>
+<a class="flex items-center gap-4 px-3 py-2.5 rounded-lg bg-white/10 text-primary border-l-4 border-primary transition-colors active:scale-95 duration-150" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-body-md text-body-md">设置</span>
+</a>
+</nav>
+<div class="mt-auto px-3 py-4 flex items-center gap-3 border-t border-outline-variant/20 pt-6">
+<img alt="User Profile" class="w-8 h-8 rounded-full" data-alt="A professional close-up portrait of a tech-savvy user in a modern office environment, lit by cool blue ambient screen glow. The individual wears clean, minimal professional attire, representing a high-end software user persona. The overall image has a soft-focus background with bokeh lights, creating a premium and focused atmosphere consistent with corporate modern design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBz_HQIdTMf5cvK2PYB5hcA-NYhcE9javJK_YP68liJCYCNRn0k9mrt1uP2UFYNMIvPf0YumvCEgKFRlo1MN1upWiY1HzF-p4s-HmmA3Z4buDGsx1lnN946G_G-bJhX2OT8pzagd2FYWaYXW478HMozYflp7afNWQBWwzeruON6RcZ7eYvSylkefVmzZkxdFlThTm5HFrwFdZ6DuwDjqDaGYfypVRkjKeG9mfNx19xejic-tfS7eyYkNIMLa3tGS9DXobW2kv_IcGwT"/>
+<div class="overflow-hidden">
+<p class="text-xs font-semibold truncate">Alex Chen</p>
+<p class="text-[10px] text-on-surface-variant">Version 2.4.0</p>
+</div>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-[240px] h-12 bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant/20 flex justify-between items-center px-8 z-40 shadow-sm">
+<div class="flex items-center gap-4">
+<span class="font-title-sm text-title-sm text-on-surface font-medium">设置中心</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="relative group">
+<input class="bg-surface-container-high border-none rounded-full py-1 px-4 text-xs w-48 focus:ring-1 focus:ring-primary-container transition-all" placeholder="搜索设置..." type="text"/>
+<span class="material-symbols-outlined absolute right-3 top-1 text-[16px] text-on-surface-variant group-hover:text-primary transition-colors">search</span>
+</div>
+<div class="flex items-center ml-4">
+<button class="p-2 hover:bg-surface-bright rounded-md transition-all duration-200">
+<span class="material-symbols-outlined text-[18px]">remove</span>
+</button>
+<button class="p-2 hover:bg-surface-bright rounded-md transition-all duration-200">
+<span class="material-symbols-outlined text-[18px]">check_box_outline_blank</span>
+</button>
+<button class="p-2 hover:bg-error/10 hover:text-error rounded-md transition-all duration-200">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<main class="ml-[240px] mt-12 flex-1 p-margin-page overflow-y-auto">
+<div class="max-w-4xl mx-auto space-y-8 pb-12">
+<!-- Header Section -->
+<div class="space-y-2">
+<h2 class="font-display-lg text-display-lg text-on-surface">系统设置</h2>
+<p class="text-on-surface-variant font-body-md text-body-md">管理下载环境、全局偏好及网络连接设置。</p>
+</div>
+<!-- Environment Section -->
+<section class="space-y-4">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary">terminal</span>
+<h3 class="font-title-sm text-title-sm font-semibold">环境检测</h3>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- yt-dlp -->
+<div class="acrylic-card rounded-xl p-4 flex flex-col justify-between transition-all duration-300">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary">data_object</span>
+</div>
+<div>
+<p class="font-semibold text-on-surface">yt-dlp</p>
+<p class="text-xs text-on-surface-variant">核心解析引擎</p>
+</div>
+</div>
+<span class="px-2 py-0.5 bg-primary-container/20 text-primary border border-primary/30 rounded text-[10px] font-bold uppercase tracking-wider">已安装</span>
+</div>
+<div class="flex justify-between items-center text-xs">
+<span class="text-on-surface-variant">当前版本: 2024.03.10</span>
+<button class="text-primary hover:underline font-medium">更新</button>
+</div>
+</div>
+<!-- ffmpeg -->
+<div class="acrylic-card rounded-xl p-4 flex flex-col justify-between transition-all duration-300">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">movie_edit</span>
+</div>
+<div>
+<p class="font-semibold text-on-surface">ffmpeg</p>
+<p class="text-xs text-on-surface-variant">多媒体混流工具</p>
+</div>
+</div>
+<span class="px-2 py-0.5 bg-primary-container/20 text-primary border border-primary/30 rounded text-[10px] font-bold uppercase tracking-wider">已安装</span>
+</div>
+<div class="flex justify-between items-center text-xs">
+<span class="text-on-surface-variant">当前版本: n6.1.1-3</span>
+<button class="px-3 py-1 bg-white/5 hover:bg-white/10 rounded border border-white/10 transition-colors">重新检测</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Download Settings -->
+<section class="space-y-4">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary">download_for_offline</span>
+<h3 class="font-title-sm text-title-sm font-semibold">下载设置</h3>
+</div>
+<div class="acrylic-card rounded-xl overflow-hidden divide-y divide-outline-variant/10">
+<!-- Directory Picker -->
+<div class="p-gutter flex items-center justify-between group">
+<div class="flex-1">
+<p class="font-body-md text-body-md font-medium">默认保存目录</p>
+<p class="text-xs text-on-surface-variant mt-0.5">D:\Downloads\EasyGet_Media</p>
+</div>
+<button class="px-4 py-1.5 bg-primary-container text-on-primary-container text-xs font-semibold rounded-lg hover:brightness-110 active:scale-95 transition-all">更改目录</button>
+</div>
+<!-- Default Format -->
+<div class="p-gutter flex items-center justify-between">
+<div>
+<p class="font-body-md text-body-md font-medium">默认下载格式</p>
+<p class="text-xs text-on-surface-variant mt-0.5">优先下载最优画质的封装格式</p>
+</div>
+<div class="flex gap-2">
+<span class="px-3 py-1 bg-surface-container-highest rounded text-xs font-medium cursor-pointer hover:bg-primary/20 hover:text-primary transition-colors border border-transparent hover:border-primary/30">MP4</span>
+<span class="px-3 py-1 bg-primary/20 text-primary border border-primary/30 rounded text-xs font-medium cursor-pointer">MKV</span>
+<span class="px-3 py-1 bg-surface-container-highest rounded text-xs font-medium cursor-pointer hover:bg-primary/20 hover:text-primary transition-colors border border-transparent hover:border-primary/30">WEBM</span>
+</div>
+</div>
+<!-- Quality -->
+<div class="p-gutter flex items-center justify-between">
+<div>
+<p class="font-body-md text-body-md font-medium">最大下载分辨率</p>
+<p class="text-xs text-on-surface-variant mt-0.5">针对支持多分辨率的视频网站生效</p>
+</div>
+<select class="bg-surface-container-high border-none rounded-lg text-xs font-medium py-1.5 pr-8 focus:ring-1 focus:ring-primary-container cursor-pointer">
+<option>4K Ultra HD (2160p)</option>
+<option selected="">2K QHD (1440p)</option>
+<option>Full HD (1080p)</option>
+<option>HD (720p)</option>
+</select>
+</div>
+</div>
+</section>
+<!-- Proxy Settings -->
+<section class="space-y-4">
+<div class="flex items-center gap-2 px-1">
+<span class="material-symbols-outlined text-primary">vpn_lock</span>
+<h3 class="font-title-sm text-title-sm font-semibold">代理设置</h3>
+</div>
+<div class="acrylic-card rounded-xl p-gutter space-y-6">
+<div class="flex items-center justify-between">
+<div>
+<p class="font-body-md text-body-md font-medium">启用网络代理</p>
+<p class="text-xs text-on-surface-variant">用于访问受限区域的媒体内容</p>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox" value=""/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="grid grid-cols-3 gap-4">
+<div class="col-span-1 space-y-2">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">协议类型</label>
+<select class="w-full bg-surface-container-high border-none rounded-lg text-xs py-2 focus:ring-1 focus:ring-primary-container">
+<option>HTTP</option>
+<option selected="">SOCKS5</option>
+<option>Shadowsocks</option>
+</select>
+</div>
+<div class="col-span-1 space-y-2">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">代理地址</label>
+<input class="w-full bg-surface-container-high border-none rounded-lg text-xs py-2 focus:ring-1 focus:ring-primary-container" type="text" value="127.0.0.1"/>
+</div>
+<div class="col-span-1 space-y-2">
+<label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest px-1">端口</label>
+<input class="w-full bg-surface-container-high border-none rounded-lg text-xs py-2 focus:ring-1 focus:ring-primary-container" type="text" value="7890"/>
+</div>
+</div>
+<div class="flex justify-end gap-3 pt-2">
+<button class="px-4 py-2 text-xs font-semibold text-on-surface hover:bg-white/5 rounded-lg transition-all">测试连接</button>
+<button class="px-6 py-2 text-xs font-semibold bg-primary-container text-on-primary-container rounded-lg shadow-lg shadow-primary-container/20 hover:brightness-110 active:scale-95 transition-all">保存配置</button>
+</div>
+</div>
+</section>
+<!-- Footer / Info -->
+<div class="pt-8 text-center">
+<p class="text-[11px] text-on-surface-variant/40 font-medium tracking-tight">EASYGET MEDIA DOWNLOADER ENGINE v2.4.0 (STABLE B642)</p>
+<p class="text-[10px] text-on-surface-variant/30 mt-1 italic">Designed for High-Performance Desktop Environments</p>
+</div>
+</div>
+</main>
+<script>
+        // Simple micro-interaction for cards
+        document.querySelectorAll('.acrylic-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0px)';
+            });
+        });
+    </script>
+</body></html>

@@ -1,0 +1,359 @@
+<!DOCTYPE html><html class="dark" lang="zh-CN" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>EasyGet - 单个视频下载</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#393939",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#353535",
+                        "secondary": "#cfbdff",
+                        "primary-fixed": "#c1e8ff",
+                        "surface-container": "#202020",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed": "#21005d",
+                        "secondary-fixed-dim": "#cfbdff",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-fixed-variant": "#004d67",
+                        "inverse-on-surface": "#303030",
+                        "surface-container-lowest": "#0e0e0e",
+                        "error-container": "#93000a",
+                        "on-background": "#e5e2e1",
+                        "on-error": "#690005",
+                        "on-secondary-fixed-variant": "#5127ad",
+                        "on-tertiary-fixed": "#291800",
+                        "primary-container": "#60cdff",
+                        "on-surface": "#e5e2e1",
+                        "on-secondary-container": "#bfa8ff",
+                        "primary": "#b4e4ff",
+                        "on-primary-fixed": "#001e2b",
+                        "outline-variant": "#3e484e",
+                        "surface-tint": "#74d1ff",
+                        "on-tertiary": "#452b00",
+                        "tertiary-fixed": "#ffddb4",
+                        "inverse-primary": "#006687",
+                        "on-secondary": "#390093",
+                        "surface-variant": "#353535",
+                        "tertiary": "#ffd6a4",
+                        "on-surface-variant": "#bdc8cf",
+                        "on-tertiary-fixed-variant": "#633f00",
+                        "background": "#131313",
+                        "surface-container-low": "#1b1b1c",
+                        "primary-fixed-dim": "#74d1ff",
+                        "on-primary-container": "#005572",
+                        "surface-dim": "#131313",
+                        "tertiary-fixed-dim": "#ffb955",
+                        "tertiary-container": "#fcb347",
+                        "secondary-fixed": "#e8ddff",
+                        "outline": "#889299",
+                        "secondary-container": "#5127ad",
+                        "on-primary": "#003548",
+                        "inverse-surface": "#e5e2e1",
+                        "surface": "#131313",
+                        "on-tertiary-container": "#6e4700"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "component-padding-y": "8px",
+                        "gutter": "16px",
+                        "component-padding-x": "12px",
+                        "margin-page": "32px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "title-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .mica-effect {
+            background: rgba(27, 27, 28, 0.6);
+            backdrop-filter: blur(40px) saturate(1.5);
+            -webkit-backdrop-filter: blur(40px) saturate(1.5);
+        }
+        .acrylic-effect {
+            background: rgba(42, 42, 42, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .terminal-text {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        }
+        .active-nav-indicator {
+            position: absolute;
+            left: 0;
+            width: 4px;
+            height: 20px;
+            background-color: #60cdff;
+            border-radius: 0 4px 4px 0;
+        }
+    </style>
+</head>
+<body class="flex h-screen">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-[240px] fixed left-0 top-0 bg-surface-container-low/60 dark:bg-surface-container-low/60 backdrop-blur-xl border-r border-outline-variant/30 flex flex-col py-gutter px-component-padding-x z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center shadow-lg shadow-primary-container/20">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">download</span>
+</div>
+<div>
+<h1 class="font-title-sm text-title-sm font-semibold text-on-surface">EasyGet</h1>
+<p class="text-[10px] text-on-surface-variant/70 tracking-widest uppercase">Pro Account</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Active Tab: Single Download -->
+<a class="group relative flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/10 text-primary transition-all duration-150 active:scale-95 border-l-4 border-primary" href="#" style="transform: scale(1);">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">download</span>
+<span class="font-body-md text-body-md">单个下载</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors duration-150 active:scale-95" href="#" style="transform: scale(1);">
+<span class="material-symbols-outlined text-[20px]">library_add</span>
+<span class="font-body-md text-body-md">批量下载</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors duration-150 active:scale-95" href="#" style="transform: scale(1);">
+<span class="material-symbols-outlined text-[20px]">history</span>
+<span class="font-body-md text-body-md">下载历史</span>
+</a>
+<a class="group flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors duration-150 active:scale-95" href="#" style="transform: scale(1);">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span class="font-body-md text-body-md">设置中心</span>
+</a>
+</nav>
+<div class="mt-auto pt-4 border-t border-outline-variant/20 px-2 flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden">
+<img alt="User Profile" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0N3xicvGKrxrIAnnj56LMOS6TBDdVM4M9p0U0PhkPsXsxbSwIffUm77wcaKsEJrtKo44vbtwRxBEW7O7Qy3A8TP7nt814xofYySS_mf3DXXvcnWi6DyWeBoUYviddkK0IV7ZPRffDMCm1kouEHZWgjntO_TAYaZxIQWooGpXp9J2k73dsga7RhSK8RycA0e2N9AHE4X_fYygv2jcdItyGiiTGa4yAIYLG0rgEwee3RPBoW4HNorp6JFklovVVEb4GqP_wXFotTGbG">
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-[12px] font-medium truncate text-on-surface">Power User</p>
+<p class="text-[10px] text-on-surface-variant truncate">v1.2.0 Stable</p>
+</div>
+</div>
+</aside>
+<!-- TopAppBar Anchor -->
+<header class="fixed top-0 right-0 left-[240px] h-12 bg-surface-dim/80 dark:bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant/20 shadow-sm flex justify-between items-center px-gutter z-40">
+<div class="flex items-center gap-4">
+<span class="font-title-sm text-title-sm font-semibold text-on-surface">单个视频下载</span>
+</div>
+<div class="flex items-center gap-1">
+<button class="w-10 h-8 flex items-center justify-center hover:bg-surface-bright transition-all duration-200 rounded">
+<span class="material-symbols-outlined text-[18px]">remove</span>
+</button>
+<button class="w-10 h-8 flex items-center justify-center hover:bg-surface-bright transition-all duration-200 rounded">
+<span class="material-symbols-outlined text-[18px]">check_box_outline_blank</span>
+</button>
+<button class="w-10 h-8 flex items-center justify-center hover:bg-error/20 hover:text-error transition-all duration-200 rounded">
+<span class="material-symbols-outlined text-[18px]">close</span>
+</button>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="flex-1 ml-[240px] mt-12 p-margin-page overflow-y-auto custom-scrollbar relative">
+<!-- Atmospheric Background Layer -->
+<div class="absolute inset-0 pointer-events-none -z-10 overflow-hidden">
+<div class="absolute -top-[10%] -right-[5%] w-[40%] h-[40%] bg-primary/10 blur-[120px] rounded-full"></div>
+<div class="absolute -bottom-[10%] -left-[5%] w-[30%] h-[30%] bg-secondary/10 blur-[100px] rounded-full"></div>
+</div>
+<div class="max-w-4xl mx-auto space-y-gutter">
+<!-- URL Input Area -->
+<section class="acrylic-effect p-8 rounded-xl space-y-6">
+<div class="space-y-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">粘贴视频链接</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">支持 YouTube, Bilibili, Twitter, TikTok 等平台</p>
+</div>
+<div class="relative group">
+<div class="absolute inset-0 bg-primary/20 blur-md opacity-0 group-focus-within:opacity-100 transition-opacity duration-300"></div>
+<div class="relative flex items-center bg-surface-container-lowest border-2 border-outline-variant focus-within:border-primary-container rounded-xl transition-all duration-300">
+<span class="material-symbols-outlined px-4 text-on-surface-variant">link</span>
+<input class="flex-1 bg-transparent border-none focus:ring-0 py-5 text-on-surface font-body-md placeholder:text-on-surface-variant/40" placeholder="https://www.youtube.com/watch?v=..." type="text">
+<button class="mr-3 px-6 py-2 bg-surface-container-highest hover:bg-surface-bright text-on-surface rounded-lg font-medium transition-all duration-200 active:scale-95 flex items-center gap-2 border border-white/5">
+<span class="material-symbols-outlined text-[18px]">content_paste</span>
+<span class="">粘贴</span>
+</button>
+</div>
+</div>
+<!-- Bento Configuration Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<div class="acrylic-effect p-component-padding-x py-component-padding-y rounded-xl flex items-center justify-between group hover:border-primary/30 transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-secondary">movie</span>
+</div>
+<div>
+<p class="text-[12px] text-on-surface-variant">视频格式</p>
+<p class="font-medium text-on-surface">MP4 Video</p>
+</div>
+</div>
+<select class="bg-transparent border-none focus:ring-0 text-primary font-medium cursor-pointer appearance-none text-right pr-8">
+<option value="mp4">mp4</option>
+<option value="mkv">mkv</option>
+<option value="webm">webm</option>
+<option value="mp3">mp3 (仅音频)</option>
+</select>
+</div>
+<div class="acrylic-effect p-component-padding-x py-component-padding-y rounded-xl flex items-center justify-between group hover:border-primary/30 transition-colors">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-surface-container-high flex items-center justify-center">
+<span class="material-symbols-outlined text-tertiary">high_quality</span>
+</div>
+<div>
+<p class="text-[12px] text-on-surface-variant">首选画质</p>
+<p class="font-medium text-on-surface">最高可用画质</p>
+</div>
+</div>
+<select class="bg-transparent border-none focus:ring-0 text-primary font-medium cursor-pointer appearance-none text-right pr-8">
+<option value="best">最高画质</option>
+<option value="4k">4K Ultra HD</option>
+<option value="1080p">1080p Full HD</option>
+<option value="720p">720p HD</option>
+</select>
+</div>
+</div>
+<div class="pt-4 flex justify-center">
+<button class="group relative w-full md:w-auto min-w-[300px] h-14 bg-primary-container text-on-primary-container rounded-full font-bold text-lg shadow-lg shadow-primary-container/30 hover:shadow-primary-container/50 hover:-translate-y-0.5 transition-all duration-300 flex items-center justify-center gap-3 overflow-hidden" style="transform: scale(1);">
+<div class="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 skew-x-[-45deg]"></div>
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span class="">开始下载</span>
+</button>
+</div>
+</section>
+<!-- Download Log Area -->
+<section class="space-y-4">
+<div class="flex items-center justify-between px-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[20px]">terminal</span>
+<h3 class="font-title-sm text-title-sm font-medium text-on-surface-variant">下载日志</h3>
+</div>
+<button class="text-[12px] text-on-surface-variant hover:text-on-surface transition-colors flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px]">delete_sweep</span>
+<span class="">清空日志</span>
+</button>
+</div>
+<div class="acrylic-effect rounded-xl overflow-hidden">
+<div class="h-64 terminal-text p-4 text-[13px] leading-relaxed overflow-y-auto custom-scrollbar bg-black/40">
+<div class="flex gap-4 mb-1">
+<span class="text-on-surface-variant opacity-40 shrink-0">[14:20:05]</span>
+<span class="text-primary-fixed">Ready.</span>
+</div>
+<div class="flex gap-4 mb-1">
+<span class="text-on-surface-variant opacity-40 shrink-0">[14:20:12]</span>
+<span class="text-on-surface">正在连接解析引擎 yt-dlp...</span>
+</div>
+<div class="flex gap-4 mb-1">
+<span class="text-on-surface-variant opacity-40 shrink-0">[14:20:13]</span>
+<span class="text-on-surface">版本验证成功: yt-dlp 2024.03.10</span>
+</div>
+<div class="flex gap-4 mb-1">
+<span class="text-on-surface-variant opacity-40 shrink-0">[14:20:15]</span>
+<span class="text-secondary">等待输入视频 URL 以开始任务。</span>
+</div>
+<div class="flex gap-4 mt-4 items-center">
+<span class="text-primary animate-pulse">_</span>
+</div>
+</div>
+</div>
+</section>
+<!-- Bottom Context Info -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-margin-page">
+<div class="flex items-center gap-3 p-4 acrylic-effect rounded-xl">
+<span class="material-symbols-outlined text-primary-fixed">speed</span>
+<div>
+<p class="text-[10px] uppercase tracking-tighter text-on-surface-variant">网速限制</p>
+<p class="text-sm font-semibold text-on-surface">无限制</p>
+</div>
+</div>
+<div class="flex items-center gap-3 p-4 acrylic-effect rounded-xl">
+<span class="material-symbols-outlined text-secondary-fixed">folder_open</span>
+<div>
+<p class="text-[10px] uppercase tracking-tighter text-on-surface-variant">保存目录</p>
+<p class="text-sm font-semibold text-on-surface truncate max-w-[120px]">D:/Videos/EasyGet</p>
+</div>
+</div>
+<div class="flex items-center gap-3 p-4 acrylic-effect rounded-xl">
+<span class="material-symbols-outlined text-tertiary-fixed-dim">vpn_key</span>
+<div>
+<p class="text-[10px] uppercase tracking-tighter text-on-surface-variant">代理状态</p>
+<p class="text-sm font-semibold text-on-surface">系统默认</p>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Micro-interaction Script -->
+<script>
+        document.querySelectorAll('button, a').forEach(el => {
+            el.addEventListener('mousedown', () => {
+                el.style.transform = 'scale(0.96)';
+            });
+            el.addEventListener('mouseup', () => {
+                el.style.transform = 'scale(1)';
+            });
+            el.addEventListener('mouseleave', () => {
+                el.style.transform = 'scale(1)';
+            });
+        });
+
+        // Simple log simulator
+        const logContainer = document.querySelector('.terminal-text');
+        function addLog(msg, color = 'text-on-surface') {
+            const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+            const logEntry = document.createElement('div');
+            logEntry.className = 'flex gap-4 mb-1 animate-in fade-in slide-in-from-left-2 duration-300';
+            logEntry.innerHTML = `
+                <span class="text-on-surface-variant opacity-40 shrink-0">[${time}]</span>
+                <span class="${color}">${msg}</span>
+            `;
+            logContainer.insertBefore(logEntry, logContainer.lastElementChild);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Simulating some activity after 2 seconds
+        setTimeout(() => {
+            addLog('核心模块运行正常，环境检查通过。', 'text-primary');
+        }, 2000);
+    </script>
+</body></html>

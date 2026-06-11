@@ -1,0 +1,50 @@
+using EasyGet.Services;
+using Xunit;
+
+namespace EasyGet.Tests;
+
+public class YtDlpCookieTests
+{
+    [Fact]
+    public void BuildCookieFileLines_PreservesNetscapeCookieFileInput()
+    {
+        var input = """
+            # Netscape HTTP Cookie File
+            .youtube.com	TRUE	/	TRUE	1811688281	__Secure-1PSID	token-value
+            .youtube.com	TRUE	/	FALSE	0	PREF	tz=UTC
+            """;
+
+        var lines = YtDlpService.BuildCookieFileLines(input);
+
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688281\t__Secure-1PSID\ttoken-value", lines);
+        Assert.Contains(".youtube.com\tTRUE\t/\tFALSE\t0\tPREF\ttz=UTC", lines);
+    }
+
+    [Fact]
+    public void BuildCookieFileLines_StripsCookieHeaderNameAndMarksYoutubeCookiesSecure()
+    {
+        var lines = YtDlpService.BuildCookieFileLines("Cookie: __Secure-1PSID=token-value; PREF=tz=UTC");
+
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\t__Secure-1PSID\ttoken-value", lines);
+        Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\ttz=UTC", lines);
+        Assert.DoesNotContain(lines, line => line.Contains("Cookie:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessage_PreservesYoutubeForbiddenCauseAfterBrowserCookieFailures()
+    {
+        var stderrLines = new[]
+        {
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden",
+            "ERROR: Could not copy Chrome cookie database.",
+            "ERROR: Failed to decrypt with DPAPI."
+        };
+
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://www.youtube.com/watch?v=wFbtM0sfcEw",
+            stderrLines,
+            1);
+
+        Assert.Contains("YouTube 下载被风控拦截", message);
+    }
+}

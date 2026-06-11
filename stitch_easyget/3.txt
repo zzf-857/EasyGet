@@ -1,0 +1,404 @@
+<html class="dark" lang="zh-CN"><head></head><body class="flex min-h-screen">```html
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>EasyGet - 下载历史</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-bright": "#393939",
+                        "error": "#ffb4ab",
+                        "surface-container-highest": "#353535",
+                        "secondary": "#cfbdff",
+                        "primary-fixed": "#c1e8ff",
+                        "surface-container": "#202020",
+                        "on-error-container": "#ffdad6",
+                        "on-secondary-fixed": "#21005d",
+                        "secondary-fixed-dim": "#cfbdff",
+                        "surface-container-high": "#2a2a2a",
+                        "on-primary-fixed-variant": "#004d67",
+                        "inverse-on-surface": "#303030",
+                        "surface-container-lowest": "#0e0e0e",
+                        "error-container": "#93000a",
+                        "on-background": "#e5e2e1",
+                        "on-error": "#690005",
+                        "on-secondary-fixed-variant": "#5127ad",
+                        "on-tertiary-fixed": "#291800",
+                        "primary-container": "#60cdff",
+                        "on-surface": "#e5e2e1",
+                        "on-secondary-container": "#bfa8ff",
+                        "primary": "#b4e4ff",
+                        "on-primary-fixed": "#001e2b",
+                        "outline-variant": "#3e484e",
+                        "surface-tint": "#74d1ff",
+                        "on-tertiary": "#452b00",
+                        "tertiary-fixed": "#ffddb4",
+                        "inverse-primary": "#006687",
+                        "on-secondary": "#390093",
+                        "surface-variant": "#353535",
+                        "tertiary": "#ffd6a4",
+                        "on-surface-variant": "#bdc8cf",
+                        "on-tertiary-fixed-variant": "#633f00",
+                        "background": "#131313",
+                        "surface-container-low": "#1b1b1c",
+                        "primary-fixed-dim": "#74d1ff",
+                        "on-primary-container": "#005572",
+                        "surface-dim": "#131313",
+                        "tertiary-fixed-dim": "#ffb955",
+                        "tertiary-container": "#fcb347",
+                        "secondary-fixed": "#e8ddff",
+                        "outline": "#889299",
+                        "secondary-container": "#5127ad",
+                        "on-primary": "#003548",
+                        "inverse-surface": "#e5e2e1",
+                        "surface": "#131313",
+                        "on-tertiary-container": "#6e4700"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "unit": "4px",
+                        "component-padding-y": "8px",
+                        "gutter": "16px",
+                        "component-padding-x": "12px",
+                        "margin-page": "32px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-md": ["Inter"],
+                        "title-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "display-lg": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "600" }],
+                        "label-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500" }],
+                        "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }],
+                        "title-sm": ["18px", { "lineHeight": "24px", "fontWeight": "500" }]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            background-color: #131313;
+            color: #e5e2e1;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+        }
+        .mica-effect {
+            background: rgba(27, 27, 28, 0.6);
+            backdrop-filter: blur(40px) saturate(150%);
+            -webkit-backdrop-filter: blur(40px) saturate(150%);
+        }
+        .acrylic-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .acrylic-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(96, 205, 255, 0.3);
+            transform: translateY(-2px);
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<!-- SideNavBar -->
+<aside class="h-screen w-[240px] fixed left-0 top-0 bg-surface-container-low/60 dark:bg-surface-container-low/60 backdrop-blur-xl border-r border-outline-variant/30 flex flex-col py-gutter px-component-padding-x z-50">
+<div class="mb-8 px-2 flex items-center gap-3">
+<div class="w-8 h-8 bg-primary-container rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary-container" style="font-variation-settings: 'FILL' 1;">download</span>
+</div>
+<div>
+<h1 class="font-title-sm text-title-sm font-semibold text-on-surface">EasyGet</h1>
+<p class="text-[10px] uppercase tracking-wider text-on-surface-variant opacity-60">Pro Account</p>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">download</span>
+<span>单个下载</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">library_add</span>
+<span>批量下载</span>
+</a>
+<!-- Active State: History -->
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/10 dark:bg-white/10 text-primary dark:text-primary border-l-4 border-primary transition-colors active:scale-95 duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">history</span>
+<span>下载历史</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-on-surface-variant hover:bg-white/5 transition-colors active:scale-95 duration-150 font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span>设置</span>
+</a>
+</nav>
+<div class="mt-auto p-2">
+<div class="flex items-center gap-3 p-2 rounded-xl bg-surface-container-high/40">
+<img alt="User Profile" class="w-8 h-8 rounded-full border border-outline-variant" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD1Xyl4-KiTVXzzL7C81WGA-dbSKkaVOYmpLXFTMH5KyCJjQoDySiD3cpGi_HnEU8HEoq6tZPPOJXlKRyoy3ps0x6lZgvGHDXe0WtqP8kE-yjoqEWQC2f8SDAF-ITka03BxtlfTEMtVIxgWEOeGt0y_314Vl3KzmeAAzwwiMns1eWaG48XOCq9CZPHbePli4hvN2pjEB4yTdqkmsOLsbBAYSN6aJDk_QRUNRJxD_TrCTZpcBvVlM55I7GHrHEpoOErLkAhl6dnDpFQ_"/>
+<div class="overflow-hidden">
+<p class="text-xs font-medium text-on-surface truncate">Admin User</p>
+<p class="text-[10px] text-on-surface-variant truncate">Premium Plan</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 ml-[240px] relative">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-[240px] h-12 bg-surface-dim/80 dark:bg-surface-dim/80 backdrop-blur-md border-b border-outline-variant/20 shadow-sm flex justify-between items-center px-gutter z-40 transition-all duration-200">
+<div class="flex items-center gap-4 flex-1 max-w-xl">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm">search</span>
+<input class="w-full bg-surface-container-lowest/50 border-none rounded-full py-1.5 pl-10 pr-4 text-sm focus:ring-1 focus:ring-primary/50 placeholder:text-on-surface-variant/50" placeholder="搜索下载历史..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-surface-bright text-on-surface-variant transition-all">
+<span class="material-symbols-outlined text-sm">delete_sweep</span>
+<span class="text-xs font-medium">清空记录</span>
+</button>
+<div class="w-px h-4 bg-outline-variant/30 mx-2"></div>
+<div class="flex items-center">
+<button class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-surface-bright text-on-surface-variant"><span class="material-symbols-outlined text-sm">remove</span></button>
+<button class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-surface-bright text-on-surface-variant"><span class="material-symbols-outlined text-sm">check_box_outline_blank</span></button>
+<button class="w-8 h-8 flex items-center justify-center rounded-md hover:bg-error/10 text-error"><span class="material-symbols-outlined text-sm">close</span></button>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="pt-20 px-margin-page pb-margin-page">
+<div class="flex items-center justify-between mb-8">
+<div>
+<h2 class="font-headline-md text-headline-md text-on-surface">下载历史</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">共计 24 个已完成任务</p>
+</div>
+<div class="flex gap-2">
+<div class="flex bg-surface-container rounded-lg p-1">
+<button class="px-4 py-1 rounded-md bg-surface-bright text-xs font-medium shadow-sm">全部</button>
+<button class="px-4 py-1 rounded-md text-on-surface-variant text-xs font-medium hover:text-on-surface transition-colors">视频</button>
+<button class="px-4 py-1 rounded-md text-on-surface-variant text-xs font-medium hover:text-on-surface transition-colors">音频</button>
+</div>
+</div>
+</div>
+<!-- Download History Grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+<!-- Card 1 -->
+<div class="acrylic-card rounded-xl overflow-hidden group">
+<div class="relative aspect-video">
+<img class="w-full h-full object-cover" data-alt="A cinematic 4K video frame of a breathtaking mountain landscape at sunset with vibrant orange and purple hues in the sky. The lighting is dramatic, highlighting the jagged peaks and soft mist in the valleys. The aesthetic is clean and professional, resembling high-end travel cinematography with sharp details and rich contrast that fits a premium desktop application interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB_2PDpixxyNUXuUoYar7pwPxoyV1TbpSn_0tnUJ8n65Q2NBbyLrGP1Pp24ksL2eFvyKNTRHkzDLrWGyHf5f1LBSo8ZRn3RAdYP2bmNoizZ-IwZs-Hplo1fDfibYkHv5Uo08FDjif3X2LlI4h9RS8r1LsUA2dn73o7TNbinVbsr16n6ZatNYdL86OvnvWEmmOCPEcZrQLh5pmQT58IQXl-8N9RMjPWCgVQY3ugH9wpBNZJ_GKorVyapUe1pDIqB_O2CzUf1YzBxMAQp"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all active:scale-90" title="打开文件夹">
+<span class="material-symbols-outlined">folder_open</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg active:scale-90" title="播放">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-error/20 text-error hover:bg-error/30 flex items-center justify-center transition-all active:scale-90" title="删除">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+<div class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">4K</div>
+</div>
+<div class="p-4">
+<div class="flex items-start justify-between gap-2 mb-2">
+<h3 class="text-sm font-medium text-on-surface line-clamp-1">探索瑞士阿尔卑斯山的震撼风光 - 4K超清纪录片</h3>
+<span class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-[#FF0000]/20 text-[#FF0000] border border-[#FF0000]/30 uppercase">YouTube</span>
+</div>
+<div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">save</span> 1.2 GB</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-24</span>
+</div>
+<span class="text-primary">MP4</span>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="acrylic-card rounded-xl overflow-hidden group">
+<div class="relative aspect-video">
+<img class="w-full h-full object-cover" data-alt="A professional live music concert photography featuring a neon-lit stage with deep blue and magenta lighting. Silhouettes of a cheering crowd are visible in the foreground against bright spotlights. The visual style is energetic and high-fidelity, typical of a professional media download platform, with a cool-toned color palette and atmospheric glow." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCJaURNL7aQum4IvKvCYcOkr6D5yt476p4rCHooyRHQY8UXNehJDjqUqQWltbvpUZd-J9YzkqUx8zk-hhE8rGEVDD1wsGJZZkG6dtqqI-z7H8YLFB8bf9cV8fm2NqFj6NV5MbIPpI-ZemY9Jh-aG6RQuc55y_QX1psm2rnPP-vwQO4jAzp9TnEitS1K6CGoBCgA1h4CeETD6KDG8_We8z2cXK4OM8bhRYSoi55NWlqzDXcqb6NlkOFmGcjfOcmz07d0kzzhsnsMd8_f"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">folder_open</span></button>
+<button class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg active:scale-90"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span></button>
+<button class="w-10 h-10 rounded-full bg-error/20 text-error hover:bg-error/30 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">delete</span></button>
+</div>
+<div class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">1080P</div>
+</div>
+<div class="p-4">
+<div class="flex items-start justify-between gap-2 mb-2">
+<h3 class="text-sm font-medium text-on-surface line-clamp-1">【2023跨年晚会】震撼现场：顶级音画同步体验</h3>
+<span class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-[#fb7299]/20 text-[#fb7299] border border-[#fb7299]/30 uppercase">B站</span>
+</div>
+<div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">save</span> 450 MB</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-22</span>
+</div>
+<span class="text-primary">MP4</span>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="acrylic-card rounded-xl overflow-hidden group">
+<div class="relative aspect-video">
+<img class="w-full h-full object-cover" data-alt="A sleek top-down view of a modern workstation featuring a mechanical keyboard with subtle RGB lighting, a minimalist mouse, and code appearing on a monitor. The lighting is soft and focused, creating a high-tech atmosphere. The color scheme is dominated by dark grays and deep blues, with a professional and precise aesthetic suitable for a utility software tool." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6DDa7MoApBSDoL-tdTCxobuUlUPW3NpcJpQ_w8RzC_NsEGjxbS_hpO6iA97e7JwbJ7Nea-UMOM4bZ9KZzK86NGRBKdXJeGGTdhLsCnwl0DUL-uOQHGGVOhlW2rit0gdIfX4TjdHutI18UH5qTrtXtLRTKBWrzhbCWQGPHSqCCQw5F4Y4L3NxpE4Ca3kbqFBr9_YG9XSxuBu49f85Mz4IDn2J52aKcypqpVQ0qj5WXz76KpQq3ELczEXik9WuooCMLt_eaY3vzmvKz"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">folder_open</span></button>
+<button class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg active:scale-90"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span></button>
+<button class="w-10 h-10 rounded-full bg-error/20 text-error hover:bg-error/30 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">delete</span></button>
+</div>
+<div class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">8K</div>
+</div>
+<div class="p-4">
+<div class="flex items-start justify-between gap-2 mb-2">
+<h3 class="text-sm font-medium text-on-surface line-clamp-1">编程入门必看：全流程项目实战演示</h3>
+<span class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-[#FF0000]/20 text-[#FF0000] border border-[#FF0000]/30 uppercase">YouTube</span>
+</div>
+<div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">save</span> 2.8 GB</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-21</span>
+</div>
+<span class="text-primary">MKV</span>
+</div>
+</div>
+</div>
+<!-- Card 4 (Audio) -->
+<div class="acrylic-card rounded-xl overflow-hidden group">
+<div class="relative aspect-video bg-surface-container-highest flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-6xl opacity-20">music_note</span>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">folder_open</span></button>
+<button class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg active:scale-90"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">headphones</span></button>
+<button class="w-10 h-10 rounded-full bg-error/20 text-error hover:bg-error/30 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">delete</span></button>
+</div>
+<div class="absolute bottom-2 right-2 px-1.5 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">320kbps</div>
+</div>
+<div class="p-4">
+<div class="flex items-start justify-between gap-2 mb-2">
+<h3 class="text-sm font-medium text-on-surface line-clamp-1">沉浸式环境音：森林白噪音 2小时加长版</h3>
+<span class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-primary-container/20 text-primary border border-primary/30 uppercase">Audio</span>
+</div>
+<div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">save</span> 85 MB</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-18</span>
+</div>
+<span class="text-primary">MP3</span>
+</div>
+</div>
+</div>
+<!-- Card 5 -->
+<div class="acrylic-card rounded-xl overflow-hidden group">
+<div class="relative aspect-video">
+<img class="w-full h-full object-cover" data-alt="An artistic high-tech workspace with multiple monitors displaying complex data visualizations and circuit patterns. The environment is cool-toned, featuring deep blues and neon cyan lighting accents. The aesthetic is clean and futuristic, representing high-performance technology. The composition is professional and balanced, fitting the visual language of a high-end Windows utility app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAyW0EHieQjv-LYr1SBi15EJW79Dv1lZGeSv18Mv5Gz2iji8HKjcSddf8W_imMBXaVA2shG2eI8xFu2ClfWC9yseOBJ9lfuWVpNRwWjZORGkWvm7FrS42OZ4hk3Tmd2vNa-Y8-9NJsRinHxMaPpFlOOglcR1b7Whajup_868rG6bQKI-CPgwQDTHiT3YJ2k9DDdoH_N2PwQR5o3WxhkA1MK_2uP4cBg48jXhCV4t4rU2UromORYsWZ9s6S1nbvDJAxbd6qEegy8kj33"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">folder_open</span></button>
+<button class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg active:scale-90"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span></button>
+<button class="w-10 h-10 rounded-full bg-error/20 text-error hover:bg-error/30 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</div>
+<div class="p-4">
+<div class="flex items-start justify-between gap-2 mb-2">
+<h3 class="text-sm font-medium text-on-surface line-clamp-1">2023 科技前沿趋势报告：AI如何改变世界</h3>
+<span class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-[#fb7299]/20 text-[#fb7299] border border-[#fb7299]/30 uppercase">B站</span>
+</div>
+<div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">save</span> 620 MB</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-15</span>
+</div>
+<span class="text-primary">MP4</span>
+</div>
+</div>
+</div>
+<!-- Card 6 -->
+<div class="acrylic-card rounded-xl overflow-hidden group">
+<div class="relative aspect-video">
+<img class="w-full h-full object-cover" data-alt="A high-end modern creative studio space with students collaborating around a large wooden table. Warm sunlight filters through large industrial windows, creating a bright and inspiring atmosphere. The style is professional and grounded, with soft shadows and high-key lighting, maintaining a premium look that complements a modern software interface." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDQBcHubyJftMFzJXXgFVkcYAIXayb3QyTzwLeoJrUm8UGiqQPl917h3pM5IbF04b4dOGPc_LTVh4FPVJDmIOcypsBtfnzgoUdAhBJTK_eIMQAQbC4-Nk9ezwTpO_B0xOBZBb3IanUvGsTg3wUcoeE2S-wsBy2nyNtQg3uc6jdUo3UQ5R8eMr2bfwSmn3DIAgN10XRY9wqPuT_ZWXrbJXOUkEd2DgfRt81GG9_8u5HVTYzlmTgo593UG5jnl1DCiqrU428TMnpr4WW6"/>
+<div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 backdrop-blur-sm">
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">folder_open</span></button>
+<button class="w-10 h-10 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-lg active:scale-90"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">play_arrow</span></button>
+<button class="w-10 h-10 rounded-full bg-error/20 text-error hover:bg-error/30 flex items-center justify-center transition-all active:scale-90"><span class="material-symbols-outlined">delete</span></button>
+</div>
+</div>
+<div class="p-4">
+<div class="flex items-start justify-between gap-2 mb-2">
+<h3 class="text-sm font-medium text-on-surface line-clamp-1">职场进阶：如何在高压力环境下保持高效率</h3>
+<span class="shrink-0 px-2 py-0.5 rounded text-[10px] font-bold bg-[#FF0000]/20 text-[#FF0000] border border-[#FF0000]/30 uppercase">YouTube</span>
+</div>
+<div class="flex items-center justify-between text-[11px] text-on-surface-variant font-medium">
+<div class="flex items-center gap-3">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">save</span> 310 MB</span>
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">calendar_today</span> 2023-10-12</span>
+</div>
+<span class="text-primary">MP4</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Empty State Illustration Placeholder (Only shown if grid is empty) -->
+<div class="hidden flex-col items-center justify-center py-32 opacity-30" id="empty-state">
+<span class="material-symbols-outlined text-8xl mb-4">folder_off</span>
+<p class="font-headline-md text-headline-md">无下载历史</p>
+<p class="font-body-md text-body-md mt-2">快去粘贴链接下载你喜欢的视频吧</p>
+</div>
+</div>
+<!-- System Tray Status -->
+<footer class="fixed bottom-0 right-0 left-[240px] px-gutter py-2 flex items-center justify-between pointer-events-none">
+<div class="flex items-center gap-4 bg-surface-container/60 backdrop-blur-md rounded-full px-4 py-1.5 pointer-events-auto border border-outline-variant/20 shadow-xl">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+<span class="text-[10px] font-medium text-on-surface-variant">磁盘空间充足: 452.8 GB 可用</span>
+</div>
+<div class="w-px h-3 bg-outline-variant"></div>
+<span class="text-[10px] font-medium text-on-surface-variant">v1.2.4 Stable</span>
+</div>
+</footer>
+</main>
+<script>
+        // Micro-interactions and simple event handling
+        document.querySelectorAll('.acrylic-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                // Potential for more complex animations if needed
+            });
+        });
+
+        // Search highlight logic (mock)
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase();
+            const cards = document.querySelectorAll('.acrylic-card');
+            cards.forEach(card => {
+                const title = card.querySelector('h3').textContent.toLowerCase();
+                if (title.includes(query)) {
+                    card.style.display = 'block';
+                    card.style.opacity = '1';
+                } else {
+                    card.style.opacity = '0.2';
+                    // We keep them in layout for now to avoid jumpy grid
+                }
+            });
+        });
+    </script>
+```</body></html>
