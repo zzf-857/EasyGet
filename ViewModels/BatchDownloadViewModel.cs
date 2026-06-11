@@ -63,7 +63,8 @@ public partial class BatchDownloadViewModel : ObservableObject
 
         if (ignoredCount > 0)
         {
-            RequestShowNotification?.Invoke($"已导入 {validUrls.Count} 个链接，忽略了 {ignoredCount} 行无效文本", false);
+            bool isSuccess = validUrls.Count > 0;
+            RequestShowNotification?.Invoke($"已导入 {validUrls.Count} 个链接，忽略了 {ignoredCount} 行无效文本", isSuccess);
         }
     }
 

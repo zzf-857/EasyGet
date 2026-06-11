@@ -115,9 +115,11 @@ public class BatchDownloadViewModelTests
         try
         {
             string? receivedMsg = null;
+            bool? receivedSuccess = null;
             viewModel.RequestShowNotification += (msg, success) =>
             {
                 receivedMsg = msg;
+                receivedSuccess = success;
             };
 
             string inputText = "https://example.com/video1\nthis is invalid line\nhttps://example.com/video2";
@@ -128,10 +130,11 @@ public class BatchDownloadViewModelTests
             Assert.Contains("https://example.com/video2", viewModel.UrlsText);
             Assert.Equal(2, viewModel.LinkCount);
 
-            // 验证 1 个无效行触发了通知提示
+            // 验证 1 个无效行触发了通知提示，且由于有成功导入的链接，应当是 success: true
             Assert.NotNull(receivedMsg);
             Assert.Contains("已导入 2 个链接", receivedMsg);
             Assert.Contains("忽略了 1 行无效文本", receivedMsg);
+            Assert.True(receivedSuccess);
         }
         finally
         {
@@ -166,6 +169,41 @@ public class BatchDownloadViewModelTests
 
             // 验证没有触发忽略警告通知
             Assert.Null(receivedMsg);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public void ImportText_WithOnlyInvalidUrls_ImportsNoneAndRaisesErrorNotification()
+    {
+        var dbPath = CreateTempDatabasePath();
+        using var history = new HistoryService(dbPath);
+        var configService = new ConfigService();
+        var ytDlp = new YtDlpService(configService, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, configService);
+        var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
+
+        try
+        {
+            string? receivedMsg = null;
+            bool? receivedSuccess = null;
+            viewModel.RequestShowNotification += (msg, success) =>
+            {
+                receivedMsg = msg;
+                receivedSuccess = success;
+            };
+
+            string inputText = "invalid line 1\ninvalid line 2";
+            viewModel.ImportText(inputText);
+
+            Assert.Equal(0, viewModel.LinkCount);
+            Assert.NotNull(receivedMsg);
+            Assert.Contains("已导入 0 个链接", receivedMsg);
+            Assert.Contains("忽略了 2 行", receivedMsg);
+            Assert.False(receivedSuccess);
         }
         finally
         {

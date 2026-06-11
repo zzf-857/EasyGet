@@ -611,6 +611,23 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：217/217 通过
 - 新增测试：`ViewsAndMainWindowDoNotUseNamedColors`
 
+### REV-07 ImportText 部分成功提示语义错误 — ✅ 完成（2026-06-11 13:35）
+
+**Commit**：`d0135b0`
+
+**修改文件**：
+- `ViewModels/BatchDownloadViewModel.cs`（修改）
+- `EasyGet.Tests/BatchDownloadViewModelTests.cs`（修改）
+
+**实现说明**：
+在 `BatchDownloadViewModel.cs` 中调整了 `ImportText` 对部分成功结果的提示。当存在部分行忽略、但有有效链接成功导入（`validUrls.Count > 0`）时，将提示的 `isSuccess` 标记置为 `true`（使用中性/成功绿色提示），以防误导用户以为导入完全失败。仅在没有任何有效链接成功导入（`validUrls.Count == 0`）时，才置为 `false`（使用红色错误提示）。同步更新并新增了单测进行断言验证。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：218/218 通过
+- 新增测试：`ImportText_WithOnlyInvalidUrls_ImportsNoneAndRaisesErrorNotification`
+
 ---
 
 ## 审核记录
