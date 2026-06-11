@@ -1,290 +1,562 @@
-<Window x:Class="EasyGet.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="clr-namespace:EasyGet.ViewModels"
-        xmlns:views="clr-namespace:EasyGet.Views"
-        xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
-        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
-        Title="EasyGet"
-        Width="1280" Height="800"
-        MinWidth="1040" MinHeight="640"
-        WindowStartupLocation="CenterScreen"
-        WindowStyle="None"
-        ResizeMode="CanResize"
-        Background="{StaticResource BgPrimaryBrush}"
-        UseLayoutRounding="True"
-        SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display"
-        TextOptions.TextRenderingMode="ClearType">
-
-    <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="0"
-                            ResizeBorderThickness="6"
-                            CornerRadius="0"
-                            GlassFrameThickness="0"
-                            UseAeroCaptionButtons="False"/>
-    </shell:WindowChrome.WindowChrome>
-
-        <Window.TaskbarItemInfo>
-        <TaskbarItemInfo ProgressState="{Binding TaskbarState}" ProgressValue="{Binding TaskbarValue}"/>
-    </Window.TaskbarItemInfo>
-
-    <Window.Resources>
-        <DataTemplate DataType="{x:Type vm:DownloadViewModel}">
-            <views:DownloadView/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:BatchDownloadViewModel}">
-            <views:BatchDownloadView/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
-            <views:HistoryView/>
-        </DataTemplate>
-        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
-            <views:SettingsView/>
-        </DataTemplate>
-    </Window.Resources>
-
-    <Grid Background="{StaticResource BgPrimaryBrush}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
-
-        <!-- Stitch-style brand sidebar -->
-        <Border Grid.Column="0"
-                Background="{StaticResource BgSidebarBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}"
-                BorderThickness="0,0,1,0">
-            <DockPanel LastChildFill="False" Margin="14,16">
-                <StackPanel DockPanel.Dock="Top">
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,30">
-                        <Border x:Name="SidebarLogoMark"
-                                Width="40" Height="40"
-                                Background="{DynamicResource AccentBrush}"
-                                CornerRadius="9"
-                                Effect="{StaticResource SoftShadow}"
-                                ToolTip="EasyGet"
-                                AutomationProperties.Name="EasyGet">
-                            <Image Source="/Assets/app.png"
-                                   Width="34"
-                                   Height="34"
-                                   Stretch="Uniform"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center"
-                                   SnapsToDevicePixels="True"
-                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                        </Border>
-                        <StackPanel Margin="12,1,0,0" VerticalAlignment="Center">
-                            <TextBlock Text="EasyGet"
-                                       Style="{StaticResource TextCardTitle}"/>
-                            <TextBlock Text="{Binding AppVersion}"
-                                       Style="{StaticResource TextCaption}"/>
-                        </StackPanel>
-                    </StackPanel>
- 
-                    <StackPanel>
-                        <RadioButton Style="{StaticResource NavRadioButton}"
-                                     Command="{Binding NavigateCommand}"
-                                     CommandParameter="download"
-                                     ToolTip="单个下载"
-                                     AutomationProperties.Name="单个下载"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=OneWay}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE118;" Style="{StaticResource IconGlyph}"
-                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
-                                <TextBlock Text="单个下载" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Style="{StaticResource NavRadioButton}"
-                                     Command="{Binding NavigateCommand}"
-                                     CommandParameter="batch"
-                                     ToolTip="批量下载"
-                                     AutomationProperties.Name="批量下载"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=OneWay}"
-                                     Margin="0,8,0,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyph}"
-                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
-                                <TextBlock Text="批量下载" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Style="{StaticResource NavRadioButton}"
-                                     Command="{Binding NavigateCommand}"
-                                     CommandParameter="history"
-                                     ToolTip="下载历史"
-                                     AutomationProperties.Name="下载历史"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
-                                     Margin="0,8,0,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE81C;" Style="{StaticResource IconGlyph}"
-                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
-                                <TextBlock Text="下载历史" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </RadioButton>
-                        <RadioButton Style="{StaticResource NavRadioButton}"
-                                     Command="{Binding NavigateCommand}"
-                                     CommandParameter="settings"
-                                     ToolTip="设置"
-                                     AutomationProperties.Name="设置"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
-                                     Margin="0,8,0,0">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE713;" Style="{StaticResource IconGlyph}"
-                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
-                                <TextBlock Text="设置" Margin="12,0,0,0" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </RadioButton>
-                    </StackPanel>
-                </StackPanel>
-
-            </DockPanel>
-        </Border>
-
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="48"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <!-- Custom top app bar -->
-            <Border Grid.Row="0"
-                    Background="{StaticResource BgPrimaryBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}"
-                    BorderThickness="0,0,0,1"
-                    MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
-                <Grid>
-                    <ContentControl Content="{Binding CurrentPageTitle}"
-                                    VerticalAlignment="Center"
-                                    Margin="20,0,0,0">
-                        <ContentControl.ContentTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding}"
-                                           Style="{StaticResource TextSection}"/>
-                            </DataTemplate>
-                        </ContentControl.ContentTemplate>
-                    </ContentControl>
- 
-                    <StackPanel Orientation="Horizontal"
-                                HorizontalAlignment="Right"
-                                VerticalAlignment="Stretch">
-                        <Button Style="{StaticResource WindowControlButton}"
-                                ToolTip="最小化"
-                                AutomationProperties.Name="最小化"
-                                Click="MinimizeButton_Click">
-                            <TextBlock Text="&#xE921;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                        </Button>
-                        <Button Style="{StaticResource WindowControlButton}"
-                                ToolTip="最大化/还原"
-                                AutomationProperties.Name="最大化或还原"
-                                Click="MaximizeButton_Click">
-                            <TextBlock Text="&#xE922;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                        </Button>
-                        <Button Style="{StaticResource WindowCloseButton}"
-                                ToolTip="关闭"
-                                AutomationProperties.Name="关闭"
-                                Click="CloseButton_Click">
-                            <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
- 
-            <Grid Grid.Row="1" Background="{StaticResource BgPrimaryBrush}">
-                <ContentControl Content="{Binding CurrentPage}"/>
- 
- 
- 
-                <ItemsControl ItemsSource="{Binding Notifications}"
-                              HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                              Margin="24" SnapsToDevicePixels="True">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Vertical"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:NotificationItem}">
-                            <Grid x:Name="ToastGrid"
-                                  behaviors:Motion.PageEnter="True"
-                                  Margin="0,8,0,0"
-                                  Width="360"
-                                  Cursor="Hand"
-                                  MouseEnter="ToastCard_MouseEnter"
-                                  MouseLeave="ToastCard_MouseLeave">
-                                <Grid.InputBindings>
-                                    <MouseBinding MouseAction="LeftClick" Command="{Binding CloseCommand}"/>
-                                </Grid.InputBindings>
-                                
-                                <!-- Shadow Layer (R1 模糊治理) -->
-                                <Border CornerRadius="10"
-                                        Background="{Binding ElementName=ToastCard, Path=Background}"
-                                        Effect="{StaticResource PopupShadow}"/>
-                                
-                                <!-- Text Content Container (Without shadow to preserve ClearType) -->
-                                <Border x:Name="ToastCard"
-                                        CornerRadius="10" Padding="0"
-                                        ClipToBounds="True">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        
-                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
-                                            <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
-                                                        <Setter Property="Text" Value="✓"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                                <Setter Property="Text" Value="✗"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <TextBlock Text="{Binding Message}"
-                                                       Style="{StaticResource TextBody}"
-                                                       TextTrimming="CharacterEllipsis"
-                                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                        </StackPanel>
-
-                                        <!-- Bottom progress line (2px) -->
-                                        <ProgressBar Grid.Row="1" Height="2"
-                                                     Background="Transparent"
-                                                     BorderThickness="0"
-                                                     Value="{Binding RemainingRatio, Mode=OneWay}"
-                                                     Maximum="1.0">
-                                            <ProgressBar.Style>
-                                                <Style TargetType="ProgressBar">
-                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </ProgressBar.Style>
-                                        </ProgressBar>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
-        </Grid>
-    </Grid>
-</Window>
+<Window x:Class="EasyGet.MainWindow"
+
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+
+        xmlns:vm="clr-namespace:EasyGet.ViewModels"
+
+        xmlns:views="clr-namespace:EasyGet.Views"
+
+        xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
+
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+
+        Title="EasyGet"
+
+        Width="1280" Height="800"
+
+        MinWidth="1040" MinHeight="640"
+
+        WindowStartupLocation="CenterScreen"
+
+        WindowStyle="None"
+
+        ResizeMode="CanResize"
+
+        Background="{StaticResource BgPrimaryBrush}"
+
+        UseLayoutRounding="True"
+
+        SnapsToDevicePixels="True"
+
+        TextOptions.TextFormattingMode="Display"
+
+        TextOptions.TextRenderingMode="ClearType">
+
+
+
+    <shell:WindowChrome.WindowChrome>
+
+        <shell:WindowChrome CaptionHeight="0"
+
+                            ResizeBorderThickness="6"
+
+                            CornerRadius="0"
+
+                            GlassFrameThickness="0"
+
+                            UseAeroCaptionButtons="False"/>
+
+    </shell:WindowChrome.WindowChrome>
+
+
+
+        <Window.TaskbarItemInfo>
+
+        <TaskbarItemInfo ProgressState="{Binding TaskbarState}" ProgressValue="{Binding TaskbarValue}"/>
+
+    </Window.TaskbarItemInfo>
+
+
+
+    <Window.Resources>
+
+        <DataTemplate DataType="{x:Type vm:DownloadViewModel}">
+
+            <views:DownloadView/>
+
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:BatchDownloadViewModel}">
+
+            <views:BatchDownloadView/>
+
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
+
+            <views:HistoryView/>
+
+        </DataTemplate>
+
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}">
+
+            <views:SettingsView/>
+
+        </DataTemplate>
+
+    </Window.Resources>
+
+
+
+    <Grid Background="{StaticResource BgPrimaryBrush}">
+
+        <Grid.ColumnDefinitions>
+
+            <ColumnDefinition Width="240"/>
+
+            <ColumnDefinition Width="*"/>
+
+        </Grid.ColumnDefinitions>
+
+
+
+        <!-- Stitch-style brand sidebar -->
+
+        <Border Grid.Column="0"
+
+                Background="{StaticResource BgSidebarBrush}"
+
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+
+                BorderThickness="0,0,1,0">
+
+            <DockPanel LastChildFill="False" Margin="14,16">
+
+                <StackPanel DockPanel.Dock="Top">
+
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,30">
+
+                        <Border x:Name="SidebarLogoMark"
+                                Width="40" Height="40"
+                                ToolTip="EasyGet"
+                                AutomationProperties.Name="EasyGet">
+                            <Image Source="/Assets/app.png"
+                                   Width="40"
+                                   Height="40"
+                                   Stretch="Uniform"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   SnapsToDevicePixels="True"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                        </Border>
+
+                        <StackPanel Margin="12,1,0,0" VerticalAlignment="Center">
+
+                            <TextBlock Text="EasyGet"
+
+                                       Style="{StaticResource TextCardTitle}"/>
+
+                            <TextBlock Text="{Binding AppVersion}"
+
+                                       Style="{StaticResource TextCaption}"/>
+
+                        </StackPanel>
+
+                    </StackPanel>
+
+ 
+
+                    <StackPanel>
+
+                        <RadioButton Style="{StaticResource NavRadioButton}"
+
+                                     Command="{Binding NavigateCommand}"
+
+                                     CommandParameter="download"
+
+                                     ToolTip="单个下载"
+
+                                     AutomationProperties.Name="单个下载"
+
+                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=OneWay}">
+
+                            <StackPanel Orientation="Horizontal">
+
+                                <TextBlock Text="&#xE118;" Style="{StaticResource IconGlyph}"
+
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
+
+                                <TextBlock Text="单个下载" Margin="12,0,0,0" VerticalAlignment="Center"/>
+
+                            </StackPanel>
+
+                        </RadioButton>
+
+                        <RadioButton Style="{StaticResource NavRadioButton}"
+
+                                     Command="{Binding NavigateCommand}"
+
+                                     CommandParameter="batch"
+
+                                     ToolTip="批量下载"
+
+                                     AutomationProperties.Name="批量下载"
+
+                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=OneWay}"
+
+                                     Margin="0,8,0,0">
+
+                            <StackPanel Orientation="Horizontal">
+
+                                <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyph}"
+
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
+
+                                <TextBlock Text="批量下载" Margin="12,0,0,0" VerticalAlignment="Center"/>
+
+                            </StackPanel>
+
+                        </RadioButton>
+
+                        <RadioButton Style="{StaticResource NavRadioButton}"
+
+                                     Command="{Binding NavigateCommand}"
+
+                                     CommandParameter="history"
+
+                                     ToolTip="下载历史"
+
+                                     AutomationProperties.Name="下载历史"
+
+                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
+
+                                     Margin="0,8,0,0">
+
+                            <StackPanel Orientation="Horizontal">
+
+                                <TextBlock Text="&#xE81C;" Style="{StaticResource IconGlyph}"
+
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
+
+                                <TextBlock Text="下载历史" Margin="12,0,0,0" VerticalAlignment="Center"/>
+
+                            </StackPanel>
+
+                        </RadioButton>
+
+                        <RadioButton Style="{StaticResource NavRadioButton}"
+
+                                     Command="{Binding NavigateCommand}"
+
+                                     CommandParameter="settings"
+
+                                     ToolTip="设置"
+
+                                     AutomationProperties.Name="设置"
+
+                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
+
+                                     Margin="0,8,0,0">
+
+                            <StackPanel Orientation="Horizontal">
+
+                                <TextBlock Text="&#xE713;" Style="{StaticResource IconGlyph}"
+
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
+
+                                <TextBlock Text="设置" Margin="12,0,0,0" VerticalAlignment="Center"/>
+
+                            </StackPanel>
+
+                        </RadioButton>
+
+                    </StackPanel>
+
+                </StackPanel>
+
+
+
+            </DockPanel>
+
+        </Border>
+
+
+
+        <Grid Grid.Column="1">
+
+            <Grid.RowDefinitions>
+
+                <RowDefinition Height="48"/>
+
+                <RowDefinition Height="*"/>
+
+            </Grid.RowDefinitions>
+
+
+
+            <!-- Custom top app bar -->
+
+            <Border Grid.Row="0"
+
+                    Background="{StaticResource BgPrimaryBrush}"
+
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+
+                    BorderThickness="0,0,0,1"
+
+                    MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
+
+                <Grid>
+
+                    <ContentControl Content="{Binding CurrentPageTitle}"
+
+                                    VerticalAlignment="Center"
+
+                                    Margin="20,0,0,0">
+
+                        <ContentControl.ContentTemplate>
+
+                            <DataTemplate>
+
+                                <TextBlock Text="{Binding}"
+
+                                           Style="{StaticResource TextSection}"/>
+
+                            </DataTemplate>
+
+                        </ContentControl.ContentTemplate>
+
+                    </ContentControl>
+
+ 
+
+                    <StackPanel Orientation="Horizontal"
+
+                                HorizontalAlignment="Right"
+
+                                VerticalAlignment="Stretch">
+
+                        <Button Style="{StaticResource WindowControlButton}"
+
+                                ToolTip="最小化"
+
+                                AutomationProperties.Name="最小化"
+
+                                Click="MinimizeButton_Click">
+
+                            <TextBlock Text="&#xE921;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+
+                        </Button>
+
+                        <Button Style="{StaticResource WindowControlButton}"
+
+                                ToolTip="最大化/还原"
+
+                                AutomationProperties.Name="最大化或还原"
+
+                                Click="MaximizeButton_Click">
+
+                            <TextBlock Text="&#xE922;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+
+                        </Button>
+
+                        <Button Style="{StaticResource WindowCloseButton}"
+
+                                ToolTip="关闭"
+
+                                AutomationProperties.Name="关闭"
+
+                                Click="CloseButton_Click">
+
+                            <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+
+                        </Button>
+
+                    </StackPanel>
+
+                </Grid>
+
+            </Border>
+
+ 
+
+            <Grid Grid.Row="1" Background="{StaticResource BgPrimaryBrush}">
+
+                <ContentControl Content="{Binding CurrentPage}"/>
+
+ 
+
+ 
+
+ 
+
+                <ItemsControl ItemsSource="{Binding Notifications}"
+
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom"
+
+                              Margin="24" SnapsToDevicePixels="True">
+
+                    <ItemsControl.ItemsPanel>
+
+                        <ItemsPanelTemplate>
+
+                            <StackPanel Orientation="Vertical"/>
+
+                        </ItemsPanelTemplate>
+
+                    </ItemsControl.ItemsPanel>
+
+                    <ItemsControl.ItemTemplate>
+
+                        <DataTemplate DataType="{x:Type vm:NotificationItem}">
+
+                            <Grid x:Name="ToastGrid"
+
+                                  behaviors:Motion.PageEnter="True"
+
+                                  Margin="0,8,0,0"
+
+                                  Width="360"
+
+                                  Cursor="Hand"
+
+                                  MouseEnter="ToastCard_MouseEnter"
+
+                                  MouseLeave="ToastCard_MouseLeave">
+
+                                <Grid.InputBindings>
+
+                                    <MouseBinding MouseAction="LeftClick" Command="{Binding CloseCommand}"/>
+
+                                </Grid.InputBindings>
+
+                                
+
+                                <!-- Shadow Layer (R1 模糊治理) -->
+
+                                <Border CornerRadius="10"
+
+                                        Background="{Binding ElementName=ToastCard, Path=Background}"
+
+                                        Effect="{StaticResource PopupShadow}"/>
+
+                                
+
+                                <!-- Text Content Container (Without shadow to preserve ClearType) -->
+
+                                <Border x:Name="ToastCard"
+
+                                        CornerRadius="10" Padding="0"
+
+                                        ClipToBounds="True">
+
+                                    <Border.Style>
+
+                                        <Style TargetType="Border">
+
+                                            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
+
+                                            <Style.Triggers>
+
+                                                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+
+                                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
+
+                                                </DataTrigger>
+
+                                            </Style.Triggers>
+
+                                        </Style>
+
+                                    </Border.Style>
+
+                                    <Grid>
+
+                                        <Grid.RowDefinitions>
+
+                                            <RowDefinition Height="*"/>
+
+                                            <RowDefinition Height="Auto"/>
+
+                                        </Grid.RowDefinitions>
+
+                                        
+
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
+
+                                            <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">
+
+                                                <TextBlock.Style>
+
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
+
+                                                        <Setter Property="Text" Value="✓"/>
+
+                                                        <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+
+                                                        <Style.Triggers>
+
+                                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+
+                                                                <Setter Property="Text" Value="✗"/>
+
+                                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+
+                                                            </DataTrigger>
+
+                                                        </Style.Triggers>
+
+                                                    </Style>
+
+                                                </TextBlock.Style>
+
+                                            </TextBlock>
+
+                                            <TextBlock Text="{Binding Message}"
+
+                                                       Style="{StaticResource TextBody}"
+
+                                                       TextTrimming="CharacterEllipsis"
+
+                                                       VerticalAlignment="Center" TextWrapping="Wrap"/>
+
+                                        </StackPanel>
+
+
+
+                                        <!-- Bottom progress line (2px) -->
+
+                                        <ProgressBar Grid.Row="1" Height="2"
+
+                                                     Background="Transparent"
+
+                                                     BorderThickness="0"
+
+                                                     Value="{Binding RemainingRatio, Mode=OneWay}"
+
+                                                     Maximum="1.0">
+
+                                            <ProgressBar.Style>
+
+                                                <Style TargetType="ProgressBar">
+
+                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+
+                                                    <Style.Triggers>
+
+                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+
+                                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+
+                                                        </DataTrigger>
+
+                                                    </Style.Triggers>
+
+                                                </Style>
+
+                                            </ProgressBar.Style>
+
+                                        </ProgressBar>
+
+                                    </Grid>
+
+                                </Border>
+
+                            </Grid>
+
+                        </DataTemplate>
+
+                    </ItemsControl.ItemTemplate>
+
+                </ItemsControl>
+
+            </Grid>
+
+        </Grid>
+
+    </Grid>
+
+</Window>
+
