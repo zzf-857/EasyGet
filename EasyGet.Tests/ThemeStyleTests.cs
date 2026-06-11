@@ -96,6 +96,32 @@ public class ThemeStyleTests
                 + string.Join("; ", offenders));
     }
 
+    [Theory]
+    [InlineData("Views")]
+    [InlineData("MainWindow.xaml")]
+    public void ViewsAndMainWindowDoNotUseNamedColors(string relativePath)
+    {
+        var path = GetRootPath(relativePath);
+        var files = Directory.Exists(path)
+            ? Directory.EnumerateFiles(path, "*.xaml", SearchOption.AllDirectories)
+            : [path];
+
+        // Match Foreground/Background/BorderBrush/Fill/Stroke set to a named color (ignoring Transparent, Binding, DynamicResource, StaticResource)
+        var colorPattern = @"\b(Foreground|Background|BorderBrush|Fill|Stroke)\s*=\s*""(?!Transparent|Binding |TemplateBinding |StaticResource |DynamicResource)(White|Black|Red|Gray|Green|Blue|Yellow|Pink|Purple|Orange|LightGray|DarkGray)""";
+
+        var offenders = files
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => new { file, line, lineNumber = index + 1 }))
+            .Where(item => Regex.IsMatch(item.line, colorPattern, RegexOptions.IgnoreCase))
+            .Select(item => $"{Path.GetFileName(item.file)}:{item.lineNumber}:{item.line.Trim()}")
+            .ToList();
+
+        Assert.True(
+            offenders.Count == 0,
+            "Views and MainWindow must use theme color tokens instead of named colors: "
+                + string.Join("; ", offenders));
+    }
+
     [Fact]
     public void ThemeHexColorLiteralsAreOnlyColorTokenValues()
     {

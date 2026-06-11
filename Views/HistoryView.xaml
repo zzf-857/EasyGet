@@ -331,7 +331,7 @@
                                                 Margin="8,0,0,0"
                                                 Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
                                             <TextBlock Text="{Binding Platform}" FontSize="9"
-                                                       Foreground="White"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
                                                        FontWeight="Bold"/>
                                         </Border>
                                     </Grid>

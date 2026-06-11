@@ -589,6 +589,30 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：217/217 通过
 - 新增测试：无
 
+---
+
+### REV-06 命名颜色与 token 语义误用 — ✅ 完成（2026-06-11 13:32）
+
+**Commit**：`71baa63`
+
+**修改文件**：
+- `Views/HistoryView.xaml`（修改）
+- `Views/DownloadView.xaml`（修改）
+- `EasyGet.Tests/ThemeStyleTests.cs`（修改）
+
+**实现说明**：
+1. 净化了绕过 token 使用命名颜色 `Foreground="White"` 的地方（`Views/HistoryView.xaml` 里的平台徽章文本），改用 `TextPrimaryBrush`。
+2. 纠正了误将半透明遮罩 `ScrimLightBrush` 当作前景色用于平台徽章文本的地方（`Views/DownloadView.xaml`），统一改用文本类 token `TextPrimaryBrush`。
+3. 在 `ThemeStyleTests.cs` 中新增了 `ViewsAndMainWindowDoNotUseNamedColors` 的防回归断言，通过正则表达式扫描并确保 `Views` 目录及 `MainWindow.xaml` 不会出现写死的命名颜色（忽略 `Transparent`），以维持纯净 of 语义化 token 颜色体系。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：217/217 通过
+- 新增测试：`ViewsAndMainWindowDoNotUseNamedColors`
+
+---
+
 ## 审核记录
 
 <!-- 此区域由审核 Agent（Claude）填写，执行 Agent 不要修改 -->

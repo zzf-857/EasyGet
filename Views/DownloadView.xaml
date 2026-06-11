@@ -179,7 +179,7 @@
                                                     Margin="12,0,0,0"
                                                     Visibility="{Binding PreviewPlatform, Converter={StaticResource StringToVisibility}}">
                                                 <TextBlock Text="{Binding PreviewPlatform}"
-                                                           Foreground="{StaticResource ScrimLightBrush}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
                                                            FontSize="10"
                                                            FontWeight="Bold"/>
                                             </Border>
