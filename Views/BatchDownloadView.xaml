@@ -123,7 +123,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE945;" Style="{StaticResource IconGlyph}"
                                        FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="开始批量下载" Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
+                             <TextBlock Text="开始批量下载" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </Grid>

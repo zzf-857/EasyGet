@@ -312,7 +312,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE721;"
                                            FontSize="{StaticResource IconSizeBody}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="解析视频" Style="{StaticResource TextSection}" VerticalAlignment="Center"/>
+                                <TextBlock Text="解析视频" FontSize="{StaticResource FontSizeSection}" FontWeight="{StaticResource FontWeightSemiBold}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
 
@@ -327,7 +327,7 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE768;"
                                            FontSize="{StaticResource IconSizeBody}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="开始下载" Style="{StaticResource TextSection}" VerticalAlignment="Center"/>
+                                <TextBlock Text="开始下载" FontSize="{StaticResource FontSizeSection}" FontWeight="{StaticResource FontWeightSemiBold}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>

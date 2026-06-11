@@ -52,12 +52,12 @@ public class ThemeStyleTests
         AssertColor(document, "TextMuted", "#889299");
         AssertColor(document, "BorderPrimary", "#3E484E");
         AssertColor(document, "BorderSubtle", "#2A3338");
-        AssertColor(document, "Accent", "#60CDFF");
+        AssertColor(document, "Accent", "#818CF8");
         AssertColor(document, "Success", "#6CCB77");
         AssertColor(document, "Warning", "#FFB955");
         AssertColor(document, "Error", "#FFB4AB");
 
-        AssertColor(document, "AccentContainer", "#1A4250");
+        AssertColor(document, "AccentContainer", "#1E1F35");
         AssertColor(document, "SuccessContainer", "#2D4A2D");
         AssertColor(document, "ErrorContainer", "#4A1E1E");
         AssertColor(document, "Scrim", "#66000000");
@@ -67,8 +67,8 @@ public class ThemeStyleTests
         AssertColor(document, "BgConsole", "#0E0E0E");
         AssertColor(document, "WindowCloseHover", "#4A1515");
         AssertColor(document, "WindowClosePressed", "#5A1A1A");
-        AssertColor(document, "AccentGradientStart", "#89B4FA");
-        AssertColor(document, "AccentGradientEnd", "#74C7EC");
+        AssertColor(document, "AccentGradientStart", "#818CF8");
+        AssertColor(document, "AccentGradientEnd", "#C084FC");
         AssertColor(document, "ToggleTrack", "#313244");
         AssertColor(document, "ToggleThumb", "#585B70");
     }

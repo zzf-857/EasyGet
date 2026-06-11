@@ -14,11 +14,11 @@
     <Color x:Key="TextMuted">#889299</Color>
     <Color x:Key="BorderPrimary">#3E484E</Color>
     <Color x:Key="BorderSubtle">#2A3338</Color>
-    <Color x:Key="Accent">#60CDFF</Color>
+    <Color x:Key="Accent">#818CF8</Color>
     <Color x:Key="Success">#6CCB77</Color>
     <Color x:Key="Error">#FFB4AB</Color>
     <Color x:Key="Warning">#FFB955</Color>
-    <Color x:Key="AccentContainer">#1A4250</Color>
+    <Color x:Key="AccentContainer">#1E1F35</Color>
     <Color x:Key="SuccessContainer">#2D4A2D</Color>
     <Color x:Key="ErrorContainer">#4A1E1E</Color>
     <Color x:Key="Scrim">#66000000</Color>
@@ -28,8 +28,8 @@
     <Color x:Key="BgConsole">#0E0E0E</Color>
     <Color x:Key="WindowCloseHover">#4A1515</Color>
     <Color x:Key="WindowClosePressed">#5A1A1A</Color>
-    <Color x:Key="AccentGradientStart">#89B4FA</Color>
-    <Color x:Key="AccentGradientEnd">#74C7EC</Color>
+    <Color x:Key="AccentGradientStart">#818CF8</Color>
+    <Color x:Key="AccentGradientEnd">#C084FC</Color>
     <Color x:Key="ToggleTrack">#313244</Color>
     <Color x:Key="ToggleThumb">#585B70</Color>
 
@@ -290,6 +290,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
+                            TextElement.Foreground="{TemplateBinding Foreground}"
                             CornerRadius="8"
                             RenderTransformOrigin="0.5,0.5"
                             SnapsToDevicePixels="True">
@@ -396,6 +397,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
+                            TextElement.Foreground="{TemplateBinding Foreground}"
                             BorderBrush="{StaticResource BorderSubtleBrush}"
                             BorderThickness="1"
                             CornerRadius="8"
