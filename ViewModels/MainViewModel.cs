@@ -13,17 +13,15 @@ public partial class MainViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
     private readonly DownloadManager _downloadManager;
-    private System.Timers.Timer? _notificationTimer;
 
     [ObservableProperty] private ObservableObject? _currentPage;
     [ObservableProperty] private int _selectedNavIndex;
     [ObservableProperty] private string _statusMessage = "Ready";
 
-    [ObservableProperty] private bool _showNotification;
-    [ObservableProperty] private string _notificationMessage = "";
-    [ObservableProperty] private bool _isNotificationSuccess;
     [ObservableProperty] private TaskbarItemProgressState _taskbarState = TaskbarItemProgressState.None;
     [ObservableProperty] private double _taskbarValue;
+
+    public System.Collections.ObjectModel.ObservableCollection<NotificationItem> Notifications { get; } = [];
 
     public DownloadViewModel DownloadVM { get; }
     public BatchDownloadViewModel BatchDownloadVM { get; }
@@ -78,20 +76,73 @@ public partial class MainViewModel : ObservableObject
 
         BatchDownloadVM.RequestShowNotification += (msg, isSuccess) =>
         {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
-                NotificationMessage = msg;
-                IsNotificationSuccess = isSuccess;
-                ShowNotification = true;
-                _notificationTimer?.Stop();
-                _notificationTimer = new System.Timers.Timer(4000) { AutoReset = false };
-                _notificationTimer.Elapsed += (_, _) =>
-                {
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() => ShowNotification = false);
-                };
-                _notificationTimer.Start();
-            });
+            ShowToast(msg, isSuccess);
         };
+    }
+
+    public void ShowToast(string message, bool isSuccess)
+    {
+        var action = new Action(() =>
+        {
+            if (Notifications.Count >= 3)
+            {
+                var oldest = Notifications.FirstOrDefault();
+                if (oldest != null)
+                {
+                    oldest.Close();
+                }
+            }
+
+            var item = new NotificationItem(message, isSuccess);
+            item.Expired += OnNotificationExpired;
+            item.Closed += OnNotificationClosed;
+            Notifications.Add(item);
+        });
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.Invoke(action);
+        }
+    }
+
+    private void OnNotificationExpired(NotificationItem item)
+    {
+        var action = new Action(() => RemoveNotification(item));
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.Invoke(action);
+        }
+    }
+
+    private void OnNotificationClosed(NotificationItem item)
+    {
+        var action = new Action(() => RemoveNotification(item));
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.Invoke(action);
+        }
+    }
+
+    private void RemoveNotification(NotificationItem item)
+    {
+        item.Expired -= OnNotificationExpired;
+        item.Closed -= OnNotificationClosed;
+        Notifications.Remove(item);
     }
 
     private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -108,36 +159,54 @@ public partial class MainViewModel : ObservableObject
 
     private void OnTaskFinished(DownloadTask task)
     {
-        System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+        var title = string.IsNullOrEmpty(task.Title) ? task.Url : task.Title;
+        string msg = "";
+        bool isSuccess = false;
+
+        switch (task.Status)
         {
-            var title = string.IsNullOrEmpty(task.Title) ? task.Url : task.Title;
-            (NotificationMessage, IsNotificationSuccess) = task.Status switch
-            {
-                DownloadStatus.Completed => ($"下载完成: {title}", true),
-                DownloadStatus.Failed => ($"下载失败: {title}", false),
-                DownloadStatus.Cancelled => ($"已取消: {title}", false),
-                _ => ("", false)
-            };
+            case DownloadStatus.Completed:
+                msg = $"下载完成: {title}";
+                isSuccess = true;
+                break;
+            case DownloadStatus.Failed:
+                msg = $"下载失败: {title}";
+                isSuccess = false;
+                break;
+            case DownloadStatus.Cancelled:
+                msg = $"已取消: {title}";
+                isSuccess = false;
+                break;
+        }
 
-            if (string.IsNullOrEmpty(NotificationMessage))
-                return;
-
-            ShowNotification = true;
-            _notificationTimer?.Stop();
-            _notificationTimer = new System.Timers.Timer(4000) { AutoReset = false };
-            _notificationTimer.Elapsed += (_, _) =>
-            {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() => ShowNotification = false);
-            };
-            _notificationTimer.Start();
-        });
+        if (!string.IsNullOrEmpty(msg))
+        {
+            ShowToast(msg, isSuccess);
+        }
     }
 
     [RelayCommand]
     private void DismissNotification()
     {
-        ShowNotification = false;
-        _notificationTimer?.Stop();
+        var action = new Action(() =>
+        {
+            var list = Notifications.ToList();
+            foreach (var item in list)
+            {
+                item.Close();
+            }
+            Notifications.Clear();
+        });
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            dispatcher.Invoke(action);
+        }
     }
 
     [RelayCommand]
@@ -180,9 +249,7 @@ public partial class MainViewModel : ObservableObject
             catch (Exception ex)
             {
                 StatusMessage = "环境安装失败，请在设置页重试或手动安装。";
-                NotificationMessage = $"环境安装失败: {ex.Message}";
-                IsNotificationSuccess = false;
-                ShowNotification = true;
+                ShowToast($"环境安装失败: {ex.Message}", false);
             }
         }
 

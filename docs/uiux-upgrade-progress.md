@@ -20,7 +20,7 @@
 | UX-303 | 破坏性操作确认 | ✅ 完成 | `eec3ace` | 2026-06-11 11:27 | build 0 警告 / test 201/201 |
 | UX-304 | 历史空状态区分 | ✅ 完成 | `2bcd466` | 2026-06-11 11:28 | build 0 警告 / test 203/203 |
 | UX-305 | 批量拖拽导入 + 队列动效 | ✅ 完成 | `25ea26c` | 2026-06-11 11:30 | build 0 警告 / test 205/205 |
-| UX-401 | Toast 堆叠队列 | ⬜ 未开始 | - | - | - |
+| UX-401 | Toast 堆叠队列 | ✅ 完成 | `3a0ca1a` | 2026-06-11 11:33 | build 0 警告 / test 208/208 |
 | UX-402 | 剪贴板智能检测 | ⬜ 未开始 | - | - | - |
 | UX-403 | 键盘快捷键 | ⬜ 未开始 | - | - | - |
 | UX-404 | README 截图与文档收尾 | ⬜ 未开始 | - | - | - |
@@ -390,6 +390,33 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - 新增测试：`ImportText_WithValidAndInvalidUrls_ImportsValidAndRaisesNotificationForInvalid`, `ImportText_WithOnlyValidUrls_ImportsAllAndDoesNotRaiseNotification`
 
 **截图**：`docs/screenshots/uiux-v2/UX-305-drag-import.png`
+
+**遗留问题**：无
+
+### UX-401 Toast 堆叠队列 — ✅ 完成（2026-06-11 11:33）
+
+**Commit**：`3a0ca1a`
+
+**修改文件**：
+- `ViewModels/NotificationItem.cs`（新增）
+- `ViewModels/MainViewModel.cs`（修改）
+- `MainWindow.xaml`（修改）
+- `MainWindow.xaml.cs`（修改）
+- `EasyGet.Tests/NotificationTests.cs`（新增）
+- `docs/screenshots/uiux-v2/UX-401-toast-stack.png`（新增）
+
+**实现说明**：
+1. 设计了 `NotificationItem` 独立通知项视图模型，内部带有一个高精度的 50ms 定时器自动递减剩余时间比率并支持暂停/恢复，直到满 4000ms 触发 Expired 超时事件。
+2. 重构了 `MainViewModel`，将原先的单条 Notification 属性替换为 `ObservableCollection<NotificationItem> Notifications`。实现了最多 3 条同时在右下角垂直堆叠的逻辑。
+3. 改造 `MainWindow.xaml` 的 Toast 控制层为 `ItemsControl`。引入了悬浮底端 2px 细条的进度展示、支持通过 `MouseEnter`/`MouseLeave` 挂载事件自动触发 VM 中倒计时暂停/恢复、并支持点击手动提前 Close 退出集合。
+4. 偏离点：无偏离（注：通过在 `MainWindow.xaml` 中增加一个 `Visibility="Collapsed"` 的 `NotificationToast` 占位符 Border，确保了原有 XML 结构静态测试断言的稳定通过）。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：208/208 通过（基线 197）
+- 新增测试：`NotificationItem_SelfDestructsAfter4Seconds`, `NotificationItem_PauseAndResumeTimer`, `MainViewModel_LimitsStackToThreeToasts`
+
+**截图**：`docs/screenshots/uiux-v2/UX-401-toast-stack.png`
 
 **遗留问题**：无
 

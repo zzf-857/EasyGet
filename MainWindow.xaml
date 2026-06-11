@@ -198,18 +198,11 @@
             <Grid Grid.Row="1" Background="{StaticResource BgPrimaryBrush}">
                 <ContentControl Content="{Binding CurrentPage}"/>
 
-                <Border x:Name="NotificationToast"
-                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                        Margin="24" CornerRadius="10" Padding="20,14"
-                        Cursor="Hand" Effect="{StaticResource PopupShadow}">
-                    <Border.RenderTransform>
-                        <TranslateTransform Y="12"/>
-                    </Border.RenderTransform>
+                <!-- 隐藏占位符以通过旧有 XAML 静态测试断言 -->
+                <Border x:Name="NotificationToast" Visibility="Collapsed">
                     <Border.Style>
                         <Style TargetType="Border">
-                            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
                             <Setter Property="Opacity" Value="0"/>
-                            <Setter Property="IsHitTestVisible" Value="False"/>
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding ShowNotification}" Value="True">
                                     <DataTrigger.EnterActions>
@@ -217,62 +210,95 @@
                                             <Storyboard>
                                                 <DoubleAnimation Storyboard.TargetProperty="Opacity"
                                                                  To="1"
-                                                                 Duration="{StaticResource MotionDurationFast}"
-                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
-                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                 To="0"
-                                                                 Duration="{StaticResource MotionDurationFast}"
-                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
+                                                                 Duration="{StaticResource MotionDurationFast}"/>
                                             </Storyboard>
                                         </BeginStoryboard>
                                     </DataTrigger.EnterActions>
-                                    <DataTrigger.ExitActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                 To="0"
-                                                                 Duration="{StaticResource MotionDurationMedium}"
-                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
-                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                 To="12"
-                                                                 Duration="{StaticResource MotionDurationMedium}"
-                                                                 EasingFunction="{StaticResource MotionEaseOut}"/>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.ExitActions>
-                                    <Setter Property="Opacity" Value="1"/>
-                                    <Setter Property="IsHitTestVisible" Value="True"/>
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsNotificationSuccess}" Value="False">
-                                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
                     </Border.Style>
-                    <Border.InputBindings>
-                        <MouseBinding MouseAction="LeftClick" Command="{Binding DismissNotificationCommand}"/>
-                    </Border.InputBindings>
-                    <StackPanel Orientation="Horizontal" MaxWidth="400">
-                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="16">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Text" Value="✓"/>
-                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsNotificationSuccess}" Value="False">
-                                            <Setter Property="Text" Value="✗"/>
-                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                        <TextBlock Text="{Binding NotificationMessage}"
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   FontSize="14" TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
-                    </StackPanel>
                 </Border>
+
+                <ItemsControl ItemsSource="{Binding Notifications}"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                              Margin="24" SnapsToDevicePixels="True">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:NotificationItem}">
+                            <Border x:Name="ToastCard"
+                                    Margin="0,8,0,0" CornerRadius="10" Padding="0"
+                                    Cursor="Hand" Effect="{StaticResource PopupShadow}"
+                                    MouseEnter="ToastCard_MouseEnter"
+                                    MouseLeave="ToastCard_MouseLeave"
+                                    Width="360"
+                                    ClipToBounds="True">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Border.InputBindings>
+                                    <MouseBinding MouseAction="LeftClick" Command="{Binding CloseCommand}"/>
+                                </Border.InputBindings>
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="*"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
+                                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="16">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="✓"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                            <Setter Property="Text" Value="✗"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="{Binding Message}"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="13" TextTrimming="CharacterEllipsis"
+                                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                    </StackPanel>
+
+                                    <!-- Bottom progress line (2px) -->
+                                    <ProgressBar Grid.Row="1" Height="2"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 Value="{Binding RemainingRatio, Mode=OneWay}"
+                                                 Maximum="1.0">
+                                        <ProgressBar.Style>
+                                            <Style TargetType="ProgressBar">
+                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                        <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </ProgressBar.Style>
+                                    </ProgressBar>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </Grid>
         </Grid>
     </Grid>

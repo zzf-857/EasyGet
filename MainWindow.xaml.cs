@@ -124,6 +124,22 @@ public partial class MainWindow : Window
             : System.Windows.WindowState.Maximized;
     }
 
+    private void ToastCard_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is NotificationItem item)
+        {
+            item.Pause();
+        }
+    }
+
+    private void ToastCard_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is NotificationItem item)
+        {
+            item.Resume();
+        }
+    }
+
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(
         IntPtr hwnd,
