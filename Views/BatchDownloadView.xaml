@@ -30,25 +30,21 @@
                 Margin="-8"
                 Panel.ZIndex="100">
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="&#xE78A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="48" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                <TextBlock Text="&#xE78A;" Style="{StaticResource IconGlyph}"
+                           FontSize="{StaticResource IconSizeEmptyState}" Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
                 <TextBlock Text="拖入链接文本或 .txt 文件以批量导入"
-                           FontSize="18" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center"/>
+                           Style="{StaticResource TextSection}" HorizontalAlignment="Center"/>
                 <TextBlock Text="释放以提取所有视频链接"
-                           FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                           Style="{StaticResource TextBody}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
             </StackPanel>
         </Border>
-
+ 
         <Grid Grid.Row="0" Margin="0,0,0,24">
             <StackPanel>
                 <TextBlock Text="批量下载"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           FontSize="28"
-                           FontWeight="SemiBold"
-                           FontFamily="Segoe UI Variable, Microsoft YaHei UI"/>
+                           Style="{StaticResource TextPageTitle}"/>
                 <TextBlock Text="输入多个视频链接，我们将自动为您解析并加入下载队列。"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           FontSize="14"
+                           Style="{StaticResource TextBody}"
                            Margin="0,8,0,0"/>
             </StackPanel>
             <Button HorizontalAlignment="Right"
@@ -58,44 +54,41 @@
                     AutomationProperties.Name="粘贴多个视频链接"
                     Command="{Binding PasteUrlsCommand}">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE77F;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="&#xE77F;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock Text="粘贴内容" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
         </Grid>
-
+ 
         <Border Grid.Row="1" Style="{StaticResource ToolPanelBorder}" Padding="22,20" Margin="0,0,0,24">
             <StackPanel>
                 <Grid Margin="0,0,0,10">
                     <TextBlock Text="粘贴视频链接（每行一个）"
-                               Foreground="{StaticResource TextSecondaryBrush}"
-                               FontSize="12"
-                               FontWeight="SemiBold"
+                               Style="{StaticResource TextBodyStrong}"
                                VerticalAlignment="Center"/>
                     <Border HorizontalAlignment="Right"
                             Background="{StaticResource AccentContainerBrush}"
                             CornerRadius="5"
                             Padding="8,2">
-                        <TextBlock Foreground="{StaticResource AccentBrush}"
-                                   FontSize="11"
-                                   FontWeight="Bold">
+                        <TextBlock Style="{StaticResource TextCaption}"
+                                   Foreground="{StaticResource AccentBrush}">
                             <Run Text="已检测到 "/>
                             <Run Text="{Binding LinkCount, Mode=OneWay}"/>
                             <Run Text=" 个链接"/>
                         </TextBlock>
                     </Border>
                 </Grid>
-
+ 
                 <TextBox Style="{StaticResource DarkTextBox}"
-                         Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}"
-                         AcceptsReturn="True"
-                         TextWrapping="Wrap"
-                         Height="170"
-                         VerticalScrollBarVisibility="Auto"
-                         FontFamily="Cascadia Code, Consolas, Courier New"
-                         FontSize="13"/>
-
+                          Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}"
+                          AcceptsReturn="True"
+                          TextWrapping="Wrap"
+                          Height="170"
+                          VerticalScrollBarVisibility="Auto"
+                          FontFamily="{StaticResource FontFamilyMono}"
+                          FontSize="{StaticResource FontSizeBody}"/>
+ 
                 <Grid Margin="0,18,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -103,42 +96,40 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-
+ 
                     <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                        <TextBlock Text="下载格式" FontSize="10" FontWeight="Bold"
-                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,5"/>
+                        <TextBlock Text="下载格式" Style="{StaticResource TextCaption}" Margin="0,0,0,5"/>
                         <ComboBox Style="{StaticResource DarkComboBox}"
                                   Width="132"
                                   ItemsSource="{Binding FormatOptions}"
                                   SelectedItem="{Binding SelectedFormat}"/>
                     </StackPanel>
-
+ 
                     <StackPanel Grid.Column="1">
-                        <TextBlock Text="清晰度优先" FontSize="10" FontWeight="Bold"
-                                   Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,5"/>
+                        <TextBlock Text="清晰度优先" Style="{StaticResource TextCaption}" Margin="0,0,0,5"/>
                         <ComboBox Style="{StaticResource DarkComboBox}"
                                   Width="160"
                                   ItemsSource="{Binding QualityOptions}"
                                   SelectedItem="{Binding SelectedQuality}"/>
                     </StackPanel>
-
+ 
                     <Button Grid.Column="3"
-                            Style="{StaticResource AccentButton}"
-                            Padding="24,12"
-                            VerticalAlignment="Bottom"
-                            ToolTip="开始批量下载"
-                            AutomationProperties.Name="开始批量下载"
-                            Command="{Binding StartBatchDownloadCommand}">
+                             Style="{StaticResource AccentButton}"
+                             Padding="24,12"
+                             VerticalAlignment="Bottom"
+                             ToolTip="开始批量下载"
+                             AutomationProperties.Name="开始批量下载"
+                             Command="{Binding StartBatchDownloadCommand}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE945;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="开始批量下载" FontSize="14" VerticalAlignment="Center"/>
+                            <TextBlock Text="&#xE945;" Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="开始批量下载" Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </Grid>
-
+ 
                 <StackPanel Margin="0,16,0,0">
-                    <TextBlock Text="播放列表链接" FontSize="11" FontWeight="Bold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                    <TextBlock Text="播放列表链接" Style="{StaticResource TextCaption}" Margin="0,0,0,5"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -147,14 +138,13 @@
                         <Grid Grid.Column="0">
                             <TextBox Style="{StaticResource DarkTextBox}"
                                      Text="{Binding PlaylistUrl, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="12"/>
+                                     FontSize="{StaticResource FontSizeBody}"/>
                             <TextBlock Text="粘贴播放列表 URL (例如 YouTube, Bilibili 列表)..." 
-                                       FontSize="12" Foreground="{StaticResource TextMutedBrush}"
                                        IsHitTestVisible="False"
                                        Margin="12,8,12,8"
                                        VerticalAlignment="Center">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding PlaylistUrl}" Value="">
@@ -171,14 +161,14 @@
                         <Button Grid.Column="1"
                                 Style="{StaticResource SurfaceButton}"
                                 Margin="8,0,0,0"
-                                FontSize="12"
+                                FontSize="{StaticResource FontSizeBody}"
                                 ToolTip="导入播放列表"
                                 AutomationProperties.Name="导入播放列表"
                                 Command="{Binding ImportPlaylistCommand}"
                                 IsEnabled="{Binding IsImportingPlaylist, Converter={StaticResource InverseBool}}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                           FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyph}"
+                                           FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="导入播放列表" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -186,26 +176,24 @@
                 </StackPanel>
             </StackPanel>
         </Border>
-
+ 
         <Grid Grid.Row="2">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
-
+ 
             <DockPanel Grid.Row="0" Margin="0,0,0,12">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="下载队列"
-                               FontSize="24"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}"
+                               Style="{StaticResource TextCardTitle}"
                                VerticalAlignment="Center"/>
                     <Border Background="{StaticResource BgSurfaceHighBrush}"
                             CornerRadius="10"
                             Padding="8,2"
                             Margin="10,0,0,0"
                             VerticalAlignment="Center">
-                        <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}">
+                        <TextBlock Style="{StaticResource TextBody}">
                             <Run Text="{Binding QueueTasks.Count, Mode=OneWay}"/>
                             <Run Text=" 任务中"/>
                         </TextBlock>
@@ -214,32 +202,32 @@
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Style="{StaticResource SurfaceButton}"
                             Padding="10,5"
-                            FontSize="12"
+                            FontSize="{StaticResource FontSizeBody}"
                             ToolTip="暂停全部任务"
                             AutomationProperties.Name="暂停全部任务"
                             Command="{Binding PauseAllCommand}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE769;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="&#xE769;" Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0" VerticalAlignment="Center"/>
                             <TextBlock Text="暂停全部" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <Button Style="{StaticResource SurfaceButton}"
                             Padding="10,5"
-                            FontSize="12"
+                            FontSize="{StaticResource FontSizeBody}"
                             Margin="8,0,0,0"
                             ToolTip="取消全部任务"
                             AutomationProperties.Name="取消全部任务"
                             Command="{Binding CancelAllCommand}">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0" VerticalAlignment="Center"/>
                             <TextBlock Text="取消全部" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
             </DockPanel>
-
+ 
             <Border Grid.Row="1"
                     Style="{StaticResource ToolPanelBorder}"
                     Padding="0"
@@ -257,12 +245,12 @@
                                 </Style.Triggers>
                             </Style>
                         </StackPanel.Style>
-                        <TextBlock Text="&#xE896;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                   FontSize="48" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="暂无并行任务" FontSize="15" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
-                        <TextBlock Text="在上方粘贴多个链接即可开始批量下载" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                        <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"
+                                   FontSize="{StaticResource IconSizeEmptyState}" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
+                        <TextBlock Text="暂无并行任务" Style="{StaticResource TextBodyStrong}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                        <TextBlock Text="在上方粘贴多个链接即可开始批量下载" Style="{StaticResource TextBody}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                     </StackPanel>
-
+ 
                     <ListBox ItemsSource="{Binding QueueTasks}"
                              Background="Transparent"
                              BorderThickness="0"
@@ -292,7 +280,7 @@
                                             <ColumnDefinition Width="4"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-
+ 
                                         <!-- 4px left status line -->
                                         <Border Grid.Column="0" Width="4" HorizontalAlignment="Left">
                                             <Border.Style>
@@ -324,7 +312,7 @@
                                                 </Style>
                                             </Border.Style>
                                         </Border>
-
+ 
                                         <!-- Card content -->
                                         <Grid Grid.Column="1" Margin="12">
                                             <Grid.ColumnDefinitions>
@@ -332,7 +320,7 @@
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-
+ 
                                             <Border Grid.Column="0"
                                                     Width="96"
                                                     Height="62"
@@ -344,7 +332,7 @@
                                                        Stretch="UniformToFill"
                                                        RenderOptions.BitmapScalingMode="HighQuality"/>
                                             </Border>
-
+ 
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" MinWidth="0">
                                                 <DockPanel LastChildFill="True">
                                                     <Border DockPanel.Dock="Right"
@@ -352,28 +340,24 @@
                                                             CornerRadius="4"
                                                             Padding="6,2"
                                                             Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
-                                                        <TextBlock Text="{Binding Platform}"
-                                                                   FontSize="10"
-                                                                   FontWeight="Bold"
-                                                                   Foreground="{StaticResource AccentBrush}"/>
+                                                         <TextBlock Text="{Binding Platform}"
+                                                                    Style="{StaticResource TextCaption}"
+                                                                    Foreground="{StaticResource AccentBrush}"/>
                                                     </Border>
                                                     <TextBlock Text="{Binding Title, FallbackValue='解析中...'}"
-                                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                                               FontSize="13"
-                                                               FontWeight="SemiBold"
+                                                               Style="{StaticResource TextBodyStrong}"
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </DockPanel>
                                                 <Grid Margin="0,6,0,4">
-                                                    <TextBlock Foreground="{StaticResource TextSecondaryBrush}" FontSize="11">
+                                                    <TextBlock Style="{StaticResource TextCaption}">
                                                         <Run Text="{Binding Status, Converter={StaticResource StatusToText}}"/>
                                                         <Run Text=" · "/>
                                                         <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
                                                     </TextBlock>
                                                     <TextBlock HorizontalAlignment="Right" 
-                                                               Foreground="{StaticResource AccentBrush}" 
-                                                               FontSize="11" 
-                                                               FontWeight="Bold"
-                                                               FontFamily="Consolas, Segoe UI, Microsoft YaHei UI">
+                                                               Style="{StaticResource TextCaption}" 
+                                                               FontFamily="{StaticResource FontFamilyMono}"
+                                                               Foreground="{StaticResource AccentBrush}">
                                                         <Run Text="{Binding Progress, StringFormat={}{0:F0}}"/>
                                                         <Run Text="% · "/>
                                                         <Run Text="{Binding SpeedText, Mode=OneWay}"/>
@@ -384,13 +368,13 @@
                                                              Maximum="100"
                                                              Height="5"/>
                                                 <TextBlock Text="{Binding ErrorMessage}"
+                                                           Style="{StaticResource TextCaption}"
                                                            Foreground="{StaticResource ErrorBrush}"
-                                                           FontSize="11"
                                                            Margin="0,5,0,0"
                                                            TextTrimming="CharacterEllipsis"
                                                            Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibility}}"/>
                                             </StackPanel>
-
+ 
                                             <StackPanel Grid.Column="2"
                                                         Orientation="Horizontal"
                                                         VerticalAlignment="Center"
@@ -398,7 +382,7 @@
                                                 <Button ToolTip="暂停"
                                                         AutomationProperties.Name="暂停任务"
                                                         Padding="8,5"
-                                                        FontSize="11"
+                                                        FontSize="{StaticResource FontSizeCaption}"
                                                         Margin="0,0,4,0"
                                                         Command="{Binding DataContext.PauseTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding Id}">
@@ -418,12 +402,12 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
-                                                    <TextBlock Text="&#xE769;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                                    <TextBlock Text="&#xE769;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                 </Button>
                                                 <Button ToolTip="恢复"
                                                         AutomationProperties.Name="恢复任务"
                                                         Padding="8,5"
-                                                        FontSize="11"
+                                                        FontSize="{StaticResource FontSizeCaption}"
                                                         Margin="0,0,4,0"
                                                         Command="{Binding DataContext.ResumeTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding Id}">
@@ -437,12 +421,12 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
-                                                    <TextBlock Text="&#xE768;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                                    <TextBlock Text="&#xE768;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                 </Button>
                                                 <Button ToolTip="重试"
                                                         AutomationProperties.Name="重试任务"
                                                         Padding="8,5"
-                                                        FontSize="11"
+                                                        FontSize="{StaticResource FontSizeCaption}"
                                                         Margin="0,0,4,0"
                                                         Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding Id}">
@@ -456,12 +440,12 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
-                                                    <TextBlock Text="&#xE72C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                                    <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                 </Button>
                                                 <Button ToolTip="取消任务"
                                                         AutomationProperties.Name="取消任务"
                                                         Padding="8,5"
-                                                        FontSize="11"
+                                                        FontSize="{StaticResource FontSizeCaption}"
                                                         behaviors:Motion.AnimateRemove="True"
                                                         behaviors:Motion.RemoveCommand="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         behaviors:Motion.RemoveParameter="{Binding Id}">
@@ -496,7 +480,7 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
-                                                    <TextBlock Text="&#xE711;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="12"/>
+                                                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                 </Button>
                                             </StackPanel>
                                         </Grid>
@@ -508,7 +492,7 @@
                 </Grid>
             </Border>
         </Grid>
-
+ 
         <Border Grid.Row="3"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
                 BorderThickness="0,1,0,0"
@@ -517,24 +501,20 @@
             <DockPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
-                               Foreground="{StaticResource TextSecondaryBrush}" 
-                               FontSize="12" 
-                               FontWeight="SemiBold"/>
+                               Style="{StaticResource TextBody}"
+                               FontWeight="{StaticResource FontWeightSemiBold}"/>
                     <TextBlock Text="  ·  进行中任务: " 
-                               Foreground="{StaticResource TextSecondaryBrush}" 
-                               FontSize="12"/>
+                               Style="{StaticResource TextBody}"/>
                     <TextBlock Text="{Binding ActiveDownloadCount, Mode=OneWay}" 
-                               Foreground="{StaticResource AccentBrush}" 
-                               FontSize="12" 
-                               FontWeight="Bold"
-                               FontFamily="Consolas, Segoe UI"/>
+                               Style="{StaticResource TextBody}"
+                               FontWeight="{StaticResource FontWeightSemiBold}"
+                               FontFamily="{StaticResource FontFamilyMono}"
+                               Foreground="{StaticResource AccentBrush}"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Ellipse Width="7" Height="7" Fill="{StaticResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding DataContext.ToolStatusText, RelativeSource={RelativeSource AncestorType=Window}}" 
-                               Foreground="{StaticResource TextSecondaryBrush}" 
-                               FontSize="12" 
-                               FontWeight="Medium"/>
+                               Style="{StaticResource TextBody}"/>
                 </StackPanel>
             </DockPanel>
         </Border>

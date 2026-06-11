@@ -73,7 +73,11 @@
     <sys:Double x:Key="IconSizeSmall">12</sys:Double>
     <sys:Double x:Key="IconSizeBody">16</sys:Double>
     <sys:Double x:Key="IconSizeLarge">18</sys:Double>
+    <sys:Double x:Key="IconSizePreview">28</sys:Double>
     <sys:Double x:Key="IconSizeEmptyState">48</sys:Double>
+
+    <FontWeight x:Key="FontWeightNormal">Normal</FontWeight>
+    <FontWeight x:Key="FontWeightSemiBold">SemiBold</FontWeight>
 
     <FontFamily x:Key="FontFamilyUI">Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI</FontFamily>
     <FontFamily x:Key="FontFamilyMono">Cascadia Code, Consolas, Microsoft YaHei UI</FontFamily>
@@ -179,8 +183,8 @@
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="12,8"/>
-        <Setter Property="FontFamily" Value="Segoe UI Variable, Microsoft YaHei UI"/>
-        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
@@ -229,8 +233,8 @@
         <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource BgPrimaryBrush}"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
-        <Setter Property="FontSize" Value="13"/>
-        <Setter Property="FontFamily" Value="Segoe UI Variable, Microsoft YaHei UI"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="Padding" Value="20,8"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -336,8 +340,8 @@
     <Style x:Key="SurfaceButton" TargetType="Button">
         <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-        <Setter Property="FontSize" Value="13"/>
-        <Setter Property="FontFamily" Value="Segoe UI Variable, Microsoft YaHei UI"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="Padding" Value="14,8"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
@@ -449,7 +453,7 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="BorderThickness" Value="0"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="{StaticResource IconSizeSmall}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -575,8 +579,8 @@
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="FontSize" Value="13"/>
-        <Setter Property="FontFamily" Value="Segoe UI Variable, Microsoft YaHei UI"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="Padding" Value="10,7"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
@@ -686,9 +690,9 @@
     <Style x:Key="NavButton" TargetType="Button">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="FontWeight" Value="Medium"/>
-        <Setter Property="FontFamily" Value="Segoe UI Variable, Microsoft YaHei UI"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="FontWeight" Value="{StaticResource FontWeightSemiBold}"/>
+        <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="Padding" Value="12,10"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -719,8 +723,8 @@
         <Setter Property="Height" Value="42"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-        <Setter Property="FontSize" Value="14"/>
-        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="FontWeight" Value="{StaticResource FontWeightSemiBold}"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -882,8 +886,8 @@
     <Style x:Key="HistoryFilterRadioButton" TargetType="RadioButton">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
-        <Setter Property="FontSize" Value="12"/>
-        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontWeight" Value="{StaticResource FontWeightNormal}"/>
         <Setter Property="Padding" Value="14,6"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="GroupName" Value="HistoryFilter"/>

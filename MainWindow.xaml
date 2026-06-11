@@ -76,17 +76,12 @@
                         </Border>
                         <StackPanel Margin="12,1,0,0" VerticalAlignment="Center">
                             <TextBlock Text="EasyGet"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="18"
-                                       FontWeight="SemiBold"
-                                       FontFamily="Segoe UI Variable, Microsoft YaHei UI"/>
+                                       Style="{StaticResource TextCardTitle}"/>
                             <TextBlock Text="{Binding AppVersion}"
-                                       Foreground="{StaticResource TextMutedBrush}"
-                                       FontSize="10"
-                                       FontWeight="SemiBold"/>
+                                       Style="{StaticResource TextCaption}"/>
                         </StackPanel>
                     </StackPanel>
-
+ 
                     <StackPanel>
                         <RadioButton Style="{StaticResource NavRadioButton}"
                                      Command="{Binding NavigateCommand}"
@@ -95,8 +90,8 @@
                                      AutomationProperties.Name="单个下载"
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=OneWay}">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE118;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                           FontSize="18" Width="24" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE118;" Style="{StaticResource IconGlyph}"
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
                                 <TextBlock Text="单个下载" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
@@ -108,8 +103,8 @@
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=OneWay}"
                                      Margin="0,8,0,0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE8FD;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                           FontSize="18" Width="24" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyph}"
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
                                 <TextBlock Text="批量下载" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
@@ -121,8 +116,8 @@
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
                                      Margin="0,8,0,0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE81C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                           FontSize="18" Width="24" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE81C;" Style="{StaticResource IconGlyph}"
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
                                 <TextBlock Text="下载历史" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
@@ -134,8 +129,8 @@
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
                                      Margin="0,8,0,0">
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE713;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                           FontSize="18" Width="24" VerticalAlignment="Center"/>
+                                <TextBlock Text="&#xE713;" Style="{StaticResource IconGlyph}"
+                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
                                 <TextBlock Text="设置" Margin="12,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
                         </RadioButton>
@@ -164,13 +159,11 @@
                         <ContentControl.ContentTemplate>
                             <DataTemplate>
                                 <TextBlock Text="{Binding}"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"/>
+                                           Style="{StaticResource TextSection}"/>
                             </DataTemplate>
                         </ContentControl.ContentTemplate>
                     </ContentControl>
-
+ 
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Stretch">
@@ -178,29 +171,29 @@
                                 ToolTip="最小化"
                                 AutomationProperties.Name="最小化"
                                 Click="MinimizeButton_Click">
-                            <TextBlock Text="&#xE921;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                            <TextBlock Text="&#xE921;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                         </Button>
                         <Button Style="{StaticResource WindowControlButton}"
                                 ToolTip="最大化/还原"
                                 AutomationProperties.Name="最大化或还原"
                                 Click="MaximizeButton_Click">
-                            <TextBlock Text="&#xE922;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                            <TextBlock Text="&#xE922;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                         </Button>
                         <Button Style="{StaticResource WindowCloseButton}"
                                 ToolTip="关闭"
                                 AutomationProperties.Name="关闭"
                                 Click="CloseButton_Click">
-                            <TextBlock Text="&#xE8BB;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+                            <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                         </Button>
                     </StackPanel>
                 </Grid>
             </Border>
-
+ 
             <Grid Grid.Row="1" Background="{StaticResource BgPrimaryBrush}">
                 <ContentControl Content="{Binding CurrentPage}"/>
-
-
-
+ 
+ 
+ 
                 <ItemsControl ItemsSource="{Binding Notifications}"
                               HorizontalAlignment="Right" VerticalAlignment="Bottom"
                               Margin="24" SnapsToDevicePixels="True">
@@ -239,9 +232,9 @@
                                     </Grid.RowDefinitions>
                                     
                                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
-                                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0" FontSize="16">
+                                        <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">
                                             <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextSection}">
                                                     <Setter Property="Text" Value="✓"/>
                                                     <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
                                                     <Style.Triggers>
@@ -254,8 +247,8 @@
                                             </TextBlock.Style>
                                         </TextBlock>
                                         <TextBlock Text="{Binding Message}"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                                   FontSize="13" TextTrimming="CharacterEllipsis"
+                                                   Style="{StaticResource TextBody}"
+                                                   TextTrimming="CharacterEllipsis"
                                                    VerticalAlignment="Center" TextWrapping="Wrap"/>
                                     </StackPanel>
 

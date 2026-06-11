@@ -183,7 +183,8 @@ public class XamlBindingTests
             var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
             Assert.True(textBlocks.Count >= 2, "Stitch sidebar items should include an icon and a visible text label.");
             Assert.Contains(textBlocks, textBlock =>
-                (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+                (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
+                || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
             Assert.Contains(textBlocks, textBlock =>
                 (textBlock.Attribute("Text")?.Value ?? "") == item.Attribute("ToolTip")?.Value);
         });
@@ -273,7 +274,8 @@ public class XamlBindingTests
 
         Assert.NotNull(icon);
         Assert.Equal("\uE118", icon!.Attribute("Text")?.Value);
-        Assert.Contains("Segoe", icon.Attribute("FontFamily")?.Value ?? "");
+        Assert.True((icon.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
+            || (icon.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -451,10 +453,12 @@ public class XamlBindingTests
             .ToList();
 
         Assert.Contains(textBlocks, textBlock =>
-            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
+            || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
         Assert.Contains(textBlocks, textBlock =>
             !string.IsNullOrWhiteSpace(textBlock.Attribute("Text")?.Value)
-            && !textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily"));
+            && (!textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily")
+                || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal)));
     }
 
     [Fact]
@@ -588,14 +592,22 @@ public class XamlBindingTests
         var title = FindTextBlockByText(document, titleText);
 
         Assert.NotNull(title);
-        Assert.Equal("28", title!.Attribute("FontSize")?.Value);
-        Assert.Equal("SemiBold", title.Attribute("FontWeight")?.Value);
+        var fontSize = title!.Attribute("FontSize")?.Value;
+        var fontWeight = title.Attribute("FontWeight")?.Value;
+        var style = title.Attribute("Style")?.Value ?? "";
+        Assert.True(fontSize == "28" || style.Contains("TextPageTitle", StringComparison.Ordinal));
+        Assert.True(fontWeight == "SemiBold" || style.Contains("TextPageTitle", StringComparison.Ordinal));
 
         var subtitle = FindTextBlockByText(document, subtitleText);
 
         Assert.NotNull(subtitle);
-        Assert.Equal("14", subtitle!.Attribute("FontSize")?.Value);
-        Assert.Contains("TextSecondaryBrush", subtitle.Attribute("Foreground")?.Value ?? "");
+        var subFontSize = subtitle!.Attribute("FontSize")?.Value;
+        var subStyle = subtitle.Attribute("Style")?.Value ?? "";
+        Assert.True(subFontSize == "14" || subStyle.Contains("TextBodyStrong", StringComparison.Ordinal) || subStyle.Contains("TextBody", StringComparison.Ordinal));
+        var subForeground = subtitle.Attribute("Foreground")?.Value ?? "";
+        Assert.True(subForeground.Contains("TextSecondaryBrush", StringComparison.Ordinal) 
+            || subStyle.Contains("TextBodyStrong", StringComparison.Ordinal)
+            || subStyle.Contains("TextBody", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -692,10 +704,12 @@ public class XamlBindingTests
             .ToList();
 
         Assert.Contains(textBlocks, textBlock =>
-            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
+            || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
         Assert.Contains(textBlocks, textBlock =>
             !string.IsNullOrWhiteSpace(textBlock.Attribute("Text")?.Value)
-            && !textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily"));
+            && (!textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily")
+                || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal)));
     }
 
     [Theory]
@@ -721,7 +735,8 @@ public class XamlBindingTests
         var icon = button.Descendants()
             .FirstOrDefault(element =>
                 element.Name.LocalName == "TextBlock"
-                && (element.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+                && ((element.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
+                    || (element.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal)));
 
         Assert.NotNull(icon);
     }

@@ -37,9 +37,9 @@
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Column="0"
                                Text="&#xE721;"
-                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                               Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeBody}"
                                Foreground="{StaticResource TextMutedBrush}"
-                               FontSize="14"
                                Margin="0,0,8,0"
                                VerticalAlignment="Center"/>
                     <TextBox Grid.Column="1"
@@ -48,7 +48,7 @@
                              Background="Transparent"
                              BorderThickness="0"
                              Padding="0,8"
-                             FontSize="13"/>
+                             FontSize="{StaticResource FontSizeBodyStrong}"/>
                 </Grid>
             </Border>
 
@@ -65,17 +65,14 @@
                     <StackPanel Orientation="Horizontal" Margin="18,8,18,11">
                         <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding StorageStatusText}" 
-                                   Foreground="{StaticResource TextPrimaryBrush}" 
-                                   FontSize="12" 
-                                   FontWeight="SemiBold"
+                                   Style="{StaticResource TextBody}"
+                                   FontWeight="{StaticResource FontWeightSemiBold}"
                                    VerticalAlignment="Center"/>
                         <TextBlock Text="  ·  " 
-                                   Foreground="{StaticResource TextMutedBrush}" 
-                                   FontSize="12" 
+                                   Style="{StaticResource TextCaption}"
                                    VerticalAlignment="Center"/>
                         <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
-                                   Foreground="{StaticResource TextSecondaryBrush}" 
-                                   FontSize="11" 
+                                   Style="{StaticResource TextCaption}"
                                    VerticalAlignment="Center"/>
                     </StackPanel>
                     <ProgressBar VerticalAlignment="Bottom"
@@ -98,9 +95,9 @@
                     AutomationProperties.Name="清空下载历史"
                     Command="{Binding ClearAllCommand}">
                 <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="清空记录" VerticalAlignment="Center"/>
+                    <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="清空记录" Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
                 </StackPanel>
             </Button>
         </Grid>
@@ -108,11 +105,8 @@
         <Grid Grid.Row="1" Margin="38,0,0,28">
             <StackPanel>
                 <TextBlock Text="下载历史"
-                           Foreground="{StaticResource TextPrimaryBrush}"
-                           FontSize="28"
-                           FontWeight="SemiBold"/>
-                <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
-                           FontSize="14"
+                           Style="{StaticResource TextPageTitle}"/>
+                <TextBlock Style="{StaticResource TextBodyStrong}"
                            Margin="0,4,0,0">
                     <Run Text="共计 "/>
                     <Run Text="{Binding TotalHistoryCount, Mode=OneWay}"/>
@@ -185,10 +179,10 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <TextBlock Text="&#xE8F9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="56" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
-                    <TextBlock Text="无下载历史" FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
-                    <TextBlock Text="快去粘贴链接下载你喜欢的视频吧" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    <TextBlock Text="&#xE8F9;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeEmptyState}" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="无下载历史" Style="{StaticResource TextSection}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                    <TextBlock Text="快去粘贴链接下载你喜欢的视频吧" Style="{StaticResource TextBody}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                 </StackPanel>
 
                 <!-- 无匹配态：有筛选或搜索但无匹配结果 -->
@@ -203,10 +197,10 @@
                             </Style.Triggers>
                         </Style>
                     </StackPanel.Style>
-                    <TextBlock Text="&#xE11A;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                               FontSize="56" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
-                    <TextBlock Text="未找到匹配的记录" FontSize="16" Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
-                    <TextBlock Text="尝试清除筛选或搜索词以显示全部历史" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                    <TextBlock Text="&#xE11A;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeEmptyState}" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="未找到匹配的记录" Style="{StaticResource TextSection}" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                    <TextBlock Text="尝试清除筛选或搜索词以显示全部历史" Style="{StaticResource TextBody}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                     <Button Style="{StaticResource AccentButton}"
                             Content="清除筛选"
                             Command="{Binding ClearFilterAndSearchCommand}"
@@ -264,9 +258,9 @@
                                             </Image.Effect>
                                         </Image>
                                         <TextBlock Text="&#xEC4F;"
-                                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                                   Style="{StaticResource IconGlyph}"
+                                                   FontSize="{StaticResource IconSizeEmptyState}"
                                                    Foreground="{StaticResource AccentBrush}"
-                                                   FontSize="44"
                                                    Opacity="0.22"
                                                    HorizontalAlignment="Center"
                                                    VerticalAlignment="Center"/>
@@ -276,7 +270,7 @@
                                                 CornerRadius="3"
                                                 Padding="5,2"
                                                 Margin="0,0,8,8">
-                                            <TextBlock Text="{Binding Quality}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="10" FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding Quality}" Style="{StaticResource TextCaption}"/>
                                         </Border>
                                         <Border x:Name="HoverOverlay"
                                                 Background="{StaticResource ScrimOverlayBrush}"
@@ -300,8 +294,8 @@
                                                         Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding FilePath}">
                                                     <TextBlock Text="&#xE838;"
-                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                               FontSize="15"
+                                                               Style="{StaticResource IconGlyph}"
+                                                               FontSize="{StaticResource IconSizeBody}"
                                                                VerticalAlignment="Center"/>
                                                 </Button>
                                                 <Button Style="{StaticResource AccentButton}"
@@ -315,8 +309,8 @@
                                                         Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding FilePath}">
                                                     <TextBlock Text="&#xE768;"
-                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                               FontSize="17"
+                                                               Style="{StaticResource IconGlyph}"
+                                                               FontSize="{StaticResource IconSizeLarge}"
                                                                VerticalAlignment="Center"/>
                                                 </Button>
                                                 <Button Style="{StaticResource SurfaceButton}"
@@ -330,8 +324,8 @@
                                                         Command="{Binding DataContext.OpenSourceUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding Url}">
                                                     <TextBlock Text="&#xE8A7;"
-                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                               FontSize="15"
+                                                               Style="{StaticResource IconGlyph}"
+                                                               FontSize="{StaticResource IconSizeBody}"
                                                                VerticalAlignment="Center"/>
                                                 </Button>
                                                 <Button Style="{StaticResource SurfaceButton}"
@@ -343,8 +337,8 @@
                                                         Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                         CommandParameter="{Binding Id}">
                                                     <TextBlock Text="&#xE74D;"
-                                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                               FontSize="15"
+                                                               Style="{StaticResource IconGlyph}"
+                                                               FontSize="{StaticResource IconSizeBody}"
                                                                VerticalAlignment="Center"/>
                                                 </Button>
                                             </StackPanel>
@@ -360,9 +354,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0"
                                                    Text="{Binding Title}"
-                                                   FontSize="13"
-                                                   FontWeight="SemiBold"
-                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   Style="{StaticResource TextBodyStrong}"
                                                    TextTrimming="CharacterEllipsis"/>
                                         <Border Grid.Column="1"
                                                 Background="{Binding Platform, Converter={StaticResource PlatformToColor}}"
@@ -370,9 +362,7 @@
                                                 Padding="6,2"
                                                 Margin="8,0,0,0"
                                                 Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
-                                            <TextBlock Text="{Binding Platform}" FontSize="9"
-                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                       FontWeight="Bold"/>
+                                            <TextBlock Text="{Binding Platform}" Style="{StaticResource TextCaption}"/>
                                         </Border>
                                     </Grid>
 
@@ -382,23 +372,20 @@
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                            <TextBlock Text="&#xE792;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                                            <TextBlock Text="&#xE792;" Style="{StaticResource IconGlyph}"
+                                                       FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
                                             <TextBlock Text="{Binding FileSizeText, Mode=OneWay}"
-                                                       FontSize="11"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       Style="{StaticResource TextCaption}"
                                                        Margin="0,0,12,0"/>
-                                            <TextBlock Text="&#xE787;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                                       FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                                            <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"
+                                                       FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
                                             <TextBlock Text="{Binding DownloadTimeText, Mode=OneWay}"
-                                                       FontSize="11"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                       Style="{StaticResource TextCaption}"/>
                                         </StackPanel>
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding Format}"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource AccentBrush}"
-                                                   FontWeight="Bold"/>
+                                                   Style="{StaticResource TextCaption}"
+                                                   Foreground="{StaticResource AccentBrush}"/>
                                     </Grid>
 
                                 </StackPanel>
