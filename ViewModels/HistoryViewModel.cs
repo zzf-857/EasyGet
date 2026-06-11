@@ -133,15 +133,6 @@ public partial class HistoryViewModel : ObservableObject
         });
     }
 
-    /// <summary>
-    /// 搜索
-    /// </summary>
-    [RelayCommand]
-    private async Task Search()
-    {
-        await LoadHistory();
-    }
-
     [RelayCommand]
     private async Task SetMediaFilter(string filter)
     {

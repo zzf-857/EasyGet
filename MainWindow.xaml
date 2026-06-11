@@ -198,27 +198,7 @@
             <Grid Grid.Row="1" Background="{StaticResource BgPrimaryBrush}">
                 <ContentControl Content="{Binding CurrentPage}"/>
 
-                <!-- 隐藏占位符以通过旧有 XAML 静态测试断言 -->
-                <Border x:Name="NotificationToast" Visibility="Collapsed">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Opacity" Value="0"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding ShowNotification}" Value="True">
-                                    <DataTrigger.EnterActions>
-                                        <BeginStoryboard>
-                                            <Storyboard>
-                                                <DoubleAnimation Storyboard.TargetProperty="Opacity"
-                                                                 To="1"
-                                                                 Duration="{StaticResource MotionDurationFast}"/>
-                                            </Storyboard>
-                                        </BeginStoryboard>
-                                    </DataTrigger.EnterActions>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                </Border>
+
 
                 <ItemsControl ItemsSource="{Binding Notifications}"
                               HorizontalAlignment="Right" VerticalAlignment="Bottom"

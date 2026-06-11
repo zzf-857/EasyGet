@@ -19,10 +19,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <!-- 隐藏按钮以兼容原 SearchCommand 单元测试 -->
-            <Button Command="{Binding SearchCommand}" Visibility="Collapsed" ToolTip="搜索下载历史" AutomationProperties.Name="搜索下载历史">
-                <TextBlock Text="&#xE721;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"/>
-            </Button>
+
             <Border x:Name="HistorySearchBox"
                     Grid.Column="0"
                     Background="{StaticResource BgSurfaceBrush}"
@@ -83,12 +80,7 @@
                 </TextBlock>
             </StackPanel>
 
-            <!-- 隐藏的 Button 仅用于兼容原有 SetMediaFilterCommand 的 XAML 单元测试 -->
-            <StackPanel Visibility="Collapsed">
-                <Button Command="{Binding SetMediaFilterCommand}" CommandParameter="全部"/>
-                <Button Command="{Binding SetMediaFilterCommand}" CommandParameter="视频"/>
-                <Button Command="{Binding SetMediaFilterCommand}" CommandParameter="音频"/>
-            </StackPanel>
+
 
             <Border HorizontalAlignment="Right"
                     VerticalAlignment="Top"

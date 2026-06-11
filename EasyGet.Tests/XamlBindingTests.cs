@@ -109,23 +109,26 @@ public class XamlBindingTests
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
 
-        var toast = document
+        var itemsControl = document
             .Descendants()
             .FirstOrDefault(element =>
-                element.Name.LocalName == "Border"
-                && element.Attributes().Any(attribute =>
-                    attribute.Name.LocalName == "Name"
-                    && attribute.Value == "NotificationToast"));
+                element.Name.LocalName == "ItemsControl"
+                && element.Attribute("ItemsSource")?.Value == "{Binding Notifications}");
 
-        Assert.NotNull(toast);
-        Assert.DoesNotContain(toast!.Attributes("Visibility"), attribute =>
-            attribute.Value.Contains("BoolToVisibility", StringComparison.Ordinal));
-        Assert.Contains(toast.Descendants(), element =>
-            element.Name.LocalName == "DataTrigger"
-            && element.Attribute("Value")?.Value == "True");
-        Assert.Contains(toast.Descendants(), element =>
-            element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity");
+        Assert.NotNull(itemsControl);
+
+        var dataTemplates = itemsControl.Descendants()
+            .Where(element => element.Name.LocalName == "DataTemplate")
+            .ToList();
+
+        Assert.NotEmpty(dataTemplates);
+
+        var dataTriggers = itemsControl.Descendants()
+            .Where(element => element.Name.LocalName == "DataTrigger")
+            .ToList();
+
+        Assert.Contains(dataTriggers, trigger =>
+            trigger.Attribute("Binding")?.Value == "{Binding IsSuccess}");
     }
 
     [Fact]
@@ -468,7 +471,7 @@ public class XamlBindingTests
 
         Assert.Contains(document.Descendants(), element => element.Name.LocalName == "WrapPanel");
         Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "Button"
+            element.Name.LocalName == "RadioButton"
             && element.Attributes("Command").Any(attribute =>
                 attribute.Value.Contains("SetMediaFilterCommand", StringComparison.Ordinal)));
         Assert.Contains(document.Descendants(), element =>
@@ -696,7 +699,6 @@ public class XamlBindingTests
     }
 
     [Theory]
-    [InlineData("SearchCommand")]
     [InlineData("ClearAllCommand")]
     [InlineData("OpenFolderCommand")]
     [InlineData("PreviewFileCommand")]
@@ -872,6 +874,36 @@ public class XamlBindingTests
             missingHints.Count == 0,
             "Icon-only buttons must expose ToolTip and AutomationProperties.Name. Missing: "
                 + string.Join("; ", missingHints));
+    }
+
+    [Fact]
+    public void DeadControlsAreCompletelyRemovedFromXaml()
+    {
+        var mainDocument = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var toast = mainDocument
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Border"
+                && element.Attribute("Name")?.Value == "NotificationToast");
+        Assert.Null(toast);
+
+        var historyDocument = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var searchButton = historyDocument
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "Button"
+                && element.Attribute("Command")?.Value == "{Binding SearchCommand}");
+        Assert.Null(searchButton);
+
+        var collapsedFilterStack = historyDocument
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "StackPanel"
+                && element.Attribute("Visibility")?.Value == "Collapsed"
+                && element.Descendants().Any(child =>
+                    child.Name.LocalName == "Button"
+                    && child.Attribute("Command")?.Value == "{Binding SetMediaFilterCommand}"));
+        Assert.Null(collapsedFilterStack);
     }
 
     private static string GetViewPath(string fileName)
