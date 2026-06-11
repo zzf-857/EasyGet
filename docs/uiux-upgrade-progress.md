@@ -644,6 +644,22 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：218/218 通过
 - 新增测试：无
 
+### REV-09 剪贴板检测限制于下载页激活 — ✅ 完成（2026-06-11 13:40）
+
+**Commit**：`02a6f57`
+
+**修改文件**：
+- `MainWindow.xaml.cs`（修改）
+
+**实现说明**：
+在 `MainWindow.xaml.cs` 的 `MainWindow_Activated` 事件处理程序中，将剪贴板检测的触发条件修改为只有在下载页（`_viewModel.SelectedNavIndex == 0`）为当前页时才会执行。这就避免了用户在其他功能页面（如批量下载、设置页）时激活窗口静默消耗剪贴板检测状态（更新 `_lastClipboardPromptUrl`）导致用户无法在下载页看到提示条的体验问题。
+偏离点：无偏离。
+
+**自测结果**：
+- dotnet build：0 警告 0 错误
+- dotnet test：218/218 通过
+- 新增测试：无
+
 ---
 
 ## 审核记录

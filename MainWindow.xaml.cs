@@ -134,7 +134,7 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (System.Windows.Clipboard.ContainsText())
+            if (_viewModel.SelectedNavIndex == 0 && System.Windows.Clipboard.ContainsText())
             {
                 var text = System.Windows.Clipboard.GetText();
                 _viewModel.DownloadVM.CheckClipboardAndPrompt(text);
