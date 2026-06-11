@@ -466,25 +466,14 @@
                             </StackPanel>
                         </Grid>
                         <Grid Margin="0,14,0,0">
-                            <ProgressBar Value="{Binding CurrentTask.Progress, FallbackValue=0, TargetNullValue=0}"
-                                         Maximum="100"
-                                         Validation.ErrorTemplate="{x:Null}">
-                                <ProgressBar.Style>
-                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource AccentProgressBar}">
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsTaskFailed}" Value="True">
-                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </ProgressBar.Style>
-                            </ProgressBar>
-                            <TextBlock HorizontalAlignment="Right"
-                                       Margin="0,10,0,0"
-                                       FontWeight="SemiBold"
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0"
+                                       HorizontalAlignment="Right"
+                                       FontWeight="Bold"
+                                       FontSize="20"
                                        FontFamily="Consolas, Segoe UI, Microsoft YaHei UI">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
@@ -502,6 +491,26 @@
                                 <Run Text="{Binding CurrentTask.Progress, StringFormat={}{0:F1}, FallbackValue='0'}"/>
                                 <Run Text="%"/>
                             </TextBlock>
+                            <ProgressBar Grid.Row="1"
+                                         Value="{Binding CurrentTask.Progress, FallbackValue=0, TargetNullValue=0}"
+                                         Maximum="100"
+                                         Height="6"
+                                         VerticalAlignment="Center"
+                                         Margin="0,8,0,0"
+                                         Validation.ErrorTemplate="{x:Null}">
+                                <ProgressBar.Style>
+                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource AccentProgressBar}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCompleted}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsTaskFailed}" Value="True">
+                                                <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ProgressBar.Style>
+                            </ProgressBar>
                         </Grid>
                     </StackPanel>
                 </Border>
