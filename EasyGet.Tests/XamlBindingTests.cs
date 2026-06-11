@@ -818,6 +818,27 @@ public class XamlBindingTests
             text => text.Contains("aria2c", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void BatchDownloadViewUsesStatefulQueueCards()
+    {
+        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+
+        // Verify left status line presence
+        Assert.Contains("4px left status line", source);
+        // Verify stateful button commands
+        Assert.Contains("PauseTaskCommand", source);
+        Assert.Contains("ResumeTaskCommand", source);
+        Assert.Contains("RetryTaskCommand", source);
+        Assert.Contains("CancelTaskCommand", source);
+        // Verify playback scrim has been removed from ListBox.ItemTemplate
+        var itemTemplate = document.Descendants()
+            .FirstOrDefault(e => e.Name.LocalName == "ListBox.ItemTemplate");
+        Assert.NotNull(itemTemplate);
+        var itemTemplateSource = itemTemplate!.ToString(SaveOptions.DisableFormatting);
+        Assert.DoesNotContain("ScrimBrush", itemTemplateSource);
+    }
+
     [Theory]
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]
