@@ -124,8 +124,11 @@ public partial class DownloadViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(value))
         {
-            CurrentTask = null;
-            PageState = DownloadPageState.Idle;
+            if (!IsDownloading)
+            {
+                CurrentTask = null;
+                PageState = DownloadPageState.Idle;
+            }
         }
         else
         {
@@ -267,7 +270,7 @@ public partial class DownloadViewModel : ObservableObject
     {
         if (IsDownloading) 
         {
-            LogLines.Add("[提示] 当前任务正在进行中。如需同时建立多个下载任务，请使用左侧“批量下载”功能。");
+            UrlError = "当前任务正在进行中。如需同时建立多个下载任务，请使用左侧“批量下载”功能。";
             return;
         }
 
@@ -461,7 +464,10 @@ public partial class DownloadViewModel : ObservableObject
         _parseCts?.Cancel();
         _parseCts?.Dispose();
         _parseCts = null;
-        PageState = DownloadPageState.Idle;
+        if (PageState == DownloadPageState.Parsing)
+        {
+            PageState = DownloadPageState.Idle;
+        }
     }
 
     private void ShowParseError(string message)

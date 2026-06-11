@@ -273,6 +273,23 @@ public class DownloadViewModelTests
         Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
     }
 
+    [Fact]
+    public void UrlChangedDuringDownload_KeepsPageStateDownloadingAndPreservesTask()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+
+        var task = new DownloadTask();
+        viewModel.CurrentTask = task;
+        viewModel.IsDownloading = true;
+        viewModel.PageState = DownloadPageState.Downloading;
+
+        viewModel.Url = "https://example.com/changed-during-download";
+
+        Assert.Equal(DownloadPageState.Downloading, viewModel.PageState);
+        Assert.Same(task, viewModel.CurrentTask);
+    }
+
     private static DownloadContext CreateDownloadContext()
     {
         var configService = new ConfigService();
