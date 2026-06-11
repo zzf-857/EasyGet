@@ -6,16 +6,16 @@
              behaviors:Motion.PageEnter="True"
              Loaded="HistoryView_Loaded">
 
-    <Grid Margin="32,20,32,16">
+    <Grid Margin="32,20,32,32">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,24">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
@@ -51,9 +51,48 @@
                              FontSize="13"/>
                 </Grid>
             </Border>
-            <Button Grid.Column="1"
+
+            <Border Grid.Column="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Margin="0,0,16,0"
+                    Background="{StaticResource BgSurfaceHighBrush}"
+                    BorderBrush="{StaticResource BorderPrimaryBrush}"
+                    BorderThickness="1"
+                    CornerRadius="18"
+                    ClipToBounds="True">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" Margin="18,8,18,11">
+                        <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding StorageStatusText}" 
+                                   Foreground="{StaticResource TextPrimaryBrush}" 
+                                   FontSize="12" 
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="  ·  " 
+                                   Foreground="{StaticResource TextMutedBrush}" 
+                                   FontSize="12" 
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
+                                   Foreground="{StaticResource TextSecondaryBrush}" 
+                                   FontSize="11" 
+                                   VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <ProgressBar VerticalAlignment="Bottom"
+                                 Height="3"
+                                 Background="Transparent"
+                                 Value="{Binding StorageFreePercentage, FallbackValue=0}"
+                                 Maximum="100"
+                                 BorderThickness="0"
+                                 Opacity="0.55"
+                                 Foreground="{StaticResource AccentBrush}"
+                                 Validation.ErrorTemplate="{x:Null}"/>
+                </Grid>
+            </Border>
+
+            <Button Grid.Column="2"
                     Style="{StaticResource SurfaceButton}"
-                    Margin="8,0,0,0"
+                    VerticalAlignment="Center"
                     ToolTip="清空下载历史"
                     AutomationProperties.Name="清空下载历史"
                     Command="{Binding ClearAllCommand}">
@@ -419,30 +458,5 @@
             </ListBox>
         </Grid>
 
-        <Border Grid.Row="3"
-                HorizontalAlignment="Left"
-                VerticalAlignment="Bottom"
-                Background="{StaticResource BgSurfaceHighBrush}"
-                BorderBrush="{StaticResource BorderPrimaryBrush}"
-                BorderThickness="1"
-                CornerRadius="18"
-                Padding="18,8">
-            <StackPanel Orientation="Horizontal">
-                <Ellipse Width="8" Height="8" Fill="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding StorageStatusText}" 
-                           Foreground="{StaticResource TextPrimaryBrush}" 
-                           FontSize="12" 
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center"/>
-                <TextBlock Text="  ·  " 
-                           Foreground="{StaticResource TextMutedBrush}" 
-                           FontSize="12" 
-                           VerticalAlignment="Center"/>
-                <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
-                           Foreground="{StaticResource TextSecondaryBrush}" 
-                           FontSize="11" 
-                           VerticalAlignment="Center"/>
-            </StackPanel>
-        </Border>
     </Grid>
 </UserControl>

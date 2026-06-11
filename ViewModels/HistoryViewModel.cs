@@ -30,6 +30,7 @@ public partial class HistoryViewModel : ObservableObject
 
     [ObservableProperty] private int _totalHistoryCount;
     [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
+    [ObservableProperty] private double _storageFreePercentage = 0;
 
     partial void OnSearchKeywordChanged(string value)
     {
@@ -86,16 +87,43 @@ public partial class HistoryViewModel : ObservableObject
         _ = Task.Run(() =>
         {
             var status = DescribeStorageStatus(downloadPath);
+            var percentage = GetStorageFreePercentage(downloadPath);
             var dispatcher = System.Windows.Application.Current?.Dispatcher;
             if (dispatcher is null || dispatcher.CheckAccess())
             {
                 StorageStatusText = status;
+                StorageFreePercentage = percentage;
             }
             else
             {
-                dispatcher.InvokeAsync(() => StorageStatusText = status);
+                dispatcher.InvokeAsync(() =>
+                {
+                    StorageStatusText = status;
+                    StorageFreePercentage = percentage;
+                });
             }
         });
+    }
+
+    private static double GetStorageFreePercentage(string downloadPath)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(downloadPath);
+            var root = Path.GetPathRoot(fullPath);
+            if (string.IsNullOrWhiteSpace(root))
+                return 0;
+
+            var drive = new DriveInfo(root);
+            if (!drive.IsReady || drive.TotalSize <= 0)
+                return 0;
+
+            return ((double)drive.AvailableFreeSpace / drive.TotalSize) * 100.0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     /// <summary>
