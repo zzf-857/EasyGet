@@ -224,4 +224,70 @@ public class HistoryViewModelTests
             TryDeleteDatabase(dbPath);
         }
     }
+
+    [Fact]
+    public async Task ClearAll_WhenConfirmed_ClearsHistory()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/test",
+                Title = "item to clear",
+                Format = "mp4",
+                DownloadTime = DateTime.Now
+            });
+
+            var viewModel = new HistoryViewModel(service)
+            {
+                ConfirmFunc = (msg, title) => true // 确认清空
+            };
+            await viewModel.LoadHistory();
+            Assert.Single(viewModel.HistoryItems);
+
+            await viewModel.ClearAllCommand.ExecuteAsync(null);
+
+            Assert.Empty(viewModel.HistoryItems);
+            Assert.Equal(0, viewModel.TotalHistoryCount);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task ClearAll_WhenCancelled_KeepsHistory()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/test",
+                Title = "item to clear",
+                Format = "mp4",
+                DownloadTime = DateTime.Now
+            });
+
+            var viewModel = new HistoryViewModel(service)
+            {
+                ConfirmFunc = (msg, title) => false // 取消清空
+            };
+            await viewModel.LoadHistory();
+            Assert.Single(viewModel.HistoryItems);
+
+            await viewModel.ClearAllCommand.ExecuteAsync(null);
+
+            Assert.Single(viewModel.HistoryItems);
+            Assert.Equal(1, viewModel.TotalHistoryCount);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
 }

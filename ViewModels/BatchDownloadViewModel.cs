@@ -184,9 +184,26 @@ public partial class BatchDownloadViewModel : ObservableObject
         await _downloadManager.RetryAsync(taskId);
     }
 
+    public Func<string, string, bool>? ConfirmFunc { get; set; } = (msg, title) =>
+    {
+        if (System.Windows.Application.Current == null)
+            return true; // 单测默认返回 true
+        var result = System.Windows.MessageBox.Show(
+            msg,
+            title,
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+        return result == System.Windows.MessageBoxResult.Yes;
+    };
+
     [RelayCommand]
     private void CancelAll()
     {
+        if (ConfirmFunc != null && !ConfirmFunc("确定要取消全部下载任务并清理队列吗？", "确认取消全部"))
+        {
+            return;
+        }
+
         // 先发送取消信号给所有正在运行的任务
         _downloadManager.CancelAll();
         IsDownloading = false;

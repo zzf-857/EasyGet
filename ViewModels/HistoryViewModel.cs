@@ -144,12 +144,28 @@ public partial class HistoryViewModel : ObservableObject
         await LoadHistory();
     }
 
+    public Func<string, string, bool>? ConfirmFunc { get; set; } = (msg, title) =>
+    {
+        if (System.Windows.Application.Current == null)
+            return true; // 单测默认返回 true
+        var result = System.Windows.MessageBox.Show(
+            msg,
+            title,
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Warning);
+        return result == System.Windows.MessageBoxResult.Yes;
+    };
+
     /// <summary>
     /// 清空全部历史
     /// </summary>
     [RelayCommand]
     private async Task ClearAll()
     {
+        if (ConfirmFunc != null && !ConfirmFunc("确定要清空全部下载历史记录吗？此操作不可恢复。", "确认清空记录"))
+        {
+            return;
+        }
         await _historyService.ClearAllAsync();
         HistoryItems.Clear();
         TotalHistoryCount = 0;
