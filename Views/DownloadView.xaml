@@ -26,11 +26,20 @@
                         </StackPanel>
 
                         <Border Background="{StaticResource BgPrimaryBrush}"
-                                BorderBrush="{StaticResource BorderPrimaryBrush}"
                                 BorderThickness="2"
                                 CornerRadius="12"
                                 Padding="0"
                                 Margin="0,0,0,18">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding UrlError, Converter={StaticResource StringToVisibility}}" Value="Visible">
+                                            <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
@@ -66,6 +75,12 @@
                                 </Button>
                             </Grid>
                         </Border>
+
+                        <TextBlock Text="{Binding UrlError}"
+                                   Foreground="{StaticResource ErrorBrush}"
+                                   FontSize="12"
+                                   Margin="4,-12,0,14"
+                                   Visibility="{Binding UrlError, Converter={StaticResource StringToVisibility}}"/>
 
                         <Border Style="{StaticResource ToolPanelBorder}"
                                 Padding="18,16"
@@ -459,73 +474,89 @@
                 </Border>
 
                 <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="300"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE756;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       Foreground="{StaticResource AccentBrush}"
-                                       FontSize="16"
-                                       Margin="0,0,8,0"
-                                       VerticalAlignment="Center"/>
-                            <TextBlock Text="下载日志"
-                                       FontSize="16"
-                                       FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       VerticalAlignment="Center"/>
-                        </StackPanel>
-                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Style="{StaticResource SurfaceButton}"
-                                    FontSize="11"
-                                    Padding="10,5"
-                                    Margin="0,0,6,0"
-                                    ToolTip="复制下载日志"
-                                    AutomationProperties.Name="复制下载日志"
-                                    Command="{Binding CopyLogCommand}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE8C8;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="复制日志" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                            <Button Style="{StaticResource SurfaceButton}"
-                                    FontSize="11"
-                                    Padding="10,5"
-                                    ToolTip="清空下载日志"
-                                    AutomationProperties.Name="清空下载日志"
-                                    Command="{Binding ClearLogCommand}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="清空日志" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Button>
-                        </StackPanel>
-                    </DockPanel>
 
-                    <Border Grid.Row="1"
-                            Style="{StaticResource ToolPanelBorder}"
-                            Background="{StaticResource BgConsoleBrush}"
-                            Padding="14,10">
-                        <TextBox x:Name="LogTextBox"
-                                 Text="{Binding LogText, Mode=OneWay}"
-                                 IsReadOnly="True"
-                                 AcceptsReturn="True"
-                                 TextWrapping="NoWrap"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 Foreground="{StaticResource TextSecondaryBrush}"
-                                 CaretBrush="{StaticResource TextPrimaryBrush}"
-                                 SelectionBrush="{StaticResource AccentBrush}"
-                                 FontFamily="Cascadia Code, Consolas, Courier New"
-                                 FontSize="12"
-                                 Padding="0"
-                                 Cursor="IBeam"
-                                 VerticalScrollBarVisibility="Auto"
-                                 HorizontalScrollBarVisibility="Auto"/>
-                    </Border>
+                    <Expander Grid.Column="0" Grid.Row="0" Grid.ColumnSpan="2"
+                              x:Name="LogExpander"
+                              IsExpanded="{Binding IsLogExpanded, Mode=TwoWay}"
+                              Background="Transparent"
+                              BorderThickness="0">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE756;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           Foreground="{StaticResource AccentBrush}"
+                                           FontSize="16"
+                                           Margin="0,0,8,0"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text="详细日志"
+                                           FontSize="16"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Expander.Header>
+
+                        <Border Style="{StaticResource ToolPanelBorder}"
+                                Background="{StaticResource BgConsoleBrush}"
+                                Padding="14,10"
+                                Height="300"
+                                Margin="0,8,0,0">
+                            <TextBox x:Name="LogTextBox"
+                                     Text="{Binding LogText, Mode=OneWay}"
+                                     IsReadOnly="True"
+                                     AcceptsReturn="True"
+                                     TextWrapping="NoWrap"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Foreground="{StaticResource TextSecondaryBrush}"
+                                     CaretBrush="{StaticResource TextPrimaryBrush}"
+                                     SelectionBrush="{StaticResource AccentBrush}"
+                                     FontFamily="Cascadia Code, Consolas, Courier New"
+                                     FontSize="12"
+                                     Padding="0"
+                                     Cursor="IBeam"
+                                     VerticalScrollBarVisibility="Auto"
+                                     HorizontalScrollBarVisibility="Auto"/>
+                        </Border>
+                    </Expander>
+
+                    <StackPanel Grid.Column="1" Grid.Row="0"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Center"
+                                Margin="0,0,10,0">
+                        <Button Style="{StaticResource SurfaceButton}"
+                                FontSize="11"
+                                Padding="10,5"
+                                Margin="0,0,6,0"
+                                ToolTip="复制下载日志"
+                                AutomationProperties.Name="复制下载日志"
+                                Command="{Binding CopyLogCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8C8;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="复制日志" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                FontSize="11"
+                                Padding="10,5"
+                                ToolTip="清空下载日志"
+                                AutomationProperties.Name="清空下载日志"
+                                Command="{Binding ClearLogCommand}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="清空日志" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
                 </Grid>
 
                 <UniformGrid Columns="3">

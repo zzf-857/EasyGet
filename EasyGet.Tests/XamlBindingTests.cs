@@ -305,14 +305,15 @@ public class XamlBindingTests
     {
         var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
 
-        var logRow = document
+        var logBorder = document
             .Descendants()
-            .Where(element => element.Name.LocalName == "RowDefinition")
-            .FirstOrDefault(element => element.Attribute("Height")?.Value is string height
+            .FirstOrDefault(element => element.Name.LocalName == "Border"
+                && element.Attribute("Background")?.Value == "{StaticResource BgConsoleBrush}"
+                && element.Attribute("Height")?.Value is string height
                 && int.TryParse(height, out var value)
                 && value >= 300);
 
-        Assert.NotNull(logRow);
+        Assert.NotNull(logBorder);
     }
 
     [Fact]
@@ -342,7 +343,7 @@ public class XamlBindingTests
         Assert.Contains(texts, text => text.Contains("YouTube", StringComparison.Ordinal)
             && text.Contains("Bilibili", StringComparison.Ordinal));
         Assert.Contains("开始下载", texts);
-        Assert.Contains("下载日志", texts);
+        Assert.Contains("详细日志", texts);
         Assert.Contains("并发分片", texts);
         Assert.Contains("保存目录", texts);
         Assert.Contains("代理状态", texts);

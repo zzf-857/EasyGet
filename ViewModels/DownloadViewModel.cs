@@ -48,6 +48,8 @@ public partial class DownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PreviewFileSizeText))]
     private VideoInfo? _previewInfo;
     [ObservableProperty] private string _parseErrorMessage = "";
+    [ObservableProperty] private string? _urlError;
+    [ObservableProperty] private bool _isLogExpanded; // Default is false (collapsed)
 
     // 当前任务状态
     [ObservableProperty]
@@ -113,6 +115,7 @@ public partial class DownloadViewModel : ObservableObject
         CancelParse();
         PreviewInfo = null;
         ParseErrorMessage = "";
+        UrlError = null;
 
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -205,7 +208,7 @@ public partial class DownloadViewModel : ObservableObject
         var cleanUrl = ExtractUrl(Url);
         if (string.IsNullOrWhiteSpace(cleanUrl))
         {
-            ShowParseError("未能从输入中识别出有效链接");
+            UrlError = "未能从输入中识别出有效链接";
             return;
         }
 
@@ -265,15 +268,14 @@ public partial class DownloadViewModel : ObservableObject
 
         if (string.IsNullOrWhiteSpace(Url))
         {
-            LogLines.Add("[错误] 请输入视频链接");
+            UrlError = "请输入视频链接";
             return;
         }
 
         var cleanUrl = ExtractUrl(Url);
         if (string.IsNullOrWhiteSpace(cleanUrl))
         {
-            LogLines.Add("[错误] 未能从输入中识别出有效链接");
-            ShowParseError("未能从输入中识别出有效链接");
+            UrlError = "未能从输入中识别出有效链接";
             return;
         }
 

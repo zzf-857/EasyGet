@@ -159,6 +159,47 @@ public class DownloadViewModelTests
         Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
     }
 
+    [Fact]
+    public async Task ParseAndDownloadValidationSetsUrlErrorAndDoesNotWriteToLog()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+
+        // Scene 1: Empty URL, start parsing
+        viewModel.Url = "";
+        viewModel.UrlError = null;
+        viewModel.LogLines.Clear();
+
+        await viewModel.ParseCommand.ExecuteAsync(null);
+
+        Assert.Equal("未能从输入中识别出有效链接", viewModel.UrlError);
+        Assert.Empty(viewModel.LogLines);
+
+        // Scene 2: Invalid URL, start parsing
+        viewModel.Url = "invalid-url";
+        viewModel.UrlError = null;
+        viewModel.LogLines.Clear();
+
+        await viewModel.ParseCommand.ExecuteAsync(null);
+
+        Assert.Equal("未能从输入中识别出有效链接", viewModel.UrlError);
+        Assert.Empty(viewModel.LogLines);
+
+        // Scene 3: Empty URL, start downloading
+        viewModel.Url = "";
+        viewModel.UrlError = null;
+        viewModel.LogLines.Clear();
+
+        await viewModel.StartDownloadCommand.ExecuteAsync(null);
+
+        Assert.Equal("请输入视频链接", viewModel.UrlError);
+        Assert.Empty(viewModel.LogLines);
+
+        // Scene 4: Input valid URL, UrlError is automatically cleared
+        viewModel.Url = "https://example.com/video";
+        Assert.Null(viewModel.UrlError);
+    }
+
     private static DownloadContext CreateDownloadContext()
     {
         var configService = new ConfigService();
