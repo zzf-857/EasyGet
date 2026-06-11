@@ -566,4 +566,65 @@ public class ThemeStyleTests
         Assert.NotNull(token);
         Assert.Equal(expectedValue, token!.Value.Trim());
     }
+
+    [Theory]
+    [InlineData("Views")]
+    [InlineData("MainWindow.xaml")]
+    public void ViewsAndMainWindowDoNotUseHardcodedFontAttributes(string relativePath)
+    {
+        var path = GetRootPath(relativePath);
+        var files = Directory.Exists(path)
+            ? Directory.EnumerateFiles(path, "*.xaml", SearchOption.AllDirectories)
+            : [path];
+
+        // Match: (FontSize|FontFamily|FontWeight)\s*=\s*"(?!{)
+        var fontPattern = @"\b(FontSize|FontFamily|FontWeight)\s*=\s*""(?!\{)";
+
+        var offenders = files
+            .SelectMany(file => File.ReadLines(file)
+                .Select((line, index) => new { file, line, lineNumber = index + 1 }))
+            .Where(item => Regex.IsMatch(item.line, fontPattern))
+            .Select(item => $"{Path.GetFileName(item.file)}:{item.lineNumber}:{item.line.Trim()}")
+            .ToList();
+
+        Assert.True(
+            offenders.Count == 0,
+            "Views and MainWindow must use typography styles/tokens instead of hardcoded attributes: "
+                + string.Join("; ", offenders));
+    }
+
+    [Fact]
+    public void FontWeightBoldIsBannedGlobally()
+    {
+        var foldersToScan = new[] { "Views", "Themes", "MainWindow.xaml" };
+        var offenders = new List<string>();
+
+        foreach (var folderOrFile in foldersToScan)
+        {
+            var path = GetRootPath(folderOrFile);
+            if (!Directory.Exists(path) && !File.Exists(path))
+                continue;
+
+            var files = Directory.Exists(path)
+                ? Directory.EnumerateFiles(path, "*.xaml", SearchOption.AllDirectories)
+                : [path];
+
+            foreach (var file in files)
+            {
+                var lines = File.ReadLines(file).ToList();
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    if (Regex.IsMatch(lines[i], @"FontWeight\s*=\s*[""']Bold[""']", RegexOptions.IgnoreCase))
+                    {
+                        offenders.Add($"{Path.GetFileName(file)}:L{i + 1}:{lines[i].Trim()}");
+                    }
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "FontWeight=\"Bold\" is globally banned. Use FontWeightSemiBold or FontWeightNormal instead: "
+                + string.Join("; ", offenders));
+    }
 }

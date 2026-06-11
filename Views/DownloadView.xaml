@@ -16,12 +16,10 @@
                     <StackPanel>
                         <StackPanel Margin="0,0,0,20">
                             <TextBlock Text="粘贴视频链接"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="28"
-                                       FontWeight="SemiBold"/>
+                                       Style="{StaticResource TextPageTitle}"/>
                             <TextBlock Text="支持 YouTube, Bilibili, Twitter, TikTok 等平台"
+                                       Style="{StaticResource TextBodyStrong}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="14"
                                        Margin="0,6,0,0"/>
                         </StackPanel>
 
@@ -43,13 +41,13 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Style="{StaticResource IconGlyph}" Grid.Column="0" Text="&#xE77F;"
-                                           FontSize="14" Foreground="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Grid.Column="1" VerticalAlignment="Center" FontSize="13" TextTrimming="CharacterEllipsis">
+                                           FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TextBody}" TextTrimming="CharacterEllipsis">
                                     <Run Text="检测到剪贴板链接: " Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <Run Text="{Binding ClipboardPromptUrl}" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold"/>
+                                    <Run Text="{Binding ClipboardPromptUrl}" Foreground="{StaticResource AccentBrush}" FontWeight="{StaticResource FontWeightSemiBold}"/>
                                     <Run Text="，点击直接解析" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </TextBlock>
-                                <Button Grid.Column="2" Style="{StaticResource SurfaceButton}" Padding="6,3" FontSize="10"
+                                <Button Grid.Column="2" Style="{StaticResource SurfaceButton}" Padding="6,3" FontSize="{StaticResource FontSizeCaption}"
                                         Content="忽略"
                                         Command="{Binding DismissClipboardPromptCommand}"/>
                             </Grid>
@@ -79,7 +77,7 @@
                                 <TextBlock Style="{StaticResource IconGlyph}" Grid.Column="0"
                                            Text="&#xE71B;"
                                            Foreground="{StaticResource TextSecondaryBrush}"
-                                           FontSize="16"
+                                           FontSize="{StaticResource IconSizeBody}"
                                            Margin="18,0,12,0"
                                            VerticalAlignment="Center"/>
                                 <TextBox Grid.Column="1"
@@ -87,7 +85,6 @@
                                          Text="{Binding Url, UpdateSourceTrigger=PropertyChanged}"
                                          BorderThickness="0"
                                          Background="Transparent"
-                                         FontSize="14"
                                          Padding="0,16"
                                          VerticalContentAlignment="Center"/>
                                 <Button Grid.Column="2"
@@ -98,7 +95,7 @@
                                         Command="{Binding PasteUrlCommand}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE77F;"
-                                                   FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                   FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="粘贴" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -106,8 +103,8 @@
                         </Border>
 
                         <TextBlock Text="{Binding UrlError}"
+                                   Style="{StaticResource TextBody}"
                                    Foreground="{StaticResource ErrorBrush}"
-                                   FontSize="12"
                                    Margin="4,-12,0,14"
                                    Visibility="{Binding UrlError, Converter={StaticResource StringToVisibility}}"/>
 
@@ -123,11 +120,9 @@
                                              VerticalAlignment="Center"/>
                                 <StackPanel>
                                     <TextBlock Text="正在解析视频信息"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               FontWeight="SemiBold"/>
+                                               Style="{StaticResource TextBodyStrong}"/>
                                     <TextBlock Text="正在获取封面、标题、时长和预估大小"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="12"
+                                               Style="{StaticResource TextBody}"
                                                Margin="0,4,0,0"/>
                                 </StackPanel>
                             </StackPanel>
@@ -140,9 +135,7 @@
                                 Visibility="{Binding IsReady, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel>
                                 <TextBlock Text="视频预览"
-                                           Foreground="{StaticResource TextMutedBrush}"
-                                           FontSize="11"
-                                           FontWeight="SemiBold"
+                                           Style="{StaticResource TextCaption}"
                                            Margin="0,0,0,10"/>
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -162,7 +155,7 @@
                                                    RenderOptions.BitmapScalingMode="HighQuality"/>
                                             <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE8B2;"
                                                        Foreground="{StaticResource TextMutedBrush}"
-                                                       FontSize="28"
+                                                       FontSize="{StaticResource FontSizePageTitle}"
                                                        Opacity="0.35"
                                                        HorizontalAlignment="Center"
                                                        VerticalAlignment="Center"/>
@@ -181,14 +174,14 @@
                                             </Border>
                                             <TextBlock Text="{Binding PreviewTitle}"
                                                        Foreground="{StaticResource TextPrimaryBrush}"
-                                                       FontSize="15"
-                                                       FontWeight="SemiBold"
+                                                       FontSize="{StaticResource FontSizeBodyStrong}"
+                                                       FontWeight="{StaticResource FontWeightSemiBold}"
                                                        TextWrapping="Wrap"
                                                        TextTrimming="CharacterEllipsis"
                                                        MaxHeight="44"/>
                                         </DockPanel>
                                         <TextBlock Foreground="{StaticResource TextSecondaryBrush}"
-                                                   FontSize="12"
+                                                   FontSize="{StaticResource FontSizeBody}"
                                                    Margin="0,8,0,0">
                                             <Run Text="{Binding PreviewDurationText, Mode=OneWay}"/>
                                             <Run Text=" · "/>
@@ -208,16 +201,14 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE783;"
                                            Foreground="{StaticResource ErrorBrush}"
-                                           FontSize="18"
+                                           FontSize="{StaticResource FontSizeSection}"
                                            Margin="0,0,12,0"
                                            VerticalAlignment="Center"/>
                                 <StackPanel>
                                     <TextBlock Text="解析失败"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               FontWeight="SemiBold"/>
+                                               Style="{StaticResource TextBodyStrong}"/>
                                     <TextBlock Text="{Binding ParseErrorMessage}"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="12"
+                                               Style="{StaticResource TextBody}"
                                                Margin="0,4,0,0"/>
                                 </StackPanel>
                             </StackPanel>
@@ -242,8 +233,8 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="视频格式" Foreground="{StaticResource TextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="{Binding SelectedFormat}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="视频格式" Foreground="{StaticResource TextMutedBrush}" FontSize="{StaticResource FontSizeCaption}"/>
+                                        <TextBlock Text="{Binding SelectedFormat}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="{StaticResource FontWeightSemiBold}"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="2"
                                               Style="{StaticResource DarkComboBox}"
@@ -269,8 +260,8 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="首选画质" Foreground="{StaticResource TextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="{Binding SelectedQuality}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="首选画质" Foreground="{StaticResource TextMutedBrush}" FontSize="{StaticResource FontSizeCaption}"/>
+                                        <TextBlock Text="{Binding SelectedQuality}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="{StaticResource FontWeightSemiBold}"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="2"
                                               Style="{StaticResource DarkComboBox}"
@@ -296,8 +287,8 @@
                                                    VerticalAlignment="Center"/>
                                     </Border>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="字幕" Foreground="{StaticResource TextMutedBrush}" FontSize="11"/>
-                                        <TextBlock Text="{Binding SelectedSubtitle}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                        <TextBlock Text="字幕" Foreground="{StaticResource TextMutedBrush}" FontSize="{StaticResource FontSizeCaption}"/>
+                                        <TextBlock Text="{Binding SelectedSubtitle}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="{StaticResource FontWeightSemiBold}"/>
                                     </StackPanel>
                                     <ComboBox Grid.Column="2"
                                               Style="{StaticResource DarkComboBox}"
@@ -320,8 +311,8 @@
                                 Visibility="{Binding IsParseActionVisible, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE721;"
-                                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="解析视频" FontSize="16" VerticalAlignment="Center"/>
+                                           FontSize="{StaticResource IconSizeBody}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="解析视频" Style="{StaticResource TextSection}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
 
@@ -335,8 +326,8 @@
                                 Visibility="{Binding IsReady, Converter={StaticResource BoolToVisibility}}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE768;"
-                                           FontSize="16" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="开始下载" FontSize="16" VerticalAlignment="Center"/>
+                                           FontSize="{StaticResource IconSizeBody}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="开始下载" Style="{StaticResource TextSection}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                     </StackPanel>
@@ -374,14 +365,10 @@
 
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                 <TextBlock Text="{Binding CurrentTask.Title, FallbackValue='准备中...'}"
-                                           FontSize="14"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           Style="{StaticResource TextBodyStrong}"
                                            TextTrimming="CharacterEllipsis"/>
-                                <TextBlock FontSize="12"
-                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                <TextBlock Style="{StaticResource TextMono}"
                                            Margin="0,6,0,0"
-                                           FontFamily="{StaticResource FontFamilyMono}"
                                            Visibility="{Binding IsDownloadActive, Converter={StaticResource BoolToVisibility}}">
                                     <Run Text="{Binding CurrentTask.Platform, FallbackValue='', Mode=OneWay}"/>
                                     <Run Text=" · "/>
@@ -391,7 +378,7 @@
                                     <Run Text=" · 剩余 "/>
                                     <Run Text="{Binding CurrentTask.EtaText, FallbackValue='--:--', Mode=OneWay}"/>
                                 </TextBlock>
-                                <TextBlock FontSize="12"
+                                <TextBlock Style="{StaticResource TextBody}"
                                            Foreground="{StaticResource SuccessBrush}"
                                            Margin="0,6,0,0"
                                            Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}">
@@ -399,7 +386,7 @@
                                     <Run Text="{Binding CurrentOutputLocationText, Mode=OneWay}"/>
                                 </TextBlock>
                                 <TextBlock Text="{Binding CurrentErrorMessage}"
-                                           FontSize="12"
+                                           Style="{StaticResource TextBody}"
                                            Foreground="{StaticResource ErrorBrush}"
                                            Margin="0,6,0,0"
                                            TextTrimming="CharacterEllipsis"
@@ -417,7 +404,7 @@
                                         Visibility="{Binding IsDownloadActive, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE711;"
-                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                   FontSize="{StaticResource FontSizeBody}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="取消" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -430,7 +417,7 @@
                                         Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE838;"
-                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                   FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="打开文件夹" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -442,7 +429,7 @@
                                         Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE768;"
-                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                   FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="播放" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -454,7 +441,7 @@
                                         Visibility="{Binding IsTaskFailed, Converter={StaticResource BoolToVisibility}}">
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE72C;"
-                                                   FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                   FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="重试" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
@@ -527,13 +514,11 @@
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE756;"
                                            Foreground="{StaticResource AccentBrush}"
-                                           FontSize="16"
+                                           FontSize="{StaticResource IconSizeBody}"
                                            Margin="0,0,8,0"
                                            VerticalAlignment="Center"/>
                                 <TextBlock Text="详细日志"
-                                           FontSize="16"
-                                           FontWeight="SemiBold"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           Style="{StaticResource TextSection}"
                                            VerticalAlignment="Center"/>
                             </StackPanel>
                         </Expander.Header>
@@ -554,7 +539,7 @@
                                      CaretBrush="{StaticResource TextPrimaryBrush}"
                                      SelectionBrush="{StaticResource AccentBrush}"
                                      FontFamily="{StaticResource FontFamilyMono}"
-                                     FontSize="12"
+                                     FontSize="{StaticResource FontSizeBody}"
                                      Padding="0"
                                      Cursor="IBeam"
                                      VerticalScrollBarVisibility="Auto"
@@ -567,7 +552,7 @@
                                 VerticalAlignment="Top"
                                 Margin="0,6,10,0">
                         <Button Style="{StaticResource SurfaceButton}"
-                                FontSize="11"
+                                FontSize="{StaticResource FontSizeCaption}"
                                 Padding="10,5"
                                 Margin="0,0,6,0"
                                 ToolTip="复制下载日志"
@@ -575,19 +560,19 @@
                                 Command="{Binding CopyLogCommand}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE8C8;"
-                                           FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                           FontSize="{StaticResource FontSizeCaption}" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="复制日志" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource SurfaceButton}"
-                                FontSize="11"
+                                FontSize="{StaticResource FontSizeCaption}"
                                 Padding="10,5"
                                 ToolTip="清空下载日志"
                                 AutomationProperties.Name="清空下载日志"
                                 Command="{Binding ClearLogCommand}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE74D;"
-                                           FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                           FontSize="{StaticResource FontSizeCaption}" Margin="0,0,5,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="清空日志" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
@@ -598,10 +583,10 @@
                     <Border Style="{StaticResource ToolPanelBorder}" Padding="16,13" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource IconGlyph}" Text="&#xEC4A;"
-                                       Foreground="{StaticResource AccentBrush}" FontSize="18" Margin="0,0,12,0"/>
+                                       Foreground="{StaticResource AccentBrush}" FontSize="{StaticResource IconSizeLarge}" Margin="0,0,12,0"/>
                             <StackPanel>
-                                <TextBlock Text="并发分片" Foreground="{StaticResource TextMutedBrush}" FontSize="10" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding ConcurrentFragmentsText}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold"/>
+                                <TextBlock Text="并发分片" Style="{StaticResource TextCaption}"/>
+                                <TextBlock Text="{Binding ConcurrentFragmentsText}" Style="{StaticResource TextBodyStrong}"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -613,10 +598,10 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Style="{StaticResource IconGlyph}" Grid.Column="0" Text="&#xE838;"
-                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="18" Margin="0,0,12,0"/>
+                                       Foreground="{StaticResource TextSecondaryBrush}" FontSize="{StaticResource IconSizeLarge}" Margin="0,0,12,0"/>
                             <StackPanel Grid.Column="1">
-                                <TextBlock Text="保存目录" Foreground="{StaticResource TextMutedBrush}" FontSize="10" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding DownloadDirectory}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="保存目录" Style="{StaticResource TextCaption}"/>
+                                <TextBlock Text="{Binding DownloadDirectory}" Style="{StaticResource TextBodyStrong}" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                             <Button Grid.Column="2"
                                     Style="{StaticResource SurfaceButton}"
@@ -627,8 +612,8 @@
                                     Command="{Binding BrowseDirectoryCommand}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE8B7;"
-                                               FontSize="11" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="更改" FontSize="11" VerticalAlignment="Center"/>
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="更改" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </Button>
                         </Grid>
@@ -636,10 +621,10 @@
                     <Border Style="{StaticResource ToolPanelBorder}" Padding="16,13" Margin="8,0,0,0">
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Style="{StaticResource IconGlyph}" Text="&#xE72E;"
-                                       Foreground="{StaticResource WarningBrush}" FontSize="18" Margin="0,0,12,0"/>
+                                       Foreground="{StaticResource WarningBrush}" FontSize="{StaticResource IconSizeLarge}" Margin="0,0,12,0"/>
                             <StackPanel>
-                                <TextBlock Text="代理状态" Foreground="{StaticResource TextMutedBrush}" FontSize="10" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding ProxyStatusText}" Foreground="{StaticResource TextPrimaryBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="代理状态" Style="{StaticResource TextCaption}"/>
+                                <TextBlock Text="{Binding ProxyStatusText}" Style="{StaticResource TextBodyStrong}" TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
