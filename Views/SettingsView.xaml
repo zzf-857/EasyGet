@@ -494,7 +494,9 @@
                                 
                                 <Button Style="{StaticResource AccentButton}" Padding="18,6" Command="{Binding SendTgCodeCommand}" IsEnabled="{Binding CanOperateTg}" Visibility="{Binding ShowTgSendCodeButton, Converter={StaticResource BoolToVisibility}}" Content="发送验证码"/>
                                 
-                                <Button Style="{StaticResource AccentButton}" Padding="18,6" Command="{Binding SubmitTgCodeCommand}" IsEnabled="{Binding CanOperateTg}" Visibility="{Binding ShowTgCodeInput, Converter={StaticResource BoolToVisibility}}" Content="确认验证码"/>
+                                <Button Style="{StaticResource AccentButton}" Padding="18,6" Command="{Binding SubmitTgCodeCommand}" IsEnabled="{Binding CanOperateTg}" Visibility="{Binding ShowTgSubmitCodeButton, Converter={StaticResource BoolToVisibility}}" Content="确认验证码"/>
+                                
+                                <Button Style="{StaticResource AccentButton}" Padding="18,6" Command="{Binding SubmitTgPasswordCommand}" IsEnabled="{Binding CanOperateTg}" Visibility="{Binding ShowTgPasswordInput, Converter={StaticResource BoolToVisibility}}" Content="确认密码"/>
                             </StackPanel>
                         </DockPanel>
                     </StackPanel>

@@ -20,9 +20,13 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowTgSendCodeButton))]
+    [NotifyPropertyChangedFor(nameof(ShowTgSubmitCodeButton))]
     private bool _showTgCodeInput;
 
-    [ObservableProperty] private bool _showTgPasswordInput;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowTgSubmitCodeButton))]
+    private bool _showTgPasswordInput;
+    
     [ObservableProperty] private string _tgVerificationCode = "";
     [ObservableProperty] private string _tgTwoFactorPassword = "";
     [ObservableProperty] private string _tgStatusMessage = "";
@@ -32,6 +36,7 @@ public partial class SettingsViewModel : ObservableObject
     private bool _isTgOperating;
 
     public bool ShowTgSendCodeButton => !ShowTgCodeInput;
+    public bool ShowTgSubmitCodeButton => ShowTgCodeInput && !ShowTgPasswordInput;
     public bool CanOperateTg => !IsTgOperating;
 
     [ObservableProperty] private bool _ytDlpFound;
