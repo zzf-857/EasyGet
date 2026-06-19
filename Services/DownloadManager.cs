@@ -9,6 +9,7 @@ namespace EasyGet.Services;
 public class DownloadManager
 {
     private readonly YtDlpService _ytDlpService;
+    private readonly M3u8DownloadService _m3u8DownloadService;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly SemaphoreSlim _semaphore;
@@ -24,9 +25,14 @@ public class DownloadManager
     /// <summary>任务完成回调（包含完成、失败、取消）</summary>
     public event Action<DownloadTask>? TaskFinished;
 
-    public DownloadManager(YtDlpService ytDlpService, HistoryService historyService, ConfigService configService)
+    public DownloadManager(
+        YtDlpService ytDlpService,
+        HistoryService historyService,
+        ConfigService configService,
+        M3u8DownloadService? m3u8DownloadService = null)
     {
         _ytDlpService = ytDlpService;
+        _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());
         _historyService = historyService;
         _configService = configService;
         _currentConcurrencyLimit = NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads);
@@ -132,11 +138,22 @@ public class DownloadManager
                     ApplyProgress(task, p);
                 });
 
-                await _ytDlpService.DownloadAsync(
-                    task,
-                    progress,
-                    line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                    task.Cts.Token);
+                if (M3u8DownloadService.IsM3u8Url(task.Url))
+                {
+                    await _m3u8DownloadService.DownloadAsync(
+                        task,
+                        progress,
+                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                        task.Cts.Token);
+                }
+                else
+                {
+                    await _ytDlpService.DownloadAsync(
+                        task,
+                        progress,
+                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                        task.Cts.Token);
+                }
 
                 // 下载成功后保存历史
                 if (task.Status == DownloadStatus.Completed)
@@ -241,11 +258,22 @@ public class DownloadManager
                     ApplyProgress(task, p);
                 });
 
-                await _ytDlpService.DownloadAsync(
-                    task,
-                    progress,
-                    line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                    task.Cts.Token);
+                if (M3u8DownloadService.IsM3u8Url(task.Url))
+                {
+                    await _m3u8DownloadService.DownloadAsync(
+                        task,
+                        progress,
+                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                        task.Cts.Token);
+                }
+                else
+                {
+                    await _ytDlpService.DownloadAsync(
+                        task,
+                        progress,
+                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                        task.Cts.Token);
+                }
 
                 if (task.Status == DownloadStatus.Completed)
                 {

@@ -66,6 +66,38 @@ public partial class YtDlpService
 
     public async Task<VideoInfo?> GetVideoInfoAsync(string url, CancellationToken ct = default)
     {
+        if (M3u8DownloadService.IsM3u8Url(url))
+        {
+            var title = "M3U8_Video";
+            try
+            {
+                var uri = new Uri(url);
+                var filename = Path.GetFileNameWithoutExtension(uri.AbsolutePath);
+                if (!string.IsNullOrWhiteSpace(filename) && filename != "index" && filename != "playlist")
+                {
+                    title = filename;
+                }
+                else
+                {
+                    title = $"M3U8_{DateTime.Now:yyyyMMdd_HHmmss}";
+                }
+            }
+            catch
+            {
+                title = $"M3U8_{DateTime.Now:yyyyMMdd_HHmmss}";
+            }
+
+            return new VideoInfo
+            {
+                Title = title,
+                Platform = "M3U8",
+                Duration = 0,
+                Thumbnail = "",
+                FileSize = 0,
+                Url = url
+            };
+        }
+
         try
         {
             var strategies = GetCookieStrategies(url);

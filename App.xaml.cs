@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using EasyGet.Services;
@@ -38,6 +38,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
             services.AddSingleton<YtDlpService>();
+            services.AddSingleton<M3u8DownloadService>();
             services.AddSingleton<IVideoInfoProvider, YtDlpVideoInfoProvider>();
             services.AddSingleton<DownloadManager>();
 
