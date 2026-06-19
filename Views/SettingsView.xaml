@@ -390,6 +390,117 @@
                 </Border>
             </StackPanel>
 
+            <StackPanel Margin="0,0,0,26">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="&#xE709;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeLarge}"
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="Telegram 账号绑定" Style="{StaticResource TextSection}"/>
+                </StackPanel>
+                <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
+                    <StackPanel>
+                        <!-- 新手小白引导教程 -->
+                        <Border Background="{DynamicResource AccentContainerBrush}" CornerRadius="6" Padding="14,12" Margin="0,0,0,16">
+                            <StackPanel>
+                                <TextBlock Text="💡 新手小白绑定指南:" Style="{StaticResource TextBodyStrong}" Foreground="{DynamicResource AccentBrush}"/>
+                                <TextBlock Style="{StaticResource TextBody}" Margin="0,6,0,0" Opacity="0.9" TextWrapping="Wrap">
+                                    <Run Text="1. 访问 Telegram 开发者官网 "/>
+                                    <Hyperlink NavigateUri="https://my.telegram.org" RequestNavigate="Hyperlink_RequestNavigate">my.telegram.org</Hyperlink>
+                                    <Run Text=" 并登录账号。"/>
+                                </TextBlock>
+                                <TextBlock Text="2. 点击 API development tools 创建应用，记录您的 App api_id 和 api_hash。" Style="{StaticResource TextBody}" Margin="0,4,0,0" Opacity="0.9" TextWrapping="Wrap"/>
+                                <TextBlock Text="3. 填入下方 api_id (纯数字) 和 api_hash，并在手机号处输入绑定的手机号（如 +86138xxxxxxxx）。" Style="{StaticResource TextBody}" Margin="0,4,0,0" Opacity="0.9" TextWrapping="Wrap"/>
+                                <TextBlock Text="4. 点击 [发送验证码]，在随后弹出的输入框内填入您 Telegram 客户端内收到的验证码（如果有，还要输入 2FA 密码）进行登录绑定。" Style="{StaticResource TextBody}" Margin="0,4,0,0" Opacity="0.9" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Telegram API ID" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="my.telegram.org 申请得到的 api_id 纯数字" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" Text="{Binding TgApiId, UpdateSourceTrigger=PropertyChanged}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="Telegram API Hash" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="my.telegram.org 申请得到的 api_hash 密钥" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" Text="{Binding TgApiHash, UpdateSourceTrigger=PropertyChanged}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="绑定手机号" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="必须携带国际区号，例如中国大陆输入 +86138xxxxxxxx" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" Text="{Binding TgPhoneNumber, UpdateSourceTrigger=PropertyChanged}"/>
+                        </Grid>
+
+                        <!-- 登录验证码与2FA密码交互控制 -->
+                        <StackPanel Visibility="{Binding ShowTgCodeInput, Converter={StaticResource BoolToVisibility}}">
+                            <Grid Margin="0,0,0,14">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="220"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="验证码 (Verification Code)" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="Telegram 官方客户端内收到的验证码" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" Text="{Binding TgVerificationCode, UpdateSourceTrigger=PropertyChanged}"/>
+                            </Grid>
+                            
+                            <Grid Margin="0,0,0,14" Visibility="{Binding ShowTgPasswordInput, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="220"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="两步验证密码 (2FA Password)" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="您账号开启的两步验证支付/安全密码" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Style="{StaticResource DarkTextBox}" Text="{Binding TgTwoFactorPassword, UpdateSourceTrigger=PropertyChanged}"/>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- 错误与状态消息 -->
+                        <TextBlock Text="{Binding TgStatusMessage}" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource TextBodyStrong}" Margin="0,4,0,10" TextWrapping="Wrap" Visibility="{Binding TgStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+
+                        <DockPanel Margin="0,6,0,0">
+                            <!-- 账号状态显示 -->
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" DockPanel.Dock="Left">
+                                <TextBlock Text="状态: " Style="{StaticResource TextBody}"/>
+                                <TextBlock Text="{Binding TgLoginStatusText}" Style="{StaticResource TextBodyStrong}" Foreground="{DynamicResource AccentBrush}"/>
+                            </StackPanel>
+
+                            <!-- 操作按钮组 -->
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" DockPanel.Dock="Right">
+                                <Button Style="{StaticResource SurfaceButton}" Margin="0,0,10,0" Padding="14,6" Command="{Binding TgLogOutCommand}" Content="注销登录"/>
+                                
+                                <Button Style="{StaticResource AccentButton}" Padding="18,6" Command="{Binding SendTgCodeCommand}" IsEnabled="{Binding CanOperateTg}" Visibility="{Binding ShowTgSendCodeButton, Converter={StaticResource BoolToVisibility}}" Content="发送验证码"/>
+                                
+                                <Button Style="{StaticResource AccentButton}" Padding="18,6" Command="{Binding SubmitTgCodeCommand}" IsEnabled="{Binding CanOperateTg}" Visibility="{Binding ShowTgCodeInput, Converter={StaticResource BoolToVisibility}}" Content="确认验证码"/>
+                            </StackPanel>
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
             <StackPanel Margin="0,0,0,30">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyph}"

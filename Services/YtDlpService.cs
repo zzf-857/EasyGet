@@ -98,6 +98,34 @@ public partial class YtDlpService
             };
         }
 
+        if (TelegramDownloadService.IsTelegramUrl(url))
+        {
+            var title = "Telegram_Message";
+            try
+            {
+                var parsed = TelegramDownloadService.ParseTelegramLink(url);
+                if (parsed != null)
+                {
+                    var (chatTarget, startId, endId) = parsed.Value;
+                    title = endId != null ? $"TG_{chatTarget}_{startId}-{endId}" : $"TG_{chatTarget}_{startId}";
+                }
+            }
+            catch
+            {
+                title = $"TG_Message_{DateTime.Now:yyyyMMdd_HHmmss}";
+            }
+
+            return new VideoInfo
+            {
+                Title = title,
+                Platform = "Telegram",
+                Duration = 0,
+                Thumbnail = "",
+                FileSize = 0,
+                Url = url
+            };
+        }
+
         try
         {
             var strategies = GetCookieStrategies(url);

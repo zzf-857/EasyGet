@@ -53,6 +53,15 @@ public class AppConfig
     /// <summary>主题配色名称 (Indigo, Teal, Rose, Amber, Blue)</summary>
     public string ThemeColor { get; set; } = "Indigo";
 
+    /// <summary>Telegram API ID</summary>
+    public string TgApiId { get; set; } = "";
+
+    /// <summary>Telegram API Hash</summary>
+    public string TgApiHash { get; set; } = "";
+
+    /// <summary>Telegram 绑定手机号</summary>
+    public string TgPhoneNumber { get; set; } = "";
+
     /// <summary>应用窗口位置和大小</summary>
     public WindowState Window { get; set; } = new();
 }

@@ -75,7 +75,7 @@ public class NotificationTests
             var downloadVM = new DownloadViewModel(manager, configService, new YtDlpVideoInfoProvider(ytDlp));
             var batchDownloadVM = new BatchDownloadViewModel(manager, configService, ytDlp);
             var historyVM = new HistoryViewModel(history);
-            var settingsVM = new SettingsViewModel(configService, env, manager);
+            var settingsVM = new SettingsViewModel(configService, env, manager, new TelegramDownloadService(configService));
 
             var mainVM = new MainViewModel(
                 configService,

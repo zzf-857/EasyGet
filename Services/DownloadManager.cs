@@ -10,6 +10,7 @@ public class DownloadManager
 {
     private readonly YtDlpService _ytDlpService;
     private readonly M3u8DownloadService _m3u8DownloadService;
+    private readonly TelegramDownloadService _telegramDownloadService;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly SemaphoreSlim _semaphore;
@@ -29,10 +30,12 @@ public class DownloadManager
         YtDlpService ytDlpService,
         HistoryService historyService,
         ConfigService configService,
-        M3u8DownloadService? m3u8DownloadService = null)
+        M3u8DownloadService? m3u8DownloadService = null,
+        TelegramDownloadService? telegramDownloadService = null)
     {
         _ytDlpService = ytDlpService;
         _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());
+        _telegramDownloadService = telegramDownloadService ?? new TelegramDownloadService(configService);
         _historyService = historyService;
         _configService = configService;
         _currentConcurrencyLimit = NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads);
@@ -141,6 +144,14 @@ public class DownloadManager
                 if (M3u8DownloadService.IsM3u8Url(task.Url))
                 {
                     await _m3u8DownloadService.DownloadAsync(
+                        task,
+                        progress,
+                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                        task.Cts.Token);
+                }
+                else if (TelegramDownloadService.IsTelegramUrl(task.Url))
+                {
+                    await _telegramDownloadService.DownloadAsync(
                         task,
                         progress,
                         line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
@@ -261,6 +272,14 @@ public class DownloadManager
                 if (M3u8DownloadService.IsM3u8Url(task.Url))
                 {
                     await _m3u8DownloadService.DownloadAsync(
+                        task,
+                        progress,
+                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                        task.Cts.Token);
+                }
+                else if (TelegramDownloadService.IsTelegramUrl(task.Url))
+                {
+                    await _telegramDownloadService.DownloadAsync(
                         task,
                         progress,
                         line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),

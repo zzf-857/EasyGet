@@ -10,7 +10,29 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
     private readonly DownloadManager _downloadManager;
+    private readonly TelegramDownloadService _telegramDownloadService;
     private bool _isInitializing;
+
+    [ObservableProperty] private string _tgApiId = "";
+    [ObservableProperty] private string _tgApiHash = "";
+    [ObservableProperty] private string _tgPhoneNumber = "";
+    [ObservableProperty] private string _tgLoginStatusText = "未登录";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowTgSendCodeButton))]
+    private bool _showTgCodeInput;
+
+    [ObservableProperty] private bool _showTgPasswordInput;
+    [ObservableProperty] private string _tgVerificationCode = "";
+    [ObservableProperty] private string _tgTwoFactorPassword = "";
+    [ObservableProperty] private string _tgStatusMessage = "";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanOperateTg))]
+    private bool _isTgOperating;
+
+    public bool ShowTgSendCodeButton => !ShowTgCodeInput;
+    public bool CanOperateTg => !IsTgOperating;
 
     [ObservableProperty] private bool _ytDlpFound;
     [ObservableProperty] private string _ytDlpVersion = "";
@@ -51,11 +73,12 @@ public partial class SettingsViewModel : ObservableObject
 
     public event Action? SettingsSaved;
 
-    public SettingsViewModel(ConfigService configService, EnvironmentService envService, DownloadManager downloadManager)
+    public SettingsViewModel(ConfigService configService, EnvironmentService envService, DownloadManager downloadManager, TelegramDownloadService telegramDownloadService)
     {
         _configService = configService;
         _envService = envService;
         _downloadManager = downloadManager;
+        _telegramDownloadService = telegramDownloadService;
     }
 
     public void Initialize()
@@ -84,6 +107,9 @@ public partial class SettingsViewModel : ObservableObject
             CookieContent = c.CookieContent;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
             SelectedThemeColor = c.ThemeColor;
+            TgApiId = c.TgApiId;
+            TgApiHash = c.TgApiHash;
+            TgPhoneNumber = c.TgPhoneNumber;
         }
         finally
         {
@@ -91,6 +117,7 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         RefreshEnvironmentStatus();
+        _ = RefreshTgStatusAsync();
     }
 
     public void RefreshEnvironmentStatus()
@@ -184,6 +211,9 @@ public partial class SettingsViewModel : ObservableObject
         c.CookieContent = CookieContent;
         c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
         c.ThemeColor = SelectedThemeColor;
+        c.TgApiId = TgApiId;
+        c.TgApiHash = TgApiHash;
+        c.TgPhoneNumber = TgPhoneNumber;
 
         ConfigService.NormalizeRuntimeConfig(c);
         SyncNormalizedPerformanceValues(c);
@@ -203,6 +233,9 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnUseAria2cChanged(bool value) => AutoSave();
     partial void OnCookieContentChanged(string value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
+    partial void OnTgApiIdChanged(string value) => AutoSave();
+    partial void OnTgApiHashChanged(string value) => AutoSave();
+    partial void OnTgPhoneNumberChanged(string value) => AutoSave();
     partial void OnSelectedThemeColorChanged(string value)
     {
         ThemeManager.ApplyTheme(value);
@@ -288,5 +321,188 @@ public partial class SettingsViewModel : ObservableObject
     private void ClearCookie()
     {
         CookieContent = "";
+    }
+
+    [RelayCommand]
+    private async Task SendTgCode()
+    {
+        if (string.IsNullOrWhiteSpace(TgApiId) || string.IsNullOrWhiteSpace(TgApiHash) || string.IsNullOrWhiteSpace(TgPhoneNumber))
+        {
+            TgStatusMessage = "请填写完整的 API ID、API Hash 和手机号";
+            return;
+        }
+
+        IsTgOperating = true;
+        TgStatusMessage = "正在发送验证码...";
+        ShowTgCodeInput = false;
+        ShowTgPasswordInput = false;
+
+        try
+        {
+            var result = await _telegramDownloadService.SendCodeAsync(TgPhoneNumber.Trim(), TgApiId.Trim(), TgApiHash.Trim());
+            if (result == "verification_code")
+            {
+                ShowTgCodeInput = true;
+                TgStatusMessage = "验证码发送成功，请输入收到的验证码";
+            }
+            else if (result == "password")
+            {
+                ShowTgCodeInput = true;
+                ShowTgPasswordInput = true;
+                TgStatusMessage = "请输入验证码及两步验证密码";
+            }
+            else if (result == null)
+            {
+                TgStatusMessage = "登录成功！";
+                await RefreshTgStatusAsync();
+            }
+            else
+            {
+                TgStatusMessage = $"未知的登录状态响应: {result}";
+            }
+        }
+        catch (Exception ex)
+        {
+            TgStatusMessage = $"发送验证码失败: {ex.Message}";
+        }
+        finally
+        {
+            IsTgOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task SubmitTgCode()
+    {
+        if (string.IsNullOrWhiteSpace(TgVerificationCode))
+        {
+            TgStatusMessage = "请输入验证码";
+            return;
+        }
+
+        IsTgOperating = true;
+        TgStatusMessage = "正在提交验证码...";
+
+        try
+        {
+            var result = await _telegramDownloadService.SubmitCodeAsync(TgVerificationCode.Trim());
+            if (result == "password")
+            {
+                ShowTgPasswordInput = true;
+                TgStatusMessage = "该账号开启了两步验证，请输入两步验证密码";
+            }
+            else if (result == null)
+            {
+                TgStatusMessage = "登录绑定成功！";
+                ShowTgCodeInput = false;
+                ShowTgPasswordInput = false;
+                TgVerificationCode = "";
+                TgTwoFactorPassword = "";
+                await RefreshTgStatusAsync();
+            }
+            else
+            {
+                TgStatusMessage = $"登录遇到后续要求: {result}";
+            }
+        }
+        catch (Exception ex)
+        {
+            TgStatusMessage = $"提交验证码失败: {ex.Message}";
+        }
+        finally
+        {
+            IsTgOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task SubmitTgPassword()
+    {
+        if (string.IsNullOrWhiteSpace(TgTwoFactorPassword))
+        {
+            TgStatusMessage = "请输入两步验证密码";
+            return;
+        }
+
+        IsTgOperating = true;
+        TgStatusMessage = "正在提交密码...";
+
+        try
+        {
+            var result = await _telegramDownloadService.SubmitPasswordAsync(TgTwoFactorPassword.Trim());
+            if (result == null)
+            {
+                TgStatusMessage = "两步验证成功，已完成登录绑定！";
+                ShowTgCodeInput = false;
+                ShowTgPasswordInput = false;
+                TgVerificationCode = "";
+                TgTwoFactorPassword = "";
+                await RefreshTgStatusAsync();
+            }
+            else
+            {
+                TgStatusMessage = $"登录失败，继续提示: {result}";
+            }
+        }
+        catch (Exception ex)
+        {
+            TgStatusMessage = $"提交密码失败: {ex.Message}";
+        }
+        finally
+        {
+            IsTgOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task TgLogOut()
+    {
+        IsTgOperating = true;
+        TgStatusMessage = "正在退出登录...";
+        try
+        {
+            await _telegramDownloadService.LogOutAsync();
+            TgStatusMessage = "已成功注销绑定。";
+            ShowTgCodeInput = false;
+            ShowTgPasswordInput = false;
+            TgVerificationCode = "";
+            TgTwoFactorPassword = "";
+            await RefreshTgStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            TgStatusMessage = $"退出登录失败: {ex.Message}";
+        }
+        finally
+        {
+            IsTgOperating = false;
+        }
+    }
+
+    public async Task RefreshTgStatusAsync()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(TgApiId) || string.IsNullOrWhiteSpace(TgApiHash) || string.IsNullOrWhiteSpace(TgPhoneNumber))
+            {
+                TgLoginStatusText = "未配置凭证";
+                return;
+            }
+
+            var result = await _telegramDownloadService.CheckLoginStatusAsync();
+            if (result == null)
+            {
+                TgLoginStatusText = "已登录已绑定";
+            }
+            else
+            {
+                TgLoginStatusText = $"未登录 (待输入: {result})";
+            }
+        }
+        catch (Exception ex)
+        {
+            TgLoginStatusText = "未登录";
+            System.Diagnostics.Debug.WriteLine($"[SettingsViewModel] RefreshTgStatusAsync failed: {ex.Message}");
+        }
     }
 }

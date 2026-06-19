@@ -23,7 +23,7 @@ public class TaskbarProgressTests
         var ytDlp = new YtDlpService(config, environment);
         var manager = new DownloadManager(ytDlp, history, config);
         var batch = new BatchDownloadViewModel(manager, config, ytDlp);
-        var settings = new SettingsViewModel(config, environment, manager);
+        var settings = new SettingsViewModel(config, environment, manager, new TelegramDownloadService(config));
         var download = new DownloadViewModel(manager, config, new YtDlpVideoInfoProvider(ytDlp));
         var historyVm = new HistoryViewModel(history, config);
 

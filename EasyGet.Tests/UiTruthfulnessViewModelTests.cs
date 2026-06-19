@@ -69,7 +69,8 @@ public class UiTruthfulnessViewModelTests
         var settings = new SettingsViewModel(
             batchContext.Config,
             batchContext.Environment,
-            batchContext.Manager);
+            batchContext.Manager,
+            new TelegramDownloadService(batchContext.Config));
         var download = new DownloadViewModel(
             batchContext.Manager,
             batchContext.Config,
