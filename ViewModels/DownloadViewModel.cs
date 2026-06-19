@@ -364,15 +364,18 @@ public partial class DownloadViewModel : ObservableObject
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(task.OutputFilePath) && File.Exists(task.OutputFilePath))
+                if (!string.IsNullOrWhiteSpace(task.OutputFilePath))
                 {
-                    Process.Start(new ProcessStartInfo
+                    if (File.Exists(task.OutputFilePath) || Directory.Exists(task.OutputFilePath))
                     {
-                        FileName = "explorer.exe",
-                        Arguments = $"/select,\"{task.OutputFilePath}\"",
-                        UseShellExecute = true
-                    });
-                    return;
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"/select,\"{task.OutputFilePath}\"",
+                            UseShellExecute = true
+                        });
+                        return;
+                    }
                 }
 
                 if (!string.IsNullOrWhiteSpace(task.OutputDirectory) && Directory.Exists(task.OutputDirectory))
@@ -390,6 +393,55 @@ public partial class DownloadViewModel : ObservableObject
         });
     }
 
+    private static string ResolvePreviewFilePath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return "";
+        if (System.IO.File.Exists(path)) return path;
+        if (System.IO.Directory.Exists(path))
+        {
+            try
+            {
+                var dir = new DirectoryInfo(path);
+                var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".wmv",
+                    ".mp3", ".m4a", ".wav", ".flac", ".aac", ".opus", ".ogg",
+                    ".jpg", ".jpeg", ".png", ".gif", ".webp"
+                };
+
+                var files = dir.GetFiles("*", SearchOption.AllDirectories);
+                
+                var mediaFile = files
+                    .Where(f => mediaExtensions.Contains(f.Extension))
+                    .OrderBy(f => f.Name)
+                    .FirstOrDefault();
+                if (mediaFile != null)
+                {
+                    return mediaFile.FullName;
+                }
+
+                var otherFile = files
+                    .Where(f => !f.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(f => f.Name)
+                    .FirstOrDefault();
+                if (otherFile != null)
+                {
+                    return otherFile.FullName;
+                }
+
+                var firstFile = files.OrderBy(f => f.Name).FirstOrDefault();
+                if (firstFile != null)
+                {
+                    return firstFile.FullName;
+                }
+            }
+            catch
+            {
+            }
+        }
+        return path;
+    }
+
     [RelayCommand]
     private async Task PlayCurrentFile()
     {
@@ -401,13 +453,14 @@ public partial class DownloadViewModel : ObservableObject
         {
             try
             {
-                if (File.Exists(filePath))
+                var targetPath = ResolvePreviewFilePath(filePath);
+                if (File.Exists(targetPath))
                 {
                     Process.Start(new ProcessStartInfo
                     {
-                        FileName = filePath,
+                        FileName = targetPath,
                         UseShellExecute = true,
-                        WorkingDirectory = Path.GetDirectoryName(filePath) ?? ""
+                        WorkingDirectory = Path.GetDirectoryName(targetPath) ?? ""
                     });
                 }
             }

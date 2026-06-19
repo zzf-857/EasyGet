@@ -419,6 +419,10 @@ public class TelegramDownloadService : IDisposable
             }
 
             var safeTitle = string.Concat(chatTitle.Split(Path.GetInvalidFileNameChars())).Trim();
+            if (string.IsNullOrWhiteSpace(safeTitle))
+            {
+                safeTitle = chatTarget;
+            }
 
             if (endId != null)
             {
@@ -439,6 +443,7 @@ public class TelegramDownloadService : IDisposable
 
                 logCallback?.Invoke($"[Telegram] 启动范围提取任务: {chatTitle} [ID {start} - {end}]，共 {msgIds.Count} 个消息。");
                 var folderName = $"{safeTitle}_{start}-{end}";
+                task.Title = folderName;
                 var savePath = Path.Combine(task.OutputDirectory, folderName);
                 Directory.CreateDirectory(savePath);
 
@@ -454,7 +459,7 @@ public class TelegramDownloadService : IDisposable
                     logCallback?.Invoke($"[Telegram] [{idx + 1}/{msgIds.Count}] 正在拉取消息 ID: {msgId}...");
                     
                     var success = await DownloadSingleMessageAsync(
-                        inputPeer, msgId, savePath, logCallback, progress, 
+                        task, inputPeer, msgId, savePath, logCallback, progress, 
                         totalInBatch: msgIds.Count, currentBatchIndex: idx, 
                         prefix: $"{msgId}_", ct: ct);
 
@@ -478,6 +483,7 @@ public class TelegramDownloadService : IDisposable
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
                 task.OutputFilePath = savePath;
+                UpdateTaskFileSizeFromDirectory(task, savePath, logCallback);
                 logCallback?.Invoke($"[Telegram] 范围提取完成。成功: {successCount} | 失败: {failCount}。已保存至目录: {savePath}");
             }
             else
@@ -485,10 +491,11 @@ public class TelegramDownloadService : IDisposable
                 // 单条消息下载
                 logCallback?.Invoke($"[Telegram] 正在拉取单条消息 ID: {startId}...");
                 var folderName = $"{safeTitle}_{startId}";
+                task.Title = folderName;
                 var savePath = Path.Combine(task.OutputDirectory, folderName);
                 Directory.CreateDirectory(savePath);
 
-                var success = await DownloadSingleMessageAsync(inputPeer, startId, savePath, logCallback, progress, 1, 0, "", ct);
+                var success = await DownloadSingleMessageAsync(task, inputPeer, startId, savePath, logCallback, progress, 1, 0, "", ct);
                 if (!success)
                 {
                     throw new Exception($"下载消息 ID {startId} 失败。");
@@ -497,6 +504,7 @@ public class TelegramDownloadService : IDisposable
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
                 task.OutputFilePath = savePath;
+                UpdateTaskFileSizeFromDirectory(task, savePath, logCallback);
                 logCallback?.Invoke($"[Telegram] 单条提取完成。已保存至目录: {savePath}");
             }
         }
@@ -516,6 +524,7 @@ public class TelegramDownloadService : IDisposable
     }
 
     private async Task<bool> DownloadSingleMessageAsync(
+        DownloadTask task,
         InputPeer peer,
         int messageId,
         string savePath,
@@ -592,6 +601,16 @@ public class TelegramDownloadService : IDisposable
                     // 照片通常取最大尺寸
                     filename = $"media_{messageId}.jpg";
                     totalSize = photo.sizes.Length > 0 ? photo.sizes[^1].FileSize : 0;
+                }
+
+                if (totalSize > 0)
+                {
+                    task.FileSize = totalSize;
+                }
+                var fileExt = Path.GetExtension(filename).TrimStart('.').ToLowerInvariant();
+                if (!string.IsNullOrEmpty(fileExt))
+                {
+                    task.Format = fileExt;
                 }
 
                 if (!string.IsNullOrWhiteSpace(prefix))
@@ -681,6 +700,30 @@ public class TelegramDownloadService : IDisposable
             len /= 1024;
         }
         return $"{len:0.#} {sizes[order]}";
+    }
+
+    private static void UpdateTaskFileSizeFromDirectory(DownloadTask task, string directoryPath, Action<string>? logCallback)
+    {
+        try
+        {
+            if (Directory.Exists(directoryPath))
+            {
+                long totalSize = 0;
+                var dirInfo = new DirectoryInfo(directoryPath);
+                foreach (var file in dirInfo.GetFiles("*", SearchOption.AllDirectories))
+                {
+                    totalSize += file.Length;
+                }
+                if (totalSize > 0)
+                {
+                    task.FileSize = totalSize;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logCallback?.Invoke($"[Telegram] 计算目录大小失败: {ex.Message}");
+        }
     }
 
     public void Dispose()

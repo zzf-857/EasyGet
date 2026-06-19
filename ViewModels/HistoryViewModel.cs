@@ -144,12 +144,13 @@ public partial class HistoryViewModel : ObservableObject
         foreach (var item in filteredItems)
             HistoryItems.Add(item);
 
-        // 异步检查文件是否存在，避免在 UI 线程同步读取磁盘/网络驱动器导致卡顿
+        // 异步检查文件或文件夹是否存在，避免在 UI 线程同步读取磁盘/网络驱动器导致卡顿
         _ = Task.Run(() =>
         {
             foreach (var item in filteredItems)
             {
-                var exists = !string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath);
+                var exists = !string.IsNullOrEmpty(item.FilePath) && 
+                             (System.IO.File.Exists(item.FilePath) || System.IO.Directory.Exists(item.FilePath));
                 if (item.FileExists != exists)
                 {
                     System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
@@ -249,6 +250,55 @@ public partial class HistoryViewModel : ObservableObject
         });
     }
 
+    private static string ResolvePreviewFilePath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return "";
+        if (System.IO.File.Exists(path)) return path;
+        if (System.IO.Directory.Exists(path))
+        {
+            try
+            {
+                var dir = new DirectoryInfo(path);
+                var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".wmv",
+                    ".mp3", ".m4a", ".wav", ".flac", ".aac", ".opus", ".ogg",
+                    ".jpg", ".jpeg", ".png", ".gif", ".webp"
+                };
+
+                var files = dir.GetFiles("*", SearchOption.AllDirectories);
+                
+                var mediaFile = files
+                    .Where(f => mediaExtensions.Contains(f.Extension))
+                    .OrderBy(f => f.Name)
+                    .FirstOrDefault();
+                if (mediaFile != null)
+                {
+                    return mediaFile.FullName;
+                }
+
+                var otherFile = files
+                    .Where(f => !f.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(f => f.Name)
+                    .FirstOrDefault();
+                if (otherFile != null)
+                {
+                    return otherFile.FullName;
+                }
+
+                var firstFile = files.OrderBy(f => f.Name).FirstOrDefault();
+                if (firstFile != null)
+                {
+                    return firstFile.FullName;
+                }
+            }
+            catch
+            {
+            }
+        }
+        return path;
+    }
+
     [RelayCommand]
     private async Task PreviewFile(string filePath)
     {
@@ -258,14 +308,15 @@ public partial class HistoryViewModel : ObservableObject
         {
             try
             {
-                if (!System.IO.File.Exists(filePath))
+                var targetPath = ResolvePreviewFilePath(filePath);
+                if (!System.IO.File.Exists(targetPath))
                     return;
 
                 _startProcess(new ProcessStartInfo
                 {
-                    FileName = filePath,
+                    FileName = targetPath,
                     UseShellExecute = true,
-                    WorkingDirectory = System.IO.Path.GetDirectoryName(filePath) ?? ""
+                    WorkingDirectory = System.IO.Path.GetDirectoryName(targetPath) ?? ""
                 });
             }
             catch
