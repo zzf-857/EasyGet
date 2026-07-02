@@ -1267,9 +1267,12 @@ public partial class YtDlpService
 
     private static string? ParseOutputPath(string line)
     {
-        var mergerMatch = MergerOutputRegex().Match(line);
-        if (mergerMatch.Success)
-            return mergerMatch.Groups[1].Value;
+        if (line.Contains("[Merger]", StringComparison.OrdinalIgnoreCase))
+        {
+            var mergerMatch = MergerOutputRegex().Match(line);
+            if (mergerMatch.Success)
+                return mergerMatch.Groups[1].Value;
+        }
 
         if (line.Contains("[download]", StringComparison.OrdinalIgnoreCase)
             && line.Contains("Destination:", StringComparison.OrdinalIgnoreCase))

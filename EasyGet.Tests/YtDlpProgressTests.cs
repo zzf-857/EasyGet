@@ -140,6 +140,22 @@ public class YtDlpProgressTests
         Assert.True(result.ShouldLog);
     }
 
+    [Fact]
+    public void ParseOutputPath_GuardsMergerRegexWithCheapContains()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs"))).Replace("\r\n", "\n");
+
+        Assert.DoesNotContain(
+            "private static string? ParseOutputPath(string line)\n    {\n        var mergerMatch = MergerOutputRegex().Match(line);",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "if (line.Contains(\"[Merger]\", StringComparison.OrdinalIgnoreCase))\n        {\n            var mergerMatch = MergerOutputRegex().Match(line);",
+            source,
+            StringComparison.Ordinal);
+    }
+
     private static DownloadProgress? ParseProgressLine(string line)
     {
         var method = typeof(YtDlpService).GetMethod(
