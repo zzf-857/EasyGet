@@ -9,7 +9,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <AssemblyName>EasyGet</AssemblyName>
     <RootNamespace>EasyGet</RootNamespace>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
     <Description>全平台视频下载工具</Description>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>

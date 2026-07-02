@@ -30,13 +30,13 @@ graph TD
 只发布 zip：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -Version 1.1.2
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -Version 1.1.3
 ```
 
 构建安装包：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.2
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.3
 ```
 
 `build-installer.ps1` 需要本机安装 Inno Setup 6，并会复用 `publish-win-x64.ps1` 先生成发布目录。
@@ -46,10 +46,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps
 
 ```powershell
 git add .
-git commit -m "chore: release v1.1.2"
+git commit -m "chore: release v1.1.3"
 git push origin main
-git tag -a v1.1.2 -m "EasyGet v1.1.2"
-git push origin v1.1.2
+git tag -a v1.1.3 -m "EasyGet v1.1.3"
+git push origin v1.1.3
 ```
 
 推送 tag 后，`.github/workflows/release.yml` 会在 `windows-latest` 上构建并创建 GitHub Release。

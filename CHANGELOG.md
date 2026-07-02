@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.3 - 2026-07-02
+
+### Fixes
+- Stabilized the release CI history-search debounce test so tagged GitHub Actions builds can finish reliably.
+
+### Release
+- Kept the fixed updater download flow from 1.1.2 and republished on a fresh version after the 1.1.2 workflow failed before assets were created.
+
 ## 1.1.2 - 2026-07-02
 
 ### Fixes

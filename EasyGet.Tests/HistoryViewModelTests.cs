@@ -188,6 +188,20 @@ public class HistoryViewModelTests
         }
     }
 
+    private static async Task<bool> WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (stopwatch.Elapsed < timeout)
+        {
+            if (condition())
+                return true;
+
+            await Task.Delay(25);
+        }
+
+        return condition();
+    }
+
     [Fact]
     public async Task SearchKeywordChange_TriggersDebouncedSearch()
     {
@@ -213,10 +227,13 @@ public class HistoryViewModelTests
             // 此时由于有 300ms 延时，列表应该还没有刷新
             Assert.Single(viewModel.HistoryItems);
 
-            // 等待 350ms 让防抖定时任务执行完毕
-            await Task.Delay(350);
+            // 等待防抖任务完成；CI runner 上固定 350ms 容易和调度抢跑。
+            var refreshed = await WaitUntilAsync(
+                () => viewModel.HistoryItems.Count == 0,
+                TimeSpan.FromSeconds(2));
 
             // 此时防抖自动查询应该已执行完毕，列表应当变空
+            Assert.True(refreshed);
             Assert.Empty(viewModel.HistoryItems);
         }
         finally
