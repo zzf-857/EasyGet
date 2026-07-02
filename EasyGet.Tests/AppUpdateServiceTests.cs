@@ -156,6 +156,18 @@ public class AppUpdateServiceTests
         }
     }
 
+    [Fact]
+    public void DownloadInstallerAsync_UsesAsyncBufferedFileStream()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "AppUpdateService.cs")));
+
+        Assert.Contains("InstallerDownloadBufferSize", source, StringComparison.Ordinal);
+        Assert.Contains("new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true)", source, StringComparison.Ordinal);
+        Assert.Contains("new byte[InstallerDownloadBufferSize]", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Create(tempPath)", source, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(@"C:\repo\EasyGet\artifacts\publish\Release\win-x64\", "发布目录运行")]
     [InlineData(@"C:\repo\EasyGet\bin\Release\net8.0-windows\", "开发构建运行")]

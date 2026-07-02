@@ -12,6 +12,7 @@ public class AppUpdateService : IAppUpdateService
 {
     private const string LatestReleaseUrl = "https://api.github.com/repos/zzf-857/EasyGet/releases/latest";
     private const string InnoUninstallKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\{5A8E1D83-9FE4-41A8-8F8D-DED866E53335}_is1";
+    private const int InstallerDownloadBufferSize = 81920;
     private static readonly HttpClient SharedHttpClient = CreateHttpClient();
     private static readonly object LogSync = new();
     private readonly HttpClient _httpClient;
@@ -118,9 +119,9 @@ public class AppUpdateService : IAppUpdateService
                 ("targetPath", targetPath));
 
             await using (var source = await response.Content.ReadAsStreamAsync(ct))
-            await using (var target = File.Create(tempPath))
+            await using (var target = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true))
             {
-                var buffer = new byte[81920];
+                var buffer = new byte[InstallerDownloadBufferSize];
                 long totalRead = 0;
                 while (true)
                 {
