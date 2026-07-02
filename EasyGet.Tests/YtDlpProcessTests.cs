@@ -92,4 +92,28 @@ public class YtDlpProcessTests
                 File.Delete(markerPath);
         }
     }
+
+    [Fact]
+    public async Task RunDownloadProcessAsync_StreamsLinesWithoutRetainingFullOutput()
+    {
+        var stdoutLines = new List<string>();
+        var stderrLines = new List<string>();
+
+        var result = await YtDlpService.RunDownloadProcessAsync(
+            "powershell",
+            [
+                "-NoProfile",
+                "-Command",
+                "[Console]::Out.WriteLine('download line'); [Console]::Error.WriteLine('error line')"
+            ],
+            TimeSpan.FromSeconds(5),
+            stdoutLines.Add,
+            stderrLines.Add);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("download line", stdoutLines);
+        Assert.Contains("error line", stderrLines);
+        Assert.Equal("", result.StandardOutput);
+        Assert.Equal("", result.StandardError);
+    }
 }

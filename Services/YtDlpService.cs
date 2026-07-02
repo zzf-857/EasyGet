@@ -1310,13 +1310,11 @@ public partial class YtDlpService
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException($"无法启动命令: {fileName}");
 
-        var stdout = new StringBuilder();
-        var stderr = new StringBuilder();
         var lastOutputTicks = DateTime.UtcNow.Ticks;
         void TouchOutput() => Interlocked.Exchange(ref lastOutputTicks, DateTime.UtcNow.Ticks);
 
-        var stdoutTask = ReadProcessLinesAsync(process.StandardOutput, stdout, stdoutLineReceived, TouchOutput);
-        var stderrTask = ReadProcessLinesAsync(process.StandardError, stderr, stderrLineReceived, TouchOutput);
+        var stdoutTask = ReadProcessLinesAsync(process.StandardOutput, output: null, stdoutLineReceived, TouchOutput);
+        var stderrTask = ReadProcessLinesAsync(process.StandardError, output: null, stderrLineReceived, TouchOutput);
 
         var idleTimeoutSource = new TaskCompletionSource<TimeoutException>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var monitorCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -1366,7 +1364,7 @@ public partial class YtDlpService
         if (!readersDrained)
             await Task.WhenAll(stdoutTask, stderrTask);
 
-        return new ProcessOutput(stdout.ToString(), stderr.ToString(), process.ExitCode);
+        return new ProcessOutput("", "", process.ExitCode);
     }
 
     internal static async Task<ProcessOutput> RunProcessAsync(
@@ -1450,7 +1448,7 @@ public partial class YtDlpService
 
     private static async Task ReadProcessLinesAsync(
         StreamReader reader,
-        StringBuilder output,
+        StringBuilder? output,
         Action<string>? lineReceived,
         Action touchOutput)
     {
@@ -1459,7 +1457,7 @@ public partial class YtDlpService
             while (await reader.ReadLineAsync() is { } line)
             {
                 touchOutput();
-                output.AppendLine(line);
+                output?.AppendLine(line);
                 lineReceived?.Invoke(line);
             }
         }
