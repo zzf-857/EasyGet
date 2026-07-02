@@ -695,7 +695,7 @@ internal partial class DouyinBrowserDownloadService
         IProgress<DownloadProgress>? progress,
         CancellationToken ct)
     {
-        var buffer = new byte[DownloadBufferSize];
+        var buffer = ArrayPool<byte>.Shared.Rent(DownloadBufferSize);
         long downloaded = 0;
         long total = 0;
         var started = DateTime.UtcNow;
@@ -789,6 +789,10 @@ internal partial class DouyinBrowserDownloadService
         {
             TryDeleteFile(tempPath);
             throw;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         if (File.Exists(outputPath))

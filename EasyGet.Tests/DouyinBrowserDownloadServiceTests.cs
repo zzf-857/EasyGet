@@ -142,6 +142,17 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public void DownloadFileAsync_RentsAndReturnsDownloadBuffer()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
+
+        Assert.Contains("ArrayPool<byte>.Shared.Rent(DownloadBufferSize)", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new byte[DownloadBufferSize]", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BuildOutputPath_AppendsCounterWhenFileExists()
     {
         Directory.CreateDirectory(_tempDir);
