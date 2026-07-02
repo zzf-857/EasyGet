@@ -49,6 +49,24 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void WindowsPublishScriptRestoresRuntimeAssetsBeforeNoRestorePublish()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("dotnet restore $projectPath -r $Runtime", script, StringComparison.Ordinal);
+        Assert.Contains("\"--no-restore\"", script, StringComparison.Ordinal);
+
+        var restoreIndex = script.IndexOf("dotnet restore $projectPath -r $Runtime", StringComparison.Ordinal);
+        var publishIndex = script.IndexOf("dotnet @publishArgs", StringComparison.Ordinal);
+        Assert.True(restoreIndex >= 0, "Expected publish script to restore runtime-specific assets.");
+        Assert.True(publishIndex >= 0, "Expected publish script to invoke dotnet publish through publishArgs.");
+        Assert.True(restoreIndex < publishIndex,
+            "Runtime-specific restore should happen before dotnet publish --no-restore.");
+    }
+
+    [Fact]
     public void WindowsPublishScriptVerifiesPortableZipContents()
     {
         var root = TestRepositoryPaths.Root;

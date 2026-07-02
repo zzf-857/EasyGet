@@ -42,7 +42,7 @@ if (Test-Path -LiteralPath $publishDirFullPath) {
 }
 
 Write-Host "[EasyGet] Restore"
-dotnet restore $projectPath
+dotnet restore $projectPath -r $Runtime
 
 if (-not $SkipTests) {
     dotnet restore $testProjectPath
@@ -56,6 +56,7 @@ $publishArgs = @(
     $projectPath,
     "-c", $Configuration,
     "-r", $Runtime,
+    "--no-restore",
     "--self-contained", $selfContainedValue,
     "-o", $publishDir,
     "/p:PublishSingleFile=false",
