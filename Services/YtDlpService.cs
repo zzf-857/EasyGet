@@ -395,8 +395,6 @@ public partial class YtDlpService
                     DefaultDownloadNoOutputTimeout,
                     line =>
                     {
-                        logCallback?.Invoke(line);
-
                         var path = ParseOutputPath(line);
                         if (!string.IsNullOrWhiteSpace(path))
                             capturedOutputPath = path;
@@ -404,6 +402,9 @@ public partial class YtDlpService
                         var parsed = ParseProgressLine(line);
                         if (parsed is not null)
                             progress?.Report(parsed);
+
+                        if (ShouldLogDownloadOutputLine(line))
+                            logCallback?.Invoke(line);
                     },
                     line =>
                     {
@@ -702,6 +703,9 @@ public partial class YtDlpService
 
         return null;
     }
+
+    internal static bool ShouldLogDownloadOutputLine(string line)
+        => !line.StartsWith("download:", StringComparison.OrdinalIgnoreCase);
 
     private static double ParseSpeed(string speedStr)
     {

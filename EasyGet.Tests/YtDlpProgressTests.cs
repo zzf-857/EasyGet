@@ -63,6 +63,16 @@ public class YtDlpProgressTests
         Assert.Equal(0, progress.Eta);
     }
 
+    [Theory]
+    [InlineData("download:45.0% 1.00MiB/s ETA 00:01", false)]
+    [InlineData("[download] Destination: C:\\Videos\\sample.mp4", true)]
+    [InlineData("[Merger] Merging formats into \"C:\\Videos\\sample.mp4\"", true)]
+    [InlineData("[yt-dlp] completed: sample", true)]
+    public void ShouldLogDownloadOutputLine_SkipsProgressTemplateLines(string line, bool expected)
+    {
+        Assert.Equal(expected, YtDlpService.ShouldLogDownloadOutputLine(line));
+    }
+
     private static DownloadProgress? ParseProgressLine(string line)
     {
         var method = typeof(YtDlpService).GetMethod(
