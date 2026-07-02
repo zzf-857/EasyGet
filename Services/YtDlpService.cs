@@ -1279,16 +1279,32 @@ public partial class YtDlpService
             _ => new[] { ".mp4", ".mkv", ".webm" }
         };
 
-        var file = Directory.GetFiles(task.OutputDirectory)
-            .Select(path => new FileInfo(path))
-            .Where(f => !f.Name.EndsWith(".part", StringComparison.OrdinalIgnoreCase)
-                && !f.Name.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase)
-                && extensions.Any(ext => f.Extension.Equals(ext, StringComparison.OrdinalIgnoreCase))
-                && f.LastWriteTime >= downloadStartTime.AddMinutes(-1))
-            .OrderByDescending(f => f.LastWriteTime)
-            .FirstOrDefault();
+        var minWriteTime = downloadStartTime.AddMinutes(-1);
+        string? newestPath = null;
+        var newestWriteTime = DateTime.MinValue;
 
-        return file?.FullName;
+        foreach (var path in Directory.EnumerateFiles(task.OutputDirectory))
+        {
+            var fileName = Path.GetFileName(path);
+            if (fileName.EndsWith(".part", StringComparison.OrdinalIgnoreCase)
+                || fileName.EndsWith(".ytdl", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var extension = Path.GetExtension(path);
+            if (!extensions.Any(ext => extension.Equals(ext, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var lastWriteTime = File.GetLastWriteTime(path);
+            if (lastWriteTime < minWriteTime || lastWriteTime <= newestWriteTime)
+                continue;
+
+            newestPath = path;
+            newestWriteTime = lastWriteTime;
+        }
+
+        return newestPath is null ? null : Path.GetFullPath(newestPath);
     }
 
     private async Task<string> RunAsync(List<string> args, CancellationToken ct = default)

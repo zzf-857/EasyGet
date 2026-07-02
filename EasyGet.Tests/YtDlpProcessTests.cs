@@ -20,6 +20,17 @@ public class YtDlpProcessTests
     }
 
     [Fact]
+    public void ResolveOutputFile_EnumeratesOutputDirectoryWithoutSortingSnapshot()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.Contains("Directory.EnumerateFiles(task.OutputDirectory)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Directory.GetFiles(task.OutputDirectory)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("OrderByDescending(f => f.LastWriteTime)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RunProcessAsync_CapturesStderrWithoutBlocking()
     {
         var result = await YtDlpService.RunProcessAsync(
