@@ -300,6 +300,19 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public void SearchKeywordDebounce_UsesAwaitedTaskAndDisposesPreviousTokenSource()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("ViewModels", "HistoryViewModel.cs")));
+
+        Assert.Contains("SearchDebounceDelay", source, StringComparison.Ordinal);
+        Assert.Contains("DebouncedLoadHistoryAsync", source, StringComparison.Ordinal);
+        Assert.Contains("previousSearchCts?.Dispose();", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(".ContinueWith(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.Delay(300", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ClearAll_WhenConfirmed_ClearsHistory()
     {
         var dbPath = CreateTempDatabasePath();

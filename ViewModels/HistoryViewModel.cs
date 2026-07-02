@@ -13,6 +13,8 @@ namespace EasyGet.ViewModels;
 /// </summary>
 public partial class HistoryViewModel : ObservableObject
 {
+    private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(300);
+
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly Action<ProcessStartInfo> _startProcess;
@@ -34,25 +36,35 @@ public partial class HistoryViewModel : ObservableObject
 
     partial void OnSearchKeywordChanged(string value)
     {
-        _searchCts?.Cancel();
+        var previousSearchCts = _searchCts;
+        previousSearchCts?.Cancel();
         _searchCts = new CancellationTokenSource();
-        var token = _searchCts.Token;
+        previousSearchCts?.Dispose();
 
-        _ = Task.Delay(300, token).ContinueWith(async t =>
+        _ = DebouncedLoadHistoryAsync(_searchCts.Token);
+    }
+
+    private async Task DebouncedLoadHistoryAsync(CancellationToken token)
+    {
+        try
         {
-            if (t.IsCompletedSuccessfully && !token.IsCancellationRequested)
+            await Task.Delay(SearchDebounceDelay, token);
+
+            if (token.IsCancellationRequested)
+                return;
+
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher != null)
             {
-                var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                if (dispatcher != null)
-                {
-                    await dispatcher.InvokeAsync(async () => await LoadHistory());
-                }
-                else
-                {
-                    await LoadHistory();
-                }
+                await await dispatcher.InvokeAsync(LoadHistory);
+                return;
             }
-        }, token);
+
+            await LoadHistory();
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
     }
 
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
