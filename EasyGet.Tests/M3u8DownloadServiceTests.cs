@@ -75,6 +75,16 @@ public class M3u8DownloadServiceTests
         Assert.Contains("被加密", ex.Message);
     }
 
+    [Fact]
+    public void ParseSegments_StreamsLinesWithoutSplittingPlaylistSnapshot()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "M3u8DownloadService.cs")));
+
+        Assert.Contains("EnumeratePlaylistLines(m3u8Content)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("m3u8Content.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)", source, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(0, 16)]
     [InlineData(8, 16)]

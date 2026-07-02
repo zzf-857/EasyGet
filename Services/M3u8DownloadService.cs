@@ -319,13 +319,12 @@ public class M3u8DownloadService
     internal static List<string> ParseSegments(string m3u8Content, string m3u8Url)
     {
         var segments = new List<string>();
-        var lines = m3u8Content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
         var baseUri = new Uri(m3u8Url);
 
-        foreach (var line in lines)
+        foreach (var line in EnumeratePlaylistLines(m3u8Content))
         {
-            var trimmedLine = line.Trim();
-            if (string.IsNullOrWhiteSpace(trimmedLine))
+            var trimmedLine = line.Span.Trim();
+            if (trimmedLine.IsEmpty)
                 continue;
 
             // 如果包含加密，抛出不支持的异常
@@ -334,15 +333,39 @@ public class M3u8DownloadService
                 throw new NotSupportedException("该 m3u8 视频流被加密，当前暂不支持下载。");
             }
 
-            if (!trimmedLine.StartsWith("#"))
+            if (!trimmedLine.StartsWith("#", StringComparison.Ordinal))
             {
                 // 用 Uri 类自动解析相对路径拼接
-                var segmentUri = new Uri(baseUri, trimmedLine);
+                var segmentUri = new Uri(baseUri, trimmedLine.ToString());
                 segments.Add(segmentUri.AbsoluteUri);
             }
         }
 
         return segments;
+    }
+
+    private static IEnumerable<ReadOnlyMemory<char>> EnumeratePlaylistLines(string content)
+    {
+        var start = 0;
+        while (start < content.Length)
+        {
+            var end = start;
+            while (end < content.Length && content[end] is not ('\r' or '\n'))
+            {
+                end++;
+            }
+
+            if (end > start)
+            {
+                yield return content.AsMemory(start, end - start);
+            }
+
+            start = end;
+            while (start < content.Length && content[start] is '\r' or '\n')
+            {
+                start++;
+            }
+        }
     }
 
     internal static int ResolveSegmentConcurrency(int configuredFragments)
