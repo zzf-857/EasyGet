@@ -175,6 +175,46 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void WriteCookieFileIfChanged_SkipsUnchangedContentButRewritesChangedContent()
+    {
+        var method = typeof(YtDlpService).GetMethod(
+            "WriteCookieFileIfChanged",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+
+        var directory = Path.Combine(Path.GetTempPath(), $"easyget-cookie-cache-{Guid.NewGuid():N}");
+        var cookiePath = Path.Combine(directory, "cookies.txt");
+        const string firstCookie = "Cookie: PREF=tz=UTC";
+        const string updatedCookie = "Cookie: PREF=tz=UTC; VISITOR_INFO1_LIVE=visitor-token";
+
+        try
+        {
+            method!.Invoke(null, [firstCookie, cookiePath]);
+            var markerTime = DateTime.UtcNow.AddMinutes(-10);
+            File.SetLastWriteTimeUtc(cookiePath, markerTime);
+
+            method.Invoke(null, [firstCookie, cookiePath]);
+            var unchangedWriteTime = File.GetLastWriteTimeUtc(cookiePath);
+
+            Assert.True(
+                Math.Abs((unchangedWriteTime - markerTime).TotalSeconds) < 2,
+                "Saving identical cookie content should not rewrite cookies.txt.");
+
+            method.Invoke(null, [updatedCookie, cookiePath]);
+
+            Assert.Contains("VISITOR_INFO1_LIVE", File.ReadAllText(cookiePath));
+            Assert.True(
+                File.GetLastWriteTimeUtc(cookiePath) > markerTime.AddMinutes(1),
+                "Changing cookie content should rewrite cookies.txt.");
+        }
+        finally
+        {
+            TryDeleteDirectory(directory);
+        }
+    }
+
+    [Fact]
     public void BuildDownloadFailureMessage_PreservesYoutubeForbiddenCauseAfterBrowserCookieFailures()
     {
         var stderrLines = new[]
@@ -364,5 +404,17 @@ public class YtDlpCookieTests
 
         IEnumerator IEnumerable.GetEnumerator()
             => GetEnumerator();
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+        }
     }
 }

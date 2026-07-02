@@ -835,6 +835,11 @@ public partial class YtDlpService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "EasyGet",
         "cookies.txt");
+    private static readonly object CookieFileWriteLock = new();
+    private static string? _cachedCookieContent;
+    private static string? _cachedCookieFilePath;
+    private static DateTime _cachedCookieFileWriteTimeUtc;
+    private static long _cachedCookieFileLength;
 
     private void AddCookieArgs(List<string> args, string url, CookieStrategy strategy)
     {
@@ -1067,8 +1072,69 @@ public partial class YtDlpService
 
     private static void SaveCookieFile(string cookieContent)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(CookieFilePath)!);
-        File.WriteAllLines(CookieFilePath, BuildCookieFileLines(cookieContent));
+        WriteCookieFileIfChanged(cookieContent, CookieFilePath);
+    }
+
+    private static void WriteCookieFileIfChanged(string cookieContent, string cookieFilePath)
+    {
+        lock (CookieFileWriteLock)
+        {
+            var directory = Path.GetDirectoryName(cookieFilePath);
+            if (!string.IsNullOrEmpty(directory))
+                Directory.CreateDirectory(directory);
+
+            if (CookieFileCacheMatches(cookieContent, cookieFilePath))
+                return;
+
+            var lines = BuildCookieFileLines(cookieContent);
+            if (File.Exists(cookieFilePath) && File.ReadLines(cookieFilePath).SequenceEqual(lines))
+            {
+                CacheCookieFileState(cookieContent, cookieFilePath);
+                return;
+            }
+
+            File.WriteAllLines(cookieFilePath, lines);
+            CacheCookieFileState(cookieContent, cookieFilePath);
+        }
+    }
+
+    private static bool CookieFileCacheMatches(string cookieContent, string cookieFilePath)
+    {
+        if (!string.Equals(_cachedCookieContent, cookieContent, StringComparison.Ordinal)
+            || !string.Equals(_cachedCookieFilePath, cookieFilePath, StringComparison.OrdinalIgnoreCase)
+            || !TryGetCookieFileState(cookieFilePath, out var writeTimeUtc, out var length))
+        {
+            return false;
+        }
+
+        return writeTimeUtc == _cachedCookieFileWriteTimeUtc
+            && length == _cachedCookieFileLength;
+    }
+
+    private static void CacheCookieFileState(string cookieContent, string cookieFilePath)
+    {
+        if (!TryGetCookieFileState(cookieFilePath, out var writeTimeUtc, out var length))
+            return;
+
+        _cachedCookieContent = cookieContent;
+        _cachedCookieFilePath = cookieFilePath;
+        _cachedCookieFileWriteTimeUtc = writeTimeUtc;
+        _cachedCookieFileLength = length;
+    }
+
+    private static bool TryGetCookieFileState(string cookieFilePath, out DateTime writeTimeUtc, out long length)
+    {
+        if (File.Exists(cookieFilePath))
+        {
+            var file = new FileInfo(cookieFilePath);
+            writeTimeUtc = file.LastWriteTimeUtc;
+            length = file.Length;
+            return true;
+        }
+
+        writeTimeUtc = default;
+        length = 0;
+        return false;
     }
 
     internal static List<string> BuildCookieFileLines(string cookieContent)
