@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using EasyGet.ViewModels;
 using EasyGet.Services;
 using EasyGet.Models;
@@ -298,7 +299,65 @@ public class DownloadViewModelTests
         Assert.Same(task, viewModel.CurrentTask);
     }
 
-    private static DownloadContext CreateDownloadContext()
+    [Fact]
+    public async Task OpenCurrentFolderCommand_SelectsExistingOutputFileWithInjectedLauncher()
+    {
+        var startedProcesses = new List<ProcessStartInfo>();
+        using var context = CreateDownloadContext(startedProcesses.Add);
+        var directory = Path.Combine(Path.GetTempPath(), $"easyget-open-folder-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "video.mp4");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(filePath, "video");
+            context.ViewModel.CurrentTask = new DownloadTask
+            {
+                OutputFilePath = filePath,
+                OutputDirectory = directory
+            };
+
+            await context.ViewModel.OpenCurrentFolderCommand.ExecuteAsync(null);
+
+            var startInfo = Assert.Single(startedProcesses);
+            Assert.Equal("explorer.exe", startInfo.FileName);
+            Assert.Equal($"/select,\"{filePath}\"", startInfo.Arguments);
+            Assert.True(startInfo.UseShellExecute);
+        }
+        finally
+        {
+            TryDeleteDirectory(directory);
+        }
+    }
+
+    [Fact]
+    public async Task PlayCurrentFileCommand_OpensResolvedFileWithInjectedLauncher()
+    {
+        var startedProcesses = new List<ProcessStartInfo>();
+        using var context = CreateDownloadContext(startedProcesses.Add);
+        var directory = Path.Combine(Path.GetTempPath(), $"easyget-play-file-{Guid.NewGuid():N}");
+        var filePath = Path.Combine(directory, "video.mp4");
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(filePath, "video");
+            context.ViewModel.CurrentTask = new DownloadTask { OutputFilePath = filePath };
+
+            await context.ViewModel.PlayCurrentFileCommand.ExecuteAsync(null);
+
+            var startInfo = Assert.Single(startedProcesses);
+            Assert.Equal(filePath, startInfo.FileName);
+            Assert.True(startInfo.UseShellExecute);
+            Assert.Equal(directory, startInfo.WorkingDirectory);
+        }
+        finally
+        {
+            TryDeleteDirectory(directory);
+        }
+    }
+
+    private static DownloadContext CreateDownloadContext(Action<ProcessStartInfo>? startProcess = null)
     {
         var configService = new ConfigService();
         var dbPath = Path.Combine(
@@ -310,9 +369,23 @@ public class DownloadViewModelTests
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, historyService, configService);
         var videoInfoProvider = new FakeVideoInfoProvider();
-        var viewModel = new DownloadViewModel(manager, configService, videoInfoProvider);
+        var viewModel = startProcess is null
+            ? new DownloadViewModel(manager, configService, videoInfoProvider)
+            : new DownloadViewModel(manager, configService, videoInfoProvider, startProcess);
 
         return new DownloadContext(historyService, viewModel, videoInfoProvider);
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+        }
     }
 
     private sealed record DownloadContext(

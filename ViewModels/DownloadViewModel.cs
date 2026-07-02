@@ -17,6 +17,7 @@ public partial class DownloadViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly IVideoInfoProvider _videoInfoProvider;
+    private readonly Action<ProcessStartInfo> _startProcess;
     private CancellationTokenSource? _parseCts;
     private int _parseRequestId;
 
@@ -95,10 +96,20 @@ public partial class DownloadViewModel : ObservableObject
     public string CurrentErrorMessage => CurrentTask?.ErrorMessage ?? "";
 
     public DownloadViewModel(DownloadManager downloadManager, ConfigService configService, IVideoInfoProvider videoInfoProvider)
+        : this(downloadManager, configService, videoInfoProvider, StartProcess)
+    {
+    }
+
+    internal DownloadViewModel(
+        DownloadManager downloadManager,
+        ConfigService configService,
+        IVideoInfoProvider videoInfoProvider,
+        Action<ProcessStartInfo> startProcess)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _videoInfoProvider = videoInfoProvider;
+        _startProcess = startProcess;
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
 
         // 转发下载管理器的日志
@@ -365,7 +376,7 @@ public partial class DownloadViewModel : ObservableObject
                 {
                     if (File.Exists(task.OutputFilePath) || Directory.Exists(task.OutputFilePath))
                     {
-                        Process.Start(new ProcessStartInfo
+                        _startProcess(new ProcessStartInfo
                         {
                             FileName = "explorer.exe",
                             Arguments = $"/select,\"{task.OutputFilePath}\"",
@@ -377,7 +388,7 @@ public partial class DownloadViewModel : ObservableObject
 
                 if (!string.IsNullOrWhiteSpace(task.OutputDirectory) && Directory.Exists(task.OutputDirectory))
                 {
-                    Process.Start(new ProcessStartInfo
+                    _startProcess(new ProcessStartInfo
                     {
                         FileName = task.OutputDirectory,
                         UseShellExecute = true
@@ -404,7 +415,7 @@ public partial class DownloadViewModel : ObservableObject
                 var targetPath = MediaPreviewFileResolver.Resolve(filePath);
                 if (File.Exists(targetPath))
                 {
-                    Process.Start(new ProcessStartInfo
+                    _startProcess(new ProcessStartInfo
                     {
                         FileName = targetPath,
                         UseShellExecute = true,
@@ -456,6 +467,11 @@ public partial class DownloadViewModel : ObservableObject
     private void ClearLog()
     {
         LogLines.Clear();
+    }
+
+    private static void StartProcess(ProcessStartInfo startInfo)
+    {
+        Process.Start(startInfo);
     }
 
     [RelayCommand]
