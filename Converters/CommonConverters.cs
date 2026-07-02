@@ -37,21 +37,29 @@ public class BoolToVisibilityConverter : IValueConverter
 /// </summary>
 public class StatusToColorConverter : IValueConverter
 {
+    private static readonly Brush CompletedBrush = ConverterBrushFactory.Create(0xA6, 0xE3, 0xA1);
+    private static readonly Brush DownloadingBrush = ConverterBrushFactory.Create(0x89, 0xB4, 0xFA);
+    private static readonly Brush FailedBrush = ConverterBrushFactory.Create(0xF3, 0x8B, 0xA8);
+    private static readonly Brush MutedBrush = ConverterBrushFactory.Create(0x6C, 0x70, 0x86);
+    private static readonly Brush DefaultBrush = ConverterBrushFactory.Create(0xBA, 0xC2, 0xDE);
+    private static readonly Brush FallbackBrush = ConverterBrushFactory.Create(0xFF, 0xFF, 0xFF);
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         if (value is DownloadStatus status)
         {
             return status switch
             {
-                DownloadStatus.Completed => new SolidColorBrush(Color.FromRgb(0xA6, 0xE3, 0xA1)), // green
-                DownloadStatus.Downloading => new SolidColorBrush(Color.FromRgb(0x89, 0xB4, 0xFA)), // blue
-                DownloadStatus.Failed => new SolidColorBrush(Color.FromRgb(0xF3, 0x8B, 0xA8)), // red
-                DownloadStatus.Waiting => new SolidColorBrush(Color.FromRgb(0x6C, 0x70, 0x86)), // muted
-                DownloadStatus.Cancelled => new SolidColorBrush(Color.FromRgb(0x6C, 0x70, 0x86)),
-                _ => new SolidColorBrush(Color.FromRgb(0xBA, 0xC2, 0xDE))
+                DownloadStatus.Completed => CompletedBrush,
+                DownloadStatus.Downloading => DownloadingBrush,
+                DownloadStatus.Failed => FailedBrush,
+                DownloadStatus.Waiting => MutedBrush,
+                DownloadStatus.Cancelled => MutedBrush,
+                _ => DefaultBrush
             };
         }
-        return new SolidColorBrush(Colors.White);
+
+        return FallbackBrush;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -88,20 +96,34 @@ public class StatusToTextConverter : IValueConverter
 /// </summary>
 public class PlatformToColorConverter : IValueConverter
 {
+    private static readonly Brush YoutubeBrush = ConverterBrushFactory.Create(0xFF, 0x00, 0x00);
+    private static readonly Brush BilibiliBrush = ConverterBrushFactory.Create(0xE9, 0x1E, 0x63);
+    private static readonly Brush TikTokBrush = ConverterBrushFactory.Create(0x00, 0x00, 0x00);
+    private static readonly Brush TwitterBrush = ConverterBrushFactory.Create(0x1D, 0xA1, 0xF2);
+    private static readonly Brush InstagramBrush = ConverterBrushFactory.Create(0xE4, 0x40, 0x5F);
+    private static readonly Brush FacebookBrush = ConverterBrushFactory.Create(0x18, 0x77, 0xF2);
+    private static readonly Brush KuaishouBrush = ConverterBrushFactory.Create(0xFF, 0x63, 0x00);
+    private static readonly Brush DefaultPlatformBrush = ConverterBrushFactory.Create(0x89, 0xB4, 0xFA);
+
+    private static readonly IReadOnlyDictionary<string, Brush> PlatformBrushes =
+        new Dictionary<string, Brush>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["youtube"] = YoutubeBrush,
+            ["bilibili"] = BilibiliBrush,
+            ["tiktok"] = TikTokBrush,
+            ["douyin"] = TikTokBrush,
+            ["twitter"] = TwitterBrush,
+            ["x"] = TwitterBrush,
+            ["instagram"] = InstagramBrush,
+            ["facebook"] = FacebookBrush,
+            ["kuaishou"] = KuaishouBrush
+        };
+
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
-        var platform = (value as string)?.ToLower() ?? "";
-        return platform switch
-        {
-            "youtube" => new SolidColorBrush(Color.FromRgb(0xFF, 0x00, 0x00)),
-            "bilibili" => new SolidColorBrush(Color.FromRgb(0xE9, 0x1E, 0x63)),
-            "tiktok" or "douyin" => new SolidColorBrush(Color.FromRgb(0x00, 0x00, 0x00)),
-            "twitter" or "x" => new SolidColorBrush(Color.FromRgb(0x1D, 0xA1, 0xF2)),
-            "instagram" => new SolidColorBrush(Color.FromRgb(0xE4, 0x40, 0x5F)),
-            "facebook" => new SolidColorBrush(Color.FromRgb(0x18, 0x77, 0xF2)),
-            "kuaishou" => new SolidColorBrush(Color.FromRgb(0xFF, 0x63, 0x00)),
-            _ => new SolidColorBrush(Color.FromRgb(0x89, 0xB4, 0xFA))
-        };
+        return value is string platform && PlatformBrushes.TryGetValue(platform, out var brush)
+            ? brush
+            : DefaultPlatformBrush;
     }
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -221,5 +243,15 @@ public class EqualsToBoolConverter : IValueConverter
         if (value is true && parameter != null)
             return parameter.ToString()!;
         return System.Windows.Data.Binding.DoNothing;
+    }
+}
+
+file static class ConverterBrushFactory
+{
+    public static Brush Create(byte red, byte green, byte blue)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(red, green, blue));
+        brush.Freeze();
+        return brush;
     }
 }
