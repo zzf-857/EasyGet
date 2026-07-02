@@ -211,6 +211,17 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void BuildDownloadFailureMessage_ScansStderrWithoutListSnapshot()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.Contains("lastErrorLine", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("var lines = stderrLines.ToList();", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("lines.Any(", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ShouldRetryWithNextCookieStrategy_RetriesDouyinAfterBrowserCookieDatabaseFailure()
     {
         var method = typeof(YtDlpService).GetMethod(

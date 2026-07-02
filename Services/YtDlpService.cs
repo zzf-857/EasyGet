@@ -991,27 +991,50 @@ public partial class YtDlpService
 
     internal static string BuildDownloadFailureMessage(string url, IEnumerable<string> stderrLines, int exitCode)
     {
-        var lines = stderrLines.ToList();
+        var isDouyinUrl = IsDouyinUrl(url);
+        var isYoutubeUrl = IsYoutubeUrl(url);
+        var isBilibiliUrl = IsBilibiliUrl(url);
 
-        if (IsDouyinUrl(url) && (lines.Any(line => line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase))
-            || lines.Any(IsBrowserCookieAccessError)))
+        var douyinCookieProblem = false;
+        var youtubeBotOrForbidden = false;
+        var bilibiliPreconditionFailed = false;
+        string? lastErrorLine = null;
+
+        foreach (var line in stderrLines)
+        {
+            if (line.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
+                lastErrorLine = line;
+
+            if (isDouyinUrl
+                && (line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase)
+                    || IsBrowserCookieAccessError(line)))
+            {
+                douyinCookieProblem = true;
+            }
+
+            if (isYoutubeUrl && IsYoutubeBotOrForbiddenError(line))
+                youtubeBotOrForbidden = true;
+
+            if (isBilibiliUrl && IsBilibiliPreconditionFailedError(line))
+                bilibiliPreconditionFailed = true;
+        }
+
+        if (douyinCookieProblem)
         {
             return "抖音需要最新 Cookie，但自动读取浏览器 Cookie 失败或 Cookie 已失效。请关闭 Chrome/Edge 后重试，或在设置中粘贴最新抖音 Cookie。";
         }
 
-        if (IsYoutubeUrl(url) && lines.Any(IsYoutubeBotOrForbiddenError))
+        if (youtubeBotOrForbidden)
         {
             return "YouTube 下载被风控拦截（403/需要登录验证）。请在设置中粘贴最新 YouTube Cookie，或关闭浏览器后重试。";
         }
 
-        if (IsBilibiliUrl(url) && lines.Any(IsBilibiliPreconditionFailedError))
+        if (bilibiliPreconditionFailed)
         {
             return "B 站返回 412 Precondition Failed，通常是请求头或站点风控校验导致。EasyGet 已自动补充 B 站请求头；如果仍失败，请稍后重试或更新 yt-dlp。";
         }
 
-        return lines.LastOrDefault(line =>
-                   line.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
-               ?? $"yt-dlp exit code: {exitCode}";
+        return lastErrorLine ?? $"yt-dlp exit code: {exitCode}";
     }
 
     private static bool IsBilibiliPreconditionFailedError(string line)
