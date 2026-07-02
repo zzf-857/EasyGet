@@ -24,16 +24,43 @@ internal static class MediaPreviewFileResolver
 
         try
         {
-            var files = new DirectoryInfo(path).GetFiles("*", SearchOption.AllDirectories);
+            string? bestMedia = null;
+            string? bestNonText = null;
+            string? bestAny = null;
 
-            return files.Where(file => MediaExtensions.Contains(file.Extension)).MinBy(file => file.Name)?.FullName
-                ?? files.Where(file => !file.Extension.Equals(".txt", StringComparison.OrdinalIgnoreCase)).MinBy(file => file.Name)?.FullName
-                ?? files.MinBy(file => file.Name)?.FullName
+            foreach (var filePath in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            {
+                bestAny = PreferEarlierFileName(filePath, bestAny);
+
+                var extension = Path.GetExtension(filePath);
+                if (MediaExtensions.Contains(extension))
+                {
+                    bestMedia = PreferEarlierFileName(filePath, bestMedia);
+                }
+                else if (!extension.Equals(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    bestNonText = PreferEarlierFileName(filePath, bestNonText);
+                }
+            }
+
+            return bestMedia
+                ?? bestNonText
+                ?? bestAny
                 ?? path;
         }
         catch
         {
             return path;
         }
+    }
+
+    private static string PreferEarlierFileName(string candidate, string? current)
+    {
+        if (current is null)
+            return candidate;
+
+        return Comparer<string>.Default.Compare(Path.GetFileName(candidate), Path.GetFileName(current)) < 0
+            ? candidate
+            : current;
     }
 }

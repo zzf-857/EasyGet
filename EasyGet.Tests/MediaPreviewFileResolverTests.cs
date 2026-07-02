@@ -107,6 +107,17 @@ public class MediaPreviewFileResolverTests
     }
 
     [Fact]
+    public void Resolve_StreamsDirectoryFilesWithoutGetFilesSnapshot()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "MediaPreviewFileResolver.cs")));
+
+        Assert.Contains("Directory.EnumerateFiles(path, \"*\", SearchOption.AllDirectories)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(".GetFiles(\"*\", SearchOption.AllDirectories)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("files.Where", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Resolve_ReturnsOriginalPathWhenNothingExists()
     {
         var missingPath = Path.Combine(Path.GetTempPath(), $"easyget-missing-{Guid.NewGuid():N}");
