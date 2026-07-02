@@ -50,6 +50,7 @@ public class ReleaseScriptTests
         Assert.Contains("EasyGet-Setup-v", innoScript, StringComparison.Ordinal);
         Assert.Contains("CloseApplications=yes", innoScript, StringComparison.Ordinal);
         Assert.Contains("RestartApplications=no", innoScript, StringComparison.Ordinal);
+        Assert.Contains("Compression=lzma2/ultra64", innoScript, StringComparison.Ordinal);
         Assert.Contains(@"Excludes: ""*.pdb""", innoScript, StringComparison.Ordinal);
         Assert.DoesNotContain(@"\{#MyAppExeName}""; DestDir", innoScript, StringComparison.Ordinal);
     }
@@ -64,6 +65,25 @@ public class ReleaseScriptTests
         Assert.Contains("<SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>", project, StringComparison.Ordinal);
         Assert.Contains("<DebugType>none</DebugType>", project, StringComparison.Ordinal);
         Assert.Contains("<DebugSymbols>false</DebugSymbols>", project, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProjectDoesNotDirectlyUseWinFormsFolderDialogs()
+    {
+        var root = GetRepositoryRoot();
+        var projectPath = Path.Combine(root, "EasyGet.csproj");
+        var project = File.ReadAllText(projectPath);
+        var sourceFiles = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
+            .Where(path =>
+                !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                && !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                && !path.Contains($"{Path.DirectorySeparatorChar}artifacts{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase)
+                && !path.Contains($"{Path.DirectorySeparatorChar}EasyGet.Tests{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase))
+            .Select(File.ReadAllText);
+
+        Assert.DoesNotContain("<UseWindowsForms>true</UseWindowsForms>", project, StringComparison.Ordinal);
+        Assert.All(sourceFiles, source => Assert.DoesNotContain("System.Windows.Forms", source, StringComparison.Ordinal));
+        Assert.Contains("Microsoft.Win32.OpenFolderDialog", string.Join(Environment.NewLine, sourceFiles), StringComparison.Ordinal);
     }
 
     [Fact]

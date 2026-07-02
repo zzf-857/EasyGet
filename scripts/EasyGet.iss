@@ -3,7 +3,7 @@
 
 #define MyAppName "EasyGet"
 #ifndef MyAppVersion
-#define MyAppVersion "1.1.5"
+#define MyAppVersion "1.1.6"
 #endif
 #define MyAppPublisher "zzf-857"
 #define MyAppURL "https://github.com/zzf-857/EasyGet"
@@ -24,7 +24,7 @@ DisableProgramGroupPage=yes
 OutputDir=..\artifacts\publish\Release
 OutputBaseFilename=EasyGet-Setup-v{#MyAppVersion}
 SetupIconFile=..\Assets\app.ico
-Compression=lzma
+Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes

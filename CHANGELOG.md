@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.6 - 2026-07-02
+
+### Optimizations
+- Replaced the remaining direct WinForms folder pickers with WPF `OpenFolderDialog`, keeping folder selection behavior while simplifying project dependencies.
+- Switched the Inno Setup payload compression to `lzma2/ultra64`, reducing the setup executable size by about 0.95 MB in local release builds.
+
+### Tests
+- Added release-script coverage to keep direct WinForms folder dialog usage and weaker installer compression from returning.
+
 ## 1.1.5 - 2026-07-02
 
 ### Optimizations

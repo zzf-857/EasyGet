@@ -193,17 +193,15 @@ public partial class DownloadViewModel : ObservableObject
     [RelayCommand]
     private void BrowseDirectory()
     {
-        // 使用 FolderBrowserDialog (WinForms interop)
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Description = "选择下载目录",
-            InitialDirectory = DownloadDirectory,
-            UseDescriptionForTitle = true
+            Title = "选择下载目录",
+            InitialDirectory = DownloadDirectory
         };
 
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        if (dialog.ShowDialog() == true)
         {
-            DownloadDirectory = dialog.SelectedPath;
+            DownloadDirectory = dialog.FolderName;
         }
     }
 

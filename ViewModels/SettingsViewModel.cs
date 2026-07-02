@@ -232,15 +232,14 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private void BrowseDownloadPath()
     {
-        using var dialog = new System.Windows.Forms.FolderBrowserDialog
+        var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Description = "选择默认下载目录",
-            InitialDirectory = DefaultDownloadPath,
-            UseDescriptionForTitle = true
+            Title = "选择默认下载目录",
+            InitialDirectory = DefaultDownloadPath
         };
 
-        if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
-            DefaultDownloadPath = dialog.SelectedPath;
+        if (dialog.ShowDialog() == true)
+            DefaultDownloadPath = dialog.FolderName;
     }
 
     [RelayCommand]
