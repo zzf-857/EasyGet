@@ -219,6 +219,36 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public async Task ConstructorCreatesIndexForDescendingHistoryReads()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using (new HistoryService(dbPath))
+            {
+            }
+
+            await using var connection = new SqliteConnection($"Data Source={dbPath}");
+            await connection.OpenAsync();
+            await using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT sql
+                FROM sqlite_master
+                WHERE type = 'index'
+                  AND name = 'idx_download_history_download_time_desc'
+                """;
+
+            var indexSql = Assert.IsType<string>(await cmd.ExecuteScalarAsync());
+            Assert.Contains("download_time DESC", indexSql, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public void FileSizeText_ClampsNegativeBytesToZero()
     {
         var history = new DownloadHistory { FileSize = -2048 };

@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet" alt=".NET 8"/>
   <img src="https://img.shields.io/badge/WPF-Desktop-0078D4?logo=windows" alt="WPF"/>
   <img src="https://img.shields.io/badge/Architecture-MVVM-green" alt="MVVM"/>
-  <img src="https://img.shields.io/badge/Version-1.1.6-blue" alt="Version"/>
+  <img src="https://img.shields.io/badge/Version-1.1.7-blue" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"/>
 </p>
 
@@ -143,7 +143,7 @@ dotnet test EasyGet.Tests/EasyGet.Tests.csproj
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -SkipZip
 
 # 构建安装包（需要 Inno Setup 6）
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.6
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.7
 ```
 
 > **提示：** 首次运行时，EasyGet 会自动检测并下载 yt-dlp 和 ffmpeg，无需手动安装。yt-dlp 来自官方 GitHub Release，ffmpeg Windows 构建来自 FFmpeg 官网链接的 gyan.dev。

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.7 - 2026-07-02
+
+### Optimizations
+- Added a SQLite index for descending history reads so the history page can load newest-first records more efficiently as the local database grows.
+
+### Tests
+- Added regression coverage to ensure the history database creates the read-order index during initialization and legacy database upgrades.
+
 ## 1.1.6 - 2026-07-02
 
 ### Optimizations

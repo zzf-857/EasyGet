@@ -64,6 +64,13 @@ public class HistoryService : IDisposable
             alter.ExecuteNonQuery();
         }
         catch { /* 列已存在，忽略 */ }
+
+        using var index = _connection.CreateCommand();
+        index.CommandText = """
+            CREATE INDEX IF NOT EXISTS idx_download_history_download_time_desc
+            ON download_history (download_time DESC)
+            """;
+        index.ExecuteNonQuery();
     }
 
     /// <summary>
