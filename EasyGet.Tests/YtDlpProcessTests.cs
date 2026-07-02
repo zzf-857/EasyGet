@@ -6,6 +6,20 @@ namespace EasyGet.Tests;
 public class YtDlpProcessTests
 {
     [Fact]
+    public void ProcessStartInfoSetup_IsSharedByYtDlpProcessRunners()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.Contains("CreateProcessStartInfo", source, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(source, "PYTHONIOENCODING"));
+        Assert.Equal(1, CountOccurrences(source, "PYTHONUTF8"));
+        Assert.Equal(1, CountOccurrences(source, "StandardOutputEncoding = Encoding.UTF8"));
+        Assert.Equal(1, CountOccurrences(source, "UseShellExecute = false"));
+        Assert.DoesNotContain("DrainProcessOutputAsync(Task<string>", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RunProcessAsync_CapturesStderrWithoutBlocking()
     {
         var result = await YtDlpService.RunProcessAsync(
@@ -115,5 +129,18 @@ public class YtDlpProcessTests
         Assert.Contains("error line", stderrLines);
         Assert.Equal("", result.StandardOutput);
         Assert.Equal("", result.StandardError);
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 }

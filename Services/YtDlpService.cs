@@ -1304,13 +1304,7 @@ public partial class YtDlpService
             .ToList();
     }
 
-    internal static async Task<ProcessOutput> RunDownloadProcessAsync(
-        string fileName,
-        IEnumerable<string> args,
-        TimeSpan? noOutputTimeout = null,
-        Action<string>? stdoutLineReceived = null,
-        Action<string>? stderrLineReceived = null,
-        CancellationToken ct = default)
+    private static ProcessStartInfo CreateProcessStartInfo(string fileName, IEnumerable<string> args)
     {
         var psi = new ProcessStartInfo
         {
@@ -1329,7 +1323,18 @@ public partial class YtDlpService
         foreach (var arg in args)
             psi.ArgumentList.Add(arg);
 
-        using var process = Process.Start(psi)
+        return psi;
+    }
+
+    internal static async Task<ProcessOutput> RunDownloadProcessAsync(
+        string fileName,
+        IEnumerable<string> args,
+        TimeSpan? noOutputTimeout = null,
+        Action<string>? stdoutLineReceived = null,
+        Action<string>? stderrLineReceived = null,
+        CancellationToken ct = default)
+    {
+        using var process = Process.Start(CreateProcessStartInfo(fileName, args))
             ?? throw new InvalidOperationException($"无法启动命令: {fileName}");
 
         var lastOutputTicks = DateTime.UtcNow.Ticks;
@@ -1395,24 +1400,7 @@ public partial class YtDlpService
         TimeSpan? timeout = null,
         CancellationToken ct = default)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = fileName,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-
-        psi.Environment["PYTHONIOENCODING"] = "utf-8";
-        psi.Environment["PYTHONUTF8"] = "1";
-
-        foreach (var arg in args)
-            psi.ArgumentList.Add(arg);
-
-        using var process = Process.Start(psi)
+        using var process = Process.Start(CreateProcessStartInfo(fileName, args))
             ?? throw new InvalidOperationException($"无法启动命令: {fileName}");
 
         var stdoutTask = process.StandardOutput.ReadToEndAsync();
@@ -1442,18 +1430,6 @@ public partial class YtDlpService
             await stdoutTask,
             await stderrTask,
             process.ExitCode);
-    }
-
-    private static async Task DrainProcessOutputAsync(Task<string> stdoutTask, Task<string> stderrTask)
-    {
-        try
-        {
-            await Task.WhenAny(Task.WhenAll(stdoutTask, stderrTask), Task.Delay(1000));
-        }
-        catch
-        {
-            // 进程超时后的输出清理是 best effort。
-        }
     }
 
     private static async Task DrainProcessOutputAsync(Task stdoutTask, Task stderrTask)
