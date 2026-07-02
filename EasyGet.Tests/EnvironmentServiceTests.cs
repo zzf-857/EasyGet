@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using System.Collections.Concurrent;
 using System.Net;
 using Xunit;
 
@@ -57,6 +58,46 @@ public class EnvironmentServiceTests : IDisposable
         var foundPath = EnvironmentService.FindExecutableOnPath("aria2c", _tempDir);
 
         Assert.Equal(expectedPath, foundPath);
+    }
+
+    [Fact]
+    public async Task CheckEnvironmentAsync_StartsToolChecksConcurrently()
+    {
+        var startedTools = new ConcurrentQueue<string>();
+        var bothToolsStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseToolChecks = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new EnvironmentService(async (tool, _) =>
+        {
+            startedTools.Enqueue(tool);
+            if (startedTools.Count == 2)
+                bothToolsStarted.TrySetResult();
+
+            await releaseToolChecks.Task;
+
+            return tool == "yt-dlp"
+                ? (true, "2026.01.01", @"C:\Tools\yt-dlp.exe")
+                : (true, "7.0", @"C:\Tools\ffmpeg.exe");
+        });
+
+        var checkTask = service.CheckEnvironmentAsync();
+
+        try
+        {
+            var completed = await Task.WhenAny(
+                bothToolsStarted.Task,
+                Task.Delay(TimeSpan.FromMilliseconds(200)));
+
+            Assert.Same(bothToolsStarted.Task, completed);
+        }
+        finally
+        {
+            releaseToolChecks.TrySetResult();
+        }
+
+        var status = await checkTask;
+        Assert.True(status.IsReady);
+        Assert.Equal("2026.01.01", status.YtDlpVersion);
+        Assert.Equal("7.0", status.FfmpegVersion);
     }
 
     [Fact]

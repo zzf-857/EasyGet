@@ -25,24 +25,43 @@ public class EnvironmentService
     private static readonly HttpClient HttpClient = new();
     private const int ToolDownloadMaxAttempts = 3;
     private const int ToolDownloadBufferSize = 81920;
+    private readonly Func<string, string, Task<(bool found, string version, string path)>> _checkToolAsync;
 
     public EnvironmentStatus Status { get; private set; } = new();
+
+    public EnvironmentService()
+        : this(null)
+    {
+    }
+
+    internal EnvironmentService(Func<string, string, Task<(bool found, string version, string path)>>? checkToolAsync)
+    {
+        _checkToolAsync = checkToolAsync ?? CheckToolAsync;
+    }
 
     public async Task<EnvironmentStatus> CheckEnvironmentAsync()
     {
         Status = new EnvironmentStatus();
 
-        var (ytFound, ytVer, ytPath) = await CheckToolAsync("yt-dlp", "--version");
-        Status.YtDlpFound = ytFound;
-        Status.YtDlpVersion = ytVer;
-        Status.YtDlpPath = ytPath;
+        var ytDlpTask = _checkToolAsync("yt-dlp", "--version");
+        var ffmpegTask = _checkToolAsync("ffmpeg", "-version");
+        await Task.WhenAll(ytDlpTask, ffmpegTask);
 
-        var (ffFound, ffVer, ffPath) = await CheckToolAsync("ffmpeg", "-version");
-        Status.FfmpegFound = ffFound;
-        Status.FfmpegVersion = ffVer;
-        Status.FfmpegPath = ffPath;
+        var (ytFound, ytVer, ytPath) = await ytDlpTask;
+        var (ffFound, ffVer, ffPath) = await ffmpegTask;
 
-        return Status;
+        var status = new EnvironmentStatus
+        {
+            YtDlpFound = ytFound,
+            YtDlpVersion = ytVer,
+            YtDlpPath = ytPath,
+            FfmpegFound = ffFound,
+            FfmpegVersion = ffVer,
+            FfmpegPath = ffPath
+        };
+
+        Status = status;
+        return status;
     }
 
     public async Task<EnvironmentStatus> InstallMissingToolsAsync(IProgress<string>? log = null, CancellationToken ct = default)
