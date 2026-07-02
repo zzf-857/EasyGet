@@ -157,14 +157,16 @@ public class AppUpdateServiceTests
     }
 
     [Fact]
-    public void DownloadInstallerAsync_UsesAsyncBufferedFileStream()
+    public void DownloadInstallerAsync_UsesAsyncBufferedFileStreamAndRentedBuffer()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
             Path.Combine("Services", "AppUpdateService.cs")));
 
         Assert.Contains("InstallerDownloadBufferSize", source, StringComparison.Ordinal);
         Assert.Contains("new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true)", source, StringComparison.Ordinal);
-        Assert.Contains("new byte[InstallerDownloadBufferSize]", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Rent(InstallerDownloadBufferSize)", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new byte[InstallerDownloadBufferSize]", source, StringComparison.Ordinal);
         Assert.DoesNotContain("File.Create(tempPath)", source, StringComparison.Ordinal);
     }
 

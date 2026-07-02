@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -118,25 +119,32 @@ public class AppUpdateService : IAppUpdateService
                 ("tempPath", tempPath),
                 ("targetPath", targetPath));
 
-            await using (var source = await response.Content.ReadAsStreamAsync(ct))
-            await using (var target = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true))
+            var buffer = ArrayPool<byte>.Shared.Rent(InstallerDownloadBufferSize);
+            try
             {
-                var buffer = new byte[InstallerDownloadBufferSize];
-                long totalRead = 0;
-                while (true)
+                await using (var source = await response.Content.ReadAsStreamAsync(ct))
+                await using (var target = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true))
                 {
-                    var read = await source.ReadAsync(buffer, ct);
-                    if (read == 0)
-                        break;
+                    long totalRead = 0;
+                    while (true)
+                    {
+                        var read = await source.ReadAsync(buffer.AsMemory(0, InstallerDownloadBufferSize), ct);
+                        if (read == 0)
+                            break;
 
-                    await target.WriteAsync(buffer.AsMemory(0, read), ct);
-                    totalRead += read;
+                        await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                        totalRead += read;
 
-                    if (total > 0)
-                        progress?.Report(Math.Clamp(totalRead * 100d / total, 0, 100));
+                        if (total > 0)
+                            progress?.Report(Math.Clamp(totalRead * 100d / total, 0, 100));
+                    }
+
+                    await target.FlushAsync(ct);
                 }
-
-                await target.FlushAsync(ct);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
 
             LogUpdateEvent(
