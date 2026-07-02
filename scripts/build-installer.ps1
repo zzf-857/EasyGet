@@ -19,7 +19,10 @@ $publishScript = Join-Path $PSScriptRoot "publish-win-x64.ps1"
 $innoScript = Join-Path $PSScriptRoot "EasyGet.iss"
 
 [xml]$project = Get-Content -Raw -Encoding UTF8 -LiteralPath $projectPath
-$projectVersion = $project.Project.PropertyGroup.Version | Select-Object -First 1
+$projectVersion = $project.Project.PropertyGroup |
+    ForEach-Object { $_.Version } |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+    Select-Object -First 1
 
 if ([string]::IsNullOrWhiteSpace($projectVersion)) {
     throw "Version is required. Define <Version> in EasyGet.csproj."

@@ -30,6 +30,17 @@ if (-not [System.IO.Path]::IsPathRooted($OutputRoot)) {
 $publishDir = Join-Path $OutputRoot "$Configuration\$Runtime"
 $selfContainedValue = $SelfContained.ToString().ToLowerInvariant()
 
+$outputRootFullPath = [System.IO.Path]::GetFullPath($OutputRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$publishDirFullPath = [System.IO.Path]::GetFullPath($publishDir)
+if (-not $publishDirFullPath.StartsWith($outputRootFullPath + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Refusing to clean publish directory outside output root: $publishDirFullPath"
+}
+
+if (Test-Path -LiteralPath $publishDirFullPath) {
+    Write-Host "[EasyGet] Clean $publishDirFullPath"
+    Remove-Item -LiteralPath $publishDirFullPath -Recurse -Force
+}
+
 Write-Host "[EasyGet] Restore"
 dotnet restore $projectPath
 dotnet restore $testProjectPath
@@ -48,7 +59,9 @@ $publishArgs = @(
     "--self-contained", $selfContainedValue,
     "-o", $publishDir,
     "/p:PublishSingleFile=false",
-    "/p:IncludeNativeLibrariesForSelfExtract=true"
+    "/p:IncludeNativeLibrariesForSelfExtract=true",
+    "/p:DebugType=none",
+    "/p:DebugSymbols=false"
 )
 
 if (-not [string]::IsNullOrWhiteSpace($Version)) {
@@ -58,6 +71,9 @@ if (-not [string]::IsNullOrWhiteSpace($Version)) {
 }
 
 dotnet @publishArgs
+
+Get-ChildItem -LiteralPath $publishDir -Filter "*.pdb" -Recurse -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force
 
 $exePath = Join-Path $publishDir "EasyGet.exe"
 if (-not (Test-Path $exePath)) {

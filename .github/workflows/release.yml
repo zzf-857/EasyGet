@@ -34,7 +34,10 @@ jobs:
 
           $version = $tag.Substring(1)
           [xml]$project = Get-Content -Raw -Encoding UTF8 -LiteralPath "EasyGet.csproj"
-          $projectVersion = $project.Project.PropertyGroup.Version | Select-Object -First 1
+          $projectVersion = $project.Project.PropertyGroup |
+            ForEach-Object { $_.Version } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -First 1
           if ($projectVersion -ne $version) {
             throw "Version mismatch: tag '$tag' but EasyGet.csproj <Version> is '$projectVersion'."
           }

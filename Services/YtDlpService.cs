@@ -517,6 +517,7 @@ public partial class YtDlpService
         args.Add("--progress-template");
         args.Add("download:%(progress._percent_str)s %(progress._speed_str)s ETA %(progress._eta_str)s");
 
+        AddDownloadThroughputArgs(args);
         AddNetworkReliabilityArgs(args);
 
         var fragments = Math.Clamp(
@@ -582,6 +583,12 @@ public partial class YtDlpService
         args.Add("linear=1:5:1");
         args.Add("--retry-sleep");
         args.Add("fragment:linear=1:5:1");
+    }
+
+    internal static void AddDownloadThroughputArgs(List<string> args)
+    {
+        args.Add("--buffer-size");
+        args.Add("16K");
     }
 
     internal static void AddSiteCompatibilityArgs(List<string> args, string url)

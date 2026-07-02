@@ -43,6 +43,16 @@ public class YtDlpArgsTests
     }
 
     [Fact]
+    public void AddDownloadThroughputArgs_IncreasesInitialDownloadBuffer()
+    {
+        var args = new List<string>();
+
+        YtDlpService.AddDownloadThroughputArgs(args);
+
+        AssertOptionValue(args, "--buffer-size", "16K");
+    }
+
+    [Fact]
     public void BuildVideoInfoBaseArgs_AddsNetworkReliabilityOptions()
     {
         var args = YtDlpService.BuildVideoInfoBaseArgs();

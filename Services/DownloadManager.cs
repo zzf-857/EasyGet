@@ -141,47 +141,8 @@ public class DownloadManager
                     ApplyProgress(task, p);
                 });
 
-                if (M3u8DownloadService.IsM3u8Url(task.Url))
-                {
-                    await _m3u8DownloadService.DownloadAsync(
-                        task,
-                        progress,
-                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                        task.Cts.Token);
-                }
-                else if (TelegramDownloadService.IsTelegramUrl(task.Url))
-                {
-                    await _telegramDownloadService.DownloadAsync(
-                        task,
-                        progress,
-                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                        task.Cts.Token);
-                }
-                else
-                {
-                    await _ytDlpService.DownloadAsync(
-                        task,
-                        progress,
-                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                        task.Cts.Token);
-                }
-
-                // 下载成功后保存历史
-                if (task.Status == DownloadStatus.Completed)
-                {
-                    await _historyService.AddAsync(new DownloadHistory
-                    {
-                        Url = task.Url,
-                        Title = task.Title,
-                        Platform = task.Platform,
-                        Format = task.Format,
-                        Quality = task.Quality,
-                        FileSize = task.FileSize,
-                        FilePath = task.OutputFilePath,
-                        ThumbnailUrl = task.ThumbnailUrl,
-                        DownloadTime = DateTime.Now
-                    });
-                }
+                await DownloadWithMatchingServiceAsync(task, progress);
+                await SaveHistoryIfCompletedAsync(task);
             }
             catch (OperationCanceledException)
             {
@@ -269,46 +230,8 @@ public class DownloadManager
                     ApplyProgress(task, p);
                 });
 
-                if (M3u8DownloadService.IsM3u8Url(task.Url))
-                {
-                    await _m3u8DownloadService.DownloadAsync(
-                        task,
-                        progress,
-                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                        task.Cts.Token);
-                }
-                else if (TelegramDownloadService.IsTelegramUrl(task.Url))
-                {
-                    await _telegramDownloadService.DownloadAsync(
-                        task,
-                        progress,
-                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                        task.Cts.Token);
-                }
-                else
-                {
-                    await _ytDlpService.DownloadAsync(
-                        task,
-                        progress,
-                        line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
-                        task.Cts.Token);
-                }
-
-                if (task.Status == DownloadStatus.Completed)
-                {
-                    await _historyService.AddAsync(new DownloadHistory
-                    {
-                        Url = task.Url,
-                        Title = task.Title,
-                        Platform = task.Platform,
-                        Format = task.Format,
-                        Quality = task.Quality,
-                        FileSize = task.FileSize,
-                        FilePath = task.OutputFilePath,
-                        ThumbnailUrl = task.ThumbnailUrl,
-                        DownloadTime = DateTime.Now
-                    });
-                }
+                await DownloadWithMatchingServiceAsync(task, progress);
+                await SaveHistoryIfCompletedAsync(task);
             }
             catch (OperationCanceledException)
             {
@@ -421,4 +344,39 @@ public class DownloadManager
 
     private static double NormalizeFiniteProgressValue(double value)
         => double.IsFinite(value) ? value : 0;
+
+    private Task DownloadWithMatchingServiceAsync(
+        DownloadTask task,
+        IProgress<DownloadProgress> progress)
+    {
+        var token = task.Cts?.Token ?? CancellationToken.None;
+        Action<string> log = line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}");
+
+        if (M3u8DownloadService.IsM3u8Url(task.Url))
+            return _m3u8DownloadService.DownloadAsync(task, progress, log, token);
+
+        if (TelegramDownloadService.IsTelegramUrl(task.Url))
+            return _telegramDownloadService.DownloadAsync(task, progress, log, token);
+
+        return _ytDlpService.DownloadAsync(task, progress, log, token);
+    }
+
+    private async Task SaveHistoryIfCompletedAsync(DownloadTask task)
+    {
+        if (task.Status != DownloadStatus.Completed)
+            return;
+
+        await _historyService.AddAsync(new DownloadHistory
+        {
+            Url = task.Url,
+            Title = task.Title,
+            Platform = task.Platform,
+            Format = task.Format,
+            Quality = task.Quality,
+            FileSize = task.FileSize,
+            FilePath = task.OutputFilePath,
+            ThumbnailUrl = task.ThumbnailUrl,
+            DownloadTime = DateTime.Now
+        });
+    }
 }

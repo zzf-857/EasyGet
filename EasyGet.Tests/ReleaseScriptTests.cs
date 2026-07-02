@@ -18,6 +18,10 @@ public class ReleaseScriptTests
         Assert.Contains("\"publish\"", script, StringComparison.Ordinal);
         Assert.Contains("dotnet @publishArgs", script, StringComparison.Ordinal);
         Assert.Contains("--self-contained", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -LiteralPath $publishDirFullPath -Recurse -Force", script, StringComparison.Ordinal);
+        Assert.Contains("/p:DebugType=none", script, StringComparison.Ordinal);
+        Assert.Contains("/p:DebugSymbols=false", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -Force", script, StringComparison.Ordinal);
         Assert.Contains("EasyGet.exe", script, StringComparison.Ordinal);
         Assert.Contains("Compress-Archive", script, StringComparison.Ordinal);
         Assert.Contains("SkipZip", script, StringComparison.Ordinal);
@@ -38,6 +42,7 @@ public class ReleaseScriptTests
         Assert.Contains("ISCC", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MyAppVersion", script, StringComparison.Ordinal);
         Assert.Contains("Get-Content -Raw -Encoding UTF8", script, StringComparison.Ordinal);
+        Assert.Contains("ForEach-Object { $_.Version }", script, StringComparison.Ordinal);
         Assert.Contains("Version mismatch", script, StringComparison.Ordinal);
         Assert.Contains("easyget-update.json", script, StringComparison.Ordinal);
         Assert.Contains("ConvertTo-Json", script, StringComparison.Ordinal);
@@ -45,6 +50,20 @@ public class ReleaseScriptTests
         Assert.Contains("EasyGet-Setup-v", innoScript, StringComparison.Ordinal);
         Assert.Contains("CloseApplications=yes", innoScript, StringComparison.Ordinal);
         Assert.Contains("RestartApplications=no", innoScript, StringComparison.Ordinal);
+        Assert.Contains(@"Excludes: ""*.pdb""", innoScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"\{#MyAppExeName}""; DestDir", innoScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ProjectRestrictsReleaseSatelliteResources()
+    {
+        var root = GetRepositoryRoot();
+        var projectPath = Path.Combine(root, "EasyGet.csproj");
+        var project = File.ReadAllText(projectPath);
+
+        Assert.Contains("<SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>", project, StringComparison.Ordinal);
+        Assert.Contains("<DebugType>none</DebugType>", project, StringComparison.Ordinal);
+        Assert.Contains("<DebugSymbols>false</DebugSymbols>", project, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -59,6 +78,7 @@ public class ReleaseScriptTests
         Assert.Contains("tags:", workflow, StringComparison.Ordinal);
         Assert.Contains("v*", workflow, StringComparison.Ordinal);
         Assert.Contains("Validate release version", workflow, StringComparison.Ordinal);
+        Assert.Contains("ForEach-Object { $_.Version }", workflow, StringComparison.Ordinal);
         Assert.Contains("Version mismatch", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet test", workflow, StringComparison.Ordinal);
         Assert.Contains("build-installer.ps1", workflow, StringComparison.Ordinal);
