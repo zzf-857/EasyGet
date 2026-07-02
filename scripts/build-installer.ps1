@@ -36,6 +36,10 @@ elseif ($Version -ne $projectVersion) {
     throw "Version mismatch: -Version '$Version' does not match EasyGet.csproj <Version> '$projectVersion'. Update the project version before building a release."
 }
 
+if ($Configuration -ne "Release" -or $Runtime -ne "win-x64") {
+    throw "Installer packaging supports only Release/win-x64 because scripts\EasyGet.iss packages artifacts\publish\Release\win-x64. Use scripts\publish-win-x64.ps1 for non-installer publish variants."
+}
+
 Write-Host "[EasyGet] Build installer v$Version"
 
 & $publishScript `

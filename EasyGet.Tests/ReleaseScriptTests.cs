@@ -97,6 +97,28 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void InstallerScriptRejectsConfigurationsThatDoNotMatchFixedInnoSourcePath()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "build-installer.ps1");
+        var innoPath = Path.Combine(root, "scripts", "EasyGet.iss");
+
+        var script = File.ReadAllText(scriptPath);
+        var innoScript = File.ReadAllText(innoPath);
+
+        Assert.Contains(@"Source: ""..\artifacts\publish\Release\win-x64\*""", innoScript, StringComparison.Ordinal);
+        Assert.Contains("$Configuration -ne \"Release\" -or $Runtime -ne \"win-x64\"", script, StringComparison.Ordinal);
+        Assert.Contains("Installer packaging supports only Release/win-x64", script, StringComparison.Ordinal);
+
+        var contractCheckIndex = script.IndexOf("Installer packaging supports only Release/win-x64", StringComparison.Ordinal);
+        var publishInvocationIndex = script.IndexOf("& $publishScript", StringComparison.Ordinal);
+        Assert.True(contractCheckIndex >= 0, "Expected build-installer.ps1 to reject unsupported installer inputs.");
+        Assert.True(publishInvocationIndex >= 0, "Expected build-installer.ps1 to invoke the publish script.");
+        Assert.True(contractCheckIndex < publishInvocationIndex,
+            "Unsupported installer inputs should be rejected before publishing so stale Inno assets cannot be packaged.");
+    }
+
+    [Fact]
     public void InstallerScriptRemovesStaleVersionedSetupArtifactsBeforeRunningInnoSetup()
     {
         var root = TestRepositoryPaths.Root;
