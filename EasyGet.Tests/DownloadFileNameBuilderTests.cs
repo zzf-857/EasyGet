@@ -44,6 +44,17 @@ public class DownloadFileNameBuilderTests
     }
 
     [Fact]
+    public void SanitizeResolvedTitle_UsesCachedDefaultStrictEncoding()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DownloadFileNameBuilder.cs")));
+
+        Assert.Contains("DefaultStrictEncoding", source, StringComparison.Ordinal);
+        Assert.Contains("SanitizeResolvedTitle(resolvedTitle, DefaultStrictEncoding)", source, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(source, "CreateStrictEncoding(Encoding.Default)"));
+    }
+
+    [Fact]
     public void SanitizeResolvedTitle_RemovesCharactersNotEncodableByExternalTool()
     {
         var gbk = Encoding.GetEncoding(
@@ -56,5 +67,18 @@ public class DownloadFileNameBuilderTests
             gbk);
 
         Assert.Equal("我如何用obsidian+AI做知識管理&內容創作", sanitized);
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
     }
 }

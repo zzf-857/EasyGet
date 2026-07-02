@@ -5,6 +5,8 @@ namespace EasyGet.Services;
 
 internal static class DownloadFileNameBuilder
 {
+    private static readonly Encoding DefaultStrictEncoding = CreateStrictEncoding(Encoding.Default);
+
     private static readonly char[] TrailingTrimChars =
     [
         ' ', '.', '。', '，', ',', '!', '！', '?', '？', ';', '；', ':', '：'
@@ -21,7 +23,7 @@ internal static class DownloadFileNameBuilder
 
     internal static string SanitizeResolvedTitle(string? resolvedTitle)
     {
-        return SanitizeResolvedTitle(resolvedTitle, CreateStrictEncoding(Encoding.Default));
+        return SanitizeResolvedTitle(resolvedTitle, DefaultStrictEncoding);
     }
 
     internal static string SanitizeResolvedTitle(string? resolvedTitle, Encoding externalToolEncoding)
