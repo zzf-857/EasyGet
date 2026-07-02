@@ -8,7 +8,7 @@ public class ProjectDependencyTests
     [Fact]
     public void MainProjectPackageReferencesUsePinnedVersions()
     {
-        var project = XDocument.Load(Path.Combine(GetRepositoryRoot(), "EasyGet.csproj"));
+        var project = XDocument.Load(Path.Combine(TestRepositoryPaths.Root, "EasyGet.csproj"));
 
         var packageVersions = project
             .Descendants("PackageReference")
@@ -28,17 +28,4 @@ public class ProjectDependencyTests
         });
     }
 
-    private static string GetRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "EasyGet.csproj")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root from test output directory.");
-    }
 }

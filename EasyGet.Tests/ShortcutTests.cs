@@ -33,32 +33,8 @@ public class ShortcutTests
     }
 
     private static string GetViewPath(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "Views", fileName);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find Views/{fileName} from test output directory.");
-    }
+        => TestRepositoryPaths.GetViewPath(fileName);
 
     private static string GetRootPath(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, fileName);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find {fileName} from test output directory.");
-    }
+        => TestRepositoryPaths.GetRootPath(fileName);
 }

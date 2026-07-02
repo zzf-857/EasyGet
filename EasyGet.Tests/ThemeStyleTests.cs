@@ -485,34 +485,10 @@ public class ThemeStyleTests
     }
 
     private static string GetThemePath(string fileName)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, "Themes", fileName);
-            if (File.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find Themes/{fileName} from test output directory.");
-    }
+        => TestRepositoryPaths.GetThemePath(fileName);
 
     private static string GetRootPath(string relativePath)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            var candidate = Path.Combine(directory.FullName, relativePath);
-            if (File.Exists(candidate) || Directory.Exists(candidate))
-                return candidate;
-
-            directory = directory.Parent;
-        }
-
-        throw new FileNotFoundException($"Could not find {relativePath} from test output directory.");
-    }
+        => TestRepositoryPaths.GetRootPath(relativePath);
 
     private static void AssertStyleSetter(XElement style, string property, string expectedValue)
     {

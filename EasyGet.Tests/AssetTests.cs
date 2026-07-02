@@ -59,14 +59,5 @@ public class AssetTests
     }
 
     private static string GetRootPath()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "EasyGet.csproj")))
-        {
-            directory = directory.Parent;
-        }
-
-        return directory?.FullName
-            ?? throw new DirectoryNotFoundException("Could not locate the EasyGet project root.");
-    }
+        => TestRepositoryPaths.Root;
 }

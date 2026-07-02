@@ -7,7 +7,7 @@ public class ReleaseScriptTests
     [Fact]
     public void WindowsPublishScriptRunsTestsPublishesAndChecksExecutable()
     {
-        var root = GetRepositoryRoot();
+        var root = TestRepositoryPaths.Root;
         var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
 
         Assert.True(File.Exists(scriptPath), "Expected scripts/publish-win-x64.ps1 to exist.");
@@ -33,7 +33,7 @@ public class ReleaseScriptTests
     [Fact]
     public void InstallerScriptBuildsVersionedSetupExecutable()
     {
-        var root = GetRepositoryRoot();
+        var root = TestRepositoryPaths.Root;
         var scriptPath = Path.Combine(root, "scripts", "build-installer.ps1");
         var innoPath = Path.Combine(root, "scripts", "EasyGet.iss");
 
@@ -60,7 +60,7 @@ public class ReleaseScriptTests
     [Fact]
     public void ProjectRestrictsReleaseSatelliteResources()
     {
-        var root = GetRepositoryRoot();
+        var root = TestRepositoryPaths.Root;
         var projectPath = Path.Combine(root, "EasyGet.csproj");
         var project = File.ReadAllText(projectPath);
 
@@ -72,7 +72,7 @@ public class ReleaseScriptTests
     [Fact]
     public void ProjectDoesNotDirectlyUseWinFormsFolderDialogs()
     {
-        var root = GetRepositoryRoot();
+        var root = TestRepositoryPaths.Root;
         var projectPath = Path.Combine(root, "EasyGet.csproj");
         var project = File.ReadAllText(projectPath);
         var sourceFiles = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -91,7 +91,7 @@ public class ReleaseScriptTests
     [Fact]
     public void GitHubReleaseWorkflowPublishesInstallerZipAndManifest()
     {
-        var root = GetRepositoryRoot();
+        var root = TestRepositoryPaths.Root;
         var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
 
         Assert.True(File.Exists(workflowPath), "Expected .github/workflows/release.yml to exist.");
@@ -114,24 +114,10 @@ public class ReleaseScriptTests
     [Fact]
     public void ManualPackagingGuideMentionsPublishScript()
     {
-        var root = GetRepositoryRoot();
+        var root = TestRepositoryPaths.Root;
         var guidePath = Path.Combine(root, "00Readme", "手动打包说明.md");
         var guide = File.ReadAllText(guidePath);
 
         Assert.Contains("scripts\\publish-win-x64.ps1", guide, StringComparison.Ordinal);
-    }
-
-    private static string GetRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "EasyGet.csproj")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not find repository root from test output directory.");
     }
 }
