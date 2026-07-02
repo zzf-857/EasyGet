@@ -18,6 +18,9 @@ internal partial class DouyinBrowserDownloadService
 {
     private const string BrowserUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
+    private const int DownloadBufferSize = 128 * 1024;
+    private const long DownloadProgressByteInterval = 512 * 1024;
+    private static readonly TimeSpan DownloadProgressReportInterval = TimeSpan.FromMilliseconds(250);
 
     private static readonly HttpClient HttpClient = new();
 
@@ -691,10 +694,12 @@ internal partial class DouyinBrowserDownloadService
         IProgress<DownloadProgress>? progress,
         CancellationToken ct)
     {
-        var buffer = new byte[128 * 1024];
+        var buffer = new byte[DownloadBufferSize];
         long downloaded = 0;
         long total = 0;
         var started = DateTime.UtcNow;
+        var lastProgressReport = DateTime.MinValue;
+        long lastProgressDownloaded = 0;
         var fileMode = FileMode.Create;
 
         try
@@ -720,7 +725,7 @@ internal partial class DouyinBrowserDownloadService
                     ?? Math.Max(total, response.Content.Headers.ContentLength ?? 0);
 
                 await using (var source = await response.Content.ReadAsStreamAsync(ct))
-                await using (var target = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.Read))
+                await using (var target = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.Read, DownloadBufferSize, useAsync: true))
                 {
                     while (true)
                     {
@@ -731,20 +736,35 @@ internal partial class DouyinBrowserDownloadService
                         await target.WriteAsync(buffer.AsMemory(0, read), ct);
                         downloaded += read;
 
-                        var elapsed = Math.Max((DateTime.UtcNow - started).TotalSeconds, 0.1);
-                        var speed = downloaded / elapsed;
-                        var percent = total > 0 ? downloaded * 100d / total : 0;
-                        var eta = total > 0 && speed > 0 ? (total - downloaded) / speed : 0;
-                        progress?.Report(new DownloadProgress
+                        if (progress is not null)
                         {
-                            Percent = percent,
-                            Downloaded = downloaded,
-                            Total = total,
-                            Speed = speed,
-                            Eta = eta,
-                            RawLine = "[douyin-browser] downloading"
-                        });
+                            var now = DateTime.UtcNow;
+                            var completedKnownTotal = total > 0 && downloaded >= total;
+                            var shouldReport =
+                                lastProgressReport == DateTime.MinValue
+                                || completedKnownTotal
+                                || now - lastProgressReport >= DownloadProgressReportInterval
+                                || downloaded - lastProgressDownloaded >= DownloadProgressByteInterval;
+
+                            if (shouldReport)
+                            {
+                                ReportDownloadProgress(progress, downloaded, total, started, now);
+                                lastProgressReport = now;
+                                lastProgressDownloaded = downloaded;
+                            }
+                        }
                     }
+                }
+
+                if (progress is not null
+                    && downloaded > 0
+                    && lastProgressDownloaded != downloaded
+                    && (total <= 0 || downloaded >= total))
+                {
+                    var now = DateTime.UtcNow;
+                    ReportDownloadProgress(progress, downloaded, total, started, now);
+                    lastProgressReport = now;
+                    lastProgressDownloaded = downloaded;
                 }
 
                 if (total <= 0 || downloaded >= total)
@@ -773,6 +793,28 @@ internal partial class DouyinBrowserDownloadService
         if (File.Exists(outputPath))
             File.Delete(outputPath);
         File.Move(tempPath, outputPath);
+    }
+
+    private static void ReportDownloadProgress(
+        IProgress<DownloadProgress> progress,
+        long downloaded,
+        long total,
+        DateTime started,
+        DateTime now)
+    {
+        var elapsed = Math.Max((now - started).TotalSeconds, 0.1);
+        var speed = downloaded / elapsed;
+        var percent = total > 0 ? downloaded * 100d / total : 0;
+        var eta = total > 0 && speed > 0 ? (total - downloaded) / speed : 0;
+        progress.Report(new DownloadProgress
+        {
+            Percent = percent,
+            Downloaded = downloaded,
+            Total = total,
+            Speed = speed,
+            Eta = eta,
+            RawLine = "[douyin-browser] downloading"
+        });
     }
 
     private static string? FindChromiumBrowserPath()

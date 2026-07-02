@@ -263,10 +263,43 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
         Assert.False(File.Exists(outputPath));
     }
 
+    [Fact]
+    public async Task DownloadFileAsync_ThrottlesChunkProgressReports()
+    {
+        var tempPath = Path.Combine(_tempDir, "throttled.mp4.part");
+        var outputPath = Path.Combine(_tempDir, "throttled.mp4");
+        Directory.CreateDirectory(_tempDir);
+
+        using var server = new SlowBodyHttpServer(totalBytes: 128 * 1024, chunkBytes: 1024, delayMs: 1);
+        var progress = new CollectingProgress();
+
+        await DouyinBrowserDownloadService.DownloadFileAsync(
+            server.Url,
+            tempPath,
+            outputPath,
+            "https://www.douyin.com/",
+            progress,
+            CancellationToken.None);
+
+        Assert.Equal(128 * 1024, new FileInfo(outputPath).Length);
+        Assert.NotEmpty(progress.Reports);
+        Assert.True(progress.Reports.Count <= 20,
+            $"Expected throttled progress reports, but received {progress.Reports.Count} reports.");
+        Assert.Equal(128 * 1024, progress.Reports[^1].Downloaded);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDir))
             Directory.Delete(_tempDir, recursive: true);
+    }
+
+    private sealed class CollectingProgress : IProgress<DownloadProgress>
+    {
+        public List<DownloadProgress> Reports { get; } = [];
+
+        public void Report(DownloadProgress value)
+            => Reports.Add(value);
     }
 
     private sealed class ScriptedHttpServer : IDisposable
