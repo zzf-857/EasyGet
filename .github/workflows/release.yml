@@ -84,6 +84,14 @@ jobs:
           if ($manifest.zipAsset -ne $zip.Name -or [long]$manifest.zipSize -ne $zip.Length) {
             throw "Manifest zip asset does not match generated portable zip."
           }
+          $setupHash = Get-FileHash -Algorithm SHA256 -LiteralPath $setup.FullName
+          $zipHash = Get-FileHash -Algorithm SHA256 -LiteralPath $zip.FullName
+          if ($manifest.setupSha256 -ne $setupHash.Hash) {
+            throw "Manifest setup hash does not match generated installer."
+          }
+          if ($manifest.zipSha256 -ne $zipHash.Hash) {
+            throw "Manifest zip hash does not match generated portable zip."
+          }
 
       - name: Prepare release notes
         shell: bash

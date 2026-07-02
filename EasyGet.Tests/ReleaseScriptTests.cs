@@ -176,6 +176,19 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void InstallerScriptWritesSha256HashesToUpdateManifest()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "build-installer.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("Get-FileHash -Algorithm SHA256 -LiteralPath $setupPath", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath", script, StringComparison.Ordinal);
+        Assert.Contains("setupSha256 = $setupHash.Hash", script, StringComparison.Ordinal);
+        Assert.Contains("zipSha256 = $zipHash.Hash", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void InstallerScriptRejectsConfigurationsThatDoNotMatchFixedInnoSourcePath()
     {
         var root = TestRepositoryPaths.Root;
@@ -280,6 +293,21 @@ public class ReleaseScriptTests
         Assert.Contains("ConvertFrom-Json", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("Create update manifest", workflow, StringComparison.Ordinal);
         Assert.DoesNotContain("ConvertTo-Json", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowVerifiesManifestSha256Hashes()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("Get-FileHash -Algorithm SHA256 -LiteralPath $setup.FullName", workflow, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash -Algorithm SHA256 -LiteralPath $zip.FullName", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.setupSha256", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.zipSha256", workflow, StringComparison.Ordinal);
+        Assert.Contains("Manifest setup hash does not match generated installer.", workflow, StringComparison.Ordinal);
+        Assert.Contains("Manifest zip hash does not match generated portable zip.", workflow, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -110,13 +110,18 @@ if ($zipInfo.Length -le 0) {
     throw "Release zip is empty: $zipPath"
 }
 
+$setupHash = Get-FileHash -Algorithm SHA256 -LiteralPath $setupPath
+$zipHash = Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath
+
 $manifest = [ordered]@{
     version = $Version
     tag = "v$Version"
     setupAsset = $setupInfo.Name
     setupSize = $setupInfo.Length
+    setupSha256 = $setupHash.Hash
     zipAsset = $zipInfo.Name
     zipSize = $zipInfo.Length
+    zipSha256 = $zipHash.Hash
     releaseUrl = "https://github.com/zzf-857/EasyGet/releases/tag/v$Version"
 } | ConvertTo-Json
 
