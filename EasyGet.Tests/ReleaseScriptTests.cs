@@ -118,7 +118,34 @@ public class ReleaseScriptTests
         Assert.Contains("$blockedZipEntryPatterns", publishScript, StringComparison.Ordinal);
         Assert.Contains("WildcardPattern", publishScript, StringComparison.Ordinal);
         Assert.Contains("diagnostic/runtime debugging file was included", publishScript, StringComparison.Ordinal);
-        Assert.Contains(@"Excludes: ""*.pdb,createdump.exe,mscordaccore*.dll,mscordbi.dll,Microsoft.DiaSymReader.Native.amd64.dll""", innoScript, StringComparison.Ordinal);
+        Assert.Contains(@"Excludes: ""*.pdb,createdump.exe,mscordaccore*.dll,mscordbi.dll,Microsoft.DiaSymReader.Native.amd64.dll,System.Windows.Forms.Design*.dll,System.Design.dll,System.Drawing.Design.dll""", innoScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptPrunesDesignTimeWindowsDesktopAssemblies()
+    {
+        var root = TestRepositoryPaths.Root;
+        var publishScriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var innoPath = Path.Combine(root, "scripts", "EasyGet.iss");
+
+        var publishScript = File.ReadAllText(publishScriptPath);
+        var innoScript = File.ReadAllText(innoPath);
+
+        var designTimePatterns = new[]
+        {
+            "System.Windows.Forms.Design*.dll",
+            "System.Design.dll",
+            "System.Drawing.Design.dll"
+        };
+
+        foreach (var pattern in designTimePatterns)
+        {
+            Assert.Contains(pattern, publishScript, StringComparison.Ordinal);
+            Assert.Contains(pattern, innoScript, StringComparison.Ordinal);
+        }
+
+        Assert.DoesNotContain("System.Windows.Forms.dll,", innoScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("WindowsFormsIntegration.dll", innoScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -144,7 +171,7 @@ public class ReleaseScriptTests
         Assert.Contains("CloseApplications=yes", innoScript, StringComparison.Ordinal);
         Assert.Contains("RestartApplications=no", innoScript, StringComparison.Ordinal);
         Assert.Contains("Compression=lzma2/ultra64", innoScript, StringComparison.Ordinal);
-        Assert.Contains(@"Excludes: ""*.pdb,createdump.exe,mscordaccore*.dll,mscordbi.dll,Microsoft.DiaSymReader.Native.amd64.dll""", innoScript, StringComparison.Ordinal);
+        Assert.Contains(@"Excludes: ""*.pdb,createdump.exe,mscordaccore*.dll,mscordbi.dll,Microsoft.DiaSymReader.Native.amd64.dll,System.Windows.Forms.Design*.dll,System.Design.dll,System.Drawing.Design.dll""", innoScript, StringComparison.Ordinal);
         Assert.DoesNotContain(@"\{#MyAppExeName}""; DestDir", innoScript, StringComparison.Ordinal);
     }
 

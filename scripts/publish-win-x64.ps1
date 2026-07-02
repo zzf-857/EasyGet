@@ -78,7 +78,10 @@ $publishPrunePatterns = @(
     "createdump.exe",
     "mscordaccore*.dll",
     "mscordbi.dll",
-    "Microsoft.DiaSymReader.Native.amd64.dll"
+    "Microsoft.DiaSymReader.Native.amd64.dll",
+    "System.Windows.Forms.Design*.dll",
+    "System.Design.dll",
+    "System.Drawing.Design.dll"
 )
 
 foreach ($pattern in $publishPrunePatterns) {
@@ -109,7 +112,10 @@ function Test-PortableZipContent {
         "createdump.exe",
         "mscordaccore*.dll",
         "mscordbi.dll",
-        "Microsoft.DiaSymReader.Native.amd64.dll"
+        "Microsoft.DiaSymReader.Native.amd64.dll",
+        "System.Windows.Forms.Design*.dll",
+        "System.Design.dll",
+        "System.Drawing.Design.dll"
     )
 
     $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
