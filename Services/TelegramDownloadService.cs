@@ -619,7 +619,7 @@ public class TelegramDownloadService : IDisposable
                 }
 
                 var mediaFilePath = Path.Combine(savePath, filename);
-                logCallback?.Invoke($"[Telegram] 准备下载媒体文件: {filename} (大小: {FormatBytes(totalSize)})");
+                logCallback?.Invoke($"[Telegram] 准备下载媒体文件: {filename} (大小: {ByteSizeFormatter.FormatOrUnknown(totalSize)})");
 
                 // 流式分块下载，并提供精确进度上报
                 using (var fileStream = new FileStream(mediaFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
@@ -686,20 +686,6 @@ public class TelegramDownloadService : IDisposable
             logCallback?.Invoke($"[Telegram] 下载消息 ID {messageId} 出错: {ex.Message}");
             return false;
         }
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0) return "大小未知";
-        string[] sizes = { "B", "KB", "MB", "GB" };
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.#} {sizes[order]}";
     }
 
     private static void UpdateTaskFileSizeFromDirectory(DownloadTask task, string directoryPath, Action<string>? logCallback)

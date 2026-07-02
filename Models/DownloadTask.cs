@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using EasyGet.Services;
 
 namespace EasyGet.Models;
 
@@ -91,12 +92,12 @@ public partial class DownloadTask : ObservableObject
     /// <summary>
     /// 格式化的文件大小
     /// </summary>
-    public string FileSizeText => FormatBytes(FileSize);
+    public string FileSizeText => ByteSizeFormatter.FormatClampZero(FileSize);
 
     /// <summary>
     /// 格式化的下载速度
     /// </summary>
-    public string SpeedText => $"{FormatBytes((long)Speed)}/s";
+    public string SpeedText => $"{ByteSizeFormatter.FormatClampZero((long)Speed)}/s";
 
     /// <summary>
     /// 格式化的 ETA
@@ -123,16 +124,4 @@ public partial class DownloadTask : ObservableObject
         }
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        string[] sizes = ["B", "KB", "MB", "GB", "TB"];
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.#} {sizes[order]}";
-    }
 }

@@ -293,7 +293,7 @@ public class XiaohongshuImageDownloadService
                 RawLine = "[xhs-image] 所有图片下载完成。"
             });
 
-            logCallback?.Invoke($"[xhs-image] 图片下载成功！总大小：{FormatBytes(totalBytes)}");
+            logCallback?.Invoke($"[xhs-image] 图片下载成功！总大小：{ByteSizeFormatter.FormatClampZero(totalBytes)}");
             return true;
         }
         catch (OperationCanceledException)
@@ -384,16 +384,4 @@ public class XiaohongshuImageDownloadService
         }
     }
 
-    private static string FormatBytes(long bytes)
-    {
-        string[] sizes = ["B", "KB", "MB", "GB", "TB"];
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-        return $"{len:0.#} {sizes[order]}";
-    }
 }

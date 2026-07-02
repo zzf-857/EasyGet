@@ -88,7 +88,7 @@ public partial class DownloadViewModel : ObservableObject
     public string PreviewPlatform => PreviewInfo?.Platform ?? "";
     public string PreviewThumbnailUrl => PreviewInfo?.Thumbnail ?? "";
     public string PreviewDurationText => FormatDuration(PreviewInfo?.Duration ?? 0);
-    public string PreviewFileSizeText => FormatBytes(PreviewInfo?.FileSize ?? 0);
+    public string PreviewFileSizeText => ByteSizeFormatter.FormatOrUnknown(PreviewInfo?.FileSize ?? 0);
     public string CurrentOutputLocationText => string.IsNullOrWhiteSpace(CurrentTask?.OutputFilePath)
         ? CurrentTask?.OutputDirectory ?? ""
         : CurrentTask.OutputFilePath;
@@ -505,23 +505,6 @@ public partial class DownloadViewModel : ObservableObject
 
         var ts = TimeSpan.FromSeconds(seconds);
         return ts.Hours > 0 ? $"{ts:hh\\:mm\\:ss}" : $"{ts:mm\\:ss}";
-    }
-
-    private static string FormatBytes(long bytes)
-    {
-        if (bytes <= 0)
-            return "大小未知";
-
-        string[] sizes = ["B", "KB", "MB", "GB", "TB"];
-        double len = bytes;
-        int order = 0;
-        while (len >= 1024 && order < sizes.Length - 1)
-        {
-            order++;
-            len /= 1024;
-        }
-
-        return $"{len:0.#} {sizes[order]}";
     }
 
     /// <summary>

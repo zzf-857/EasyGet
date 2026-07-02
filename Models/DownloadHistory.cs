@@ -1,5 +1,5 @@
-using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
+using EasyGet.Services;
 
 namespace EasyGet.Models;
 
@@ -45,21 +45,7 @@ public partial class DownloadHistory : ObservableObject
     /// <summary>
     /// 格式化的文件大小
     /// </summary>
-    public string FileSizeText
-    {
-        get
-        {
-            string[] sizes = ["B", "KB", "MB", "GB", "TB"];
-            double len = Math.Max(0, FileSize);
-            int order = 0;
-            while (len >= 1024 && order < sizes.Length - 1)
-            {
-                order++;
-                len /= 1024;
-            }
-            return $"{len:0.#} {sizes[order]}";
-        }
-    }
+    public string FileSizeText => ByteSizeFormatter.FormatClampZero(FileSize);
 
     /// <summary>
     /// 格式化的下载时间

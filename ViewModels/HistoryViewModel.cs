@@ -330,20 +330,7 @@ public partial class HistoryViewModel : ObservableObject
     }
 
     internal static string FormatAvailableSpace(long bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        var value = Math.Max(0, bytes);
-        var unitIndex = 0;
-        var displayValue = (double)value;
-
-        while (displayValue >= 1024 && unitIndex < units.Length - 1)
-        {
-            displayValue /= 1024;
-            unitIndex++;
-        }
-
-        return $"{displayValue:0.#} {units[unitIndex]} 可用";
-    }
+        => ByteSizeFormatter.FormatClampZero(bytes, " 可用");
 
     private static bool MatchesMediaFilter(DownloadHistory item, string filter)
     {
