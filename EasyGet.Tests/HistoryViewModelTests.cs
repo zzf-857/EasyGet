@@ -133,6 +133,36 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public async Task PreviewFileCommand_OpensResolvedMediaFileWhenPathIsDirectory()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var directory = Path.Combine(Path.GetTempPath(), $"easyget-preview-dir-{Guid.NewGuid():N}");
+        var startedProcesses = new List<ProcessStartInfo>();
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, "metadata.txt"), "metadata");
+            var mediaPath = Path.Combine(directory, "video.mp4");
+            File.WriteAllText(mediaPath, "preview target");
+
+            using var service = new HistoryService(dbPath);
+            var viewModel = new HistoryViewModel(service, startedProcesses.Add);
+
+            await viewModel.PreviewFileCommand.ExecuteAsync(directory);
+
+            var processStartInfo = Assert.Single(startedProcesses);
+            Assert.Equal(mediaPath, processStartInfo.FileName);
+            Assert.True(processStartInfo.UseShellExecute);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(directory);
+        }
+    }
+
+    [Fact]
     public async Task OpenSourceUrlCommand_OpensHttpUrlWithDefaultBrowser()
     {
         var dbPath = CreateTempDatabasePath();
@@ -182,6 +212,18 @@ public class HistoryViewModelTests
         {
             if (File.Exists(path))
                 File.Delete(path);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
         }
         catch
         {
