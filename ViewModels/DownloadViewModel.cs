@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Text.RegularExpressions;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -529,50 +528,7 @@ public partial class DownloadViewModel : ObservableObject
     /// 从粘贴文本中提取第一个 http/https URL（支持抖音分享文本等）
     /// </summary>
     internal static string? ExtractUrl(string input)
-    {
-        if (string.IsNullOrWhiteSpace(input)) return null;
-        var trimmed = input.Trim();
-        // 如果本身就是一个干净的 URL，直接返回
-        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            // 取到第一个空白或中文字符为止
-            var match = Regex.Match(trimmed, @"^https?://[^\s\u4e00-\u9fff]+");
-            if (match.Success) return TrimTrailingSharePunctuation(match.Value);
-        }
-        // 从混合文本中提取第一个 URL
-        var urlMatch = Regex.Match(input, @"https?://[^\s\u4e00-\u9fff]+");
-        return urlMatch.Success ? TrimTrailingSharePunctuation(urlMatch.Value) : null;
-    }
-
-    private static string TrimTrailingSharePunctuation(string url)
-    {
-        return url.TrimEnd(
-            ',',
-            '.',
-            ';',
-            ':',
-            ')',
-            ']',
-            '}',
-            '>',
-            '!',
-            '?',
-            '"',
-            '\'',
-            '，',
-            '。',
-            '、',
-            '；',
-            '：',
-            '）',
-            '】',
-            '》',
-            '！',
-            '？',
-            '”',
-            '’');
-    }
+        => ShareUrlExtractor.Extract(input);
 
     private static string ParseQuality(string display) => display switch
     {
