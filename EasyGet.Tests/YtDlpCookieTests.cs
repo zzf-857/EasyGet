@@ -249,6 +249,18 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void ShouldRetryWithNextCookieStrategy_StreamsProcessOutputWithoutListSnapshot()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.Contains("ShouldRetryWithNextCookieStrategy(url, EnumerateProcessLines(result.StandardError))", source, StringComparison.Ordinal);
+        Assert.Contains("private static IEnumerable<string> EnumerateProcessLines(string output)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShouldRetryWithNextCookieStrategy(url, SplitProcessLines(result.StandardError))", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("SplitProcessLines(string output)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BuildCookieStrategies_AddsBrowserStrategiesForYoutubeWhenAvailable()
     {
         var strategies = YtDlpService.BuildCookieStrategies(

@@ -155,7 +155,7 @@ public partial class YtDlpService
                 }
 
                 if (i < strategies.Count - 1
-                    && ShouldRetryWithNextCookieStrategy(url, SplitProcessLines(result.StandardError)))
+                    && ShouldRetryWithNextCookieStrategy(url, EnumerateProcessLines(result.StandardError)))
                 {
                     continue;
                 }
@@ -314,7 +314,7 @@ public partial class YtDlpService
                 }
 
                 if (i < strategies.Count - 1
-                    && ShouldRetryWithNextCookieStrategy(url, SplitProcessLines(result.StandardError)))
+                    && ShouldRetryWithNextCookieStrategy(url, EnumerateProcessLines(result.StandardError)))
                 {
                     continue;
                 }
@@ -951,7 +951,7 @@ public partial class YtDlpService
             || url.Contains("xhslink.com", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool ShouldRetryWithNextCookieStrategy(string url, List<string> stderrLines)
+    private static bool ShouldRetryWithNextCookieStrategy(string url, IEnumerable<string> stderrLines)
     {
         if (IsDouyinUrl(url))
         {
@@ -1360,11 +1360,15 @@ public partial class YtDlpService
         return result.StandardOutput;
     }
 
-    private static List<string> SplitProcessLines(string output)
+    private static IEnumerable<string> EnumerateProcessLines(string output)
     {
-        return output
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .ToList();
+        using var reader = new StringReader(output);
+        while (reader.ReadLine() is { } line)
+        {
+            var trimmed = line.Trim();
+            if (!string.IsNullOrWhiteSpace(trimmed))
+                yield return trimmed;
+        }
     }
 
     private static ProcessStartInfo CreateProcessStartInfo(string fileName, IEnumerable<string> args)
