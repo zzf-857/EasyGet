@@ -43,9 +43,9 @@ if (Test-Path -LiteralPath $publishDirFullPath) {
 
 Write-Host "[EasyGet] Restore"
 dotnet restore $projectPath
-dotnet restore $testProjectPath
 
 if (-not $SkipTests) {
+    dotnet restore $testProjectPath
     Write-Host "[EasyGet] Test"
     dotnet test $testProjectPath -c $Configuration --no-restore
 }

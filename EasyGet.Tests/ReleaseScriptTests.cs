@@ -31,6 +31,24 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void WindowsPublishScriptDoesNotRestoreTestProjectWhenTestsAreSkipped()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        var skipTestsBlockIndex = script.IndexOf("if (-not $SkipTests)", StringComparison.Ordinal);
+        var testProjectRestoreIndex = script.IndexOf("dotnet restore $testProjectPath", StringComparison.Ordinal);
+        var testCommandIndex = script.IndexOf("dotnet test $testProjectPath", StringComparison.Ordinal);
+
+        Assert.True(skipTestsBlockIndex >= 0, "Expected publish script to guard tests with -SkipTests.");
+        Assert.True(testProjectRestoreIndex > skipTestsBlockIndex,
+            "Restoring the test project should be inside the -SkipTests guard so release packaging does not repeat test restore.");
+        Assert.True(testProjectRestoreIndex < testCommandIndex,
+            "The test project should be restored immediately before running tests.");
+    }
+
+    [Fact]
     public void InstallerScriptBuildsVersionedSetupExecutable()
     {
         var root = TestRepositoryPaths.Root;
