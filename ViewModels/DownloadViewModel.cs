@@ -14,6 +14,8 @@ namespace EasyGet.ViewModels;
 /// </summary>
 public partial class DownloadViewModel : ObservableObject
 {
+    private const int MaxLogLines = 200;
+
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly IVideoInfoProvider _videoInfoProvider;
@@ -118,8 +120,8 @@ public partial class DownloadViewModel : ObservableObject
             System.Windows.Application.Current?.Dispatcher.Invoke(() =>
             {
                 LogLines.Add(line);
-                // 保持最新 200 行
-                while (LogLines.Count > 200)
+                // 保持最新日志窗口，避免长时间下载时 UI 文本无限增长。
+                while (LogLines.Count > MaxLogLines)
                     LogLines.RemoveAt(0);
             });
         };

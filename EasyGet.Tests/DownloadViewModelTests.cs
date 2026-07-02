@@ -52,6 +52,17 @@ public class DownloadViewModelTests
     }
 
     [Fact]
+    public void DownloadLogLimit_UsesNamedConstant()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("ViewModels", "DownloadViewModel.cs")));
+
+        Assert.Contains("MaxLogLines", source, StringComparison.Ordinal);
+        Assert.Contains("while (LogLines.Count > MaxLogLines)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("LogLines.Count > 200", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ParseCommandShowsReadyPreviewWhenVideoInfoIsResolved()
     {
         using var context = CreateDownloadContext();
