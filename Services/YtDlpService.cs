@@ -555,7 +555,7 @@ public partial class YtDlpService
                 break;
         }
 
-        AddAria2cArgs(args, _configService.Config.UseAria2c, aria2cPath);
+        AddAria2cArgs(args, _configService.Config.UseAria2c, aria2cPath, fragments);
 
         AddSiteCompatibilityArgs(args, task.Url);
         AddProxyArgs(args);
@@ -565,15 +565,20 @@ public partial class YtDlpService
         return args;
     }
 
-    internal static void AddAria2cArgs(List<string> args, bool useAria2c, string? aria2cPath)
+    internal static void AddAria2cArgs(List<string> args, bool useAria2c, string? aria2cPath, int splitCount = 16)
     {
         if (!useAria2c || string.IsNullOrWhiteSpace(aria2cPath))
             return;
 
+        var resolvedSplitCount = Math.Clamp(
+            splitCount,
+            AppConfig.MinConcurrentFragments,
+            AppConfig.MaxConcurrentFragments);
+
         args.Add("--external-downloader");
         args.Add(aria2cPath);
         args.Add("--external-downloader-args");
-        args.Add("aria2c:--min-split-size=1M --max-connection-per-server=16 --split=16");
+        args.Add($"aria2c:--min-split-size=1M --max-connection-per-server={resolvedSplitCount} --split={resolvedSplitCount}");
     }
 
     internal static void AddNetworkReliabilityArgs(List<string> args)

@@ -30,6 +30,16 @@ public class YtDlpArgsTests
     }
 
     [Fact]
+    public void AddAria2cArgs_UsesConfiguredSplitCount()
+    {
+        var args = new List<string>();
+
+        InvokeAddAria2cArgs(args, useAria2c: true, aria2cPath: @"C:\Tools\aria2c.exe", splitCount: 24);
+
+        AssertOptionValue(args, "--external-downloader-args", "aria2c:--min-split-size=1M --max-connection-per-server=24 --split=24");
+    }
+
+    [Fact]
     public void AddNetworkReliabilityArgs_ConfiguresRetriesTimeoutAndBackoff()
     {
         var args = new List<string>();
@@ -141,5 +151,16 @@ public class YtDlpArgsTests
 
         Assert.NotNull(method);
         return (string)method!.Invoke(null, [format, quality])!;
+    }
+
+    private static void InvokeAddAria2cArgs(List<string> args, bool useAria2c, string aria2cPath, int splitCount)
+    {
+        var method = typeof(YtDlpService).GetMethod(
+            "AddAria2cArgs",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            [typeof(List<string>), typeof(bool), typeof(string), typeof(int)]);
+
+        Assert.NotNull(method);
+        method!.Invoke(null, [args, useAria2c, aria2cPath, splitCount]);
     }
 }
