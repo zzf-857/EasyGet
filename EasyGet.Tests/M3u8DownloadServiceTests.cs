@@ -157,4 +157,15 @@ public class M3u8DownloadServiceTests
         Assert.Contains("CopyToAsync(outfile, SegmentIoBufferSize, ct)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read);", source, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void DownloadSegments_RentsAndReturnsSegmentBuffer()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "M3u8DownloadService.cs")));
+
+        Assert.Contains("ArrayPool<byte>.Shared.Rent(SegmentIoBufferSize)", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new byte[SegmentIoBufferSize]", source, StringComparison.Ordinal);
+    }
 }

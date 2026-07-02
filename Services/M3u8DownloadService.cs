@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -434,43 +435,50 @@ public class M3u8DownloadService
     {
         var filePath = Path.Combine(tempDir, $"{index:D4}.ts");
         const int maxRetries = 5;
+        var buffer = ArrayPool<byte>.Shared.Rent(SegmentIoBufferSize);
 
-        for (int attempt = 1; attempt <= maxRetries; attempt++)
+        try
         {
-            if (ct.IsCancellationRequested)
-                return false;
-
-            try
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-                response.EnsureSuccessStatusCode();
-
-                using var stream = await response.Content.ReadAsStreamAsync(ct);
-                using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, SegmentIoBufferSize, useAsync: true);
-
-                var buffer = new byte[SegmentIoBufferSize];
-                int read;
-                while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
-                {
-                    await fileStream.WriteAsync(buffer, 0, read, ct);
-                    onBytesRead?.Invoke(read);
-                }
-
-                return true; // 下载成功
-            }
-            catch (Exception ex)
-            {
-                if (attempt == maxRetries || ct.IsCancellationRequested)
-                {
-                    logCallback?.Invoke($"[m3u8] 分片 {index} 下载最终失败 (尝试了 {maxRetries} 次): {ex.Message}");
+                if (ct.IsCancellationRequested)
                     return false;
-                }
-                
-                // 线性避让退避
-                await Task.Delay(1000 * attempt, ct);
-            }
-        }
 
-        return false;
+                try
+                {
+                    using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+                    response.EnsureSuccessStatusCode();
+
+                    using var stream = await response.Content.ReadAsStreamAsync(ct);
+                    using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, SegmentIoBufferSize, useAsync: true);
+
+                    int read;
+                    while ((read = await stream.ReadAsync(buffer.AsMemory(0, SegmentIoBufferSize), ct)) > 0)
+                    {
+                        await fileStream.WriteAsync(buffer.AsMemory(0, read), ct);
+                        onBytesRead?.Invoke(read);
+                    }
+
+                    return true; // 下载成功
+                }
+                catch (Exception ex)
+                {
+                    if (attempt == maxRetries || ct.IsCancellationRequested)
+                    {
+                        logCallback?.Invoke($"[m3u8] 分片 {index} 下载最终失败 (尝试了 {maxRetries} 次): {ex.Message}");
+                        return false;
+                    }
+
+                    // 线性避让退避
+                    await Task.Delay(1000 * attempt, ct);
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 }
