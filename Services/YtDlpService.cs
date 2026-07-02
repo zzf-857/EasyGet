@@ -146,9 +146,8 @@ public partial class YtDlpService
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
                 if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
-                    var firstJson = result.StandardOutput
-                        .Split('\n', StringSplitOptions.RemoveEmptyEntries)
-                        .FirstOrDefault(line => line.TrimStart().StartsWith("{"));
+                    var firstJson = EnumerateProcessLines(result.StandardOutput)
+                        .FirstOrDefault(line => line.StartsWith("{", StringComparison.Ordinal));
 
                     if (!string.IsNullOrWhiteSpace(firstJson))
                         return ParseVideoInfoJson(firstJson, url);
@@ -296,7 +295,7 @@ public partial class YtDlpService
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
                 if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
-                    foreach (var line in result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                    foreach (var line in EnumerateProcessLines(result.StandardOutput))
                     {
                         try
                         {

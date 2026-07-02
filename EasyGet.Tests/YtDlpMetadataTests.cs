@@ -6,6 +6,16 @@ namespace EasyGet.Tests;
 public class YtDlpMetadataTests
 {
     [Fact]
+    public void MetadataParsing_StreamsProcessOutputWithoutLineArraySnapshot()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.Contains("EnumerateProcessLines(result.StandardOutput)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("result.StandardOutput.Split('\\n', StringSplitOptions.RemoveEmptyEntries)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ExtractPlaylistUrlFromJson_FallsBackToWebpageUrlWhenUrlFieldIsNotString()
     {
         const string json = """
