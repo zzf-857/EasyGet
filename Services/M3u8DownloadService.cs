@@ -155,47 +155,29 @@ public class M3u8DownloadService
 
             var maxParallelSegments = ResolveSegmentConcurrency(_configService.Config.ConcurrentFragments);
             logCallback?.Invoke($"[m3u8] 分片下载并发数: {maxParallelSegments}");
-            using var semaphore = new SemaphoreSlim(maxParallelSegments);
-            var downloadTasks = new List<Task>();
-
-            for (int i = 0; i < totalSegments; i++)
-            {
-                int index = i;
-                string segUrl = segments[i];
-
-                downloadTasks.Add(Task.Run(async () =>
+            failedIndices = (await DownloadSegmentsWithWorkersAsync(
+                segments,
+                maxParallelSegments,
+                (index, segUrl) => DownloadSegmentWithRetryAsync(
+                    httpClient,
+                    segUrl,
+                    index,
+                    tempDir,
+                    bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
+                    logCallback,
+                    ct),
+                _ =>
                 {
-                    await semaphore.WaitAsync(ct);
-                    try
+                    Interlocked.Increment(ref completedSegments);
+                    var currentCompleted = Interlocked.Read(ref completedSegments);
+                    progress?.Report(new DownloadProgress
                     {
-                        var success = await DownloadSegmentWithRetryAsync(httpClient, segUrl, index, tempDir, bytes => Interlocked.Add(ref totalDownloadedBytes, bytes), logCallback, ct);
-                        if (success)
-                        {
-                            Interlocked.Increment(ref completedSegments);
-                            var currentCompleted = Interlocked.Read(ref completedSegments);
-                            progress?.Report(new DownloadProgress
-                            {
-                                Percent = Math.Min(99.9, (double)currentCompleted / totalSegments * 100),
-                                Downloaded = Interlocked.Read(ref totalDownloadedBytes),
-                                Total = 0
-                            });
-                        }
-                        else
-                        {
-                            lock (failedIndices)
-                            {
-                                failedIndices.Add(index);
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }, ct));
-            }
-
-            await Task.WhenAll(downloadTasks);
+                        Percent = Math.Min(99.9, (double)currentCompleted / totalSegments * 100),
+                        Downloaded = Interlocked.Read(ref totalDownloadedBytes),
+                        Total = 0
+                    });
+                },
+                ct)).ToList();
             stopwatch.Stop();
 
             // 3. 重试下载失败的分片
@@ -381,26 +363,56 @@ public class M3u8DownloadService
         if (failedIndices.Count == 0)
             return [];
 
-        var stillFailed = new List<int>();
-        var parallelism = Math.Max(1, maxParallelSegments);
-        using var semaphore = new SemaphoreSlim(parallelism);
-        var retryTasks = new List<Task>(failedIndices.Count);
+        return await DownloadSegmentsWithWorkersAsync(
+            segments,
+            maxParallelSegments,
+            async (index, segUrl) =>
+            {
+                logCallback?.Invoke($"[m3u8] 正在重试分片 {index}: {segUrl}");
+                return await downloadSegmentAsync(index, segUrl);
+            },
+            onSegmentCompleted,
+            ct,
+            failedIndices);
+    }
 
-        foreach (var index in failedIndices)
+    internal static async Task<IReadOnlyList<int>> DownloadSegmentsWithWorkersAsync(
+        IReadOnlyList<string> segments,
+        int maxParallelSegments,
+        Func<int, string, Task<bool>> downloadSegmentAsync,
+        Action<int>? onSegmentCompleted,
+        CancellationToken ct,
+        IReadOnlyList<int>? segmentIndices = null)
+    {
+        var itemCount = segmentIndices?.Count ?? segments.Count;
+        if (itemCount == 0)
+            return [];
+
+        var stillFailed = new List<int>();
+        var nextItem = -1;
+        var workerCount = Math.Min(Math.Max(1, maxParallelSegments), itemCount);
+        var workers = new Task[workerCount];
+
+        for (var workerIndex = 0; workerIndex < workers.Length; workerIndex++)
         {
-            retryTasks.Add(RetrySegmentAsync(index));
+            workers[workerIndex] = RunWorkerAsync();
         }
 
-        await Task.WhenAll(retryTasks);
+        await Task.WhenAll(workers);
+        stillFailed.Sort();
         return stillFailed;
 
-        async Task RetrySegmentAsync(int index)
+        async Task RunWorkerAsync()
         {
-            await semaphore.WaitAsync(ct);
-            try
+            while (true)
             {
+                var item = Interlocked.Increment(ref nextItem);
+                if (item >= itemCount)
+                    return;
+
+                ct.ThrowIfCancellationRequested();
+                var index = segmentIndices is null ? item : segmentIndices[item];
                 var segUrl = segments[index];
-                logCallback?.Invoke($"[m3u8] 正在重试分片 {index}: {segUrl}");
                 var success = await downloadSegmentAsync(index, segUrl);
                 if (success)
                 {
@@ -413,10 +425,6 @@ public class M3u8DownloadService
                         stillFailed.Add(index);
                     }
                 }
-            }
-            finally
-            {
-                semaphore.Release();
             }
         }
     }

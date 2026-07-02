@@ -147,6 +147,77 @@ public class M3u8DownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadSegmentsWithWorkersAsync_UsesFixedWorkersAndReturnsFailedIndicesInOrder()
+    {
+        var segments = Enumerable.Range(0, 20).Select(index => $"segment-{index}.ts").ToArray();
+        var releaseFirstWave = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstFourStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activeDownloads = 0;
+        var startedDownloads = 0;
+        var peakActiveDownloads = 0;
+        var completedIndices = new List<int>();
+
+        async Task<bool> DownloadSegmentAsync(int index, string segmentUrl)
+        {
+            Assert.Equal(segments[index], segmentUrl);
+            var active = Interlocked.Increment(ref activeDownloads);
+            try
+            {
+                UpdatePeakActiveDownloads(active);
+
+                if (Interlocked.Increment(ref startedDownloads) == 4)
+                    firstFourStarted.SetResult(true);
+
+                if (Volatile.Read(ref startedDownloads) <= 4)
+                    await releaseFirstWave.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+                return index is not (3 or 11);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref activeDownloads);
+            }
+        }
+
+        var downloadTask = M3u8DownloadService.DownloadSegmentsWithWorkersAsync(
+            segments,
+            maxParallelSegments: 4,
+            DownloadSegmentAsync,
+            index =>
+            {
+                lock (completedIndices)
+                {
+                    completedIndices.Add(index);
+                }
+            },
+            CancellationToken.None);
+
+        await firstFourStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(4, Volatile.Read(ref startedDownloads));
+
+        releaseFirstWave.SetResult(true);
+        var failedIndices = await downloadTask;
+
+        Assert.Equal(4, peakActiveDownloads);
+        Assert.Equal([3, 11], failedIndices);
+        Assert.DoesNotContain(3, completedIndices);
+        Assert.DoesNotContain(11, completedIndices);
+
+        void UpdatePeakActiveDownloads(int active)
+        {
+            while (true)
+            {
+                var observedPeak = Volatile.Read(ref peakActiveDownloads);
+                if (active <= observedPeak)
+                    return;
+
+                if (Interlocked.CompareExchange(ref peakActiveDownloads, active, observedPeak) == observedPeak)
+                    return;
+            }
+        }
+    }
+
+    [Fact]
     public void MergeSegments_UsesAsyncBufferedFileStreams()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
