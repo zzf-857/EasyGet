@@ -238,6 +238,44 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task DownloadFileAsync_ResumesWhenInitialResponseIsInterruptedAfterProgress()
+    {
+        var tempPath = Path.Combine(_tempDir, "resume.mp4.part");
+        var outputPath = Path.Combine(_tempDir, "resume.mp4");
+        Directory.CreateDirectory(_tempDir);
+
+        using var server = new ScriptedHttpServer(
+            """
+            HTTP/1.1 200 OK
+            Content-Type: video/mp4
+            Content-Length: 10
+            Connection: close
+
+            abcde
+            """,
+            """
+            HTTP/1.1 206 Partial Content
+            Content-Type: video/mp4
+            Content-Length: 5
+            Content-Range: bytes 5-9/10
+            Connection: close
+
+            fghij
+            """);
+
+        await DouyinBrowserDownloadService.DownloadFileAsync(
+            server.Url,
+            tempPath,
+            outputPath,
+            "https://www.douyin.com/",
+            null,
+            CancellationToken.None);
+
+        Assert.Equal("abcdefghij", File.ReadAllText(outputPath));
+        Assert.False(File.Exists(tempPath));
+    }
+
+    [Fact]
     public async Task DownloadFileAsync_RemovesTempFileWhenCancelled()
     {
         var tempPath = Path.Combine(_tempDir, "cancelled.mp4.part");

@@ -21,6 +21,7 @@ internal partial class DouyinBrowserDownloadService
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
     private const int CdpReceiveBufferSize = 64 * 1024;
     private const int DownloadBufferSize = 128 * 1024;
+    private const int MaxInterruptedResumeAttempts = 3;
     private const long DownloadProgressByteInterval = 512 * 1024;
     private static readonly TimeSpan DownloadProgressReportInterval = TimeSpan.FromMilliseconds(250);
 
@@ -711,11 +712,14 @@ internal partial class DouyinBrowserDownloadService
         var lastProgressReport = DateTime.MinValue;
         long lastProgressDownloaded = 0;
         var fileMode = FileMode.Create;
+        var interruptedResumeAttempts = 0;
 
         try
         {
             while (true)
             {
+                var attemptStartDownloaded = downloaded;
+
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 request.Headers.TryAddWithoutValidation("User-Agent", BrowserUserAgent);
                 request.Headers.Referrer = new Uri(referer);
@@ -734,36 +738,50 @@ internal partial class DouyinBrowserDownloadService
                 total = response.Content.Headers.ContentRange?.Length
                     ?? Math.Max(total, response.Content.Headers.ContentLength ?? 0);
 
-                await using (var source = await response.Content.ReadAsStreamAsync(ct))
-                await using (var target = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.Read, DownloadBufferSize, useAsync: true))
+                try
                 {
-                    while (true)
+                    await using (var source = await response.Content.ReadAsStreamAsync(ct))
+                    await using (var target = new FileStream(tempPath, fileMode, FileAccess.Write, FileShare.Read, DownloadBufferSize, useAsync: true))
                     {
-                        var read = await source.ReadAsync(buffer, ct);
-                        if (read == 0)
-                            break;
-
-                        await target.WriteAsync(buffer.AsMemory(0, read), ct);
-                        downloaded += read;
-
-                        if (progress is not null)
+                        while (true)
                         {
-                            var now = DateTime.UtcNow;
-                            var completedKnownTotal = total > 0 && downloaded >= total;
-                            var shouldReport =
-                                lastProgressReport == DateTime.MinValue
-                                || completedKnownTotal
-                                || now - lastProgressReport >= DownloadProgressReportInterval
-                                || downloaded - lastProgressDownloaded >= DownloadProgressByteInterval;
+                            var read = await source.ReadAsync(buffer, ct);
+                            if (read == 0)
+                                break;
 
-                            if (shouldReport)
+                            await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                            downloaded += read;
+
+                            if (progress is not null)
                             {
-                                ReportDownloadProgress(progress, downloaded, total, started, now);
-                                lastProgressReport = now;
-                                lastProgressDownloaded = downloaded;
+                                var now = DateTime.UtcNow;
+                                var completedKnownTotal = total > 0 && downloaded >= total;
+                                var shouldReport =
+                                    lastProgressReport == DateTime.MinValue
+                                    || completedKnownTotal
+                                    || now - lastProgressReport >= DownloadProgressReportInterval
+                                    || downloaded - lastProgressDownloaded >= DownloadProgressByteInterval;
+
+                                if (shouldReport)
+                                {
+                                    ReportDownloadProgress(progress, downloaded, total, started, now);
+                                    lastProgressReport = now;
+                                    lastProgressDownloaded = downloaded;
+                                }
                             }
                         }
                     }
+                }
+                catch (IOException) when (
+                    downloaded > attemptStartDownloaded
+                    && total > 0
+                    && downloaded < total
+                    && interruptedResumeAttempts < MaxInterruptedResumeAttempts
+                    && !ct.IsCancellationRequested)
+                {
+                    interruptedResumeAttempts++;
+                    fileMode = FileMode.Append;
+                    continue;
                 }
 
                 if (progress is not null
