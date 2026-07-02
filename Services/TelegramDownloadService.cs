@@ -116,7 +116,7 @@ public class TelegramDownloadService : IDisposable
             }
 
             InitClient();
-            var loginResult = await _client.Login(phone);
+            var loginResult = await _client!.Login(phone);
             _loginRequirement = loginResult;
             return loginResult;
         }
@@ -667,12 +667,12 @@ public class TelegramDownloadService : IDisposable
 
                     if (message.media is MessageMediaDocument mDoc && mDoc.document is Document d)
                     {
-                        await _client.DownloadFileAsync(d, fileStream, (PhotoSizeBase)null!, (bytes, total) => reportProgress(bytes, total));
+                        await _client!.DownloadFileAsync(d, fileStream, (PhotoSizeBase)null!, (bytes, total) => reportProgress(bytes, total));
                     }
                     else if (message.media is MessageMediaPhoto mPhoto && mPhoto.photo is Photo p)
                     {
                         var largestSize = p.sizes[^1];
-                        await _client.DownloadFileAsync(p, fileStream, largestSize, (bytes, total) => reportProgress(bytes, total));
+                        await _client!.DownloadFileAsync(p, fileStream, largestSize, (bytes, total) => reportProgress(bytes, total));
                     }
                 }
 

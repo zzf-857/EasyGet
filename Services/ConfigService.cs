@@ -13,10 +13,10 @@ public class ConfigService
     private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
     private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
 
-    private static readonly string ConfigDir = Path.Combine(
+    private static readonly string DefaultConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
 
-    private static readonly string ConfigFile = Path.Combine(ConfigDir, "config.json");
+    private static readonly string ConfigDir = DefaultConfigDir;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -25,6 +25,19 @@ public class ConfigService
     };
 
     private AppConfig _config = new();
+    private readonly string _configDir;
+    private readonly string _configFile;
+
+    public ConfigService()
+        : this(DefaultConfigDir)
+    {
+    }
+
+    internal ConfigService(string configDir)
+    {
+        _configDir = configDir;
+        _configFile = Path.Combine(_configDir, "config.json");
+    }
 
     /// <summary>当前配置</summary>
     public AppConfig Config => _config;
@@ -36,9 +49,9 @@ public class ConfigService
     {
         try
         {
-            if (File.Exists(ConfigFile))
+            if (File.Exists(_configFile))
             {
-                var json = await File.ReadAllTextAsync(ConfigFile);
+                var json = await File.ReadAllTextAsync(_configFile);
                 _config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
             }
         }
@@ -64,9 +77,10 @@ public class ConfigService
         try
         {
             NormalizeRuntimeConfig(_config);
-            Directory.CreateDirectory(ConfigDir);
+            Directory.CreateDirectory(_configDir);
+            BackupExistingConfig(_configFile);
             var json = JsonSerializer.Serialize(_config, JsonOptions);
-            await File.WriteAllTextAsync(ConfigFile, json);
+            await File.WriteAllTextAsync(_configFile, json);
         }
         catch (Exception ex)
         {
@@ -82,6 +96,19 @@ public class ConfigService
         var dir = Path.Combine(ConfigDir, "tools");
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    private static void BackupExistingConfig(string configFile)
+    {
+        if (!File.Exists(configFile))
+            return;
+
+        var directory = Path.GetDirectoryName(configFile);
+        if (string.IsNullOrWhiteSpace(directory))
+            return;
+
+        var backupFile = Path.Combine(directory, "config.backup.json");
+        File.Copy(configFile, backupFile, overwrite: true);
     }
 
     internal static void NormalizeRuntimeConfig(AppConfig config)

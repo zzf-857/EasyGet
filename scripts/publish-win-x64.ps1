@@ -11,6 +11,8 @@ param(
 
     [switch]$SkipZip,
 
+    [string]$Version = "",
+
     [string]$OutputRoot = "artifacts\publish"
 )
 
@@ -38,13 +40,24 @@ if (-not $SkipTests) {
 }
 
 Write-Host "[EasyGet] Publish $Configuration $Runtime"
-dotnet publish $projectPath `
-    -c $Configuration `
-    -r $Runtime `
-    --self-contained $selfContainedValue `
-    -o $publishDir `
-    /p:PublishSingleFile=false `
-    /p:IncludeNativeLibrariesForSelfExtract=true
+$publishArgs = @(
+    "publish",
+    $projectPath,
+    "-c", $Configuration,
+    "-r", $Runtime,
+    "--self-contained", $selfContainedValue,
+    "-o", $publishDir,
+    "/p:PublishSingleFile=false",
+    "/p:IncludeNativeLibrariesForSelfExtract=true"
+)
+
+if (-not [string]::IsNullOrWhiteSpace($Version)) {
+    $publishArgs += "/p:Version=$Version"
+    $publishArgs += "/p:FileVersion=$Version.0"
+    $publishArgs += "/p:AssemblyVersion=$Version.0"
+}
+
+dotnet @publishArgs
 
 $exePath = Join-Path $publishDir "EasyGet.exe"
 if (-not (Test-Path $exePath)) {

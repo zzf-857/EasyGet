@@ -1,0 +1,81 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Release Windows App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: |
+          dotnet restore EasyGet.csproj
+          dotnet restore EasyGet.Tests/EasyGet.Tests.csproj
+
+      - name: Test
+        run: dotnet test EasyGet.Tests/EasyGet.Tests.csproj -c Release --no-restore
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer and portable zip
+        shell: pwsh
+        run: |
+          $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          ./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -Version $version -SkipTests
+
+      - name: Create update manifest
+        shell: pwsh
+        run: |
+          $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          $releaseDir = "artifacts/publish/Release"
+          $setup = Get-ChildItem $releaseDir -Filter "EasyGet-Setup-v*.exe" | Select-Object -First 1
+          $zip = Get-Item "$releaseDir/EasyGet-win-x64-Release.zip"
+          $manifest = [ordered]@{
+            version = $version
+            tag = "${env:GITHUB_REF_NAME}"
+            setupAsset = $setup.Name
+            setupSize = $setup.Length
+            zipAsset = $zip.Name
+            zipSize = $zip.Length
+            releaseUrl = "https://github.com/${env:GITHUB_REPOSITORY}/releases/tag/${env:GITHUB_REF_NAME}"
+          } | ConvertTo-Json
+          $manifest | Set-Content -Encoding UTF8 "$releaseDir/easyget-update.json"
+
+      - name: Prepare release notes
+        shell: bash
+        run: |
+          git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "EasyGet ${GITHUB_REF_NAME}" > release-notes.md
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release-notes.md
+          files: |
+            artifacts/publish/Release/EasyGet-Setup-v*.exe
+            artifacts/publish/Release/EasyGet-win-x64-Release.zip
+            artifacts/publish/Release/easyget-update.json
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

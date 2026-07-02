@@ -2,7 +2,9 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "EasyGet"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+#define MyAppVersion "1.1.0"
+#endif
 #define MyAppPublisher "zzf-857"
 #define MyAppURL "https://github.com/zzf-857/EasyGet"
 #define MyAppExeName "EasyGet.exe"
@@ -20,14 +22,14 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\artifacts\publish\Release
-OutputBaseFilename=EasyGet-win-x64-Setup
+OutputBaseFilename=EasyGet-Setup-v{#MyAppVersion}
 SetupIconFile=..\Assets\app.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
-
-[Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+CloseApplications=yes
+RestartApplications=no
+VersionInfoVersion={#MyAppVersion}.0
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked

@@ -503,6 +503,84 @@
                 </Border>
             </StackPanel>
 
+            <StackPanel Margin="0,0,0,26">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="&#xE895;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeLarge}"
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
+                    <TextBlock Text="版本与更新" Style="{StaticResource TextSection}"/>
+                </StackPanel>
+                <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="当前软件版本" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="{Binding AppVersionText}" Style="{StaticResource TextMono}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <Button Grid.Column="1"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="14,7"
+                                    ToolTip="检查新版本"
+                                    AutomationProperties.Name="检查新版本"
+                                    Command="{Binding CheckAppUpdateCommand}"
+                                    IsEnabled="{Binding CanCheckAppUpdate}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="检查新版本"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
+                        <TextBlock Text="{Binding AppUpdateStatusMessage}"
+                                   Style="{StaticResource TextBody}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding AppUpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+
+                        <ProgressBar Style="{StaticResource AccentProgressBar}"
+                                     Minimum="0"
+                                     Maximum="100"
+                                     Value="{Binding AppUpdateProgress}"
+                                     Margin="0,12,0,0"
+                                     Visibility="{Binding IsDownloadingAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
+                            <Button Style="{StaticResource SurfaceButton}"
+                                    Padding="14,7"
+                                    Margin="0,0,10,0"
+                                    ToolTip="下载更新包"
+                                    AutomationProperties.Name="下载更新包"
+                                    Command="{Binding DownloadAppUpdateCommand}"
+                                    IsEnabled="{Binding CanDownloadAppUpdate}"
+                                    Visibility="{Binding CanDownloadAppUpdate, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="下载更新包"/>
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource AccentButton}"
+                                    Padding="18,7"
+                                    ToolTip="安装更新"
+                                    AutomationProperties.Name="安装更新"
+                                    Command="{Binding InstallAppUpdateCommand}"
+                                    IsEnabled="{Binding CanInstallAppUpdate}"
+                                    Visibility="{Binding CanInstallAppUpdate, Converter={StaticResource BoolToVisibility}}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE777;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="安装更新"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
             <StackPanel Margin="0,0,0,30">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyph}"

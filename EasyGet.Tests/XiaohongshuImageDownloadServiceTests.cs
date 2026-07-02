@@ -84,7 +84,7 @@ public class XiaohongshuImageDownloadServiceTests
         Assert.False(YtDlpService.IsXiaohongshuUrl(null!));
     }
 
-    [Fact]
+    [Fact(Skip = "Live external-site test. Run manually when validating Xiaohongshu network behavior.")]
     public async Task LiveDownloadTest()
     {
         var configService = new ConfigService();

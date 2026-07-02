@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EasyGet.Models;
 using EasyGet.Services;
 
 namespace EasyGet.ViewModels;
@@ -11,6 +12,9 @@ public partial class SettingsViewModel : ObservableObject
     private readonly EnvironmentService _envService;
     private readonly DownloadManager _downloadManager;
     private readonly TelegramDownloadService _telegramDownloadService;
+    private readonly IAppUpdateService _appUpdateService;
+    private AppUpdateInfo? _availableAppUpdate;
+    private string? _downloadedInstallerPath;
     private bool _isInitializing;
 
     [ObservableProperty] private string _tgApiId = "";
@@ -66,6 +70,32 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _installStatusStage = "";
     [ObservableProperty] private string _installStatusMessage = "";
 
+    [ObservableProperty] private string _appVersionText = "";
+    [ObservableProperty] private string _latestAppVersion = "";
+    [ObservableProperty] private string _appUpdateStatusMessage = "";
+    [ObservableProperty] private int _appUpdateProgress;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCheckAppUpdate))]
+    [NotifyPropertyChangedFor(nameof(CanDownloadAppUpdate))]
+    [NotifyPropertyChangedFor(nameof(CanInstallAppUpdate))]
+    private bool _isCheckingAppUpdate;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCheckAppUpdate))]
+    [NotifyPropertyChangedFor(nameof(CanDownloadAppUpdate))]
+    [NotifyPropertyChangedFor(nameof(CanInstallAppUpdate))]
+    private bool _isDownloadingAppUpdate;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDownloadAppUpdate))]
+    private bool _isAppUpdateAvailable;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanDownloadAppUpdate))]
+    [NotifyPropertyChangedFor(nameof(CanInstallAppUpdate))]
+    private bool _isAppUpdateDownloaded;
+
     [ObservableProperty] private string _selectedThemeColor = "Indigo";
     public List<ThemePalette> ThemeOptions => ThemeManager.Palettes;
 
@@ -75,15 +105,31 @@ public partial class SettingsViewModel : ObservableObject
     public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
     public bool CanUpdateYtDlp => CanCheckEnvironment && YtDlpFound;
+    public bool CanCheckAppUpdate => !IsCheckingAppUpdate && !IsDownloadingAppUpdate;
+    public bool CanDownloadAppUpdate => CanCheckAppUpdate
+        && IsAppUpdateAvailable
+        && !IsAppUpdateDownloaded
+        && _availableAppUpdate?.InstallerDownloadUrl is not null;
+    public bool CanInstallAppUpdate => !IsCheckingAppUpdate
+        && !IsDownloadingAppUpdate
+        && IsAppUpdateDownloaded
+        && !string.IsNullOrWhiteSpace(_downloadedInstallerPath);
 
     public event Action? SettingsSaved;
 
-    public SettingsViewModel(ConfigService configService, EnvironmentService envService, DownloadManager downloadManager, TelegramDownloadService telegramDownloadService)
+    public SettingsViewModel(
+        ConfigService configService,
+        EnvironmentService envService,
+        DownloadManager downloadManager,
+        TelegramDownloadService telegramDownloadService,
+        IAppUpdateService? appUpdateService = null)
     {
         _configService = configService;
         _envService = envService;
         _downloadManager = downloadManager;
         _telegramDownloadService = telegramDownloadService;
+        _appUpdateService = appUpdateService ?? new AppUpdateService();
+        AppVersionText = $"v{_appUpdateService.CurrentVersion}";
     }
 
     public void Initialize()
@@ -115,6 +161,7 @@ public partial class SettingsViewModel : ObservableObject
             TgApiId = c.TgApiId;
             TgApiHash = c.TgApiHash;
             TgPhoneNumber = c.TgPhoneNumber;
+            AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         }
         finally
         {
@@ -256,6 +303,10 @@ public partial class SettingsViewModel : ObservableObject
     }
     partial void OnIsUpdatingYtDlpChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnInstallStatusMessageChanged(string value) => RefreshInstallStatusStage();
+    partial void OnIsAppUpdateAvailableChanged(bool value) => NotifyAppUpdateActionStateChanged();
+    partial void OnIsAppUpdateDownloadedChanged(bool value) => NotifyAppUpdateActionStateChanged();
+    partial void OnIsCheckingAppUpdateChanged(bool value) => NotifyAppUpdateActionStateChanged();
+    partial void OnIsDownloadingAppUpdateChanged(bool value) => NotifyAppUpdateActionStateChanged();
 
     private void AutoSave()
     {
@@ -292,6 +343,13 @@ public partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(CanUpdateYtDlp));
     }
 
+    private void NotifyAppUpdateActionStateChanged()
+    {
+        OnPropertyChanged(nameof(CanCheckAppUpdate));
+        OnPropertyChanged(nameof(CanDownloadAppUpdate));
+        OnPropertyChanged(nameof(CanInstallAppUpdate));
+    }
+
     private void RefreshInstallStatusStage()
     {
         InstallStatusStage = DescribeInstallStatusStage(InstallStatusMessage, IsInstallingTools);
@@ -326,6 +384,95 @@ public partial class SettingsViewModel : ObservableObject
     private void ClearCookie()
     {
         CookieContent = "";
+    }
+
+    [RelayCommand]
+    private async Task CheckAppUpdate()
+    {
+        IsCheckingAppUpdate = true;
+        AppUpdateStatusMessage = "正在连接 GitHub 检查更新...";
+        AppUpdateProgress = 0;
+        IsAppUpdateDownloaded = false;
+        _downloadedInstallerPath = null;
+
+        try
+        {
+            var result = await _appUpdateService.CheckLatestAsync();
+            _availableAppUpdate = result;
+            LatestAppVersion = result.LatestVersion;
+            IsAppUpdateAvailable = result.IsUpdateAvailable && result.InstallerDownloadUrl is not null;
+
+            AppUpdateStatusMessage = IsAppUpdateAvailable
+                ? $"发现新版本 v{result.LatestVersion}，可下载更新包。"
+                : $"当前已是最新版本 v{result.CurrentVersion}。";
+        }
+        catch (Exception ex)
+        {
+            IsAppUpdateAvailable = false;
+            LatestAppVersion = "";
+            AppUpdateStatusMessage = $"检查更新失败: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingAppUpdate = false;
+            NotifyAppUpdateActionStateChanged();
+        }
+    }
+
+    [RelayCommand]
+    private async Task DownloadAppUpdate()
+    {
+        if (_availableAppUpdate is null || _availableAppUpdate.InstallerDownloadUrl is null)
+        {
+            AppUpdateStatusMessage = "请先检查更新。";
+            return;
+        }
+
+        IsDownloadingAppUpdate = true;
+        AppUpdateProgress = 0;
+        AppUpdateStatusMessage = "正在下载更新包...";
+
+        try
+        {
+            var progress = new Progress<double>(value =>
+            {
+                AppUpdateProgress = (int)Math.Clamp(Math.Round(value), 0, 100);
+            });
+            _downloadedInstallerPath = await _appUpdateService.DownloadInstallerAsync(_availableAppUpdate, progress);
+            AppUpdateProgress = 100;
+            IsAppUpdateDownloaded = true;
+            AppUpdateStatusMessage = $"更新包已下载: {_availableAppUpdate.InstallerFileName}";
+        }
+        catch (Exception ex)
+        {
+            IsAppUpdateDownloaded = false;
+            _downloadedInstallerPath = null;
+            AppUpdateStatusMessage = $"下载更新失败: {ex.Message}";
+        }
+        finally
+        {
+            IsDownloadingAppUpdate = false;
+            NotifyAppUpdateActionStateChanged();
+        }
+    }
+
+    [RelayCommand]
+    private void InstallAppUpdate()
+    {
+        if (string.IsNullOrWhiteSpace(_downloadedInstallerPath))
+        {
+            AppUpdateStatusMessage = "请先下载更新包。";
+            return;
+        }
+
+        if (!_appUpdateService.LaunchInstaller(_downloadedInstallerPath))
+        {
+            AppUpdateStatusMessage = "安装程序启动失败，请重新下载更新包。";
+            return;
+        }
+
+        AppUpdateStatusMessage = "安装程序已启动，EasyGet 即将退出。";
+        System.Windows.Application.Current?.Shutdown();
     }
 
     [RelayCommand]

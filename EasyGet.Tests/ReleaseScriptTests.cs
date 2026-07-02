@@ -15,11 +15,50 @@ public class ReleaseScriptTests
         var script = File.ReadAllText(scriptPath);
         Assert.Contains("[CmdletBinding()]", script, StringComparison.Ordinal);
         Assert.Contains("dotnet test", script, StringComparison.Ordinal);
-        Assert.Contains("dotnet publish", script, StringComparison.Ordinal);
+        Assert.Contains("\"publish\"", script, StringComparison.Ordinal);
+        Assert.Contains("dotnet @publishArgs", script, StringComparison.Ordinal);
         Assert.Contains("--self-contained", script, StringComparison.Ordinal);
         Assert.Contains("EasyGet.exe", script, StringComparison.Ordinal);
         Assert.Contains("Compress-Archive", script, StringComparison.Ordinal);
         Assert.Contains("SkipZip", script, StringComparison.Ordinal);
+        Assert.Contains("Version", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void InstallerScriptBuildsVersionedSetupExecutable()
+    {
+        var root = GetRepositoryRoot();
+        var scriptPath = Path.Combine(root, "scripts", "build-installer.ps1");
+        var innoPath = Path.Combine(root, "scripts", "EasyGet.iss");
+
+        Assert.True(File.Exists(scriptPath), "Expected scripts/build-installer.ps1 to exist.");
+        Assert.True(File.Exists(innoPath), "Expected scripts/EasyGet.iss to exist.");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("ISCC", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("MyAppVersion", script, StringComparison.Ordinal);
+        Assert.Contains("easyget-update.json", script, StringComparison.Ordinal);
+        Assert.Contains("ConvertTo-Json", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-Setup-v", File.ReadAllText(innoPath), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowPublishesInstallerZipAndManifest()
+    {
+        var root = GetRepositoryRoot();
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+
+        Assert.True(File.Exists(workflowPath), "Expected .github/workflows/release.yml to exist.");
+
+        var workflow = File.ReadAllText(workflowPath);
+        Assert.Contains("tags:", workflow, StringComparison.Ordinal);
+        Assert.Contains("v*", workflow, StringComparison.Ordinal);
+        Assert.Contains("dotnet test", workflow, StringComparison.Ordinal);
+        Assert.Contains("build-installer.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-Setup-v*.exe", workflow, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-win-x64-Release.zip", workflow, StringComparison.Ordinal);
+        Assert.Contains("easyget-update.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("softprops/action-gh-release", workflow, StringComparison.Ordinal);
     }
 
     [Fact]

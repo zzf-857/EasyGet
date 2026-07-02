@@ -6,6 +6,37 @@ namespace EasyGet.Tests;
 
 public class ConfigServiceTests
 {
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"easyget-config-tests-{Guid.NewGuid():N}");
+
+    [Fact]
+    public async Task SaveAsync_CreatesBackupBeforeOverwritingExistingConfig()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var configPath = Path.Combine(_tempDir, "config.json");
+        var originalJson = """
+        {
+          "defaultDownloadPath": "D:\\Old",
+          "cookieContent": "old-cookie",
+          "tgApiId": "12345",
+          "tgApiHash": "old-hash",
+          "tgPhoneNumber": "+8613800000000"
+        }
+        """;
+        await File.WriteAllTextAsync(configPath, originalJson);
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+        service.Config.CookieContent = "new-cookie";
+
+        await service.SaveAsync();
+
+        var backupPath = Path.Combine(_tempDir, "config.backup.json");
+        Assert.True(File.Exists(backupPath));
+        var backupJson = await File.ReadAllTextAsync(backupPath);
+        Assert.Contains("old-cookie", backupJson);
+        Assert.Contains("old-hash", backupJson);
+    }
+
     [Fact]
     public void NormalizeRuntimeConfig_ClampsPerformanceValuesToSafeRange()
     {

@@ -836,6 +836,26 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void SettingsViewExposesApplicationUpdateControls()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("版本与更新", texts);
+        Assert.Contains("当前软件版本", texts);
+        Assert.Contains("检查新版本", texts);
+        Assert.Contains("下载更新包", texts);
+        Assert.Contains("安装更新", texts);
+        Assert.Contains("AppVersionText", source);
+        Assert.Contains("CheckAppUpdateCommand", source);
+        Assert.Contains("DownloadAppUpdateCommand", source);
+        Assert.Contains("InstallAppUpdateCommand", source);
+        Assert.Contains("AppUpdateProgress", source);
+        Assert.Contains("AccentProgressBar", source);
+    }
+
+    [Fact]
     public void BatchDownloadViewUsesStatefulQueueCards()
     {
         var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
