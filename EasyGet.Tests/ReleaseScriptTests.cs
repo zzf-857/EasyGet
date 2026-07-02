@@ -130,6 +130,19 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void GitHubReleaseWorkflowVerifiesGeneratedManifestInsteadOfRecreatingIt()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("Verify update manifest", workflow, StringComparison.Ordinal);
+        Assert.Contains("ConvertFrom-Json", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("Create update manifest", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("ConvertTo-Json", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ManualPackagingGuideMentionsPublishScript()
     {
         var root = TestRepositoryPaths.Root;

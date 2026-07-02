@@ -59,23 +59,31 @@ jobs:
           $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
           ./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -Version $version -SkipTests
 
-      - name: Create update manifest
+      - name: Verify update manifest
         shell: pwsh
         run: |
           $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
           $releaseDir = "artifacts/publish/Release"
           $setup = Get-Item "$releaseDir/EasyGet-Setup-v$version.exe"
           $zip = Get-Item "$releaseDir/EasyGet-win-x64-Release.zip"
-          $manifest = [ordered]@{
-            version = $version
-            tag = "${env:GITHUB_REF_NAME}"
-            setupAsset = $setup.Name
-            setupSize = $setup.Length
-            zipAsset = $zip.Name
-            zipSize = $zip.Length
-            releaseUrl = "https://github.com/${env:GITHUB_REPOSITORY}/releases/tag/${env:GITHUB_REF_NAME}"
-          } | ConvertTo-Json
-          $manifest | Set-Content -Encoding UTF8 "$releaseDir/easyget-update.json"
+          $manifestPath = "$releaseDir/easyget-update.json"
+          if (-not (Test-Path -LiteralPath $manifestPath)) {
+            throw "Missing update manifest: $manifestPath"
+          }
+
+          $manifest = Get-Content -Raw -Encoding UTF8 -LiteralPath $manifestPath | ConvertFrom-Json
+          if ($manifest.version -ne $version) {
+            throw "Manifest version mismatch: expected '$version' but got '$($manifest.version)'."
+          }
+          if ($manifest.tag -ne "${env:GITHUB_REF_NAME}") {
+            throw "Manifest tag mismatch: expected '${env:GITHUB_REF_NAME}' but got '$($manifest.tag)'."
+          }
+          if ($manifest.setupAsset -ne $setup.Name -or [long]$manifest.setupSize -ne $setup.Length) {
+            throw "Manifest setup asset does not match generated installer."
+          }
+          if ($manifest.zipAsset -ne $zip.Name -or [long]$manifest.zipSize -ne $zip.Length) {
+            throw "Manifest zip asset does not match generated portable zip."
+          }
 
       - name: Prepare release notes
         shell: bash
