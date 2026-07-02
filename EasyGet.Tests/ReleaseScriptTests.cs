@@ -76,6 +76,23 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void InstallerScriptRemovesStaleVersionedSetupArtifactsBeforeRunningInnoSetup()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "build-installer.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        var cleanupIndex = script.IndexOf("EasyGet-Setup-v*.exe", StringComparison.Ordinal);
+        var isccIndex = script.IndexOf("& $iscc", StringComparison.Ordinal);
+
+        Assert.True(cleanupIndex >= 0, "Expected installer build script to clean stale versioned setup files.");
+        Assert.True(isccIndex >= 0, "Expected installer build script to invoke ISCC.");
+        Assert.True(cleanupIndex < isccIndex, "Stale setup files should be removed before Inno Setup writes the current installer.");
+        Assert.Contains("Get-ChildItem -LiteralPath $releaseDir -Filter \"EasyGet-Setup-v*.exe\"", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -Force", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ProjectRestrictsReleaseSatelliteResources()
     {
         var root = TestRepositoryPaths.Root;

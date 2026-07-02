@@ -130,6 +130,18 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public void ReceiveCdpMessageAsync_AvoidsMemoryStreamToArrayCopy()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
+
+        Assert.Contains("ArrayBufferWriter<byte>", source, StringComparison.Ordinal);
+        Assert.Contains("Encoding.UTF8.GetString(message.WrittenSpan)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new MemoryStream()", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("stream.ToArray()", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BuildOutputPath_AppendsCounterWhenFileExists()
     {
         Directory.CreateDirectory(_tempDir);

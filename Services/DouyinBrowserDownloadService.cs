@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -635,7 +636,7 @@ internal partial class DouyinBrowserDownloadService
     private static async Task<string> ReceiveCdpMessageAsync(ClientWebSocket socket, CancellationToken ct)
     {
         var buffer = new byte[64 * 1024];
-        using var stream = new MemoryStream();
+        var message = new ArrayBufferWriter<byte>(buffer.Length);
         WebSocketReceiveResult result;
         do
         {
@@ -643,11 +644,11 @@ internal partial class DouyinBrowserDownloadService
             if (result.MessageType == WebSocketMessageType.Close)
                 return "";
 
-            stream.Write(buffer, 0, result.Count);
+            message.Write(buffer.AsSpan(0, result.Count));
         }
         while (!result.EndOfMessage);
 
-        return Encoding.UTF8.GetString(stream.ToArray());
+        return Encoding.UTF8.GetString(message.WrittenSpan);
     }
 
     private static async Task<string> EvaluateStringAsync(ClientWebSocket socket, int id, string expression, CancellationToken ct)

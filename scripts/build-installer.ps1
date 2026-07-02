@@ -17,6 +17,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $projectPath = Join-Path $repoRoot "EasyGet.csproj"
 $publishScript = Join-Path $PSScriptRoot "publish-win-x64.ps1"
 $innoScript = Join-Path $PSScriptRoot "EasyGet.iss"
+$releaseDir = Join-Path $repoRoot "artifacts\publish\$Configuration"
 
 [xml]$project = Get-Content -Raw -Encoding UTF8 -LiteralPath $projectPath
 $projectVersion = $project.Project.PropertyGroup |
@@ -72,6 +73,11 @@ function Find-InnoSetupCompiler {
 $iscc = Find-InnoSetupCompiler
 Write-Host "[EasyGet] ISCC: $iscc"
 
+if (Test-Path -LiteralPath $releaseDir) {
+    Get-ChildItem -LiteralPath $releaseDir -Filter "EasyGet-Setup-v*.exe" |
+        Remove-Item -Force
+}
+
 Push-Location $PSScriptRoot
 try {
     & $iscc "/DMyAppVersion=$Version" $innoScript
@@ -90,7 +96,6 @@ if ($setupInfo.Length -le 0) {
     throw "Installer build failed: $setupPath is empty."
 }
 
-$releaseDir = Join-Path $repoRoot "artifacts\publish\$Configuration"
 $zipPath = Join-Path $releaseDir "EasyGet-$Runtime-$Configuration.zip"
 if (-not (Test-Path -LiteralPath $zipPath)) {
     throw "Release zip was not found: $zipPath"
