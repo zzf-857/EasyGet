@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.5 - 2026-07-02
+
+### Optimizations
+- Reduced Release package size by limiting satellite resources to `zh-Hans` and removing debug symbols/PDB files from published artifacts.
+- Tidied duplicate download-manager completion paths while preserving existing task and history behavior.
+- Increased the initial yt-dlp download buffer to improve throughput without changing downloader selection or format behavior.
+
+### Release
+- Hardened version extraction in local and GitHub release scripts so conditional project property groups do not break strict-mode packaging.
+- Removed duplicate installer file entries and excluded PDB files from the Inno Setup payload.
+
 ## 1.1.4 - 2026-07-02
 
 ### Fixes
