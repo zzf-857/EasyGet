@@ -238,12 +238,7 @@ public partial class HistoryViewModel : ObservableObject
                 var dir = System.IO.Path.GetDirectoryName(filePath);
                 if (dir != null && System.IO.Directory.Exists(dir))
                 {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = "explorer.exe",
-                        Arguments = $"/select,\"{filePath}\"",
-                        UseShellExecute = true
-                    });
+                    _startProcess(CreateOpenFolderStartInfo(filePath));
                 }
             }
             catch { }
@@ -307,6 +302,14 @@ public partial class HistoryViewModel : ObservableObject
     {
         Process.Start(startInfo);
     }
+
+    internal static ProcessStartInfo CreateOpenFolderStartInfo(string filePath)
+        => new()
+        {
+            FileName = "explorer.exe",
+            Arguments = $"/select,\"{filePath}\"",
+            UseShellExecute = true
+        };
 
     private static string DescribeStorageStatus(string downloadPath)
     {

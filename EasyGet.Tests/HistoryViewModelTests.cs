@@ -186,6 +186,35 @@ public class HistoryViewModelTests
         }
     }
 
+    [Fact]
+    public void CreateOpenFolderStartInfo_SelectsTargetFileInExplorer()
+    {
+        const string filePath = @"C:\Downloads\EasyGet\video.mp4";
+
+        var startInfo = HistoryViewModel.CreateOpenFolderStartInfo(filePath);
+
+        Assert.Equal("explorer.exe", startInfo.FileName);
+        Assert.Equal(@"/select,""C:\Downloads\EasyGet\video.mp4""", startInfo.Arguments);
+        Assert.True(startInfo.UseShellExecute);
+    }
+
+    [Fact]
+    public void OpenFolderCommand_UsesInjectedProcessLauncher()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("ViewModels", "HistoryViewModel.cs")));
+        var openFolderStart = source.IndexOf("private async Task OpenFolder", StringComparison.Ordinal);
+        var previewFileStart = source.IndexOf("private async Task PreviewFile", StringComparison.Ordinal);
+
+        Assert.True(openFolderStart >= 0, "Expected HistoryViewModel.OpenFolder method to exist.");
+        Assert.True(previewFileStart > openFolderStart, "Expected PreviewFile to follow OpenFolder in HistoryViewModel.");
+
+        var openFolderSource = source[openFolderStart..previewFileStart];
+
+        Assert.Contains("_startProcess(CreateOpenFolderStartInfo(filePath));", openFolderSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("Process.Start", openFolderSource, StringComparison.Ordinal);
+    }
+
     private static string CreateTempDatabasePath()
         => TestTempPaths.CreateSqliteDatabasePath("easyget-history-vm");
 
