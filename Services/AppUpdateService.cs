@@ -12,6 +12,7 @@ public class AppUpdateService : IAppUpdateService
     private const string LatestReleaseUrl = "https://api.github.com/repos/zzf-857/EasyGet/releases/latest";
     private static readonly HttpClient SharedHttpClient = CreateHttpClient();
     private readonly HttpClient _httpClient;
+    private readonly string _updatesDir;
 
     public AppUpdateService()
         : this(SharedHttpClient)
@@ -19,8 +20,14 @@ public class AppUpdateService : IAppUpdateService
     }
 
     internal AppUpdateService(HttpClient httpClient)
+        : this(httpClient, GetDefaultUpdatesDir())
+    {
+    }
+
+    internal AppUpdateService(HttpClient httpClient, string updatesDir)
     {
         _httpClient = httpClient;
+        _updatesDir = updatesDir;
     }
 
     public string CurrentVersion => GetCurrentVersion();
@@ -42,10 +49,7 @@ public class AppUpdateService : IAppUpdateService
         if (updateInfo.InstallerDownloadUrl is null)
             throw new InvalidOperationException("没有可下载的 EasyGet 安装包。");
 
-        var updatesDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "EasyGet",
-            "updates");
+        var updatesDir = _updatesDir;
         Directory.CreateDirectory(updatesDir);
 
         var fileName = string.IsNullOrWhiteSpace(updateInfo.InstallerFileName)
@@ -58,22 +62,23 @@ public class AppUpdateService : IAppUpdateService
         response.EnsureSuccessStatusCode();
 
         var total = response.Content.Headers.ContentLength ?? updateInfo.InstallerSize;
-        await using var source = await response.Content.ReadAsStreamAsync(ct);
-        await using var target = File.Create(tempPath);
-
-        var buffer = new byte[81920];
-        long totalRead = 0;
-        while (true)
+        await using (var source = await response.Content.ReadAsStreamAsync(ct))
+        await using (var target = File.Create(tempPath))
         {
-            var read = await source.ReadAsync(buffer, ct);
-            if (read == 0)
-                break;
+            var buffer = new byte[81920];
+            long totalRead = 0;
+            while (true)
+            {
+                var read = await source.ReadAsync(buffer, ct);
+                if (read == 0)
+                    break;
 
-            await target.WriteAsync(buffer.AsMemory(0, read), ct);
-            totalRead += read;
+                await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                totalRead += read;
 
-            if (total > 0)
-                progress?.Report(Math.Clamp(totalRead * 100d / total, 0, 100));
+                if (total > 0)
+                    progress?.Report(Math.Clamp(totalRead * 100d / total, 0, 100));
+            }
         }
 
         progress?.Report(100);
@@ -223,6 +228,12 @@ public class AppUpdateService : IAppUpdateService
 
     private static Uri? TryCreateUri(string value)
         => Uri.TryCreate(value, UriKind.Absolute, out var uri) ? uri : null;
+
+    private static string GetDefaultUpdatesDir()
+        => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EasyGet",
+            "updates");
 
     private static HttpClient CreateHttpClient()
     {

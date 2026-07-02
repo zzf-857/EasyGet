@@ -1,4 +1,6 @@
+using EasyGet.Models;
 using EasyGet.Services;
+using System.Net;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -70,5 +72,51 @@ public class AppUpdateServiceTests
         Assert.False(info.IsUpdateAvailable);
         Assert.Equal("1.1.0", info.LatestVersion);
         Assert.Equal("EasyGet-Setup-v1.1.0.exe", info.InstallerFileName);
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_ClosesTempFileBeforeMovingToFinalInstaller()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-update-tests-{Guid.NewGuid():N}");
+        var payload = new byte[] { 1, 2, 3, 4, 5 };
+        var service = new AppUpdateService(
+            new HttpClient(new StubHttpMessageHandler(payload)),
+            tempDir);
+        var info = new AppUpdateInfo
+        {
+            LatestVersion = "1.1.1",
+            InstallerFileName = "EasyGet-Setup-v1.1.1.exe",
+            InstallerDownloadUrl = new Uri("https://example.com/EasyGet-Setup-v1.1.1.exe"),
+            InstallerSize = payload.Length
+        };
+
+        try
+        {
+            var path = await service.DownloadInstallerAsync(info);
+
+            Assert.Equal(Path.Combine(tempDir, "EasyGet-Setup-v1.1.1.exe"), path);
+            Assert.Equal(payload, await File.ReadAllBytesAsync(path));
+            Assert.False(File.Exists($"{path}.download"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    private sealed class StubHttpMessageHandler(byte[] payload) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(payload)
+            };
+            response.Content.Headers.ContentLength = payload.Length;
+            return Task.FromResult(response);
+        }
     }
 }

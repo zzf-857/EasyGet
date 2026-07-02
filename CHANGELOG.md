@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2 - 2026-07-02
+
+### Fixes
+- Fixed app update downloads failing at the final rename step because the `.download` file was still open.
+
+### Tests
+- Added regression coverage for updater installer downloads moving from `.download` to the final setup executable.
+
 ## 1.1.1 - 2026-07-02
 
 ### Fixes
