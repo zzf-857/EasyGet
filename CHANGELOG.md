@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.1.4 - 2026-07-02
+
+### Fixes
+- Added update download diagnostics around `.download` creation, stream disposal, final `File.Move`, installer launch, runtime path, and version detection.
+- Added exclusive file-open checks and retry logging before replacing an existing downloaded installer package.
+- Surfaced the current runtime mode in Settings so project-directory, published, development, and installed runs are easier to tell apart.
+
+### Release
+- Added GitHub Actions release version validation so `vX.Y.Z` tags must match `EasyGet.csproj` before packaging.
+- Switched release asset selection to the exact setup package name for the tag instead of a broad setup wildcard.
+
+### Tests
+- Expanded updater regression tests to prove the final installer can be opened exclusively after download and `.download` is removed.
+- Added coverage for runtime-mode detection, Inno close-application settings, and release workflow version guards.
+
 ## 1.1.3 - 2026-07-02
 
 ### Fixes

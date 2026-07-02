@@ -71,6 +71,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _installStatusMessage = "";
 
     [ObservableProperty] private string _appVersionText = "";
+    [ObservableProperty] private string _appRuntimeText = "";
     [ObservableProperty] private string _latestAppVersion = "";
     [ObservableProperty] private string _appUpdateStatusMessage = "";
     [ObservableProperty] private int _appUpdateProgress;
@@ -130,6 +131,7 @@ public partial class SettingsViewModel : ObservableObject
         _telegramDownloadService = telegramDownloadService;
         _appUpdateService = appUpdateService ?? new AppUpdateService();
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
+        AppRuntimeText = _appUpdateService.RuntimeDescription;
     }
 
     public void Initialize()
@@ -162,6 +164,7 @@ public partial class SettingsViewModel : ObservableObject
             TgApiHash = c.TgApiHash;
             TgPhoneNumber = c.TgPhoneNumber;
             AppVersionText = $"v{_appUpdateService.CurrentVersion}";
+            AppRuntimeText = _appUpdateService.RuntimeDescription;
         }
         finally
         {

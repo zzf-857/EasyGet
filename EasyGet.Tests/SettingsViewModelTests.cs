@@ -44,6 +44,7 @@ public class SettingsViewModelTests
         Assert.False(viewModel.IsAppUpdateDownloaded);
         Assert.Equal("1.1.0", viewModel.LatestAppVersion);
         Assert.Contains("发现新版本", viewModel.AppUpdateStatusMessage);
+        Assert.Equal("安装版运行", viewModel.AppRuntimeText);
         Assert.True(viewModel.CanDownloadAppUpdate);
     }
 
@@ -97,6 +98,8 @@ public class SettingsViewModelTests
     private sealed class FakeAppUpdateService : IAppUpdateService
     {
         public string CurrentVersion { get; init; } = "1.0.0";
+        public string CurrentExecutablePath { get; init; } = @"C:\Program Files\EasyGet\EasyGet.exe";
+        public string RuntimeDescription { get; init; } = "安装版运行";
 
         public AppUpdateInfo NextUpdate { get; init; } = new();
 

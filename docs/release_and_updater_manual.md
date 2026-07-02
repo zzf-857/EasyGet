@@ -30,13 +30,13 @@ graph TD
 只发布 zip：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -Version 1.1.3
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -Version 1.1.4
 ```
 
 构建安装包：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.3
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.4
 ```
 
 `build-installer.ps1` 需要本机安装 Inno Setup 6，并会复用 `publish-win-x64.ps1` 先生成发布目录。
@@ -46,10 +46,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps
 
 ```powershell
 git add .
-git commit -m "chore: release v1.1.3"
+git commit -m "chore: release v1.1.4"
 git push origin main
-git tag -a v1.1.3 -m "EasyGet v1.1.3"
-git push origin v1.1.3
+git tag -a v1.1.4 -m "EasyGet v1.1.4"
+git push origin v1.1.4
 ```
 
 推送 tag 后，`.github/workflows/release.yml` 会在 `windows-latest` 上构建并创建 GitHub Release。
@@ -63,3 +63,5 @@ git push origin v1.1.3
 5. EasyGet 会启动安装包并退出，安装器负责覆盖安装。
 
 当前实现不会静默安装，也不会在退出时自动替换文件；这是为了避免本地调试版或便携版被意外覆盖。
+
+更新下载和安装器启动的诊断日志位于 `%LocalAppData%\EasyGet\logs\update.log`，用于排查 `.download` 临时文件、最终安装包、运行路径和版本号是否一致。

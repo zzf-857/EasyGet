@@ -520,6 +520,7 @@
                             <StackPanel>
                                 <TextBlock Text="当前软件版本" Style="{StaticResource TextBodyStrong}"/>
                                 <TextBlock Text="{Binding AppVersionText}" Style="{StaticResource TextMono}" Margin="0,4,0,0"/>
+                                <TextBlock Text="{Binding AppRuntimeText}" Style="{StaticResource TextCaption}" Margin="0,4,0,0"/>
                             </StackPanel>
                             <Button Grid.Column="1"
                                     Style="{StaticResource SurfaceButton}"

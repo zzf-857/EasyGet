@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet" alt=".NET 8"/>
   <img src="https://img.shields.io/badge/WPF-Desktop-0078D4?logo=windows" alt="WPF"/>
   <img src="https://img.shields.io/badge/Architecture-MVVM-green" alt="MVVM"/>
-  <img src="https://img.shields.io/badge/Version-1.1.3-blue" alt="Version"/>
+  <img src="https://img.shields.io/badge/Version-1.1.4-blue" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"/>
 </p>
 
@@ -143,7 +143,7 @@ dotnet test EasyGet.Tests/EasyGet.Tests.csproj
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps1 -SkipZip
 
 # 构建安装包（需要 Inno Setup 6）
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.3
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.1.4
 ```
 
 > **提示：** 首次运行时，EasyGet 会自动检测并下载 yt-dlp 和 ffmpeg，无需手动安装。yt-dlp 来自官方 GitHub Release，ffmpeg Windows 构建来自 FFmpeg 官网链接的 gyan.dev。
@@ -210,6 +210,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps
 | Telegram 登录会话 | `%LocalAppData%/EasyGet/tools/telegram.session` (本地登录凭据，独立于项目，防推送泄露) |
 | Cookie 转换文件 | `%LocalAppData%/EasyGet/cookies.txt` |
 | 应用更新包 | `%LocalAppData%/EasyGet/updates/` |
+| 应用更新日志 | `%LocalAppData%/EasyGet/logs/update.log` |
 | 崩溃日志 | `<应用目录>/logs/crash_*.txt` |
 | yt-dlp | `<应用目录>/tools/yt-dlp.exe` |
 | ffmpeg | `<应用目录>/tools/ffmpeg.exe` |

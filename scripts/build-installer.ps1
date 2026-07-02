@@ -18,13 +18,18 @@ $projectPath = Join-Path $repoRoot "EasyGet.csproj"
 $publishScript = Join-Path $PSScriptRoot "publish-win-x64.ps1"
 $innoScript = Join-Path $PSScriptRoot "EasyGet.iss"
 
-if ([string]::IsNullOrWhiteSpace($Version)) {
-    [xml]$project = Get-Content -LiteralPath $projectPath
-    $Version = $project.Project.PropertyGroup.Version | Select-Object -First 1
+[xml]$project = Get-Content -Raw -Encoding UTF8 -LiteralPath $projectPath
+$projectVersion = $project.Project.PropertyGroup.Version | Select-Object -First 1
+
+if ([string]::IsNullOrWhiteSpace($projectVersion)) {
+    throw "Version is required. Define <Version> in EasyGet.csproj."
 }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
-    throw "Version is required. Pass -Version or define <Version> in EasyGet.csproj."
+    $Version = $projectVersion
+}
+elseif ($Version -ne $projectVersion) {
+    throw "Version mismatch: -Version '$Version' does not match EasyGet.csproj <Version> '$projectVersion'. Update the project version before building a release."
 }
 
 Write-Host "[EasyGet] Build installer v$Version"

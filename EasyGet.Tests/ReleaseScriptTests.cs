@@ -37,9 +37,14 @@ public class ReleaseScriptTests
         var script = File.ReadAllText(scriptPath);
         Assert.Contains("ISCC", script, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("MyAppVersion", script, StringComparison.Ordinal);
+        Assert.Contains("Get-Content -Raw -Encoding UTF8", script, StringComparison.Ordinal);
+        Assert.Contains("Version mismatch", script, StringComparison.Ordinal);
         Assert.Contains("easyget-update.json", script, StringComparison.Ordinal);
         Assert.Contains("ConvertTo-Json", script, StringComparison.Ordinal);
-        Assert.Contains("EasyGet-Setup-v", File.ReadAllText(innoPath), StringComparison.Ordinal);
+        var innoScript = File.ReadAllText(innoPath);
+        Assert.Contains("EasyGet-Setup-v", innoScript, StringComparison.Ordinal);
+        Assert.Contains("CloseApplications=yes", innoScript, StringComparison.Ordinal);
+        Assert.Contains("RestartApplications=no", innoScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -53,9 +58,12 @@ public class ReleaseScriptTests
         var workflow = File.ReadAllText(workflowPath);
         Assert.Contains("tags:", workflow, StringComparison.Ordinal);
         Assert.Contains("v*", workflow, StringComparison.Ordinal);
+        Assert.Contains("Validate release version", workflow, StringComparison.Ordinal);
+        Assert.Contains("Version mismatch", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet test", workflow, StringComparison.Ordinal);
         Assert.Contains("build-installer.ps1", workflow, StringComparison.Ordinal);
-        Assert.Contains("EasyGet-Setup-v*.exe", workflow, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-Setup-v$version.exe", workflow, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-Setup-${{ github.ref_name }}.exe", workflow, StringComparison.Ordinal);
         Assert.Contains("EasyGet-win-x64-Release.zip", workflow, StringComparison.Ordinal);
         Assert.Contains("easyget-update.json", workflow, StringComparison.Ordinal);
         Assert.Contains("softprops/action-gh-release", workflow, StringComparison.Ordinal);

@@ -24,6 +24,21 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $tag = "${env:GITHUB_REF_NAME}"
+          if ($tag -notmatch '^v\d+\.\d+\.\d+$') {
+            throw "Release tag '$tag' must use vX.Y.Z format."
+          }
+
+          $version = $tag.Substring(1)
+          [xml]$project = Get-Content -Raw -Encoding UTF8 -LiteralPath "EasyGet.csproj"
+          $projectVersion = $project.Project.PropertyGroup.Version | Select-Object -First 1
+          if ($projectVersion -ne $version) {
+            throw "Version mismatch: tag '$tag' but EasyGet.csproj <Version> is '$projectVersion'."
+          }
+
       - name: Restore
         run: |
           dotnet restore EasyGet.csproj
@@ -46,7 +61,7 @@ jobs:
         run: |
           $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
           $releaseDir = "artifacts/publish/Release"
-          $setup = Get-ChildItem $releaseDir -Filter "EasyGet-Setup-v*.exe" | Select-Object -First 1
+          $setup = Get-Item "$releaseDir/EasyGet-Setup-v$version.exe"
           $zip = Get-Item "$releaseDir/EasyGet-win-x64-Release.zip"
           $manifest = [ordered]@{
             version = $version
@@ -72,7 +87,7 @@ jobs:
         with:
           body_path: release-notes.md
           files: |
-            artifacts/publish/Release/EasyGet-Setup-v*.exe
+            artifacts/publish/Release/EasyGet-Setup-${{ github.ref_name }}.exe
             artifacts/publish/Release/EasyGet-win-x64-Release.zip
             artifacts/publish/Release/easyget-update.json
           draft: false
