@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using System.Collections;
 using System.Reflection;
 using Xunit;
 
@@ -249,6 +250,27 @@ public class YtDlpCookieTests
     }
 
     [Fact]
+    public void ShouldRetryWithNextCookieStrategy_ScansStderrLinesOnce()
+    {
+        var method = typeof(YtDlpService).GetMethod(
+            "ShouldRetryWithNextCookieStrategy",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+
+        var shouldRetry = (bool)method!.Invoke(null, new object[]
+        {
+            "https://v.douyin.com/i6EpMYVJgA8/",
+            new SingleUseEnumerable([
+                "WARNING: unrelated",
+                "ERROR: Could not copy Chrome cookie database."
+            ])
+        })!;
+
+        Assert.True(shouldRetry);
+    }
+
+    [Fact]
     public void ShouldRetryWithNextCookieStrategy_StreamsProcessOutputWithoutListSnapshot()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
@@ -314,5 +336,22 @@ public class YtDlpCookieTests
         Assert.Equal("Douyin_vi3b7QpNklg", info.Title);
         Assert.Equal("Douyin", info.Platform);
         Assert.Equal("https://v.douyin.com/vi3b7QpNklg/", info.Url);
+    }
+
+    private sealed class SingleUseEnumerable(IEnumerable<string> lines) : IEnumerable<string>
+    {
+        private bool _used;
+
+        public IEnumerator<string> GetEnumerator()
+        {
+            if (_used)
+                throw new InvalidOperationException("stderr lines should be scanned only once.");
+
+            _used = true;
+            return lines.GetEnumerator();
+        }
+
+        IEnumerator IEnumerable.GetEnumerator()
+            => GetEnumerator();
     }
 }

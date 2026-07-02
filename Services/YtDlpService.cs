@@ -952,17 +952,21 @@ public partial class YtDlpService
 
     private static bool ShouldRetryWithNextCookieStrategy(string url, IEnumerable<string> stderrLines)
     {
-        if (IsDouyinUrl(url))
-        {
-            return stderrLines.Any(line =>
-                line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase))
-                || stderrLines.Any(IsBrowserCookieAccessError);
-        }
+        var isDouyinUrl = IsDouyinUrl(url);
+        var isYoutubeUrl = IsYoutubeUrl(url);
+        if (!isDouyinUrl && !isYoutubeUrl)
+            return false;
 
-        if (IsYoutubeUrl(url))
+        foreach (var line in stderrLines)
         {
-            return stderrLines.Any(IsYoutubeBotOrForbiddenError)
-                   || stderrLines.Any(IsBrowserCookieAccessError);
+            if (IsBrowserCookieAccessError(line))
+                return true;
+
+            if (isDouyinUrl && line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (isYoutubeUrl && IsYoutubeBotOrForbiddenError(line))
+                return true;
         }
 
         return false;
