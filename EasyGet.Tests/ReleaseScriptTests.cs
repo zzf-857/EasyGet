@@ -78,7 +78,8 @@ public class ReleaseScriptTests
         Assert.Contains("[System.IO.Compression.ZipFile]::OpenRead($ZipPath)", script, StringComparison.Ordinal);
         Assert.Contains("$zip.Dispose()", script, StringComparison.Ordinal);
         Assert.Contains("FullName -eq \"EasyGet.exe\"", script, StringComparison.Ordinal);
-        Assert.Contains("EndsWith(\".pdb\", [System.StringComparison]::OrdinalIgnoreCase)", script, StringComparison.Ordinal);
+        Assert.Contains("$blockedZipEntryPatterns", script, StringComparison.Ordinal);
+        Assert.Contains("WildcardPattern", script, StringComparison.Ordinal);
         Assert.Contains("Portable zip smoke check failed", script, StringComparison.Ordinal);
 
         var compressArchiveIndex = script.IndexOf("Compress-Archive", StringComparison.Ordinal);
@@ -86,6 +87,38 @@ public class ReleaseScriptTests
         Assert.True(compressArchiveIndex >= 0, "Expected the publish script to create a portable zip.");
         Assert.True(zipContentCheckIndex > compressArchiveIndex,
             "Portable zip contents should be verified after Compress-Archive writes the asset.");
+    }
+
+    [Fact]
+    public void WindowsPublishScriptPrunesDiagnosticsOnlyRuntimeFiles()
+    {
+        var root = TestRepositoryPaths.Root;
+        var publishScriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var innoPath = Path.Combine(root, "scripts", "EasyGet.iss");
+
+        var publishScript = File.ReadAllText(publishScriptPath);
+        var innoScript = File.ReadAllText(innoPath);
+
+        var diagnosticPatterns = new[]
+        {
+            "*.pdb",
+            "createdump.exe",
+            "mscordaccore*.dll",
+            "mscordbi.dll",
+            "Microsoft.DiaSymReader.Native.amd64.dll"
+        };
+
+        foreach (var pattern in diagnosticPatterns)
+        {
+            Assert.Contains(pattern, publishScript, StringComparison.Ordinal);
+            Assert.Contains(pattern, innoScript, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("$publishPrunePatterns", publishScript, StringComparison.Ordinal);
+        Assert.Contains("$blockedZipEntryPatterns", publishScript, StringComparison.Ordinal);
+        Assert.Contains("WildcardPattern", publishScript, StringComparison.Ordinal);
+        Assert.Contains("diagnostic/runtime debugging file was included", publishScript, StringComparison.Ordinal);
+        Assert.Contains(@"Excludes: ""*.pdb,createdump.exe,mscordaccore*.dll,mscordbi.dll,Microsoft.DiaSymReader.Native.amd64.dll""", innoScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -111,7 +144,7 @@ public class ReleaseScriptTests
         Assert.Contains("CloseApplications=yes", innoScript, StringComparison.Ordinal);
         Assert.Contains("RestartApplications=no", innoScript, StringComparison.Ordinal);
         Assert.Contains("Compression=lzma2/ultra64", innoScript, StringComparison.Ordinal);
-        Assert.Contains(@"Excludes: ""*.pdb""", innoScript, StringComparison.Ordinal);
+        Assert.Contains(@"Excludes: ""*.pdb,createdump.exe,mscordaccore*.dll,mscordbi.dll,Microsoft.DiaSymReader.Native.amd64.dll""", innoScript, StringComparison.Ordinal);
         Assert.DoesNotContain(@"\{#MyAppExeName}""; DestDir", innoScript, StringComparison.Ordinal);
     }
 

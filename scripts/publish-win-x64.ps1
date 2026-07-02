@@ -73,8 +73,18 @@ if (-not [string]::IsNullOrWhiteSpace($Version)) {
 
 dotnet @publishArgs
 
-Get-ChildItem -LiteralPath $publishDir -Filter "*.pdb" -Recurse -File -ErrorAction SilentlyContinue |
-    Remove-Item -Force
+$publishPrunePatterns = @(
+    "*.pdb",
+    "createdump.exe",
+    "mscordaccore*.dll",
+    "mscordbi.dll",
+    "Microsoft.DiaSymReader.Native.amd64.dll"
+)
+
+foreach ($pattern in $publishPrunePatterns) {
+    Get-ChildItem -LiteralPath $publishDir -Filter $pattern -Recurse -File -ErrorAction SilentlyContinue |
+        Remove-Item -Force
+}
 
 $exePath = Join-Path $publishDir "EasyGet.exe"
 if (-not (Test-Path $exePath)) {
@@ -94,6 +104,14 @@ function Test-PortableZipContent {
         [string]$ZipPath
     )
 
+    $blockedZipEntryPatterns = @(
+        "*.pdb",
+        "createdump.exe",
+        "mscordaccore*.dll",
+        "mscordbi.dll",
+        "Microsoft.DiaSymReader.Native.amd64.dll"
+    )
+
     $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
     try {
         $entries = @($zip.Entries)
@@ -102,11 +120,14 @@ function Test-PortableZipContent {
             throw "Portable zip smoke check failed: EasyGet.exe was not found at the zip root."
         }
 
-        $pdbEntry = $entries |
-            Where-Object { $_.FullName.EndsWith(".pdb", [System.StringComparison]::OrdinalIgnoreCase) } |
-            Select-Object -First 1
-        if ($pdbEntry) {
-            throw "Portable zip smoke check failed: debug symbol was included: $($pdbEntry.FullName)"
+        foreach ($pattern in $blockedZipEntryPatterns) {
+            $matcher = [System.Management.Automation.WildcardPattern]::new($pattern, [System.Management.Automation.WildcardOptions]::IgnoreCase)
+            $blockedEntry = $entries |
+                Where-Object { $matcher.IsMatch([System.IO.Path]::GetFileName($_.FullName)) } |
+                Select-Object -First 1
+            if ($blockedEntry) {
+                throw "Portable zip smoke check failed: diagnostic/runtime debugging file was included: $($blockedEntry.FullName)"
+            }
         }
     }
     finally {
