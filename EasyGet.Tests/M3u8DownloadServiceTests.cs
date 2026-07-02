@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using EasyGet.Services;
 using Xunit;
 
@@ -82,5 +84,65 @@ public class M3u8DownloadServiceTests
     public void ResolveSegmentConcurrency_KeepsExistingDefaultUnlessConfiguredHigher(int configuredFragments, int expected)
     {
         Assert.Equal(expected, M3u8DownloadService.ResolveSegmentConcurrency(configuredFragments));
+    }
+
+    [Fact]
+    public async Task RetryFailedSegmentsAsync_UsesConfiguredParallelism()
+    {
+        var failedIndices = new[] { 0, 1, 2 };
+        var segments = new[] { "segment-0.ts", "segment-1.ts", "segment-2.ts" };
+        var releaseDownloads = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var firstTwoStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activeDownloads = 0;
+        var startedDownloads = 0;
+        var peakActiveDownloads = 0;
+
+        async Task<bool> DownloadSegmentAsync(int index, string segmentUrl)
+        {
+            var active = Interlocked.Increment(ref activeDownloads);
+            try
+            {
+                UpdatePeakActiveDownloads(active);
+
+                if (Interlocked.Increment(ref startedDownloads) == 2)
+                    firstTwoStarted.SetResult(true);
+
+                await releaseDownloads.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                return true;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref activeDownloads);
+            }
+        }
+
+        var retryTask = M3u8DownloadService.RetryFailedSegmentsAsync(
+            failedIndices,
+            segments,
+            maxParallelSegments: 2,
+            DownloadSegmentAsync,
+            onSegmentCompleted: null,
+            logCallback: null,
+            CancellationToken.None);
+
+        await firstTwoStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        releaseDownloads.SetResult(true);
+        var stillFailed = await retryTask;
+
+        Assert.Empty(stillFailed);
+        Assert.Equal(2, peakActiveDownloads);
+
+        void UpdatePeakActiveDownloads(int active)
+        {
+            while (true)
+            {
+                var observedPeak = Volatile.Read(ref peakActiveDownloads);
+                if (active <= observedPeak)
+                    return;
+
+                if (Interlocked.CompareExchange(ref peakActiveDownloads, active, observedPeak) == observedPeak)
+                    return;
+            }
+        }
     }
 }

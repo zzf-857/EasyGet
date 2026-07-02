@@ -200,21 +200,21 @@ public class M3u8DownloadService
             if (failedIndices.Count > 0)
             {
                 logCallback?.Invoke($"[m3u8] 警告: 有 {failedIndices.Count} 个分片下载失败。开始重试...");
-                var stillFailed = new List<int>();
-                foreach (var index in failedIndices)
-                {
-                    var segUrl = segments[index];
-                    logCallback?.Invoke($"[m3u8] 正在重试分片 {index}: {segUrl}");
-                    var success = await DownloadSegmentWithRetryAsync(httpClient, segUrl, index, tempDir, bytes => Interlocked.Add(ref totalDownloadedBytes, bytes), logCallback, ct);
-                    if (success)
-                    {
-                        Interlocked.Increment(ref completedSegments);
-                    }
-                    else
-                    {
-                        stillFailed.Add(index);
-                    }
-                }
+                var stillFailed = await RetryFailedSegmentsAsync(
+                    failedIndices,
+                    segments,
+                    maxParallelSegments,
+                    (index, segUrl) => DownloadSegmentWithRetryAsync(
+                        httpClient,
+                        segUrl,
+                        index,
+                        tempDir,
+                        bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
+                        logCallback,
+                        ct),
+                    _ => Interlocked.Increment(ref completedSegments),
+                    logCallback,
+                    ct);
 
                 if (stillFailed.Count > 0)
                 {
@@ -366,6 +366,58 @@ public class M3u8DownloadService
             Math.Max(configuredFragments, DefaultSegmentConcurrency),
             AppConfig.MinConcurrentFragments,
             AppConfig.MaxConcurrentFragments);
+
+    internal static async Task<IReadOnlyList<int>> RetryFailedSegmentsAsync(
+        IReadOnlyList<int> failedIndices,
+        IReadOnlyList<string> segments,
+        int maxParallelSegments,
+        Func<int, string, Task<bool>> downloadSegmentAsync,
+        Action<int>? onSegmentCompleted,
+        Action<string>? logCallback,
+        CancellationToken ct)
+    {
+        if (failedIndices.Count == 0)
+            return [];
+
+        var stillFailed = new List<int>();
+        var parallelism = Math.Max(1, maxParallelSegments);
+        using var semaphore = new SemaphoreSlim(parallelism);
+        var retryTasks = new List<Task>(failedIndices.Count);
+
+        foreach (var index in failedIndices)
+        {
+            retryTasks.Add(RetrySegmentAsync(index));
+        }
+
+        await Task.WhenAll(retryTasks);
+        return stillFailed;
+
+        async Task RetrySegmentAsync(int index)
+        {
+            await semaphore.WaitAsync(ct);
+            try
+            {
+                var segUrl = segments[index];
+                logCallback?.Invoke($"[m3u8] 正在重试分片 {index}: {segUrl}");
+                var success = await downloadSegmentAsync(index, segUrl);
+                if (success)
+                {
+                    onSegmentCompleted?.Invoke(index);
+                }
+                else
+                {
+                    lock (stillFailed)
+                    {
+                        stillFailed.Add(index);
+                    }
+                }
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }
+    }
 
     /// <summary>
     /// 带有重试机制的单分片下载
