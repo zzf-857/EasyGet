@@ -29,6 +29,11 @@ public class DownloadProgress
 
 internal sealed record ProcessOutput(string StandardOutput, string StandardError, int ExitCode);
 
+internal readonly record struct DownloadOutputLineHandling(
+    DownloadProgress? Progress,
+    string? OutputPath,
+    bool ShouldLog);
+
 public partial class YtDlpService
 {
     private static readonly TimeSpan DefaultDownloadNoOutputTimeout = TimeSpan.FromMinutes(10);
@@ -395,15 +400,14 @@ public partial class YtDlpService
                     DefaultDownloadNoOutputTimeout,
                     line =>
                     {
-                        var path = ParseOutputPath(line);
-                        if (!string.IsNullOrWhiteSpace(path))
-                            capturedOutputPath = path;
+                        var handling = ClassifyDownloadOutputLine(line);
+                        if (!string.IsNullOrWhiteSpace(handling.OutputPath))
+                            capturedOutputPath = handling.OutputPath;
 
-                        var parsed = ParseProgressLine(line);
-                        if (parsed is not null)
-                            progress?.Report(parsed);
+                        if (handling.Progress is not null)
+                            progress?.Report(handling.Progress);
 
-                        if (ShouldLogDownloadOutputLine(line))
+                        if (handling.ShouldLog)
                             logCallback?.Invoke(line);
                     },
                     line =>
@@ -705,7 +709,21 @@ public partial class YtDlpService
     }
 
     internal static bool ShouldLogDownloadOutputLine(string line)
-        => !line.StartsWith("download:", StringComparison.OrdinalIgnoreCase);
+        => !IsDownloadProgressTemplateLine(line);
+
+    internal static DownloadOutputLineHandling ClassifyDownloadOutputLine(string line)
+    {
+        if (IsDownloadProgressTemplateLine(line))
+            return new DownloadOutputLineHandling(ParseProgressLine(line), null, false);
+
+        return new DownloadOutputLineHandling(
+            ParseProgressLine(line),
+            ParseOutputPath(line),
+            true);
+    }
+
+    private static bool IsDownloadProgressTemplateLine(string line)
+        => line.StartsWith("download:", StringComparison.OrdinalIgnoreCase);
 
     private static double ParseSpeed(string speedStr)
     {

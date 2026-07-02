@@ -73,6 +73,38 @@ public class YtDlpProgressTests
         Assert.Equal(expected, YtDlpService.ShouldLogDownloadOutputLine(line));
     }
 
+    [Fact]
+    public void ClassifyDownloadOutputLine_FastPathsTemplateProgressLines()
+    {
+        var result = YtDlpService.ClassifyDownloadOutputLine("download:45.0% 1.00MiB/s ETA 00:01");
+
+        Assert.NotNull(result.Progress);
+        Assert.Equal(45, result.Progress!.Percent);
+        Assert.Null(result.OutputPath);
+        Assert.False(result.ShouldLog);
+    }
+
+    [Fact]
+    public void ClassifyDownloadOutputLine_CapturesDestinationLines()
+    {
+        var result = YtDlpService.ClassifyDownloadOutputLine("[download] Destination: C:\\Videos\\sample.mp4");
+
+        Assert.Null(result.Progress);
+        Assert.Equal("C:\\Videos\\sample.mp4", result.OutputPath);
+        Assert.True(result.ShouldLog);
+    }
+
+    [Fact]
+    public void ClassifyDownloadOutputLine_CapturesMergerLinesAndProgress()
+    {
+        var result = YtDlpService.ClassifyDownloadOutputLine("[Merger] Merging formats into \"C:\\Videos\\sample.mp4\"");
+
+        Assert.NotNull(result.Progress);
+        Assert.Equal(99, result.Progress!.Percent);
+        Assert.Equal("C:\\Videos\\sample.mp4", result.OutputPath);
+        Assert.True(result.ShouldLog);
+    }
+
     private static DownloadProgress? ParseProgressLine(string line)
     {
         var method = typeof(YtDlpService).GetMethod(
