@@ -145,4 +145,16 @@ public class M3u8DownloadServiceTests
             }
         }
     }
+
+    [Fact]
+    public void MergeSegments_UsesAsyncBufferedFileStreams()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "M3u8DownloadService.cs")));
+
+        Assert.Contains("SegmentIoBufferSize", source, StringComparison.Ordinal);
+        Assert.Contains("FileAccess.Read, FileShare.Read, SegmentIoBufferSize, useAsync: true", source, StringComparison.Ordinal);
+        Assert.Contains("CopyToAsync(outfile, SegmentIoBufferSize, ct)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read);", source, StringComparison.Ordinal);
+    }
 }

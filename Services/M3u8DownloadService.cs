@@ -14,6 +14,7 @@ namespace EasyGet.Services;
 public class M3u8DownloadService
 {
     private const int DefaultSegmentConcurrency = 16;
+    private const int SegmentIoBufferSize = 81920;
 
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
@@ -225,15 +226,15 @@ public class M3u8DownloadService
             logCallback?.Invoke("[m3u8] 分片下载完成，开始拼接...");
 
             // 4. 拼接分片为单个 ts 文件
-            using (var outfile = new FileStream(outputTsPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+            using (var outfile = new FileStream(outputTsPath, FileMode.Create, FileAccess.Write, FileShare.None, SegmentIoBufferSize, useAsync: true))
             {
                 for (int i = 0; i < totalSegments; i++)
                 {
                     var partPath = Path.Combine(tempDir, $"{i:D4}.ts");
                     if (File.Exists(partPath))
                     {
-                        using var infile = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-                        await infile.CopyToAsync(outfile, ct);
+                        using var infile = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, SegmentIoBufferSize, useAsync: true);
+                        await infile.CopyToAsync(outfile, SegmentIoBufferSize, ct);
                     }
                     else
                     {
@@ -445,9 +446,9 @@ public class M3u8DownloadService
                 response.EnsureSuccessStatusCode();
 
                 using var stream = await response.Content.ReadAsStreamAsync(ct);
-                using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+                using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, SegmentIoBufferSize, useAsync: true);
 
-                var buffer = new byte[81920];
+                var buffer = new byte[SegmentIoBufferSize];
                 int read;
                 while ((read = await stream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                 {
