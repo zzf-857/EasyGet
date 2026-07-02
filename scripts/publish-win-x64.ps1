@@ -60,6 +60,7 @@ $publishArgs = @(
     "--self-contained", $selfContainedValue,
     "-o", $publishDir,
     "/p:PublishSingleFile=false",
+    "/p:PublishReadyToRun=false",
     "/p:DebugType=none",
     "/p:DebugSymbols=false"
 )
