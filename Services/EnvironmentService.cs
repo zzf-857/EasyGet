@@ -23,6 +23,7 @@ public class EnvironmentService
 {
     private static readonly HttpClient HttpClient = new();
     private const int ToolDownloadMaxAttempts = 3;
+    private const int ToolDownloadBufferSize = 81920;
 
     public EnvironmentStatus Status { get; private set; } = new();
 
@@ -254,9 +255,9 @@ public class EnvironmentService
 
         var totalBytes = response.Content.Headers.ContentLength;
         await using var source = await response.Content.ReadAsStreamAsync(ct);
-        await using var target = File.Create(targetPath);
+        await using var target = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, ToolDownloadBufferSize, useAsync: true);
 
-        var buffer = new byte[81920];
+        var buffer = new byte[ToolDownloadBufferSize];
         long totalRead = 0;
         var lastPercent = -1;
 
