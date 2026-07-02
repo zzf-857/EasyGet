@@ -18,6 +18,8 @@ public class ReleaseScriptTests
         Assert.Contains("\"publish\"", script, StringComparison.Ordinal);
         Assert.Contains("dotnet @publishArgs", script, StringComparison.Ordinal);
         Assert.Contains("--self-contained", script, StringComparison.Ordinal);
+        Assert.Contains("/p:PublishSingleFile=false", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("/p:IncludeNativeLibrariesForSelfExtract=true", script, StringComparison.Ordinal);
         Assert.Contains("Remove-Item -LiteralPath $publishDirFullPath -Recurse -Force", script, StringComparison.Ordinal);
         Assert.Contains("/p:DebugType=none", script, StringComparison.Ordinal);
         Assert.Contains("/p:DebugSymbols=false", script, StringComparison.Ordinal);

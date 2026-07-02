@@ -59,7 +59,6 @@ $publishArgs = @(
     "--self-contained", $selfContainedValue,
     "-o", $publishDir,
     "/p:PublishSingleFile=false",
-    "/p:IncludeNativeLibrariesForSelfExtract=true",
     "/p:DebugType=none",
     "/p:DebugSymbols=false"
 )
