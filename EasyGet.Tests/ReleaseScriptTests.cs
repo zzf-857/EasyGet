@@ -49,6 +49,27 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void WindowsPublishScriptVerifiesPortableZipContents()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("Test-PortableZipContent", script, StringComparison.Ordinal);
+        Assert.Contains("[System.IO.Compression.ZipFile]::OpenRead($ZipPath)", script, StringComparison.Ordinal);
+        Assert.Contains("$zip.Dispose()", script, StringComparison.Ordinal);
+        Assert.Contains("FullName -eq \"EasyGet.exe\"", script, StringComparison.Ordinal);
+        Assert.Contains("EndsWith(\".pdb\", [System.StringComparison]::OrdinalIgnoreCase)", script, StringComparison.Ordinal);
+        Assert.Contains("Portable zip smoke check failed", script, StringComparison.Ordinal);
+
+        var compressArchiveIndex = script.IndexOf("Compress-Archive", StringComparison.Ordinal);
+        var zipContentCheckIndex = script.IndexOf("Test-PortableZipContent -ZipPath $zipPath", StringComparison.Ordinal);
+        Assert.True(compressArchiveIndex >= 0, "Expected the publish script to create a portable zip.");
+        Assert.True(zipContentCheckIndex > compressArchiveIndex,
+            "Portable zip contents should be verified after Compress-Archive writes the asset.");
+    }
+
+    [Fact]
     public void InstallerScriptBuildsVersionedSetupExecutable()
     {
         var root = TestRepositoryPaths.Root;

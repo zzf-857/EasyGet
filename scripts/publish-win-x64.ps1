@@ -86,6 +86,32 @@ if ($exeInfo.Length -le 0) {
 
 Write-Host "[EasyGet] Smoke check passed: $exePath"
 
+function Test-PortableZipContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ZipPath
+    )
+
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        $entries = @($zip.Entries)
+        $rootExe = $entries | Where-Object { $_.FullName -eq "EasyGet.exe" } | Select-Object -First 1
+        if (-not $rootExe) {
+            throw "Portable zip smoke check failed: EasyGet.exe was not found at the zip root."
+        }
+
+        $pdbEntry = $entries |
+            Where-Object { $_.FullName.EndsWith(".pdb", [System.StringComparison]::OrdinalIgnoreCase) } |
+            Select-Object -First 1
+        if ($pdbEntry) {
+            throw "Portable zip smoke check failed: debug symbol was included: $($pdbEntry.FullName)"
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+
 if (-not $SkipZip) {
     $zipPath = Join-Path (Split-Path $publishDir -Parent) "EasyGet-$Runtime-$Configuration.zip"
     if (Test-Path $zipPath) {
@@ -94,6 +120,7 @@ if (-not $SkipZip) {
 
     Write-Host "[EasyGet] Zip $zipPath"
     Compress-Archive -Path (Join-Path $publishDir "*") -DestinationPath $zipPath -Force
+    Test-PortableZipContent -ZipPath $zipPath
     Write-Host "[EasyGet] Zip ready: $zipPath"
 }
 
