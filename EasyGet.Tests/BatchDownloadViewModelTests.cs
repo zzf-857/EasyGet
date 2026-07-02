@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,24 +12,10 @@ namespace EasyGet.Tests;
 public class BatchDownloadViewModelTests
 {
     private static string CreateTempDatabasePath()
-        => Path.Combine(
-            Path.GetTempPath(),
-            $"easyget-batch-vm-{Guid.NewGuid():N}.db");
+        => TestTempPaths.CreateSqliteDatabasePath("easyget-batch-vm");
 
     private static void TryDeleteDatabase(string dbPath)
-    {
-        foreach (var path in new[] { dbPath, $"{dbPath}-wal", $"{dbPath}-shm" })
-        {
-            try
-            {
-                if (File.Exists(path))
-                    File.Delete(path);
-            }
-            catch
-            {
-            }
-        }
-    }
+        => TestTempPaths.TryDeleteSqliteDatabase(dbPath);
 
     [Fact]
     public void CancelAll_WhenConfirmed_CancelsAndClearsTasks()

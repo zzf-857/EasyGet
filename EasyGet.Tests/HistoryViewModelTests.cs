@@ -187,24 +187,10 @@ public class HistoryViewModelTests
     }
 
     private static string CreateTempDatabasePath()
-        => Path.Combine(
-            Path.GetTempPath(),
-            $"easyget-history-vm-{Guid.NewGuid():N}.db");
+        => TestTempPaths.CreateSqliteDatabasePath("easyget-history-vm");
 
     private static void TryDeleteDatabase(string dbPath)
-    {
-        foreach (var path in new[] { dbPath, $"{dbPath}-wal", $"{dbPath}-shm" })
-        {
-            try
-            {
-                if (File.Exists(path))
-                    File.Delete(path);
-            }
-            catch
-            {
-            }
-        }
-    }
+        => TestTempPaths.TryDeleteSqliteDatabase(dbPath);
 
     private static void TryDeleteFile(string path)
     {

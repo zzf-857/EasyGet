@@ -265,9 +265,7 @@ public class HistoryServiceTests
     }
 
     private static string CreateTempDatabasePath()
-        => Path.Combine(
-            Path.GetTempPath(),
-            $"easyget-history-{Guid.NewGuid():N}.db");
+        => TestTempPaths.CreateSqliteDatabasePath("easyget-history");
 
     private static async Task InsertHistoryRowAsync(
         string dbPath,
@@ -351,18 +349,5 @@ public class HistoryServiceTests
         => value ?? fallback;
 
     private static void TryDeleteDatabase(string dbPath)
-    {
-        foreach (var path in new[] { dbPath, $"{dbPath}-wal", $"{dbPath}-shm" })
-        {
-            try
-            {
-                if (File.Exists(path))
-                    File.Delete(path);
-            }
-            catch
-            {
-                // 测试临时数据库清理失败不影响断言结果。
-            }
-        }
-    }
+        => TestTempPaths.TryDeleteSqliteDatabase(dbPath);
 }
