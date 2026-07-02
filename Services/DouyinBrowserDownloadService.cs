@@ -19,6 +19,7 @@ internal partial class DouyinBrowserDownloadService
 {
     private const string BrowserUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36";
+    private const int CdpReceiveBufferSize = 64 * 1024;
     private const int DownloadBufferSize = 128 * 1024;
     private const long DownloadProgressByteInterval = 512 * 1024;
     private static readonly TimeSpan DownloadProgressReportInterval = TimeSpan.FromMilliseconds(250);
@@ -635,20 +636,28 @@ internal partial class DouyinBrowserDownloadService
 
     private static async Task<string> ReceiveCdpMessageAsync(ClientWebSocket socket, CancellationToken ct)
     {
-        var buffer = new byte[64 * 1024];
+        var buffer = ArrayPool<byte>.Shared.Rent(CdpReceiveBufferSize);
         var message = new ArrayBufferWriter<byte>(buffer.Length);
-        WebSocketReceiveResult result;
-        do
+
+        try
         {
-            result = await socket.ReceiveAsync(buffer, ct);
-            if (result.MessageType == WebSocketMessageType.Close)
-                return "";
+            ValueWebSocketReceiveResult result;
+            do
+            {
+                result = await socket.ReceiveAsync(buffer.AsMemory(0, CdpReceiveBufferSize), ct);
+                if (result.MessageType == WebSocketMessageType.Close)
+                    return "";
 
-            message.Write(buffer.AsSpan(0, result.Count));
+                message.Write(buffer.AsSpan(0, result.Count));
+            }
+            while (!result.EndOfMessage);
+
+            return Encoding.UTF8.GetString(message.WrittenSpan);
         }
-        while (!result.EndOfMessage);
-
-        return Encoding.UTF8.GetString(message.WrittenSpan);
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static async Task<string> EvaluateStringAsync(ClientWebSocket socket, int id, string expression, CancellationToken ct)
