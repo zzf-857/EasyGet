@@ -676,7 +676,13 @@ public partial class YtDlpService
             _ => ""
         };
 
-        return $"bv*{qualityFilter}+ba/b{qualityFilter}/b";
+        var fallback = $"bv*{qualityFilter}+ba/b{qualityFilter}/b";
+        if (format.Equals("mp4", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"bv*[ext=mp4]{qualityFilter}+ba[ext=m4a]/b[ext=mp4]{qualityFilter}/{fallback}";
+        }
+
+        return fallback;
     }
 
     private static DownloadProgress? ParseProgressLine(string line)

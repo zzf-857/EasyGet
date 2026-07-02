@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using System.Reflection;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -50,6 +51,28 @@ public class YtDlpArgsTests
         YtDlpService.AddDownloadThroughputArgs(args);
 
         AssertOptionValue(args, "--buffer-size", "1M");
+    }
+
+    [Fact]
+    public void BuildFormatString_PrefersMp4AndM4aStreamsForMp4Downloads()
+    {
+        var format = BuildFormatString("mp4", "1080");
+
+        Assert.StartsWith(
+            "bv*[ext=mp4][height<=1080]+ba[ext=m4a]/b[ext=mp4][height<=1080]/",
+            format,
+            StringComparison.Ordinal);
+        Assert.Contains("bv*[height<=1080]+ba/b[height<=1080]/b", format, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("mkv", "720", "bv*[height<=720]+ba/b[height<=720]/b")]
+    [InlineData("webm", "best", "bv*+ba/b/b")]
+    [InlineData("mp3", "1080", "bestaudio/best")]
+    [InlineData("m4a", "1080", "bestaudio/best")]
+    public void BuildFormatString_KeepsExistingSelectionForOtherFormats(string format, string quality, string expected)
+    {
+        Assert.Equal(expected, BuildFormatString(format, quality));
     }
 
     [Fact]
@@ -108,5 +131,15 @@ public class YtDlpArgsTests
 
         Assert.NotEmpty(optionIndexes);
         Assert.Contains(optionIndexes, index => index + 1 < args.Count && args[index + 1] == expectedValue);
+    }
+
+    private static string BuildFormatString(string format, string quality)
+    {
+        var method = typeof(YtDlpService).GetMethod(
+            "BuildFormatString",
+            BindingFlags.NonPublic | BindingFlags.Static);
+
+        Assert.NotNull(method);
+        return (string)method!.Invoke(null, [format, quality])!;
     }
 }
