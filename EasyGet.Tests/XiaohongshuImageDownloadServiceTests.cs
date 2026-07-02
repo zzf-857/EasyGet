@@ -1,6 +1,10 @@
 using System;
 using System.IO;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using EasyGet.Models;
 using EasyGet.Services;
@@ -109,6 +113,49 @@ public class XiaohongshuImageDownloadServiceTests
         Assert.False(YtDlpService.IsXiaohongshuUrl(null!));
     }
 
+    [Fact]
+    public async Task TryDownloadAsync_DownloadsImagesWithBoundedConcurrencyAndStableOutputOrder()
+    {
+        using var server = new ConcurrentImageNoteServer(imageCount: 4);
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-xhs-concurrent-{Guid.NewGuid():N}");
+        var task = new DownloadTask
+        {
+            Url = server.NoteUrl,
+            OutputDirectory = outputDirectory
+        };
+        var service = new XiaohongshuImageDownloadService(new ConfigService());
+
+        try
+        {
+            var downloadTask = service.TryDownloadAsync(task, ct: CancellationToken.None);
+            var completed = await Task.WhenAny(
+                server.AllImageRequestsStarted,
+                Task.Delay(TimeSpan.FromMilliseconds(300)));
+
+            server.ReleaseImages();
+            var success = await downloadTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Same(server.AllImageRequestsStarted, completed);
+            Assert.True(success);
+            Assert.Equal(DownloadStatus.Completed, task.Status);
+            Assert.EndsWith($"{Path.DirectorySeparatorChar}1.jpg", task.OutputFilePath);
+
+            var subfolder = Path.Combine(outputDirectory, "并发下载测试");
+            Assert.Equal(
+                ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
+                Directory.GetFiles(subfolder)
+                    .Select(path => Path.GetFileName(path) ?? "")
+                    .OrderBy(fileName => fileName, StringComparer.Ordinal)
+                    .ToArray());
+        }
+        finally
+        {
+            server.ReleaseImages();
+            if (Directory.Exists(outputDirectory))
+                Directory.Delete(outputDirectory, recursive: true);
+        }
+    }
+
     [Fact(Skip = "Live external-site test. Run manually when validating Xiaohongshu network behavior.")]
     public async Task LiveDownloadTest()
     {
@@ -154,6 +201,158 @@ public class XiaohongshuImageDownloadServiceTests
             {
                 Directory.Delete(tempDir, true);
             }
+        }
+    }
+
+    private sealed class ConcurrentImageNoteServer : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _cts = new();
+        private readonly TaskCompletionSource _allImageRequestsStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _releaseImages = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly Task _serverTask;
+        private readonly int _imageCount;
+        private int _startedImageRequests;
+
+        public string BaseUrl { get; }
+        public string NoteUrl => $"{BaseUrl}/explore/abc123";
+        public Task AllImageRequestsStarted => _allImageRequestsStarted.Task;
+
+        public ConcurrentImageNoteServer(int imageCount)
+        {
+            _imageCount = imageCount;
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            BaseUrl = $"http://127.0.0.1:{port}";
+            _serverTask = Task.Run(ServeAsync);
+        }
+
+        public void ReleaseImages() => _releaseImages.TrySetResult();
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                while (!_cts.IsCancellationRequested)
+                {
+                    var client = await _listener.AcceptTcpClientAsync(_cts.Token);
+                    _ = Task.Run(() => ServeClientAsync(client), _cts.Token);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        private async Task ServeClientAsync(TcpClient client)
+        {
+            using (client)
+            {
+                var stream = client.GetStream();
+                var path = await ReadRequestPathAsync(stream, _cts.Token);
+
+                if (path.StartsWith("/explore/", StringComparison.OrdinalIgnoreCase))
+                {
+                    await WriteTextResponseAsync(stream, BuildNoteHtml(), "text/html; charset=utf-8", _cts.Token);
+                    return;
+                }
+
+                if (path.StartsWith("/image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (Interlocked.Increment(ref _startedImageRequests) == _imageCount)
+                        _allImageRequestsStarted.TrySetResult();
+
+                    await _releaseImages.Task.WaitAsync(_cts.Token);
+                    await WriteTextResponseAsync(stream, "image-bytes", "image/jpeg", _cts.Token);
+                    return;
+                }
+
+                await WriteTextResponseAsync(stream, "not found", "text/plain", _cts.Token, "404 Not Found");
+            }
+        }
+
+        private string BuildNoteHtml()
+        {
+            var images = string.Join(
+                ",",
+                Enumerable.Range(1, _imageCount).Select(index => $$"""{"urlDefault":"{{BaseUrl}}/image/{{index}}.jpg"}"""));
+
+            return $$"""
+                <html>
+                <body>
+                <script>
+                window.__INITIAL_STATE__ = {
+                  "note": {
+                    "noteDetailMap": {
+                      "abc123": {
+                        "note": {
+                          "title": "并发下载测试",
+                          "desc": "并发下载测试",
+                          "imageList": [{{images}}]
+                        }
+                      }
+                    }
+                  }
+                };
+                </script>
+                </body>
+                </html>
+                """;
+        }
+
+        private static async Task<string> ReadRequestPathAsync(NetworkStream stream, CancellationToken ct)
+        {
+            var buffer = new byte[1024];
+            var request = new StringBuilder();
+            while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+            {
+                var read = await stream.ReadAsync(buffer, ct);
+                if (read == 0)
+                    break;
+
+                request.Append(Encoding.ASCII.GetString(buffer, 0, read));
+            }
+
+            var firstLine = request.ToString().Split("\r\n", StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+            var parts = firstLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 2 ? parts[1] : "/";
+        }
+
+        private static async Task WriteTextResponseAsync(
+            NetworkStream stream,
+            string body,
+            string contentType,
+            CancellationToken ct,
+            string status = "200 OK")
+        {
+            var bodyBytes = Encoding.UTF8.GetBytes(body);
+            var headers = Encoding.ASCII.GetBytes(
+                $"HTTP/1.1 {status}\r\nContent-Type: {contentType}\r\nContent-Length: {bodyBytes.Length}\r\nConnection: close\r\n\r\n");
+
+            await stream.WriteAsync(headers, ct);
+            await stream.WriteAsync(bodyBytes, ct);
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _releaseImages.TrySetResult();
+            _listener.Stop();
+
+            try
+            {
+                _serverTask.Wait(TimeSpan.FromSeconds(1));
+            }
+            catch (AggregateException)
+            {
+            }
+
+            _cts.Dispose();
         }
     }
 }

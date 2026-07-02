@@ -18,6 +18,7 @@ public class XiaohongshuImageDownloadService
     private const string BrowserUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
     private const int ImageDownloadBufferSize = 64 * 1024;
+    private const int MaxConcurrentImageDownloads = 4;
 
     private readonly ConfigService _configService;
 
@@ -237,46 +238,23 @@ public class XiaohongshuImageDownloadService
 
             logCallback?.Invoke($"[xhs-image] 正在保存至文件夹：{subfolderPath}");
 
-            long totalBytes = 0;
-            var savedFiles = new List<string>();
-
-            for (var idx = 0; idx < imageUrls.Count; idx++)
-            {
-                ct.ThrowIfCancellationRequested();
-
-                var imageUrl = imageUrls[idx];
-                var ext = ".jpg";
-                if (imageUrl.Contains(".png", StringComparison.OrdinalIgnoreCase))
-                    ext = ".png";
-                else if (imageUrl.Contains(".webp", StringComparison.OrdinalIgnoreCase))
-                    ext = ".webp";
-                else if (imageUrl.Contains(".gif", StringComparison.OrdinalIgnoreCase))
-                    ext = ".gif";
-
-                var fileName = $"{(idx + 1)}{ext}";
-                var imagePath = Path.Combine(subfolderPath, fileName);
-
-                logCallback?.Invoke($"[xhs-image] 正在下载第 {idx + 1}/{imageUrls.Count} 张图片...");
-
-                var startProgress = 5.0 + (90.0 * idx / imageUrls.Count);
-                progress?.Report(new DownloadProgress
-                {
-                    Percent = startProgress,
-                    RawLine = $"[xhs-image] 正在下载图片 {idx + 1}/{imageUrls.Count}"
-                });
-
-                await DownloadFileAsync(client, imageUrl, imagePath, finalUrl, ct);
-
-                savedFiles.Add(imagePath);
-                if (File.Exists(imagePath))
-                {
-                    totalBytes += new FileInfo(imagePath).Length;
-                }
-            }
+            var savedFiles = new string[imageUrls.Count];
+            var fileSizes = new long[imageUrls.Count];
+            await DownloadImagesAsync(
+                client,
+                imageUrls,
+                subfolderPath,
+                finalUrl,
+                savedFiles,
+                fileSizes,
+                progress,
+                logCallback,
+                ct);
+            var totalBytes = fileSizes.Sum();
 
             task.Status = DownloadStatus.Completed;
             task.Progress = 100;
-            if (savedFiles.Count > 0)
+            if (savedFiles.Length > 0)
             {
                 task.OutputFilePath = savedFiles[0];
                 var extension = Path.GetExtension(savedFiles[0]).TrimStart('.').ToLowerInvariant();
@@ -363,6 +341,67 @@ public class XiaohongshuImageDownloadService
             task.Title = title;
         else
             dispatcher.Invoke(() => task.Title = title);
+    }
+
+    private static async Task DownloadImagesAsync(
+        HttpClient client,
+        IReadOnlyList<string> imageUrls,
+        string subfolderPath,
+        string referer,
+        string[] savedFiles,
+        long[] fileSizes,
+        IProgress<DownloadProgress>? progress,
+        Action<string>? logCallback,
+        CancellationToken ct)
+    {
+        using var concurrency = new SemaphoreSlim(Math.Min(MaxConcurrentImageDownloads, imageUrls.Count));
+        var downloads = Enumerable.Range(0, imageUrls.Count)
+            .Select(index => DownloadImageWithConcurrencyAsync(index))
+            .ToArray();
+
+        await Task.WhenAll(downloads);
+
+        async Task DownloadImageWithConcurrencyAsync(int index)
+        {
+            await concurrency.WaitAsync(ct);
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var imageUrl = imageUrls[index];
+                var imagePath = Path.Combine(subfolderPath, $"{index + 1}{GetImageExtension(imageUrl)}");
+
+                logCallback?.Invoke($"[xhs-image] 正在下载第 {index + 1}/{imageUrls.Count} 张图片...");
+
+                var startProgress = 5.0 + (90.0 * index / imageUrls.Count);
+                progress?.Report(new DownloadProgress
+                {
+                    Percent = startProgress,
+                    RawLine = $"[xhs-image] 正在下载图片 {index + 1}/{imageUrls.Count}"
+                });
+
+                await DownloadFileAsync(client, imageUrl, imagePath, referer, ct);
+
+                savedFiles[index] = imagePath;
+                if (File.Exists(imagePath))
+                    fileSizes[index] = new FileInfo(imagePath).Length;
+            }
+            finally
+            {
+                concurrency.Release();
+            }
+        }
+    }
+
+    private static string GetImageExtension(string imageUrl)
+    {
+        if (imageUrl.Contains(".png", StringComparison.OrdinalIgnoreCase))
+            return ".png";
+        if (imageUrl.Contains(".webp", StringComparison.OrdinalIgnoreCase))
+            return ".webp";
+        if (imageUrl.Contains(".gif", StringComparison.OrdinalIgnoreCase))
+            return ".gif";
+        return ".jpg";
     }
 
     private static async Task DownloadFileAsync(HttpClient client, string url, string outputPath, string referer, CancellationToken ct)
