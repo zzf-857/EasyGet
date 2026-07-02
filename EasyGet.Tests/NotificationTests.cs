@@ -34,10 +34,9 @@ public class NotificationTests
     {
         var item = new NotificationItem("Test Msg", true);
 
-        // 初始运行一会
-        await Task.Delay(200);
+        // 等待计时器确实完成至少一次 tick，避免 CI runner 调度抖动导致固定延迟不稳定。
+        Assert.True(SpinWait.SpinUntil(() => item.RemainingRatio < 1.0, TimeSpan.FromSeconds(2)));
         double initialRatio = item.RemainingRatio;
-        Assert.True(initialRatio < 1.0);
 
         // 暂停
         item.Pause();
@@ -49,7 +48,7 @@ public class NotificationTests
 
         // 恢复
         item.Resume();
-        await Task.Delay(200);
+        Assert.True(SpinWait.SpinUntil(() => item.RemainingRatio < pausedRatio, TimeSpan.FromSeconds(2)));
         double resumedRatio = item.RemainingRatio;
 
         // 验证恢复后比例确实减少了
