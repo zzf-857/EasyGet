@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -16,6 +17,7 @@ public class XiaohongshuImageDownloadService
 {
     private const string BrowserUserAgent =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    private const int ImageDownloadBufferSize = 64 * 1024;
 
     private readonly ConfigService _configService;
 
@@ -371,16 +373,24 @@ public class XiaohongshuImageDownloadService
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
-        await using var source = await response.Content.ReadAsStreamAsync(ct);
-        await using var target = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        var buffer = ArrayPool<byte>.Shared.Rent(ImageDownloadBufferSize);
 
-        var buffer = new byte[64 * 1024];
-        while (true)
+        try
         {
-            var read = await source.ReadAsync(buffer, ct);
-            if (read == 0)
-                break;
-            await target.WriteAsync(buffer.AsMemory(0, read), ct);
+            await using var source = await response.Content.ReadAsStreamAsync(ct);
+            await using var target = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, ImageDownloadBufferSize, useAsync: true);
+
+            while (true)
+            {
+                var read = await source.ReadAsync(buffer.AsMemory(0, ImageDownloadBufferSize), ct);
+                if (read == 0)
+                    break;
+                await target.WriteAsync(buffer.AsMemory(0, read), ct);
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

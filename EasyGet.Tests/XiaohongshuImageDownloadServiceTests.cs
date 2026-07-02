@@ -86,6 +86,19 @@ public class XiaohongshuImageDownloadServiceTests
     }
 
     [Fact]
+    public void DownloadFileAsync_RentsBufferAndUsesAsyncFileStream()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "XiaohongshuImageDownloadService.cs")));
+
+        Assert.Contains("ImageDownloadBufferSize", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Rent(ImageDownloadBufferSize)", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.Contains("new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, ImageDownloadBufferSize, useAsync: true)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new byte[64 * 1024]", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void IsXiaohongshuUrl_IdentifiesCorrectDomains()
     {
         Assert.True(YtDlpService.IsXiaohongshuUrl("https://www.xiaohongshu.com/explore/abc"));
