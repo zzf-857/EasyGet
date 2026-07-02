@@ -49,6 +49,28 @@ public class EnvironmentServiceTests : IDisposable
     }
 
     [Fact]
+    public void FindExecutableInDirectoryTree_PrefersBinExecutableWithoutSortingSnapshot()
+    {
+        var rootCandidateDir = Path.Combine(_tempDir, "tools");
+        var binDir = Path.Combine(_tempDir, "ffmpeg-release-essentials", "bin");
+        Directory.CreateDirectory(rootCandidateDir);
+        Directory.CreateDirectory(binDir);
+
+        File.WriteAllText(Path.Combine(rootCandidateDir, "ffmpeg.exe"), "root exe");
+        var expectedPath = Path.Combine(binDir, "ffmpeg.exe");
+        File.WriteAllText(expectedPath, "bin exe");
+
+        var foundPath = EnvironmentService.FindExecutableInDirectoryTree(_tempDir, "ffmpeg.exe");
+
+        Assert.Equal(expectedPath, foundPath);
+
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "EnvironmentService.cs")));
+        Assert.DoesNotContain(".OrderBy(path =>", source, StringComparison.Ordinal);
+        Assert.Contains("foreach (var path in Directory.EnumerateFiles(rootDirectory, executableName, SearchOption.AllDirectories))", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void FindExecutableOnPath_ReturnsExecutableFromSearchPath()
     {
         Directory.CreateDirectory(_tempDir);

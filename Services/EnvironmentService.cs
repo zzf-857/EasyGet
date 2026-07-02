@@ -147,9 +147,17 @@ public class EnvironmentService
         if (!Directory.Exists(rootDirectory))
             return null;
 
-        return Directory.EnumerateFiles(rootDirectory, executableName, SearchOption.AllDirectories)
-            .OrderBy(path => path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-            .FirstOrDefault();
+        string? firstCandidate = null;
+        var binSegment = $"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}";
+
+        foreach (var path in Directory.EnumerateFiles(rootDirectory, executableName, SearchOption.AllDirectories))
+        {
+            firstCandidate ??= path;
+            if (path.Contains(binSegment, StringComparison.OrdinalIgnoreCase))
+                return path;
+        }
+
+        return firstCandidate;
     }
 
     internal static string? FindExecutableOnPath(string executableName, string? searchPath = null)
