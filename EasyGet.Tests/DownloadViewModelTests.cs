@@ -25,6 +25,14 @@ public class DownloadViewModelTests
     }
 
     [Fact]
+    public void ExtractUrl_ExtractsDouyinShortUrlFromFullShareText()
+    {
+        var input = "8.25 复制打开抖音，看看【意联Idealink的作品】父母眼中的“享福”四件套 # AI工具 # AI短... https://v.douyin.com/vi3b7QpNklg/ mDu:/ :2pm q@R.kC 08/19";
+
+        Assert.Equal("https://v.douyin.com/vi3b7QpNklg/", DownloadViewModel.ExtractUrl(input));
+    }
+
+    [Fact]
     public void LogTextJoinsLogLinesForSelectableTextViewer()
     {
         using var context = CreateDownloadContext();

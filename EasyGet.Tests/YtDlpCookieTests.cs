@@ -293,4 +293,14 @@ public class YtDlpCookieTests
         Assert.Contains("抖音", message);
         Assert.Contains("最新 Cookie", message);
     }
+
+    [Fact]
+    public void BuildDouyinFallbackVideoInfo_UsesShortShareTokenAsStableTitle()
+    {
+        var info = YtDlpService.BuildDouyinFallbackVideoInfo("https://v.douyin.com/vi3b7QpNklg/");
+
+        Assert.Equal("Douyin_vi3b7QpNklg", info.Title);
+        Assert.Equal("Douyin", info.Platform);
+        Assert.Equal("https://v.douyin.com/vi3b7QpNklg/", info.Url);
+    }
 }

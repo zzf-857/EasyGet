@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1 - 2026-07-02
+
+### Fixes
+- Let Douyin links continue past metadata parsing when `yt-dlp` asks for fresh cookies, so the existing browser fallback can handle download.
+- Ignore the local `EXE/` install directory in Git.
+
+### Tests
+- Added coverage for full Douyin share text URL extraction and Douyin fallback metadata.
+
 ## 1.1.0 - 2026-07-02
 
 ### Features

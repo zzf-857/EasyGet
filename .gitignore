@@ -16,6 +16,9 @@ build/
 bld/
 artifacts/
 
+## Local installed app directory
+EXE/
+
 ## NuGet
 *.nupkg
 **/packages/*

@@ -163,6 +163,9 @@ public partial class YtDlpService
             Debug.WriteLine($"[YtDlpService] GetVideoInfo failed: {ex.Message}");
         }
 
+        if (IsDouyinUrl(url))
+            return BuildDouyinFallbackVideoInfo(url);
+
         if (IsXiaohongshuUrl(url))
         {
             try
@@ -800,6 +803,52 @@ public partial class YtDlpService
 
         return uri.Host.Contains("douyin.com", StringComparison.OrdinalIgnoreCase)
             || uri.Host.Contains("iesdouyin.com", StringComparison.OrdinalIgnoreCase);
+    }
+
+    internal static VideoInfo BuildDouyinFallbackVideoInfo(string url)
+    {
+        var id = ExtractDouyinStableId(url);
+        return new VideoInfo
+        {
+            Title = string.IsNullOrWhiteSpace(id) ? "Douyin_Video" : $"Douyin_{id}",
+            Platform = "Douyin",
+            Duration = 0,
+            Thumbnail = "",
+            FileSize = 0,
+            Url = url
+        };
+    }
+
+    private static string ExtractDouyinStableId(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            return "";
+
+        var videoId = Regex.Match(url, @"/video/(\d+)", RegexOptions.IgnoreCase);
+        if (videoId.Success)
+            return videoId.Groups[1].Value;
+
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            var token = uri.AbsolutePath
+                .Split('/', StringSplitOptions.RemoveEmptyEntries)
+                .FirstOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(token))
+                return SanitizeDouyinStableId(token);
+        }
+
+        var longNumber = Regex.Match(url, @"\d{12,}");
+        return longNumber.Success ? longNumber.Value : "";
+    }
+
+    private static string SanitizeDouyinStableId(string value)
+    {
+        var chars = value
+            .Where(c => char.IsLetterOrDigit(c) || c is '-' or '_')
+            .ToArray();
+
+        return new string(chars);
     }
 
     private static bool IsYoutubeUrl(string url)
