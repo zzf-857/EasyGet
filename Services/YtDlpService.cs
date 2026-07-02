@@ -727,12 +727,27 @@ public partial class YtDlpService
 
     private static double ParseSpeed(string speedStr)
     {
-        var m = SpeedRegex().Match(speedStr);
-        if (!m.Success)
+        var speed = speedStr.AsSpan().Trim();
+        if (speed.Equals("Unknown B/s", StringComparison.OrdinalIgnoreCase)
+            || !speed.EndsWith("/s", StringComparison.OrdinalIgnoreCase))
+        {
+            return 0;
+        }
+
+        speed = speed[..^2];
+        var unitStart = 0;
+        while (unitStart < speed.Length
+            && (char.IsDigit(speed[unitStart]) || speed[unitStart] == '.'))
+        {
+            unitStart++;
+        }
+
+        if (unitStart == 0 || unitStart >= speed.Length)
             return 0;
 
+        var valueSpan = speed[..unitStart];
         if (!double.TryParse(
-                m.Groups[1].Value,
+                valueSpan,
                 System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out var value))
@@ -740,15 +755,17 @@ public partial class YtDlpService
             return 0;
         }
 
-        var unit = m.Groups[2].Value.Replace("/s", "", StringComparison.OrdinalIgnoreCase);
+        var unit = speed[unitStart..];
+        if (unit.Equals("KiB", StringComparison.OrdinalIgnoreCase))
+            return value * 1024;
 
-        return unit switch
-        {
-            "KiB" => value * 1024,
-            "MiB" => value * 1024 * 1024,
-            "GiB" => value * 1024 * 1024 * 1024,
-            _ => value
-        };
+        if (unit.Equals("MiB", StringComparison.OrdinalIgnoreCase))
+            return value * 1024 * 1024;
+
+        if (unit.Equals("GiB", StringComparison.OrdinalIgnoreCase))
+            return value * 1024 * 1024 * 1024;
+
+        return value;
     }
 
     private static double ParseEta(string etaStr)
@@ -756,22 +773,38 @@ public partial class YtDlpService
         if (etaStr == "Unknown" || string.IsNullOrWhiteSpace(etaStr))
             return 0;
 
-        var parts = etaStr.Split(':');
-        return parts.Length switch
+        var eta = etaStr.AsSpan().Trim();
+        Span<int> parts = stackalloc int[3];
+        var partCount = 0;
+
+        while (true)
         {
-            3 when TryParseEtaPart(parts[0], out var hours)
-                   && TryParseEtaPart(parts[1], out var minutes)
-                   && TryParseEtaPart(parts[2], out var seconds)
-                => hours * 3600 + minutes * 60 + seconds,
-            2 when TryParseEtaPart(parts[0], out var minutes)
-                   && TryParseEtaPart(parts[1], out var seconds)
-                => minutes * 60 + seconds,
-            1 when TryParseEtaPart(parts[0], out var seconds) => seconds,
+            if (partCount == parts.Length)
+                return 0;
+
+            var separator = eta.IndexOf(':');
+            var part = separator >= 0 ? eta[..separator] : eta;
+            if (!TryParseEtaPart(part, out parts[partCount]))
+                return 0;
+
+            partCount++;
+
+            if (separator < 0)
+                break;
+
+            eta = eta[(separator + 1)..];
+        }
+
+        return partCount switch
+        {
+            3 => parts[0] * 3600 + parts[1] * 60 + parts[2],
+            2 => parts[0] * 60 + parts[1],
+            1 => parts[0],
             _ => 0
         };
     }
 
-    private static bool TryParseEtaPart(string value, out int result)
+    private static bool TryParseEtaPart(ReadOnlySpan<char> value, out int result)
         => int.TryParse(
             value,
             System.Globalization.NumberStyles.None,
@@ -1532,9 +1565,6 @@ public partial class YtDlpService
 
     [GeneratedRegex(@"([\d.]+)%.*?((?:[\d.]+[KMGT]?i?B|Unknown B)/s).*?ETA\s+(\S+)")]
     private static partial Regex UniversalProgressRegex();
-
-    [GeneratedRegex(@"([\d.]+)([\w/]+)")]
-    private static partial Regex SpeedRegex();
 
     [GeneratedRegex(@"\.f\d+\.[a-zA-Z0-9]+$")]
     private static partial Regex TempFilePattern();

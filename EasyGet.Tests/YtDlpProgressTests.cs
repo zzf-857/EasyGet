@@ -63,6 +63,41 @@ public class YtDlpProgressTests
         Assert.Equal(0, progress.Eta);
     }
 
+    [Fact]
+    public void ParseProgressLine_AvoidsPerLineSpeedRegexAndEtaSplit()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.DoesNotContain("SpeedRegex().Match(speedStr)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("etaStr.Split(':')", source, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("01:02:03", 3723)]
+    [InlineData("02:03", 123)]
+    [InlineData("42", 42)]
+    public void ParseProgressLine_ParsesEtaFormatsWithoutCulture(string eta, double expected)
+    {
+        var progress = ParseProgressLine($"download:25.0% 1.00MiB/s ETA {eta}");
+
+        Assert.NotNull(progress);
+        Assert.Equal(expected, progress!.Eta);
+    }
+
+    [Theory]
+    [InlineData("512.00B/s", 512)]
+    [InlineData("1.00KiB/s", 1024)]
+    [InlineData("1.50MiB/s", 1.5 * 1024 * 1024)]
+    [InlineData("2.00GiB/s", 2.0 * 1024 * 1024 * 1024)]
+    public void ParseProgressLine_ParsesBinarySpeedUnits(string speed, double expected)
+    {
+        var progress = ParseProgressLine($"download:25.0% {speed} ETA 00:01");
+
+        Assert.NotNull(progress);
+        Assert.Equal(expected, progress!.Speed, precision: 3);
+    }
+
     [Theory]
     [InlineData("download:45.0% 1.00MiB/s ETA 00:01", false)]
     [InlineData("[download] Destination: C:\\Videos\\sample.mp4", true)]
