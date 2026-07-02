@@ -49,7 +49,7 @@ public class YtDlpArgsTests
 
         YtDlpService.AddDownloadThroughputArgs(args);
 
-        AssertOptionValue(args, "--buffer-size", "16K");
+        AssertOptionValue(args, "--buffer-size", "1M");
     }
 
     [Fact]

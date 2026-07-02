@@ -72,4 +72,15 @@ public class M3u8DownloadServiceTests
 
         Assert.Contains("被加密", ex.Message);
     }
+
+    [Theory]
+    [InlineData(0, 16)]
+    [InlineData(8, 16)]
+    [InlineData(16, 16)]
+    [InlineData(24, 24)]
+    [InlineData(99, 32)]
+    public void ResolveSegmentConcurrency_KeepsExistingDefaultUnlessConfiguredHigher(int configuredFragments, int expected)
+    {
+        Assert.Equal(expected, M3u8DownloadService.ResolveSegmentConcurrency(configuredFragments));
+    }
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.8 - 2026-07-02
+
+### Optimizations
+- Increased the yt-dlp download buffer to `1M` to improve throughput on larger media streams without changing downloader selection or format behavior.
+- Kept the m3u8 segmented downloader at its existing 16-way baseline while allowing higher existing fragment settings to raise parallel segment downloads up to the configured maximum.
+
+### Tests
+- Added regression coverage for m3u8 segment concurrency so the downloader does not accidentally fall below the previous default parallelism.
+- Updated yt-dlp argument coverage to lock in the larger download buffer.
+
 ## 1.1.7 - 2026-07-02
 
 ### Optimizations

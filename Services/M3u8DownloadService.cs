@@ -13,6 +13,8 @@ namespace EasyGet.Services;
 
 public class M3u8DownloadService
 {
+    private const int DefaultSegmentConcurrency = 16;
+
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
 
@@ -149,8 +151,9 @@ public class M3u8DownloadService
                 }
             }, ct);
 
-            // 16 线程下载
-            var semaphore = new SemaphoreSlim(16);
+            var maxParallelSegments = ResolveSegmentConcurrency(_configService.Config.ConcurrentFragments);
+            logCallback?.Invoke($"[m3u8] 分片下载并发数: {maxParallelSegments}");
+            using var semaphore = new SemaphoreSlim(maxParallelSegments);
             var downloadTasks = new List<Task>();
 
             for (int i = 0; i < totalSegments; i++)
@@ -357,6 +360,12 @@ public class M3u8DownloadService
 
         return segments;
     }
+
+    internal static int ResolveSegmentConcurrency(int configuredFragments)
+        => Math.Clamp(
+            Math.Max(configuredFragments, DefaultSegmentConcurrency),
+            AppConfig.MinConcurrentFragments,
+            AppConfig.MaxConcurrentFragments);
 
     /// <summary>
     /// 带有重试机制的单分片下载

@@ -588,7 +588,7 @@ public partial class YtDlpService
     internal static void AddDownloadThroughputArgs(List<string> args)
     {
         args.Add("--buffer-size");
-        args.Add("16K");
+        args.Add("1M");
     }
 
     internal static void AddSiteCompatibilityArgs(List<string> args, string url)
