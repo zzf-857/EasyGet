@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
@@ -254,35 +255,43 @@ public class EnvironmentService
         response.EnsureSuccessStatusCode();
 
         var totalBytes = response.Content.Headers.ContentLength;
-        await using var source = await response.Content.ReadAsStreamAsync(ct);
-        await using var target = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, ToolDownloadBufferSize, useAsync: true);
+        var buffer = ArrayPool<byte>.Shared.Rent(ToolDownloadBufferSize);
 
-        var buffer = new byte[ToolDownloadBufferSize];
-        long totalRead = 0;
-        var lastPercent = -1;
-
-        while (true)
+        try
         {
-            var read = await source.ReadAsync(buffer, ct);
-            if (read == 0)
-                break;
+            await using var source = await response.Content.ReadAsStreamAsync(ct);
+            await using var target = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, ToolDownloadBufferSize, useAsync: true);
 
-            await target.WriteAsync(buffer.AsMemory(0, read), ct);
-            totalRead += read;
+            long totalRead = 0;
+            var lastPercent = -1;
 
-            if (totalBytes is > 0)
+            while (true)
             {
-                var percent = (int)Math.Floor(totalRead * 100d / totalBytes.Value);
-                if (percent >= lastPercent + 5 || percent == 100)
+                var read = await source.ReadAsync(buffer.AsMemory(0, ToolDownloadBufferSize), ct);
+                if (read == 0)
+                    break;
+
+                await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                totalRead += read;
+
+                if (totalBytes is > 0)
                 {
-                    lastPercent = percent;
-                    log?.Report($"{toolName} 下载中... {percent}%");
+                    var percent = (int)Math.Floor(totalRead * 100d / totalBytes.Value);
+                    if (percent >= lastPercent + 5 || percent == 100)
+                    {
+                        lastPercent = percent;
+                        log?.Report($"{toolName} 下载中... {percent}%");
+                    }
                 }
             }
-        }
 
-        if (totalBytes is > 0 && totalRead != totalBytes.Value)
-            throw new IOException($"{toolName} 下载不完整：已下载 {totalRead} / {totalBytes.Value} 字节。");
+            if (totalBytes is > 0 && totalRead != totalBytes.Value)
+                throw new IOException($"{toolName} 下载不完整：已下载 {totalRead} / {totalBytes.Value} 字节。");
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static bool ShouldRetryToolDownload(Exception ex, int attempt, CancellationToken ct)

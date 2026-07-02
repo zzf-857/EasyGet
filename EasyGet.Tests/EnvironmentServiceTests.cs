@@ -148,14 +148,16 @@ public class EnvironmentServiceTests : IDisposable
     }
 
     [Fact]
-    public void ToolDownload_UsesAsyncBufferedFileStream()
+    public void ToolDownload_UsesAsyncBufferedFileStreamAndRentedBuffer()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
             Path.Combine("Services", "EnvironmentService.cs")));
 
         Assert.Contains("ToolDownloadBufferSize", source, StringComparison.Ordinal);
         Assert.Contains("new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, ToolDownloadBufferSize, useAsync: true)", source, StringComparison.Ordinal);
-        Assert.Contains("new byte[ToolDownloadBufferSize]", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Rent(ToolDownloadBufferSize)", source, StringComparison.Ordinal);
+        Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new byte[ToolDownloadBufferSize]", source, StringComparison.Ordinal);
         Assert.DoesNotContain("File.Create(targetPath)", source, StringComparison.Ordinal);
     }
 
