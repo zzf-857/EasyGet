@@ -74,6 +74,18 @@ public class XiaohongshuImageDownloadServiceTests
     }
 
     [Fact]
+    public void ExtractNoteDataFromJson_DisposesJsonDocumentAfterCloningResult()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "XiaohongshuImageDownloadService.cs")));
+        var sourceLines = source.Split(Environment.NewLine);
+
+        Assert.Contains("using var doc = JsonDocument.Parse(jsonStr);", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(sourceLines, line =>
+            line.TrimStart().StartsWith("var doc = JsonDocument.Parse(jsonStr);", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void IsXiaohongshuUrl_IdentifiesCorrectDomains()
     {
         Assert.True(YtDlpService.IsXiaohongshuUrl("https://www.xiaohongshu.com/explore/abc"));

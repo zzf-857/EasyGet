@@ -334,7 +334,7 @@ public class XiaohongshuImageDownloadService
 
         try
         {
-            var doc = JsonDocument.Parse(jsonStr);
+            using var doc = JsonDocument.Parse(jsonStr);
             var root = doc.RootElement;
             if (root.TryGetProperty("note", out var noteProp) &&
                 noteProp.TryGetProperty("noteDetailMap", out var detailMapProp) &&
