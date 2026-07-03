@@ -580,6 +580,16 @@ public class XamlBindingTests
         Assert.Contains("HttpUrlToBool", sourceButton.Attribute("IsEnabled")?.Value ?? "");
     }
 
+    [Fact]
+    public void HistoryViewShowsAttachmentCountOnHistoryCards()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+
+        Assert.Contains("AttachmentCountText", source, StringComparison.Ordinal);
+        Assert.Contains("HasAttachmentFiles", source, StringComparison.Ordinal);
+        Assert.Contains("附属", source, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("DownloadView.xaml", "粘贴视频链接", "支持 YouTube")]
     [InlineData("BatchDownloadView.xaml", "批量下载", "输入多个视频链接")]
@@ -853,6 +863,59 @@ public class XamlBindingTests
         Assert.Contains("InstallAppUpdateCommand", source);
         Assert.Contains("AppUpdateProgress", source);
         Assert.Contains("AccentProgressBar", source);
+    }
+
+    [Fact]
+    public void SettingsViewExposesDouyinSpecialDownloadSettings()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("抖音专项下载", texts);
+        Assert.Contains("启用专项引擎", texts);
+        Assert.Contains("用户作品模式", texts);
+        Assert.Contains("下载数量上限", texts);
+        Assert.Contains("下载封面", texts);
+        Assert.Contains("下载音乐", texts);
+        Assert.Contains("下载评论", texts);
+        Assert.Contains("下载作者头像", texts);
+        Assert.Contains("保存原始 JSON", texts);
+        Assert.Contains("启用本地去重数据库", texts);
+        Assert.Contains("增量下载", texts);
+        Assert.Contains(texts, text => text.Contains("在下载目录下维护本地记录", StringComparison.Ordinal));
+        Assert.Contains(texts, text => text.Contains("依赖本地去重数据库", StringComparison.Ordinal));
+        Assert.Contains(texts, text => text.Contains("复用上方全局 Cookie", StringComparison.Ordinal));
+
+        Assert.Contains("EnableDouyinSpecialEngine", source);
+        Assert.Contains("DouyinModeOptions", source);
+        Assert.Contains("DouyinMode", source);
+        Assert.Contains("DouyinLimit", source);
+        Assert.Contains("DouyinDownloadCover", source);
+        Assert.Contains("DouyinDownloadMusic", source);
+        Assert.Contains("DouyinDownloadComments", source);
+        Assert.Contains("DouyinDownloadAvatar", source);
+        Assert.Contains("DouyinDownloadJson", source);
+        Assert.Contains("DouyinEnableDatabase", source);
+        Assert.Contains("DouyinIncrementalDownload", source);
+
+        var databaseToggle = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "ToggleButton"
+                && (element.Attribute("IsChecked")?.Value ?? "").Contains("DouyinEnableDatabase", StringComparison.Ordinal));
+        Assert.NotNull(databaseToggle);
+        Assert.Contains("EnableDouyinSpecialEngine", databaseToggle!.ToString(SaveOptions.DisableFormatting), StringComparison.Ordinal);
+
+        var incrementalToggle = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "ToggleButton"
+                && (element.Attribute("IsChecked")?.Value ?? "").Contains("DouyinIncrementalDownload", StringComparison.Ordinal));
+        Assert.NotNull(incrementalToggle);
+        var incrementalToggleSource = incrementalToggle!.ToString(SaveOptions.DisableFormatting);
+        Assert.Contains("EnableDouyinSpecialEngine", incrementalToggleSource, StringComparison.Ordinal);
+        Assert.Contains("DouyinEnableDatabase", incrementalToggleSource, StringComparison.Ordinal);
     }
 
     [Fact]

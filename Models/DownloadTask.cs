@@ -61,6 +61,9 @@ public partial class DownloadTask : ObservableObject
     /// <summary>输出文件路径</summary>
     [ObservableProperty] private string _outputFilePath = "";
 
+    /// <summary>所有安全输出文件路径（Douyin sidecar 可返回多个产物）</summary>
+    public List<string> OutputFilePaths { get; set; } = [];
+
     /// <summary>下载进度 0-100</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(SpeedText))]

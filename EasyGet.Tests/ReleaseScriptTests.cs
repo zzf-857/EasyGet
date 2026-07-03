@@ -1,4 +1,5 @@
 using Xunit;
+using System.Diagnostics;
 
 namespace EasyGet.Tests;
 
@@ -32,6 +33,247 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void DouyinSidecarBuildScriptStagesSmokeOnlyReleaseSkeleton()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "build-douyin-sidecar.ps1");
+
+        Assert.True(File.Exists(scriptPath), "Expected scripts/build-douyin-sidecar.ps1 to exist.");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("[CmdletBinding()]", script, StringComparison.Ordinal);
+        Assert.Contains("Configuration", script, StringComparison.Ordinal);
+        Assert.Contains("Runtime", script, StringComparison.Ordinal);
+        Assert.Contains("OutputRoot", script, StringComparison.Ordinal);
+        Assert.Contains("SkipBuild", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.DouyinSidecar.spec", script, StringComparison.Ordinal);
+        Assert.Contains("PyInstaller", script, StringComparison.Ordinal);
+        Assert.Contains("artifacts\\sidecar", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.DouyinSidecar.exe", script, StringComparison.Ordinal);
+        Assert.Contains("THIRD_PARTY_NOTICES.md", script, StringComparison.Ordinal);
+        Assert.Contains("douyin-downloader-promax-LICENSE.txt", script, StringComparison.Ordinal);
+        Assert.Contains("APACHE-2.0.txt", script, StringComparison.Ordinal);
+        Assert.Contains("sidecar-version.json", script, StringComparison.Ordinal);
+        Assert.Contains("Get-FileHash -Algorithm SHA256", script, StringComparison.Ordinal);
+        Assert.Contains("smokeOnly = $true", script, StringComparison.Ordinal);
+        Assert.Contains("selfContainedRealDownload = $false", script, StringComparison.Ordinal);
+        Assert.Contains("DOUYIN_DOWNLOADER_PROMAX_ROOT", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"F:\AI\AIMadeupTools\05_ThirdPartyRepos", script, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("packagingMode = \"pyinstaller-onefile-smoke-only\"", script, StringComparison.Ordinal);
+        Assert.Contains("$bundlesThirdPartyRuntime", script, StringComparison.Ordinal);
+        Assert.Contains("runtimeRequiresExternalPython = (-not $bundlesThirdPartyRuntime)", script, StringComparison.Ordinal);
+        Assert.Contains("excludedOptionalFeatures", script, StringComparison.Ordinal);
+        Assert.Contains("artifactSizeBytes", script, StringComparison.Ordinal);
+        Assert.Contains("licenseInventoryPath = \"licenses/python-dependency-license-inventory.md\"", script, StringComparison.Ordinal);
+        Assert.Contains("importSelfTest", script, StringComparison.Ordinal);
+        Assert.Contains("--self-test-imports", script, StringComparison.Ordinal);
+        Assert.Contains("commit = $thirdPartyCommit", script, StringComparison.Ordinal);
+        Assert.Contains("dirty = $thirdPartyDirty", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DouyinSidecarReleaseSkeletonIncludesSpecAndAttributionFiles()
+    {
+        var root = TestRepositoryPaths.Root;
+        var specPath = Path.Combine(root, "tools", "douyin-sidecar", "EasyGet.DouyinSidecar.spec");
+        var noticesPath = Path.Combine(root, "tools", "douyin-sidecar", "THIRD_PARTY_NOTICES.md");
+        var licensePath = Path.Combine(root, "tools", "douyin-sidecar", "licenses", "douyin-downloader-promax-LICENSE.txt");
+        var apacheLicensePath = Path.Combine(root, "tools", "douyin-sidecar", "licenses", "APACHE-2.0.txt");
+        var licenseInventoryPath = Path.Combine(root, "tools", "douyin-sidecar", "licenses", "python-dependency-license-inventory.md");
+
+        Assert.True(File.Exists(specPath), "Expected PyInstaller spec to exist.");
+        Assert.True(File.Exists(noticesPath), "Expected third-party notices to exist.");
+        Assert.True(File.Exists(licensePath), "Expected douyin-downloader-promax license copy to exist.");
+        Assert.True(File.Exists(apacheLicensePath), "Expected Apache-2.0 license text to exist.");
+        Assert.True(File.Exists(licenseInventoryPath), "Expected Python dependency license inventory to exist.");
+
+        var spec = File.ReadAllText(specPath);
+        var notices = File.ReadAllText(noticesPath);
+        var license = File.ReadAllText(licensePath);
+        var apacheLicense = File.ReadAllText(apacheLicensePath);
+        var licenseInventory = File.ReadAllText(licenseInventoryPath);
+
+        Assert.Contains("sidecar.py", spec, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.DouyinSidecar", spec, StringComparison.Ordinal);
+        Assert.Contains("smoke-only", spec, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("real download self-contained runtime is not closed", spec, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("DOUYIN_DOWNLOADER_PROMAX_ROOT", spec, StringComparison.Ordinal);
+        Assert.Contains("pathex", spec, StringComparison.Ordinal);
+        Assert.Contains("bundled_source_roots", spec, StringComparison.Ordinal);
+        Assert.Contains("datas.append", spec, StringComparison.Ordinal);
+        Assert.Contains("third_party_hiddenimports", spec, StringComparison.Ordinal);
+        Assert.Contains("core.api_client", spec, StringComparison.Ordinal);
+        Assert.Contains("storage.database", spec, StringComparison.Ordinal);
+        Assert.Contains("playwright", spec, StringComparison.Ordinal);
+        Assert.Contains("server", spec, StringComparison.Ordinal);
+        Assert.Contains("whisper", spec, StringComparison.Ordinal);
+        Assert.Contains("transcribe", spec, StringComparison.Ordinal);
+        Assert.Contains(".cookies.json", spec, StringComparison.Ordinal);
+        Assert.DoesNotContain(@"F:\AI\AIMadeupTools\05_ThirdPartyRepos", spec, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("douyin-downloader-promax", notices, StringComparison.Ordinal);
+        Assert.Contains("MIT License", notices, StringComparison.Ordinal);
+        Assert.Contains("smoke-only", notices, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("utils/xbogus.py", notices, StringComparison.Ordinal);
+        Assert.Contains("utils/abogus.py", notices, StringComparison.Ordinal);
+        Assert.Contains("Apache-2.0", notices, StringComparison.Ordinal);
+        Assert.Contains("licenses/python-dependency-license-inventory.md", notices, StringComparison.Ordinal);
+        Assert.Contains("MIT License", license, StringComparison.Ordinal);
+        Assert.Contains("Copyright (c) 2026 jiji262", license, StringComparison.Ordinal);
+        Assert.Contains("Apache License", apacheLicense, StringComparison.Ordinal);
+        Assert.Contains("Version 2.0", apacheLicense, StringComparison.Ordinal);
+        foreach (var packageName in new[] { "aiohttp", "httpx", "aiofiles", "aiosqlite", "rich", "PyYAML", "python-dateutil", "gmssl", "certifi" })
+        {
+            Assert.Contains(packageName, licenseInventory, StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.Contains("optional extras are not included", licenseInventory, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("playwright", licenseInventory, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("openai-whisper", licenseInventory, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptStagesAndSmokesDouyinSidecarUnlessSkipped()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("SkipDouyinSidecar", script, StringComparison.Ordinal);
+        Assert.Contains("build-douyin-sidecar.ps1", script, StringComparison.Ordinal);
+        Assert.Contains("sidecars\\douyin", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.DouyinSidecar.exe", script, StringComparison.Ordinal);
+        Assert.Contains("THIRD_PARTY_NOTICES.md", script, StringComparison.Ordinal);
+        Assert.Contains("licenses\\douyin-downloader-promax-LICENSE.txt", script, StringComparison.Ordinal);
+        Assert.Contains("licenses\\APACHE-2.0.txt", script, StringComparison.Ordinal);
+        Assert.Contains("licenses\\python-dependency-license-inventory.md", script, StringComparison.Ordinal);
+        Assert.Contains("sidecar-version.json", script, StringComparison.Ordinal);
+        Assert.Contains("Test-DouyinSidecarSmoke", script, StringComparison.Ordinal);
+        Assert.Contains("--emit-sample", script, StringComparison.Ordinal);
+        Assert.Contains("RunDouyinImportSelfTest", script, StringComparison.Ordinal);
+        Assert.Contains("DouyinSidecarPython", script, StringComparison.Ordinal);
+        Assert.Contains("Python = $DouyinSidecarPython", script, StringComparison.Ordinal);
+        Assert.Contains("Test-DouyinSidecarImportSelfTest", script, StringComparison.Ordinal);
+        Assert.Contains("--self-test-imports", script, StringComparison.Ordinal);
+        Assert.Contains("DOUYIN_DOWNLOADER_PROMAX_ROOT", script, StringComparison.Ordinal);
+        Assert.Contains("Push-Location $smokeDir", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item Env:\\DOUYIN_DOWNLOADER_PROMAX_ROOT", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("$env:DOUYIN_DOWNLOADER_PROMAX_ROOT = $resolvedThirdPartyRoot", script, StringComparison.Ordinal);
+        Assert.Contains("ConvertFrom-Json", script, StringComparison.Ordinal);
+        Assert.Contains(".event -ne \"success\"", script, StringComparison.Ordinal);
+        Assert.Contains("RequireDouyinSidecar:(-not $SkipDouyinSidecar)", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptSupportsOptionalDouyinRealDownloadSmokeGate()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("RunDouyinRealDownloadSmoke", script, StringComparison.Ordinal);
+        Assert.Contains("DouyinRealSmokeUrl", script, StringComparison.Ordinal);
+        Assert.Contains("DouyinCookieEnvVar", script, StringComparison.Ordinal);
+        Assert.Contains("DouyinCookieFile", script, StringComparison.Ordinal);
+        Assert.Contains("Cannot specify both -DouyinCookieEnvVar and -DouyinCookieFile", script, StringComparison.Ordinal);
+        Assert.Contains("Douyin real download smoke requires -DouyinRealSmokeUrl", script, StringComparison.Ordinal);
+        Assert.Contains("Douyin real download smoke requires -DouyinCookieEnvVar or -DouyinCookieFile", script, StringComparison.Ordinal);
+        Assert.Contains("Test-DouyinSidecarRealDownloadSmoke", script, StringComparison.Ordinal);
+        Assert.Contains("sidecars\\douyin", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.DouyinSidecar.exe", script, StringComparison.Ordinal);
+        Assert.Contains("--cookie-env", script, StringComparison.Ordinal);
+        Assert.Contains("--cookie-file", script, StringComparison.Ordinal);
+        Assert.Contains("Push-Location $smokeCwd", script, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item Env:\\DOUYIN_DOWNLOADER_PROMAX_ROOT", script, StringComparison.Ordinal);
+        Assert.Contains("manifest/output_file_path", script, StringComparison.Ordinal);
+        Assert.Contains("file size was not greater than zero", script, StringComparison.Ordinal);
+        Assert.Contains("outside smoke output dir", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptRejectsDouyinRealDownloadSmokeWithoutUrlBeforePublishing()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+
+        var result = RunPowerShellScript(scriptPath, "-SkipTests", "-SkipZip", "-SkipDouyinSidecar", "-RunDouyinRealDownloadSmoke", "-DouyinCookieEnvVar", "EASYGET_TEST_COOKIE");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Douyin real download smoke requires -DouyinRealSmokeUrl", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet restore", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptRejectsDouyinRealDownloadSmokeWithoutCookieSourceBeforePublishing()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+
+        var result = RunPowerShellScript(scriptPath, "-SkipTests", "-SkipZip", "-SkipDouyinSidecar", "-RunDouyinRealDownloadSmoke", "-DouyinRealSmokeUrl", "https://example.invalid/douyin-smoke");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Douyin real download smoke requires -DouyinCookieEnvVar or -DouyinCookieFile", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet restore", result.CombinedOutput, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptRejectsDouyinRealDownloadSmokeWithBothCookieSourcesBeforePublishing()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var cookieFile = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(cookieFile, "raw-cookie-value-that-must-not-leak");
+
+            var result = RunPowerShellScript(scriptPath, "-SkipTests", "-SkipZip", "-SkipDouyinSidecar", "-RunDouyinRealDownloadSmoke", "-DouyinRealSmokeUrl", "https://example.invalid/douyin-smoke", "-DouyinCookieEnvVar", "EASYGET_TEST_COOKIE", "-DouyinCookieFile", cookieFile);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Cannot specify both -DouyinCookieEnvVar and -DouyinCookieFile", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain("raw-cookie-value-that-must-not-leak", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.DoesNotContain(cookieFile, result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(cookieFile);
+        }
+    }
+
+    [Fact]
+    public void WindowsPublishScriptMaintainsConservativeDouyinRealDownloadManifestDefaults()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("realDownloadVerified = $false", script, StringComparison.Ordinal);
+        Assert.Contains("realDownloadVerifiedAtUtc = $null", script, StringComparison.Ordinal);
+        Assert.Contains("realDownloadSmokeUrlHash = $null", script, StringComparison.Ordinal);
+        Assert.Contains("realDownloadSmokeUsedCookieSource = $null", script, StringComparison.Ordinal);
+        Assert.Contains("selfContainedRealDownload = ($runtimeBundled -and $importSelfTestPassed -and $realDownloadSmokePassed)", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[string]$RealDownloadVerifiedAtUtc", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[string]$RealDownloadSmokeUrlHash", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[string]$RealDownloadSmokeUsedCookieSource", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WindowsPublishScriptStoresDouyinRealDownloadSmokeMetadataWithoutRawUrlOrCookie()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("Get-DouyinRealSmokeUrlHash", script, StringComparison.Ordinal);
+        Assert.Contains("realDownloadSmokeUrlHash = $realDownloadSmokeUrlHash", script, StringComparison.Ordinal);
+        Assert.Contains("realDownloadSmokeUsedCookieSource = $realDownloadSmokeUsedCookieSource", script, StringComparison.Ordinal);
+        Assert.Contains("\"env:$CookieEnvVar\"", script, StringComparison.Ordinal);
+        Assert.Contains("\"file:$([System.IO.Path]::GetFileName($CookieFile))\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"env:$DouyinCookieEnvVar\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"file:$([System.IO.Path]::GetFileName($DouyinCookieFile))\"", script, StringComparison.Ordinal);
+        Assert.Contains("Redact-DouyinSecretText", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("realDownloadSmokeUrl = $DouyinRealSmokeUrl", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Get-Content -Raw -LiteralPath $DouyinCookieFile", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsPublishScriptDoesNotRestoreTestProjectWhenTestsAreSkipped()
     {
         var root = TestRepositoryPaths.Root;
@@ -47,6 +289,33 @@ public class ReleaseScriptTests
             "Restoring the test project should be inside the -SkipTests guard so release packaging does not repeat test restore.");
         Assert.True(testProjectRestoreIndex < testCommandIndex,
             "The test project should be restored immediately before running tests.");
+    }
+
+    private static (int ExitCode, string CombinedOutput) RunPowerShellScript(string scriptPath, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "powershell",
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+        startInfo.ArgumentList.Add("-NoProfile");
+        startInfo.ArgumentList.Add("-ExecutionPolicy");
+        startInfo.ArgumentList.Add("Bypass");
+        startInfo.ArgumentList.Add("-File");
+        startInfo.ArgumentList.Add(scriptPath);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start PowerShell.");
+        var stdout = process.StandardOutput.ReadToEnd();
+        var stderr = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        return (process.ExitCode, stdout + Environment.NewLine + stderr);
     }
 
     [Fact]

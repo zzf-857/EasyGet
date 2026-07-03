@@ -249,6 +249,95 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public async Task AddAsync_RoundTripsAttachmentFilePaths()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var attachments = new[]
+        {
+            @"D:\Videos\comments.json",
+            @"D:\Videos\metadata.json"
+        };
+
+        try
+        {
+            using (var historyService = new HistoryService(dbPath))
+            {
+                var history = new DownloadHistory
+                {
+                    Url = "https://example.com/video",
+                    Title = "with attachments",
+                    Platform = "Douyin",
+                    Format = "mp4",
+                    Quality = "best",
+                    FileSize = 2048,
+                    FilePath = @"D:\Videos\video.mp4",
+                    DownloadTime = new DateTime(2026, 6, 9, 12, 34, 56)
+                };
+                SetStringListProperty(history, "AttachmentFilePaths", attachments);
+
+                await historyService.AddAsync(history);
+            }
+
+            using var readService = new HistoryService(dbPath);
+            var saved = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Equal(attachments, GetStringListProperty(saved, "AttachmentFilePaths"));
+            Assert.True(GetBoolProperty(saved, "HasAttachmentFiles"));
+            Assert.Equal("附属 2", GetStringProperty(saved, "AttachmentCountText"));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task GetAllAsync_LegacyHistoryWithoutAttachmentColumnReadsEmptyAttachmentFilePaths()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            await CreateLegacyNullableHistoryTableAsync(dbPath);
+            await InsertHistoryRowAsync(dbPath, "2026-06-09 12:34:56");
+
+            using var readService = new HistoryService(dbPath);
+            var history = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Empty(GetStringListProperty(history, "AttachmentFilePaths"));
+            Assert.False(GetBoolProperty(history, "HasAttachmentFiles"));
+            Assert.Equal("", GetStringProperty(history, "AttachmentCountText"));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task GetAllAsync_MalformedAttachmentJsonReadsEmptyAttachmentFilePaths()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            await CreateHistoryTableWithAttachmentColumnAsync(dbPath);
+            await InsertMalformedAttachmentRowAsync(dbPath);
+
+            using var readService = new HistoryService(dbPath);
+            var history = Assert.Single(await readService.GetAllAsync());
+
+            Assert.Empty(GetStringListProperty(history, "AttachmentFilePaths"));
+            Assert.False(GetBoolProperty(history, "HasAttachmentFiles"));
+            Assert.Equal("", GetStringProperty(history, "AttachmentCountText"));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public void FileSizeText_ClampsNegativeBytesToZero()
     {
         var history = new DownloadHistory { FileSize = -2048 };
@@ -299,6 +388,19 @@ public class HistoryServiceTests
         await cmd.ExecuteNonQueryAsync();
     }
 
+    private static async Task InsertMalformedAttachmentRowAsync(string dbPath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url, attachment_file_paths)
+            VALUES ('https://example.com/video', 'malformed attachments', 'Douyin', 'mp4', 'best', 1024, 'D:\Videos\example.mp4', '2026-06-09 12:34:56', '', 'not-json')
+            """;
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     private static async Task CreateLegacyNullableHistoryTableAsync(string dbPath)
     {
         await using var connection = new SqliteConnection($"Data Source={dbPath}");
@@ -317,6 +419,30 @@ public class HistoryServiceTests
                 file_path TEXT,
                 download_time TEXT,
                 thumbnail_url TEXT
+            )
+            """;
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task CreateHistoryTableWithAttachmentColumnAsync(string dbPath)
+    {
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+
+        await using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            CREATE TABLE download_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT,
+                title TEXT,
+                platform TEXT,
+                format TEXT,
+                quality TEXT,
+                file_size INTEGER,
+                file_path TEXT,
+                download_time TEXT,
+                thumbnail_url TEXT,
+                attachment_file_paths TEXT
             )
             """;
         await cmd.ExecuteNonQueryAsync();
@@ -347,6 +473,47 @@ public class HistoryServiceTests
 
     private static object ToDbValue(object? value, object fallback)
         => value ?? fallback;
+
+    private static IReadOnlyList<string> GetStringListProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        var value = property!.GetValue(instance);
+        var strings = Assert.IsAssignableFrom<IEnumerable<string>>(value);
+        return strings.ToList();
+    }
+
+    private static void SetStringListProperty(object instance, string propertyName, IEnumerable<string> values)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+
+        if (property!.CanWrite)
+        {
+            property.SetValue(instance, values.ToList());
+            return;
+        }
+
+        var currentValue = property.GetValue(instance);
+        var collection = Assert.IsAssignableFrom<ICollection<string>>(currentValue);
+        collection.Clear();
+        foreach (var value in values)
+            collection.Add(value);
+    }
+
+    private static string GetStringProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<string>(property!.GetValue(instance));
+    }
+
+    private static bool GetBoolProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<bool>(property!.GetValue(instance));
+    }
 
     private static void TryDeleteDatabase(string dbPath)
         => TestTempPaths.TryDeleteSqliteDatabase(dbPath);

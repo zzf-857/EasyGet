@@ -152,26 +152,20 @@ public partial class HistoryViewModel : ObservableObject
             .Where(item => MatchesMediaFilter(item, SelectedMediaFilter))
             .ToList();
 
-        HistoryItems.Clear();
-        foreach (var item in filteredItems)
-            HistoryItems.Add(item);
-
-        // 异步检查文件或文件夹是否存在，避免在 UI 线程同步读取磁盘/网络驱动器导致卡顿
-        _ = Task.Run(() =>
-        {
-            foreach (var item in filteredItems)
+        var fileExistsResults = await Task.Run(() => filteredItems
+            .Select(item => new
             {
-                var exists = !string.IsNullOrEmpty(item.FilePath) && 
-                             (System.IO.File.Exists(item.FilePath) || System.IO.Directory.Exists(item.FilePath));
-                if (item.FileExists != exists)
-                {
-                    System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
-                    {
-                        item.FileExists = exists;
-                    });
-                }
-            }
-        });
+                Item = item,
+                FileExists = HasExistingHistoryFile(item)
+            })
+            .ToList());
+
+        HistoryItems.Clear();
+        foreach (var result in fileExistsResults)
+        {
+            result.Item.FileExists = result.FileExists;
+            HistoryItems.Add(result.Item);
+        }
     }
 
     [RelayCommand]
@@ -365,4 +359,11 @@ public partial class HistoryViewModel : ObservableObject
             _ => false
         };
     }
+
+    private static bool HasExistingHistoryFile(DownloadHistory item)
+        => PathExists(item.FilePath) || item.AttachmentFilePaths.Any(PathExists);
+
+    private static bool PathExists(string path)
+        => !string.IsNullOrWhiteSpace(path)
+           && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path));
 }

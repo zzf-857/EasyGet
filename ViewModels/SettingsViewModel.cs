@@ -62,6 +62,17 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private string _cookieContent = "";
 
+    [ObservableProperty] private bool _enableDouyinSpecialEngine;
+    [ObservableProperty] private string _douyinMode = "post";
+    [ObservableProperty] private int _douyinLimit;
+    [ObservableProperty] private bool _douyinDownloadCover;
+    [ObservableProperty] private bool _douyinDownloadAvatar;
+    [ObservableProperty] private bool _douyinDownloadMusic;
+    [ObservableProperty] private bool _douyinDownloadComments;
+    [ObservableProperty] private bool _douyinDownloadJson;
+    [ObservableProperty] private bool _douyinEnableDatabase;
+    [ObservableProperty] private bool _douyinIncrementalDownload;
+
     [ObservableProperty] private bool _autoCategorizeByPlatform = true;
 
     [ObservableProperty] private bool _isUpdatingYtDlp;
@@ -102,6 +113,7 @@ public partial class SettingsViewModel : ObservableObject
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
     public string[] QualityOptions { get; } = ["最高画质", "2160p", "1080p", "720p", "480p"];
+    public string[] DouyinModeOptions { get; } = ["post", "like", "mix", "music"];
 
     public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
@@ -158,6 +170,16 @@ public partial class SettingsViewModel : ObservableObject
             ProxyAddress = c.ProxyAddress;
             UseAria2c = c.UseAria2c;
             CookieContent = c.CookieContent;
+            EnableDouyinSpecialEngine = c.EnableDouyinSpecialEngine;
+            DouyinMode = c.DouyinMode;
+            DouyinLimit = c.DouyinLimit;
+            DouyinDownloadCover = c.DouyinDownloadCover;
+            DouyinDownloadAvatar = c.DouyinDownloadAvatar;
+            DouyinDownloadMusic = c.DouyinDownloadMusic;
+            DouyinDownloadComments = c.DouyinDownloadComments;
+            DouyinDownloadJson = c.DouyinDownloadJson;
+            DouyinEnableDatabase = c.DouyinEnableDatabase;
+            DouyinIncrementalDownload = c.DouyinIncrementalDownload;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
             SelectedThemeColor = c.ThemeColor;
             TgApiId = c.TgApiId;
@@ -263,6 +285,16 @@ public partial class SettingsViewModel : ObservableObject
         c.ProxyAddress = ProxyAddress;
         c.UseAria2c = UseAria2c;
         c.CookieContent = CookieContent;
+        c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
+        c.DouyinMode = DouyinMode;
+        c.DouyinLimit = DouyinLimit;
+        c.DouyinDownloadCover = DouyinDownloadCover;
+        c.DouyinDownloadAvatar = DouyinDownloadAvatar;
+        c.DouyinDownloadMusic = DouyinDownloadMusic;
+        c.DouyinDownloadComments = DouyinDownloadComments;
+        c.DouyinDownloadJson = DouyinDownloadJson;
+        c.DouyinEnableDatabase = DouyinEnableDatabase;
+        c.DouyinIncrementalDownload = DouyinIncrementalDownload;
         c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
         c.ThemeColor = SelectedThemeColor;
         c.TgApiId = TgApiId;
@@ -271,6 +303,7 @@ public partial class SettingsViewModel : ObservableObject
 
         ConfigService.NormalizeRuntimeConfig(c);
         SyncNormalizedPerformanceValues(c);
+        SyncNormalizedDouyinValues(c);
 
         _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
         await _configService.SaveAsync();
@@ -286,6 +319,16 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnProxyAddressChanged(string value) => AutoSave();
     partial void OnUseAria2cChanged(bool value) => AutoSave();
     partial void OnCookieContentChanged(string value) => AutoSave();
+    partial void OnEnableDouyinSpecialEngineChanged(bool value) => AutoSave();
+    partial void OnDouyinModeChanged(string value) => AutoSave();
+    partial void OnDouyinLimitChanged(int value) => AutoSave();
+    partial void OnDouyinDownloadCoverChanged(bool value) => AutoSave();
+    partial void OnDouyinDownloadAvatarChanged(bool value) => AutoSave();
+    partial void OnDouyinDownloadMusicChanged(bool value) => AutoSave();
+    partial void OnDouyinDownloadCommentsChanged(bool value) => AutoSave();
+    partial void OnDouyinDownloadJsonChanged(bool value) => AutoSave();
+    partial void OnDouyinEnableDatabaseChanged(bool value) => AutoSave();
+    partial void OnDouyinIncrementalDownloadChanged(bool value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
     partial void OnTgApiIdChanged(string value) => AutoSave();
     partial void OnTgApiHashChanged(string value) => AutoSave();
@@ -331,6 +374,26 @@ public partial class SettingsViewModel : ObservableObject
         {
             MaxConcurrentDownloads = config.MaxConcurrentDownloads;
             ConcurrentFragments = config.ConcurrentFragments;
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
+    }
+
+    private void SyncNormalizedDouyinValues(EasyGet.Models.AppConfig config)
+    {
+        if (DouyinMode == config.DouyinMode
+            && DouyinLimit == config.DouyinLimit)
+        {
+            return;
+        }
+
+        _isInitializing = true;
+        try
+        {
+            DouyinMode = config.DouyinMode;
+            DouyinLimit = config.DouyinLimit;
         }
         finally
         {

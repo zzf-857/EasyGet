@@ -74,9 +74,91 @@ public class SettingsViewModelTests
         Assert.True(viewModel.CanInstallAppUpdate);
     }
 
-    private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)
+    [Fact]
+    public void Initialize_LoadsDouyinSpecialSettingsFromConfig()
     {
-        var config = new ConfigService();
+        var config = CreateTempConfigService();
+        config.Config.EnableDouyinSpecialEngine = true;
+        config.Config.DouyinMode = "post";
+        config.Config.DouyinLimit = 12;
+        config.Config.DouyinDownloadCover = true;
+        config.Config.DouyinDownloadMusic = true;
+        config.Config.DouyinDownloadJson = true;
+        SetAppConfigBool(config.Config, "DouyinDownloadComments", value: true);
+        SetAppConfigBool(config.Config, "DouyinDownloadAvatar", value: true);
+        SetAppConfigBool(config.Config, "DouyinEnableDatabase", value: true);
+        SetAppConfigBool(config.Config, "DouyinIncrementalDownload", value: true);
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+
+        viewModel.Initialize();
+
+        Assert.True(viewModel.EnableDouyinSpecialEngine);
+        Assert.Equal("post", viewModel.DouyinMode);
+        Assert.Equal(12, viewModel.DouyinLimit);
+        Assert.True(viewModel.DouyinDownloadCover);
+        Assert.True(viewModel.DouyinDownloadMusic);
+        Assert.True(viewModel.DouyinDownloadJson);
+        AssertViewModelBool(viewModel, "DouyinDownloadComments", expected: true);
+        AssertViewModelBool(viewModel, "DouyinDownloadAvatar", expected: true);
+        AssertViewModelBool(viewModel, "DouyinEnableDatabase", expected: true);
+        AssertViewModelBool(viewModel, "DouyinIncrementalDownload", expected: true);
+        Assert.Equal(new[] { "post", "like", "mix", "music" }, viewModel.DouyinModeOptions);
+    }
+
+    [Fact]
+    public async Task SaveSettingsCommand_PersistsDouyinSpecialSettings()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.EnableDouyinSpecialEngine = true;
+        viewModel.DouyinMode = "post";
+        viewModel.DouyinLimit = 8;
+        viewModel.DouyinDownloadCover = true;
+        viewModel.DouyinDownloadMusic = true;
+        viewModel.DouyinDownloadJson = true;
+        SetViewModelBool(viewModel, "DouyinDownloadComments", value: true);
+        SetViewModelBool(viewModel, "DouyinDownloadAvatar", value: true);
+        SetViewModelBool(viewModel, "DouyinEnableDatabase", value: true);
+        SetViewModelBool(viewModel, "DouyinIncrementalDownload", value: true);
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        Assert.True(config.Config.EnableDouyinSpecialEngine);
+        Assert.Equal("post", config.Config.DouyinMode);
+        Assert.Equal(8, config.Config.DouyinLimit);
+        Assert.True(config.Config.DouyinDownloadCover);
+        Assert.True(config.Config.DouyinDownloadMusic);
+        Assert.True(config.Config.DouyinDownloadJson);
+        AssertAppConfigBool(config.Config, "DouyinDownloadComments", expected: true);
+        AssertAppConfigBool(config.Config, "DouyinDownloadAvatar", expected: true);
+        AssertAppConfigBool(config.Config, "DouyinEnableDatabase", expected: true);
+        AssertAppConfigBool(config.Config, "DouyinIncrementalDownload", expected: true);
+    }
+
+    [Theory]
+    [InlineData("post")]
+    [InlineData("like")]
+    [InlineData("mix")]
+    [InlineData("music")]
+    public async Task SaveSettingsCommand_PersistsSupportedDouyinUserModes(string mode)
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.EnableDouyinSpecialEngine = true;
+        viewModel.DouyinMode = mode;
+        viewModel.DouyinLimit = 4;
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        Assert.Equal(mode, config.Config.DouyinMode);
+        Assert.Equal(4, config.Config.DouyinLimit);
+    }
+
+    private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)
+        => CreateViewModel(new ConfigService(), appUpdateService);
+
+    private static SettingsViewModel CreateViewModel(ConfigService config, IAppUpdateService appUpdateService)
+    {
         var environment = new EnvironmentService();
         var historyPath = Path.Combine(
             Path.GetTempPath(),
@@ -93,6 +175,41 @@ public class SettingsViewModelTests
             manager,
             new TelegramDownloadService(config),
             appUpdateService);
+    }
+
+    private static ConfigService CreateTempConfigService()
+        => new(Path.Combine(
+            Path.GetTempPath(),
+            "EasyGetTests",
+            Guid.NewGuid().ToString("N"),
+            "config"));
+
+    private static void AssertAppConfigBool(AppConfig config, string propertyName, bool expected)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(config)));
+    }
+
+    private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void AssertViewModelBool(SettingsViewModel viewModel, string propertyName, bool expected)
+    {
+        var property = typeof(SettingsViewModel).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(viewModel)));
+    }
+
+    private static void SetViewModelBool(SettingsViewModel viewModel, string propertyName, bool value)
+    {
+        var property = typeof(SettingsViewModel).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(viewModel, value);
     }
 
     private sealed class FakeAppUpdateService : IAppUpdateService

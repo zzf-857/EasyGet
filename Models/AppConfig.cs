@@ -47,6 +47,36 @@ public class AppConfig
     /// <summary>Cookie 原始内容（从浏览器复制 of cookie 字符串）</summary>
     public string CookieContent { get; set; } = "";
 
+    /// <summary>是否启用抖音专项引擎配置（下载流程接线后生效）</summary>
+    public bool EnableDouyinSpecialEngine { get; set; } = false;
+
+    /// <summary>抖音用户主页批量模式（post, like, mix, music）</summary>
+    public string DouyinMode { get; set; } = "post";
+
+    /// <summary>抖音用户作品下载数量上限；0 表示不限制</summary>
+    public int DouyinLimit { get; set; } = 0;
+
+    /// <summary>抖音专项下载是否包含封面；复用 CookieContent，不新增登录流程</summary>
+    public bool DouyinDownloadCover { get; set; } = false;
+
+    /// <summary>抖音专项下载是否下载作者头像；复用 CookieContent，不新增登录流程</summary>
+    public bool DouyinDownloadAvatar { get; set; } = false;
+
+    /// <summary>抖音专项下载是否包含音乐；复用 CookieContent，不新增登录流程</summary>
+    public bool DouyinDownloadMusic { get; set; } = false;
+
+    /// <summary>抖音专项下载是否包含评论；复用 CookieContent，不新增登录流程</summary>
+    public bool DouyinDownloadComments { get; set; } = false;
+
+    /// <summary>抖音专项下载是否保存原始 JSON；复用 CookieContent，不新增登录流程</summary>
+    public bool DouyinDownloadJson { get; set; } = false;
+
+    /// <summary>抖音专项下载是否启用本地 SQLite 去重数据库</summary>
+    public bool DouyinEnableDatabase { get; set; } = false;
+
+    /// <summary>抖音专项下载是否启用批量模式增量下载；sidecar 会在需要时自动启用数据库</summary>
+    public bool DouyinIncrementalDownload { get; set; } = false;
+
     /// <summary>是否按平台自动归类下载文件到子文件夹</summary>
     public bool AutoCategorizeByPlatform { get; set; } = true;
 

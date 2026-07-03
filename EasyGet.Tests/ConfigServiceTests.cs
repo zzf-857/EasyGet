@@ -38,6 +38,63 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesDouyinDownloadCommentsToggle()
+    {
+        var service = new ConfigService(_tempDir);
+
+        await service.LoadAsync();
+
+        AssertAppConfigBool(service.Config, "DouyinDownloadComments", expected: false);
+        SetAppConfigBool(service.Config, "DouyinDownloadComments", value: true);
+
+        await service.SaveAsync();
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        AssertAppConfigBool(reloaded.Config, "DouyinDownloadComments", expected: true);
+    }
+
+    [Fact]
+    public async Task LoadAndSave_PreservesDouyinDownloadAvatarToggle()
+    {
+        var service = new ConfigService(_tempDir);
+
+        await service.LoadAsync();
+
+        AssertAppConfigBool(service.Config, "DouyinDownloadAvatar", expected: false);
+        SetAppConfigBool(service.Config, "DouyinDownloadAvatar", value: true);
+
+        await service.SaveAsync();
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        AssertAppConfigBool(reloaded.Config, "DouyinDownloadAvatar", expected: true);
+    }
+
+    [Fact]
+    public async Task LoadAndSave_PreservesDouyinDatabaseAndIncrementalToggles()
+    {
+        var service = new ConfigService(_tempDir);
+
+        await service.LoadAsync();
+
+        AssertAppConfigBool(service.Config, "DouyinEnableDatabase", expected: false);
+        AssertAppConfigBool(service.Config, "DouyinIncrementalDownload", expected: false);
+        SetAppConfigBool(service.Config, "DouyinEnableDatabase", value: true);
+        SetAppConfigBool(service.Config, "DouyinIncrementalDownload", value: true);
+
+        await service.SaveAsync();
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        AssertAppConfigBool(reloaded.Config, "DouyinEnableDatabase", expected: true);
+        AssertAppConfigBool(reloaded.Config, "DouyinIncrementalDownload", expected: true);
+    }
+
+    [Fact]
     public void NormalizeRuntimeConfig_ClampsPerformanceValuesToSafeRange()
     {
         var config = new AppConfig
@@ -96,5 +153,67 @@ public class ConfigServiceTests
         Assert.Equal(defaultConfig.DefaultSubtitle, config.DefaultSubtitle);
         Assert.Equal("", config.ProxyAddress);
         Assert.Equal("", config.CookieContent);
+    }
+
+    [Theory]
+    [InlineData("post")]
+    [InlineData("like")]
+    [InlineData("mix")]
+    [InlineData("music")]
+    public void NormalizeRuntimeConfig_AllowsSupportedDouyinUserModes(string mode)
+    {
+        var config = new AppConfig
+        {
+            DouyinMode = mode,
+            DouyinLimit = 5
+        };
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        Assert.Equal(mode, config.DouyinMode);
+        Assert.Equal(5, config.DouyinLimit);
+    }
+
+    [Fact]
+    public void NormalizeRuntimeConfig_SanitizesDouyinSpecialOptions()
+    {
+        var config = new AppConfig
+        {
+            DouyinMode = "collect",
+            DouyinLimit = -5,
+            DouyinDownloadCover = true,
+            DouyinDownloadMusic = true,
+            DouyinDownloadJson = true
+        };
+        SetAppConfigBool(config, "DouyinDownloadComments", value: true);
+        SetAppConfigBool(config, "DouyinDownloadAvatar", value: true);
+        SetAppConfigBool(config, "DouyinEnableDatabase", value: true);
+        SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        Assert.Equal("post", config.DouyinMode);
+        Assert.Equal(0, config.DouyinLimit);
+        Assert.True(config.DouyinDownloadCover);
+        Assert.True(config.DouyinDownloadMusic);
+        Assert.True(config.DouyinDownloadJson);
+        AssertAppConfigBool(config, "DouyinDownloadComments", expected: true);
+        AssertAppConfigBool(config, "DouyinDownloadAvatar", expected: true);
+        AssertAppConfigBool(config, "DouyinEnableDatabase", expected: true);
+        AssertAppConfigBool(config, "DouyinIncrementalDownload", expected: true);
+    }
+
+    private static void AssertAppConfigBool(AppConfig config, string propertyName, bool expected)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(config)));
+    }
+
+    private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
     }
 }

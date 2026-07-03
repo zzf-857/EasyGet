@@ -392,6 +392,201 @@
 
             <StackPanel Margin="0,0,0,26">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="&#xE714;" Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeLarge}"
+                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
+                    <TextBlock Text="抖音专项下载" Style="{StaticResource TextSection}"/>
+                </StackPanel>
+                <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="启用专项引擎" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="抖音单作品、图文、合集、音乐和用户主页可使用 sidecar。"
+                                           Style="{StaticResource TextBody}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="用户作品模式" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="用于用户主页批量下载" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding DouyinModeOptions}"
+                                      SelectedItem="{Binding DouyinMode}"
+                                      IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="140"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="下载数量上限" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="0 表示不限制，主要用于用户主页批量" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextAlignment="Center"
+                                     Text="{Binding DouyinLimit, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="启用本地去重数据库" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="在下载目录下维护本地记录，减少重复下载"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinEnableDatabase}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="增量下载" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="仅对用户主页/合集等批量模式生效，依赖本地去重数据库"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          IsChecked="{Binding DouyinIncrementalDownload}"
+                                          VerticalAlignment="Center">
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton" BasedOn="{StaticResource ToggleSwitch}">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding EnableDouyinSpecialEngine}" Value="True"/>
+                                                    <Condition Binding="{Binding DouyinEnableDatabase}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="IsEnabled" Value="True"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ToggleButton.Style>
+                            </ToggleButton>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="下载封面" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="作为附加资源保存" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinDownloadCover}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="下载作者头像" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="作为附加资源保存" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinDownloadAvatar}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="下载评论" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="作为附加数据保存" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinDownloadComments}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="下载音乐" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="作为附加资源保存" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinDownloadMusic}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="保存原始 JSON" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="用于后续排查和 manifest 对齐" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinDownloadJson}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <TextBlock Text="复用上方全局 Cookie，不新增登录流程。"
+                                   Style="{StaticResource TextCaption}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Margin="0,0,0,26">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE709;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
                                Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"

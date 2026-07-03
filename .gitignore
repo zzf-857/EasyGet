@@ -34,6 +34,10 @@ EXE/
 ## dotnet tool
 .dotnet/
 
+## Python
+__pycache__/
+*.py[cod]
+
 ## OS files
 Thumbs.db
 ehthumbs.db

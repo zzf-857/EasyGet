@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using EasyGet.Models;
 
 namespace EasyGet.Services;
@@ -12,6 +13,7 @@ public class ConfigService
     private static readonly string[] SupportedFormats = ["mp4", "mkv", "webm", "mp3", "m4a"];
     private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
     private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
+    private static readonly string[] SupportedDouyinModes = ["post", "like", "mix", "music"];
 
     private static readonly string DefaultConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
@@ -21,7 +23,8 @@ public class ConfigService
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
     };
 
     private AppConfig _config = new();
@@ -141,6 +144,8 @@ public class ConfigService
         config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
         config.ProxyAddress = config.ProxyAddress?.Trim() ?? "";
         config.CookieContent ??= "";
+        config.DouyinMode = NormalizeOption(config.DouyinMode, SupportedDouyinModes, defaults.DouyinMode);
+        config.DouyinLimit = Math.Max(0, config.DouyinLimit);
 
         config.ThemeColor = string.IsNullOrWhiteSpace(config.ThemeColor)
             ? "Indigo"

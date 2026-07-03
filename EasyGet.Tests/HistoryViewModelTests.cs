@@ -93,6 +93,57 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public async Task LoadHistory_MarksFileExistsWhenAttachmentExistsButPrimaryFileIsMissing()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-attachments-{Guid.NewGuid():N}");
+        var missingPrimaryPath = Path.Combine(outputDir, "missing.mp4");
+        var missingPlainPath = Path.Combine(outputDir, "missing-plain.mp4");
+        var attachmentPath = Path.Combine(outputDir, "comments.json");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(attachmentPath, "{}");
+
+            using var service = new HistoryService(dbPath);
+            var historyWithAttachment = new DownloadHistory
+            {
+                Url = "https://example.com/attached",
+                Title = "attached item",
+                Format = "mp4",
+                FilePath = missingPrimaryPath,
+                DownloadTime = new DateTime(2026, 6, 9, 11, 0, 0)
+            };
+            SetStringListProperty(historyWithAttachment, "AttachmentFilePaths", [attachmentPath]);
+            await service.AddAsync(historyWithAttachment);
+
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/missing",
+                Title = "missing item",
+                Format = "mp4",
+                FilePath = missingPlainPath,
+                DownloadTime = new DateTime(2026, 6, 9, 10, 0, 0)
+            });
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var attachedItem = Assert.Single(viewModel.HistoryItems, item => item.Title == "attached item");
+            var missingItem = Assert.Single(viewModel.HistoryItems, item => item.Title == "missing item");
+            Assert.True(attachedItem.FileExists);
+            Assert.False(missingItem.FileExists);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
     public void HistoryViewModelExposesHistoryCardQuickActionCommands()
     {
         var commandProperties = typeof(HistoryViewModel)
@@ -257,6 +308,24 @@ public class HistoryViewModelTests
         }
 
         return condition();
+    }
+
+    private static void SetStringListProperty(object instance, string propertyName, IEnumerable<string> values)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+
+        if (property!.CanWrite)
+        {
+            property.SetValue(instance, values.ToList());
+            return;
+        }
+
+        var currentValue = property.GetValue(instance);
+        var collection = Assert.IsAssignableFrom<ICollection<string>>(currentValue);
+        collection.Clear();
+        foreach (var value in values)
+            collection.Add(value);
     }
 
     [Fact]

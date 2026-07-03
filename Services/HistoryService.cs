@@ -1,5 +1,6 @@
 using System.IO;
 using System.Globalization;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using EasyGet.Models;
 
@@ -10,7 +11,7 @@ namespace EasyGet.Services;
 /// </summary>
 public class HistoryService : IDisposable
 {
-    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url";
+    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url";
 
     private readonly SqliteConnection _connection;
 
@@ -50,6 +51,7 @@ public class HistoryService : IDisposable
                 quality TEXT NOT NULL DEFAULT '',
                 file_size INTEGER NOT NULL DEFAULT 0,
                 file_path TEXT NOT NULL DEFAULT '',
+                attachment_file_paths TEXT NOT NULL DEFAULT '[]',
                 download_time TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                 thumbnail_url TEXT NOT NULL DEFAULT ''
             )
@@ -61,6 +63,14 @@ public class HistoryService : IDisposable
         {
             using var alter = _connection.CreateCommand();
             alter.CommandText = "ALTER TABLE download_history ADD COLUMN thumbnail_url TEXT NOT NULL DEFAULT ''";
+            alter.ExecuteNonQuery();
+        }
+        catch { /* 列已存在，忽略 */ }
+
+        try
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE download_history ADD COLUMN attachment_file_paths TEXT NOT NULL DEFAULT '[]'";
             alter.ExecuteNonQuery();
         }
         catch { /* 列已存在，忽略 */ }
@@ -80,8 +90,8 @@ public class HistoryService : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, download_time, thumbnail_url)
-            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $downloadTime, $thumbnailUrl)
+            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url)
+            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl)
             """;
         cmd.Parameters.AddWithValue("$url", NormalizeHistoryText(history.Url));
         cmd.Parameters.AddWithValue("$title", NormalizeHistoryText(history.Title));
@@ -90,6 +100,7 @@ public class HistoryService : IDisposable
         cmd.Parameters.AddWithValue("$quality", NormalizeHistoryText(history.Quality));
         cmd.Parameters.AddWithValue("$fileSize", history.FileSize);
         cmd.Parameters.AddWithValue("$filePath", NormalizeHistoryText(history.FilePath));
+        cmd.Parameters.AddWithValue("$attachmentFilePaths", SerializeAttachmentFilePaths(history.AttachmentFilePaths));
         cmd.Parameters.AddWithValue(
             "$downloadTime",
             history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
@@ -135,6 +146,7 @@ public class HistoryService : IDisposable
                 Quality = ReadString(reader, "quality"),
                 FileSize = ReadNonNegativeInt64(reader, "file_size"),
                 FilePath = ReadString(reader, "file_path"),
+                AttachmentFilePaths = DeserializeAttachmentFilePaths(ReadString(reader, "attachment_file_paths")),
                 DownloadTime = ParseDownloadTime(ReadString(reader, "download_time")),
                 ThumbnailUrl = thumbnailUrl
             });
@@ -157,6 +169,44 @@ public class HistoryService : IDisposable
 
     private static string NormalizeHistoryText(string? value)
         => value ?? string.Empty;
+
+    private static string SerializeAttachmentFilePaths(IEnumerable<string>? attachmentFilePaths)
+        => JsonSerializer.Serialize(NormalizeAttachmentFilePaths(attachmentFilePaths));
+
+    private static List<string> DeserializeAttachmentFilePaths(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return [];
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<List<string>>(value);
+            return NormalizeAttachmentFilePaths(parsed);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+    }
+
+    private static List<string> NormalizeAttachmentFilePaths(IEnumerable<string>? attachmentFilePaths)
+    {
+        var normalized = new List<string>();
+        if (attachmentFilePaths is null)
+            return normalized;
+
+        foreach (var rawPath in attachmentFilePaths)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath))
+                continue;
+
+            var path = rawPath.Trim();
+            if (!normalized.Contains(path, StringComparer.Ordinal))
+                normalized.Add(path);
+        }
+
+        return normalized;
+    }
 
     private static string ReadString(SqliteDataReader reader, int ordinal)
     {

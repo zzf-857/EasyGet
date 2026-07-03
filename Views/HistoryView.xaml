@@ -371,16 +371,30 @@
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" Orientation="Horizontal">
-                                            <TextBlock Text="&#xE792;" Style="{StaticResource IconGlyph}"
-                                                       FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
-                                            <TextBlock Text="{Binding FileSizeText, Mode=OneWay}"
-                                                       Style="{StaticResource TextCaption}"
-                                                       Margin="0,0,12,0"/>
-                                            <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"
-                                                       FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
-                                            <TextBlock Text="{Binding DownloadTimeText, Mode=OneWay}"
-                                                       Style="{StaticResource TextCaption}"/>
+                                        <StackPanel Grid.Column="0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="&#xE792;" Style="{StaticResource IconGlyph}"
+                                                           FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                                                <TextBlock Text="{Binding FileSizeText, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"
+                                                           Margin="0,0,12,0"/>
+                                                <TextBlock Text="&#xE787;" Style="{StaticResource IconGlyph}"
+                                                           FontSize="{StaticResource IconSizeBody}" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,4,0"/>
+                                                <TextBlock Text="{Binding DownloadTimeText, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal"
+                                                        Margin="0,6,0,0"
+                                                        ToolTip="附属文件数量"
+                                                        Visibility="{Binding HasAttachmentFiles, Converter={StaticResource BoolToVisibility}}">
+                                                <TextBlock Text="&#xE8A5;"
+                                                           Style="{StaticResource IconGlyph}"
+                                                           FontSize="{StaticResource IconSizeBody}"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           Margin="0,0,4,0"/>
+                                                <TextBlock Text="{Binding AttachmentCountText, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"/>
+                                            </StackPanel>
                                         </StackPanel>
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding Format}"
