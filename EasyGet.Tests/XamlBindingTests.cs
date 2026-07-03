@@ -799,9 +799,12 @@ public class XamlBindingTests
         Assert.Contains("DouyinArchiveCount", source);
         Assert.Contains("HasDouyinArchiveItems", source);
         Assert.Contains("HasFilteredDouyinArchiveItems", source);
+        Assert.Contains("IsDouyinArchiveFilterActive", source);
+        Assert.Contains("ClearDouyinArchiveFiltersCommand", source);
         Assert.Contains("搜索作者、标题、作品 ID 或标签", source);
         Assert.Contains("未找到匹配作品", source);
         Assert.Contains("换个关键词或清除筛选再试", source);
+        Assert.Contains("清除筛选", source);
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
 

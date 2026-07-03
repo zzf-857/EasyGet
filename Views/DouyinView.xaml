@@ -681,6 +681,19 @@
                                        Style="{StaticResource TextBody}"
                                        HorizontalAlignment="Center"
                                        Margin="0,4,0,0"/>
+                            <Button Style="{StaticResource AccentButton}"
+                                    Command="{Binding ClearDouyinArchiveFiltersCommand}"
+                                    HorizontalAlignment="Center"
+                                    Margin="0,16,0,0"
+                                    Padding="16,6"
+                                    ToolTip="清除作品档案筛选"
+                                    AutomationProperties.Name="清除作品档案筛选">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="清除筛选" Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
 
                         <DockPanel Margin="16">
@@ -689,6 +702,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="220"/>
                                     <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
 
                                 <StackPanel Grid.Column="0"
@@ -723,6 +737,21 @@
                                           SelectedItem="{Binding SelectedDouyinArchiveTypeFilter}"
                                           ToolTip="筛选抖音作品类型"
                                           AutomationProperties.Name="筛选抖音作品类型"/>
+
+                                <Button Grid.Column="3"
+                                        Style="{StaticResource SurfaceButton}"
+                                        Command="{Binding ClearDouyinArchiveFiltersCommand}"
+                                        Visibility="{Binding IsDouyinArchiveFilterActive, Converter={StaticResource BoolToVisibility}}"
+                                        ToolTip="清除作品档案筛选"
+                                        AutomationProperties.Name="清除作品档案筛选"
+                                        Margin="8,0,0,0"
+                                        Padding="12,6">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
+                                                   FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="清除筛选" Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
                             </Grid>
 
                             <ListBox ItemsSource="{Binding DouyinHistoryItems}"

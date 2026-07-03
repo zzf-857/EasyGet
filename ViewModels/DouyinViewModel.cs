@@ -28,9 +28,11 @@ public partial class DouyinViewModel : ObservableObject
     private string _douyinTaskSearchKeyword = "";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDouyinArchiveFilterActive))]
     private string _selectedDouyinArchiveTypeFilter = "全部";
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDouyinArchiveFilterActive))]
     private string _douyinArchiveSearchKeyword = "";
 
     public IEnumerable<DownloadTask> DouyinTasks => DouyinTaskItems;
@@ -63,6 +65,10 @@ public partial class DouyinViewModel : ObservableObject
     public bool HasDouyinArchiveItems => DouyinArchiveCount > 0;
 
     public bool HasFilteredDouyinArchiveItems => FilteredDouyinArchiveCount > 0;
+
+    public bool IsDouyinArchiveFilterActive
+        => !string.IsNullOrWhiteSpace(DouyinArchiveSearchKeyword)
+           || SelectedDouyinArchiveTypeFilter != "全部";
 
     public DouyinViewModel(
         ConfigService configService,
@@ -277,6 +283,14 @@ public partial class DouyinViewModel : ObservableObject
         SelectedDouyinArchiveTypeFilter = DouyinArchiveTypeFilterOptions.Contains(filter, StringComparer.Ordinal)
             ? filter
             : "全部";
+    }
+
+    [RelayCommand]
+    private void ClearDouyinArchiveFilters()
+    {
+        DouyinArchiveSearchKeyword = "";
+        SelectedDouyinArchiveTypeFilter = "全部";
+        SyncDouyinHistoryItems();
     }
 
     private bool MatchesTaskCenterFilter(DownloadTask task)

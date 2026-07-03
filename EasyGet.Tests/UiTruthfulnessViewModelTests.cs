@@ -415,6 +415,44 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelClearsArchiveFiltersAndSearchKeyword()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "城市视频",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/video-1",
+            Format = "mp4"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "旅行图文",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/note/gallery-1",
+            Format = "jpg"
+        });
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("视频");
+        context.Douyin.DouyinArchiveSearchKeyword = "城市";
+
+        Assert.True(context.Douyin.IsDouyinArchiveFilterActive);
+        var filtered = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("城市视频", filtered.Title);
+
+        context.Douyin.ClearDouyinArchiveFiltersCommand.Execute(null);
+
+        Assert.Equal("", context.Douyin.DouyinArchiveSearchKeyword);
+        Assert.Equal("全部", context.Douyin.SelectedDouyinArchiveTypeFilter);
+        Assert.False(context.Douyin.IsDouyinArchiveFilterActive);
+        Assert.Collection(
+            context.Douyin.DouyinHistoryItems,
+            item => Assert.Equal("城市视频", item.Title),
+            item => Assert.Equal("旅行图文", item.Title));
+    }
+
+    [Fact]
     public void DouyinViewModelClassifiesLegacyArchiveItemsByFormatWhenManifestIsMissing()
     {
         using var context = CreateViewModelContext();
