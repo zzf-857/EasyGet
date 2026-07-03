@@ -98,6 +98,42 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public void TryParseStdoutLine_ParsesDiscoverySuccessDetails()
+    {
+        var outputPath = Path.Combine(Path.GetTempPath(), "hot_board.jsonl");
+
+        DouyinSpecialDownloadService.TryParseStdoutLine(
+            $$"""
+            {
+              "event": "success",
+              "title": "EasyGet Douyin hot board discovery",
+              "output_file_path": "{{JsonEscaped(outputPath)}}",
+              "details": {
+                "kind": "discovery",
+                "discovery_type": "hot_board",
+                "limit": 30,
+                "item_count": 2,
+                "items": [
+                  {"word":"猫咪","hot_value":123},
+                  {"word":"旅行","hot_value":45}
+                ]
+              }
+            }
+            """,
+            out var message);
+
+        Assert.Equal(DouyinSidecarEventKind.Success, message.Kind);
+        Assert.True(message.IsDiscovery);
+        Assert.Equal("hot_board", message.DiscoveryType);
+        Assert.Equal(30, message.DiscoveryLimit);
+        Assert.Equal(2, message.DiscoveryItemCount);
+        Assert.Equal(outputPath, message.OutputFilePath);
+        Assert.Equal(2, message.DiscoveryItems.Count);
+        Assert.Equal("猫咪", message.DiscoveryItems[0].Word);
+        Assert.Equal(123, message.DiscoveryItems[0].HotValue);
+    }
+
+    [Fact]
     public void TryMapProgress_MapsAndClampsSidecarProgress()
     {
         DouyinSpecialDownloadService.TryParseStdoutLine(
@@ -678,6 +714,138 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DiscoverAsync_HotBoardMapsConfigAndReturnsDiscoveryResult()
+    {
+        var outputPath = Path.Combine("D:\\Videos", "hot_board", "20260704_120000.jsonl");
+        var runner = new CapturingDiscoverySidecarRunner(
+            """{"event":"progress","percent":5,"message":"starting_discovery"}""",
+            $$"""
+            {
+              "event": "success",
+              "title": "EasyGet Douyin hot board discovery",
+              "output_file_path": "{{JsonEscaped(outputPath)}}",
+              "details": {
+                "kind": "discovery",
+                "discovery_type": "hot_board",
+                "limit": 30,
+                "item_count": 1,
+                "items": [
+                  {"word":"猫咪","hot_value":123}
+                ]
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var config = new AppConfig
+        {
+            CookieContent = "ttwid=abc",
+            UseProxy = true,
+            ProxyAddress = "http://127.0.0.1:7890"
+        };
+        var request = new DouyinDiscoveryRequest(
+            DouyinDiscoveryType.HotBoard,
+            "D:\\Videos",
+            Limit: 30);
+
+        var result = await service.DiscoverAsync(request, config);
+
+        Assert.NotNull(runner.LastDiscoveryRequest);
+        Assert.Equal(DouyinDiscoveryType.HotBoard, runner.LastDiscoveryRequest.Type);
+        Assert.Equal("D:\\Videos", runner.LastDiscoveryRequest.OutputDirectory);
+        Assert.Equal(30, runner.LastDiscoveryRequest.Limit);
+        Assert.Equal("ttwid=abc", runner.LastDiscoveryRequest.Cookie);
+        Assert.Equal("http://127.0.0.1:7890", runner.LastDiscoveryRequest.Proxy);
+        Assert.Equal("hot_board", result.DiscoveryType);
+        Assert.Equal(30, result.Limit);
+        Assert.Equal(1, result.ItemCount);
+        Assert.Equal(outputPath, result.OutputFilePath);
+        var item = Assert.Single(result.Items);
+        Assert.Equal("猫咪", item.Word);
+        Assert.Equal(123, item.HotValue);
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_SearchReturnsKeywordResults()
+    {
+        var outputPath = Path.Combine("D:\\Videos", "search", "猫咪_20260704_120000.jsonl");
+        var runner = new CapturingDiscoverySidecarRunner(
+            $$"""
+            {
+              "event": "success",
+              "title": "EasyGet Douyin search discovery",
+              "output_file_path": "{{JsonEscaped(outputPath)}}",
+              "details": {
+                "kind": "discovery",
+                "discovery_type": "search",
+                "keyword": "猫咪",
+                "search_max": 50,
+                "item_count": 1,
+                "items": [
+                  {
+                    "aweme_id": "aweme-1",
+                    "desc": "猫咪晒太阳",
+                    "author_nickname": "Alice",
+                    "sec_uid": "sec-a",
+                    "url": "https://www.douyin.com/video/aweme-1"
+                  }
+                ]
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var request = new DouyinDiscoveryRequest(
+            DouyinDiscoveryType.Search,
+            "D:\\Videos",
+            Keyword: " 猫咪 ",
+            SearchMax: 50);
+
+        var result = await service.DiscoverAsync(request, new AppConfig());
+
+        Assert.NotNull(runner.LastDiscoveryRequest);
+        Assert.Equal(DouyinDiscoveryType.Search, runner.LastDiscoveryRequest.Type);
+        Assert.Equal("猫咪", runner.LastDiscoveryRequest.Keyword);
+        Assert.Equal(50, runner.LastDiscoveryRequest.SearchMax);
+        Assert.Equal("search", result.DiscoveryType);
+        Assert.Equal("猫咪", result.Keyword);
+        Assert.Equal(50, result.SearchMax);
+        var item = Assert.Single(result.Items);
+        Assert.Equal("aweme-1", item.AwemeId);
+        Assert.Equal("猫咪晒太阳", item.Description);
+        Assert.Equal("Alice", item.AuthorNickname);
+        Assert.Equal("sec-a", item.SecUid);
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_FailedSidecarEventThrowsClearException()
+    {
+        var runner = new CapturingDiscoverySidecarRunner(
+            """{"event":"failed","error":"请先登录","details":{"step":"discovery_failed"}}""");
+        var service = new DouyinSpecialDownloadService(runner);
+        var request = new DouyinDiscoveryRequest(DouyinDiscoveryType.Search, "D:\\Videos", Keyword: "猫咪");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DiscoverAsync(request, new AppConfig { CookieContent = "secret-cookie" }));
+
+        Assert.Contains("请先登录", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-cookie", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DiscoverAsync_RedactsCookieFromRunnerException()
+    {
+        const string cookie = "ttwid=secret; odin_tt=hidden";
+        var runner = new ThrowingDiscoveryCookieSidecarRunner(cookie);
+        var service = new DouyinSpecialDownloadService(runner);
+        var request = new DouyinDiscoveryRequest(DouyinDiscoveryType.HotBoard, "D:\\Videos");
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DiscoverAsync(request, new AppConfig { CookieContent = cookie }));
+
+        Assert.Contains("[redacted]", ex.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(cookie, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DouyinSidecarProcessRunner_DefaultScriptPath_PrefersWorkspaceToolingSidecar()
     {
         var runner = new DouyinSidecarProcessRunner();
@@ -762,6 +930,53 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Contains("--incremental", args);
         Assert.Contains("--download-pinned", args);
         Assert.Contains("--no-group-by-mode", args);
+    }
+
+    [Fact]
+    public void DouyinSidecarProcessRunner_CreateDiscoveryProcessStartInfo_EmitsHotBoardArguments()
+    {
+        var sidecarPath = TestRepositoryPaths.GetRootPath(Path.Combine("tools", "douyin-sidecar", "sidecar.py"));
+        var runner = new DouyinSidecarProcessRunner("python", sidecarPath);
+        var request = new DouyinSidecarDiscoveryRequest(
+            DouyinDiscoveryType.HotBoard,
+            "D:\\Videos",
+            Limit: 30,
+            Cookie: "ttwid=abc",
+            Proxy: "http://127.0.0.1:7890");
+
+        var psi = CreateDiscoveryProcessStartInfo(runner, request);
+        var args = psi.ArgumentList.ToArray();
+
+        Assert.Equal("python", psi.FileName);
+        Assert.Equal(sidecarPath, args[0]);
+        AssertArgument(args, "--output-dir", "D:\\Videos");
+        AssertArgument(args, "--hot-board", "30");
+        AssertArgument(args, "--cookie-env", "EASYGET_DOUYIN_COOKIE");
+        AssertArgument(args, "--proxy", "http://127.0.0.1:7890");
+        Assert.DoesNotContain("--url", args);
+        Assert.DoesNotContain("--search", args);
+        Assert.DoesNotContain("ttwid=abc", args);
+    }
+
+    [Fact]
+    public void DouyinSidecarProcessRunner_CreateDiscoveryProcessStartInfo_EmitsSearchArguments()
+    {
+        var sidecarPath = TestRepositoryPaths.GetRootPath(Path.Combine("tools", "douyin-sidecar", "sidecar.py"));
+        var runner = new DouyinSidecarProcessRunner("python", sidecarPath);
+        var request = new DouyinSidecarDiscoveryRequest(
+            DouyinDiscoveryType.Search,
+            "D:\\Videos",
+            Keyword: "猫咪",
+            SearchMax: 50);
+
+        var psi = CreateDiscoveryProcessStartInfo(runner, request);
+        var args = psi.ArgumentList.ToArray();
+
+        AssertArgument(args, "--output-dir", "D:\\Videos");
+        AssertArgument(args, "--search", "猫咪");
+        AssertArgument(args, "--search-max", "50");
+        Assert.DoesNotContain("--url", args);
+        Assert.DoesNotContain("--hot-board", args);
     }
 
     [Fact]
@@ -939,6 +1154,35 @@ public class DouyinSpecialDownloadServiceTests
         }
     }
 
+    private sealed class CapturingDiscoverySidecarRunner(params string[] lines) : IDouyinSidecarProcessRunner
+    {
+        public DouyinSidecarDiscoveryRequest? LastDiscoveryRequest { get; private set; }
+
+        public async IAsyncEnumerable<string> RunAsync(
+            DouyinSidecarRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var line in Array.Empty<string>())
+                yield return line;
+
+            await Task.Yield();
+            throw new InvalidOperationException("Download runner should not be used for discovery tests.");
+        }
+
+        public async IAsyncEnumerable<string> RunDiscoveryAsync(
+            DouyinSidecarDiscoveryRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            LastDiscoveryRequest = request;
+            foreach (var line in lines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Yield();
+                yield return line;
+            }
+        }
+    }
+
     private sealed class CancellingSidecarRunner : IDouyinSidecarProcessRunner
     {
         public async IAsyncEnumerable<string> RunAsync(
@@ -981,6 +1225,30 @@ public class DouyinSpecialDownloadServiceTests
     {
         public async IAsyncEnumerable<string> RunAsync(
             DouyinSidecarRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var line in Array.Empty<string>())
+                yield return line;
+
+            await Task.Yield();
+            throw new InvalidOperationException($"sidecar failed with --cookie {cookie}");
+        }
+    }
+
+    private sealed class ThrowingDiscoveryCookieSidecarRunner(string cookie) : IDouyinSidecarProcessRunner
+    {
+        public async IAsyncEnumerable<string> RunAsync(
+            DouyinSidecarRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var line in Array.Empty<string>())
+                yield return line;
+
+            await Task.Yield();
+        }
+
+        public async IAsyncEnumerable<string> RunDiscoveryAsync(
+            DouyinSidecarDiscoveryRequest request,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
         {
             foreach (var line in Array.Empty<string>())
@@ -1063,6 +1331,18 @@ public class DouyinSpecialDownloadServiceTests
     {
         var method = typeof(DouyinSidecarProcessRunner).GetMethod(
             "CreateProcessStartInfo",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        return Assert.IsType<ProcessStartInfo>(method.Invoke(runner, [request]));
+    }
+
+    private static ProcessStartInfo CreateDiscoveryProcessStartInfo(
+        DouyinSidecarProcessRunner runner,
+        DouyinSidecarDiscoveryRequest request)
+    {
+        var method = typeof(DouyinSidecarProcessRunner).GetMethod(
+            "CreateDiscoveryProcessStartInfo",
             BindingFlags.Instance | BindingFlags.NonPublic);
 
         Assert.NotNull(method);

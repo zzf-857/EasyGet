@@ -16,7 +16,46 @@ public interface IDouyinSpecialDownloadService
         IProgress<DownloadProgress>? progress = null,
         Action<string>? logCallback = null,
         CancellationToken cancellationToken = default);
+
+    Task<DouyinDiscoveryResult> DiscoverAsync(
+        DouyinDiscoveryRequest request,
+        AppConfig config,
+        Action<string>? logCallback = null,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Douyin discovery is not supported by this service implementation.");
 }
+
+public enum DouyinDiscoveryType
+{
+    HotBoard,
+    Search
+}
+
+public sealed record DouyinDiscoveryRequest(
+    DouyinDiscoveryType Type,
+    string OutputDirectory,
+    string Keyword = "",
+    int Limit = 30,
+    int SearchMax = 50);
+
+public sealed record DouyinDiscoveryResult(
+    string DiscoveryType,
+    string OutputFilePath,
+    int ItemCount,
+    IReadOnlyList<DouyinDiscoveryItem> Items,
+    string Keyword = "",
+    int? Limit = null,
+    int? SearchMax = null);
+
+public sealed record DouyinDiscoveryItem(
+    string Word = "",
+    long? HotValue = null,
+    int? Position = null,
+    string AwemeId = "",
+    string Description = "",
+    string AuthorNickname = "",
+    string SecUid = "",
+    string Url = "");
 
 public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 {
@@ -55,6 +94,66 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         Action<string>? logCallback = null,
         CancellationToken cancellationToken = default)
         => await DownloadCoreAsync(task, progress, logCallback, cancellationToken, config);
+
+    public async Task<DouyinDiscoveryResult> DiscoverAsync(
+        DouyinDiscoveryRequest request,
+        AppConfig config,
+        Action<string>? logCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        var sidecarRequest = DouyinSidecarDiscoveryRequest.FromRequest(request, config);
+
+        try
+        {
+            await foreach (var line in _runner.RunDiscoveryAsync(sidecarRequest, cancellationToken))
+            {
+                if (!TryParseStdoutLine(line, out var message))
+                {
+                    if (!string.IsNullOrWhiteSpace(line))
+                        logCallback?.Invoke(RedactSensitiveText(line, sidecarRequest.Cookie));
+
+                    continue;
+                }
+
+                switch (message.Kind)
+                {
+                    case DouyinSidecarEventKind.Success when message.IsDiscovery:
+                        return BuildDiscoveryResult(message);
+                    case DouyinSidecarEventKind.Success:
+                        throw new InvalidOperationException("Douyin sidecar returned a non-discovery success summary.");
+                    case DouyinSidecarEventKind.Failed:
+                        throw new InvalidOperationException(
+                            RedactSensitiveText(
+                                SelectFirstNonEmpty(message.Error, message.Message, "Douyin discovery failed."),
+                                sidecarRequest.Cookie));
+                    case DouyinSidecarEventKind.Cancelled:
+                        throw new OperationCanceledException(
+                            SelectFirstNonEmpty(message.Message, "Douyin discovery was cancelled."),
+                            cancellationToken);
+                    case DouyinSidecarEventKind.Log:
+                    case DouyinSidecarEventKind.Progress:
+                        var logMessage = RedactSensitiveText(
+                            SelectFirstNonEmpty(message.Message, message.RawLine),
+                            sidecarRequest.Cookie);
+                        if (!string.IsNullOrWhiteSpace(logMessage))
+                            logCallback?.Invoke(logMessage);
+                        break;
+                }
+            }
+
+            throw new InvalidOperationException("Douyin sidecar did not return a discovery summary.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                RedactSensitiveText(ex.Message, sidecarRequest.Cookie),
+                ex);
+        }
+    }
 
     private async Task DownloadCoreAsync(
         DownloadTask task,
@@ -222,6 +321,19 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             message.SuccessCount = GetInt32(counts, summary, root, "success_count", "success", "succeeded");
             message.FailedCount = GetInt32(counts, summary, root, "failed_count", "failed", "failure_count");
             message.SkippedCount = GetInt32(counts, summary, root, "skipped_count", "skipped", "skip_count");
+            if (details.HasValue)
+            {
+                message.IsDiscovery = string.Equals(
+                    GetOptionalString(details.Value, "kind"),
+                    "discovery",
+                    StringComparison.OrdinalIgnoreCase);
+                message.DiscoveryType = GetOptionalString(details.Value, "discovery_type");
+                message.DiscoveryKeyword = GetOptionalString(details.Value, "keyword");
+                message.DiscoveryLimit = GetOptionalInt32(details.Value, "limit");
+                message.DiscoverySearchMax = GetOptionalInt32(details.Value, "search_max");
+                message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
+                message.DiscoveryItems = GetDiscoveryItems(details.Value);
+            }
 
             return message.Kind != DouyinSidecarEventKind.Unknown;
         }
@@ -253,6 +365,20 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             RawLine = message.RawLine
         };
         return true;
+    }
+
+    private static DouyinDiscoveryResult BuildDiscoveryResult(DouyinSidecarMessage message)
+    {
+        var discoveryType = SelectFirstNonEmpty(message.DiscoveryType, "unknown");
+        var itemCount = message.DiscoveryItemCount ?? message.DiscoveryItems.Count;
+        return new DouyinDiscoveryResult(
+            DiscoveryType: discoveryType,
+            OutputFilePath: message.OutputFilePath,
+            ItemCount: Math.Max(0, itemCount),
+            Items: message.DiscoveryItems,
+            Keyword: message.DiscoveryKeyword,
+            Limit: message.DiscoveryLimit,
+            SearchMax: message.DiscoverySearchMax);
     }
 
     internal static void ApplySuccessSummary(DownloadTask task, DouyinSidecarMessage message)
@@ -467,6 +593,35 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         return results;
     }
 
+    private static IReadOnlyList<DouyinDiscoveryItem> GetDiscoveryItems(JsonElement details)
+    {
+        if (details.ValueKind != JsonValueKind.Object
+            || !details.TryGetProperty("items", out var items)
+            || items.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var results = new List<DouyinDiscoveryItem>();
+        foreach (var item in items.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+                continue;
+
+            results.Add(new DouyinDiscoveryItem(
+                Word: GetOptionalString(item, "word"),
+                HotValue: GetOptionalInt64(item, "hot_value"),
+                Position: GetOptionalInt32(item, "position"),
+                AwemeId: GetOptionalString(item, "aweme_id"),
+                Description: GetOptionalString(item, "desc"),
+                AuthorNickname: GetOptionalString(item, "author_nickname"),
+                SecUid: GetOptionalString(item, "sec_uid"),
+                Url: GetOptionalString(item, "url")));
+        }
+
+        return results;
+    }
+
     private static string GetString(JsonElement primary, JsonElement fallback, params string[] propertyNames)
     {
         foreach (var propertyName in propertyNames)
@@ -530,6 +685,15 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             ? GetInt64(primary.Value, secondary, propertyNames)
             : null;
         value ??= GetInt64(secondary, fallback, propertyNames);
+        if (!value.HasValue)
+            return null;
+
+        return (int)Math.Clamp(value.Value, int.MinValue, int.MaxValue);
+    }
+
+    private static int? GetOptionalInt32(JsonElement element, string propertyName)
+    {
+        var value = GetOptionalInt64(element, propertyName);
         if (!value.HasValue)
             return null;
 
@@ -839,6 +1003,13 @@ internal sealed class DouyinSidecarMessage
     public int? SuccessCount { get; set; }
     public int? FailedCount { get; set; }
     public int? SkippedCount { get; set; }
+    public bool IsDiscovery { get; set; }
+    public string DiscoveryType { get; set; } = "";
+    public string DiscoveryKeyword { get; set; } = "";
+    public int? DiscoveryLimit { get; set; }
+    public int? DiscoverySearchMax { get; set; }
+    public int? DiscoveryItemCount { get; set; }
+    public IReadOnlyList<DouyinDiscoveryItem> DiscoveryItems { get; set; } = [];
 }
 
 internal sealed record DouyinSidecarRequest(
@@ -921,11 +1092,56 @@ internal sealed record DouyinSidecarRequest(
     }
 }
 
+internal sealed record DouyinSidecarDiscoveryRequest(
+    DouyinDiscoveryType Type,
+    string OutputDirectory,
+    string Keyword = "",
+    int Limit = 30,
+    int SearchMax = 50,
+    string Cookie = "",
+    string Proxy = "")
+{
+    public static DouyinSidecarDiscoveryRequest FromRequest(DouyinDiscoveryRequest request, AppConfig? config)
+    {
+        var outputDirectory = NormalizeText(request.OutputDirectory);
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+            throw new ArgumentException("Douyin discovery output directory is required.", nameof(request));
+
+        var keyword = NormalizeText(request.Keyword);
+        if (request.Type == DouyinDiscoveryType.Search && string.IsNullOrWhiteSpace(keyword))
+            throw new ArgumentException("Douyin discovery search keyword is required.", nameof(request));
+
+        var proxy = config is { UseProxy: true }
+            ? NormalizeText(config.ProxyAddress)
+            : "";
+
+        return new DouyinSidecarDiscoveryRequest(
+            Type: request.Type,
+            OutputDirectory: outputDirectory,
+            Keyword: keyword,
+            Limit: Math.Max(0, request.Limit),
+            SearchMax: Math.Max(1, request.SearchMax),
+            Cookie: NormalizeText(config?.CookieContent),
+            Proxy: proxy);
+    }
+
+    private static string NormalizeText(string? value, string fallback = "")
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrWhiteSpace(normalized) ? fallback : normalized;
+    }
+}
+
 internal interface IDouyinSidecarProcessRunner
 {
     IAsyncEnumerable<string> RunAsync(
         DouyinSidecarRequest request,
         CancellationToken cancellationToken);
+
+    IAsyncEnumerable<string> RunDiscoveryAsync(
+        DouyinSidecarDiscoveryRequest request,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException("Douyin sidecar runner does not support discovery requests.");
 }
 
 internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
@@ -945,10 +1161,27 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         DouyinSidecarRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        await foreach (var line in RunProcessAsync(CreateProcessStartInfo(request), request.Cookie, cancellationToken))
+            yield return line;
+    }
+
+    public async IAsyncEnumerable<string> RunDiscoveryAsync(
+        DouyinSidecarDiscoveryRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var line in RunProcessAsync(CreateDiscoveryProcessStartInfo(request), request.Cookie, cancellationToken))
+            yield return line;
+    }
+
+    private async IAsyncEnumerable<string> RunProcessAsync(
+        ProcessStartInfo processStartInfo,
+        string cookie,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         if (!File.Exists(_scriptPath))
             throw new InvalidOperationException($"Douyin sidecar was not found: {_scriptPath}");
 
-        using var process = Process.Start(CreateProcessStartInfo(request))
+        using var process = Process.Start(processStartInfo)
             ?? throw new InvalidOperationException($"Failed to start Douyin sidecar: {_pythonExecutablePath}");
         using var cancellationRegistration = cancellationToken.Register(() => TryKill(process));
 
@@ -965,7 +1198,7 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         {
             var stderrText = DouyinSpecialDownloadService.RedactSensitiveText(
                 stderr.ToString().Trim(),
-                request.Cookie);
+                cookie);
             throw new InvalidOperationException(
                 !string.IsNullOrWhiteSpace(stderrText)
                     ? stderrText
@@ -975,25 +1208,7 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
 
     private ProcessStartInfo CreateProcessStartInfo(DouyinSidecarRequest request)
     {
-        var runsAsExecutable = IsExecutableSidecar(_scriptPath);
-        var psi = new ProcessStartInfo
-        {
-            FileName = runsAsExecutable ? _scriptPath : _pythonExecutablePath,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8
-        };
-
-        psi.Environment["PYTHONIOENCODING"] = "utf-8";
-        psi.Environment["PYTHONUTF8"] = "1";
-        psi.Environment.Remove(DouyinSpecialDownloadService.DouyinCookieEnvironmentVariableName);
-
-        if (!runsAsExecutable)
-            psi.ArgumentList.Add(_scriptPath);
-
+        var psi = CreateBaseProcessStartInfo();
         AddArgument(psi, "--url", request.Url);
         AddArgument(psi, "--output-dir", request.OutputDirectory);
         AddArgument(psi, "--format", request.Format);
@@ -1021,6 +1236,50 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddSwitch(psi, "--include-json", request.IncludeJson);
         AddSwitch(psi, "--enable-database", request.IncludeDatabase);
         AddSwitch(psi, "--incremental", request.IncrementalDownload);
+
+        return psi;
+    }
+
+    private ProcessStartInfo CreateDiscoveryProcessStartInfo(DouyinSidecarDiscoveryRequest request)
+    {
+        var psi = CreateBaseProcessStartInfo();
+        AddArgument(psi, "--output-dir", request.OutputDirectory);
+        AddCookieEnvironmentArgument(psi, request.Cookie);
+        AddArgument(psi, "--proxy", request.Proxy);
+
+        if (request.Type == DouyinDiscoveryType.HotBoard)
+        {
+            AddArgument(psi, "--hot-board", Math.Max(0, request.Limit).ToString(CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            AddArgument(psi, "--search", request.Keyword);
+            AddArgument(psi, "--search-max", Math.Max(1, request.SearchMax).ToString(CultureInfo.InvariantCulture));
+        }
+
+        return psi;
+    }
+
+    private ProcessStartInfo CreateBaseProcessStartInfo()
+    {
+        var runsAsExecutable = IsExecutableSidecar(_scriptPath);
+        var psi = new ProcessStartInfo
+        {
+            FileName = runsAsExecutable ? _scriptPath : _pythonExecutablePath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8
+        };
+
+        psi.Environment["PYTHONIOENCODING"] = "utf-8";
+        psi.Environment["PYTHONUTF8"] = "1";
+        psi.Environment.Remove(DouyinSpecialDownloadService.DouyinCookieEnvironmentVariableName);
+
+        if (!runsAsExecutable)
+            psi.ArgumentList.Add(_scriptPath);
 
         return psi;
     }
