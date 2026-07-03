@@ -98,6 +98,39 @@ public class DouyinManifestReaderTests
     }
 
     [Fact]
+    public async Task ReadSummary_BuildsSearchTextFromItemsBeyondDisplayedLimit()
+    {
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-manifest-reader-search-{Guid.NewGuid():N}");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            var lines = Enumerable.Range(1, 25)
+                .Select(index => index > 20
+                    ? $$"""{"aweme_id":"hidden-gallery-{{index}}","media_type":"gallery","desc":"第 {{index}} 条图文","author_name":"作者 Z","file_names":["gallery_{{index}}.jpg"],"tags":["隐藏标签"]}"""
+                    : $$"""{"aweme_id":"video-{{index}}","media_type":"video","desc":"展示视频 {{index}}","author_name":"作者 A","file_names":["video_{{index}}.mp4"],"tags":["视频"]}""");
+            await File.WriteAllTextAsync(manifestPath, string.Join(Environment.NewLine, lines));
+
+            var summary = DouyinManifestReader.ReadSummary(manifestPath, maxItems: 1);
+
+            Assert.NotNull(summary);
+            Assert.Equal(25, summary!.ItemCount);
+            Assert.Equal(20, summary.VideoCount);
+            Assert.Equal(5, summary.GalleryCount);
+            var displayedItem = Assert.Single(summary.Items);
+            Assert.Equal("video-1", displayedItem.AwemeId);
+            Assert.Contains("hidden-gallery-25", summary.SearchText, StringComparison.Ordinal);
+            Assert.Contains("作者 Z", summary.SearchText, StringComparison.Ordinal);
+            Assert.Contains("隐藏标签", summary.SearchText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
     public async Task ReadSummary_ClassifiesDouyinSidecarFileRoles()
     {
         var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-manifest-reader-roles-{Guid.NewGuid():N}");

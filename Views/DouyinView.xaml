@@ -634,7 +634,7 @@
                                 <Style TargetType="StackPanel">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding DouyinHistoryItems.Count}" Value="0">
+                                        <DataTrigger Binding="{Binding HasDouyinArchiveItems}" Value="False">
                                             <Setter Property="Visibility" Value="Visible"/>
                                         </DataTrigger>
                                     </Style.Triggers>
@@ -654,88 +654,159 @@
                                        Margin="0,4,0,0"/>
                         </StackPanel>
 
-                        <ListBox ItemsSource="{Binding DouyinHistoryItems}"
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 Padding="16"
-                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                            <ListBox.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel/>
-                                </ItemsPanelTemplate>
-                            </ListBox.ItemsPanel>
-                            <ListBox.ItemContainerStyle>
-                                <Style TargetType="ListBoxItem">
-                                    <Setter Property="Padding" Value="0"/>
-                                    <Setter Property="Margin" Value="0,0,14,14"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="ListBoxItem">
-                                                <ContentPresenter/>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,42,0,42">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding HasDouyinArchiveItems}" Value="True"/>
+                                                <Condition Binding="{Binding HasFilteredDouyinArchiveItems}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
                                 </Style>
-                            </ListBox.ItemContainerStyle>
-                            <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <Border Style="{StaticResource ToolPanelBorder}"
-                                            Width="286"
-                                            Padding="0"
-                                            ClipToBounds="True"
-                                            ToolTip="{Binding FilePath}">
-                                        <StackPanel>
-                                            <Border Height="150"
-                                                    CornerRadius="12,12,0,0"
-                                                    Background="{StaticResource BgSurfaceHighestBrush}"
-                                                    ClipToBounds="True">
-                                                <Grid>
-                                                    <Image Source="{Binding ThumbnailUrl}"
-                                                           Stretch="UniformToFill"
-                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                                                    <TextBlock Text="&#xEC4F;"
-                                                               Style="{StaticResource IconGlyph}"
-                                                               FontSize="{StaticResource IconSizeEmptyState}"
-                                                               Foreground="{DynamicResource AccentBrush}"
-                                                               Opacity="0.22"
-                                                               HorizontalAlignment="Center"
-                                                               VerticalAlignment="Center"/>
-                                                    <Border HorizontalAlignment="Right"
-                                                            VerticalAlignment="Bottom"
-                                                            Background="{StaticResource ScrimHeavyBrush}"
-                                                            CornerRadius="3"
-                                                            Padding="5,2"
-                                                            Margin="0,0,8,8">
-                                                        <TextBlock Text="{Binding Quality}" Style="{StaticResource TextCaption}"/>
-                                                    </Border>
-                                                </Grid>
-                                            </Border>
+                            </StackPanel.Style>
+                            <TextBlock Text="&#xE721;" Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeEmptyState}"
+                                       Foreground="{StaticResource BorderPrimaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="未找到匹配作品"
+                                       Style="{StaticResource TextBodyStrong}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="换个关键词或清除筛选再试"
+                                       Style="{StaticResource TextBody}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
 
-                                            <StackPanel Margin="14,12,14,14">
-                                                <TextBlock Text="{Binding Title}"
-                                                           Style="{StaticResource TextBodyStrong}"
-                                                           TextTrimming="CharacterEllipsis"/>
-                                                <Grid Margin="0,8,0,0">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*"/>
-                                                        <ColumnDefinition Width="Auto"/>
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Grid.Column="0" Style="{StaticResource TextCaption}">
-                                                        <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
-                                                        <Run Text=" · "/>
-                                                        <Run Text="{Binding DownloadTimeText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock Grid.Column="1"
-                                                               Text="{Binding Format}"
-                                                               Style="{StaticResource TextCaption}"
-                                                               Foreground="{DynamicResource AccentBrush}"/>
-                                                </Grid>
-                                            </StackPanel>
-                                        </StackPanel>
+                        <DockPanel Margin="16">
+                            <Grid DockPanel.Dock="Top" Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="220"/>
+                                    <ColumnDefinition Width="140"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Text="作品记录" Style="{StaticResource TextBodyStrong}"/>
+                                    <Border Background="{DynamicResource AccentMutedBrush}"
+                                            CornerRadius="4"
+                                            Padding="8,2"
+                                            Margin="10,0,0,0"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Style="{StaticResource TextCaption}">
+                                            <Run Text="{Binding FilteredDouyinArchiveCount, Mode=OneWay}"/>
+                                            <Run Text=" / "/>
+                                            <Run Text="{Binding DouyinArchiveCount, Mode=OneWay}"/>
+                                            <Run Text=" 个作品"/>
+                                        </TextBlock>
                                     </Border>
-                                </DataTemplate>
-                            </ListBox.ItemTemplate>
-                        </ListBox>
+                                </StackPanel>
+
+                                <TextBox Grid.Column="1"
+                                         Style="{StaticResource DarkTextBox}"
+                                         Text="{Binding DouyinArchiveSearchKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                         ToolTip="搜索作者、标题、作品 ID 或标签"
+                                         AutomationProperties.Name="搜索作者、标题、作品 ID 或标签"
+                                         Margin="10,0,8,0"
+                                         Padding="10,7"/>
+
+                                <ComboBox Grid.Column="2"
+                                          Style="{StaticResource DarkComboBox}"
+                                          ItemsSource="{Binding DouyinArchiveTypeFilterOptions}"
+                                          SelectedItem="{Binding SelectedDouyinArchiveTypeFilter}"
+                                          ToolTip="筛选抖音作品类型"
+                                          AutomationProperties.Name="筛选抖音作品类型"/>
+                            </Grid>
+
+                            <ListBox ItemsSource="{Binding DouyinHistoryItems}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Margin" Value="0,0,14,14"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource ToolPanelBorder}"
+                                                Width="286"
+                                                Padding="0"
+                                                ClipToBounds="True"
+                                                ToolTip="{Binding FilePath}">
+                                            <StackPanel>
+                                                <Border Height="150"
+                                                        CornerRadius="12,12,0,0"
+                                                        Background="{StaticResource BgSurfaceHighestBrush}"
+                                                        ClipToBounds="True">
+                                                    <Grid>
+                                                        <Image Source="{Binding ThumbnailUrl}"
+                                                               Stretch="UniformToFill"
+                                                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                        <TextBlock Text="&#xEC4F;"
+                                                                   Style="{StaticResource IconGlyph}"
+                                                                   FontSize="{StaticResource IconSizeEmptyState}"
+                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                   Opacity="0.22"
+                                                                   HorizontalAlignment="Center"
+                                                                   VerticalAlignment="Center"/>
+                                                        <Border HorizontalAlignment="Right"
+                                                                VerticalAlignment="Bottom"
+                                                                Background="{StaticResource ScrimHeavyBrush}"
+                                                                CornerRadius="3"
+                                                                Padding="5,2"
+                                                                Margin="0,0,8,8">
+                                                            <TextBlock Text="{Binding Quality}" Style="{StaticResource TextCaption}"/>
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
+
+                                                <StackPanel Margin="14,12,14,14">
+                                                    <TextBlock Text="{Binding Title}"
+                                                               Style="{StaticResource TextBodyStrong}"
+                                                               TextTrimming="CharacterEllipsis"/>
+                                                    <Grid Margin="0,8,0,0">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <TextBlock Grid.Column="0" Style="{StaticResource TextCaption}">
+                                                            <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
+                                                            <Run Text=" · "/>
+                                                            <Run Text="{Binding DownloadTimeText, Mode=OneWay}"/>
+                                                        </TextBlock>
+                                                        <TextBlock Grid.Column="1"
+                                                                   Text="{Binding Format}"
+                                                                   Style="{StaticResource TextCaption}"
+                                                                   Foreground="{DynamicResource AccentBrush}"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </DockPanel>
                     </Grid>
                 </Border>
             </StackPanel>

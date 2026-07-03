@@ -275,6 +275,277 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelFiltersArchiveByKeywordAndMediaType()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "城市视频",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/video-1",
+            Format = "mp4",
+            DouyinManifestSummaryText = "作品 1 / 视频 1 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                1,
+                1,
+                1,
+                0,
+                0,
+                0,
+                1,
+                false,
+                [
+                    new DouyinManifestItem(
+                        "video-1",
+                        "video",
+                        "视频",
+                        "城市夜景",
+                        "作者 A",
+                        "2026-07-01",
+                        "",
+                        ["城市"],
+                        ["video.mp4"])
+                ])
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "旅行图文",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/note/gallery-1",
+            Format = "jpg",
+            DouyinManifestSummaryText = "作品 1 / 图文 1 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                1,
+                1,
+                0,
+                1,
+                0,
+                0,
+                2,
+                false,
+                [
+                    new DouyinManifestItem(
+                        "gallery-1",
+                        "gallery",
+                        "图文",
+                        "海边旅行",
+                        "作者 B",
+                        "2026-07-02",
+                        "",
+                        ["旅行", "海边"],
+                        ["gallery_1.jpg", "gallery_2.jpg"])
+                ])
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "原声音频",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/music/music-1",
+            Format = "mp3",
+            DouyinManifestSummaryText = "作品 1 / 音乐 1 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                1,
+                1,
+                0,
+                0,
+                1,
+                0,
+                1,
+                false,
+                [
+                    new DouyinManifestItem(
+                        "music-1",
+                        "music",
+                        "音乐",
+                        "夏日原声",
+                        "作者 C",
+                        "2026-07-03",
+                        "",
+                        ["音乐"],
+                        ["music.mp3"])
+                ])
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "not douyin",
+            Platform = "YouTube",
+            Url = "https://youtube.com/watch?v=abc",
+            Format = "mp4"
+        });
+
+        Assert.Equal(["全部", "视频", "图文", "音乐"], context.Douyin.DouyinArchiveTypeFilterOptions);
+        Assert.Equal(3, context.Douyin.DouyinArchiveCount);
+        Assert.Equal(3, context.Douyin.FilteredDouyinArchiveCount);
+
+        context.Douyin.SelectedDouyinArchiveTypeFilter = "图文";
+
+        var gallery = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("旅行图文", gallery.Title);
+        Assert.Equal(1, context.Douyin.FilteredDouyinArchiveCount);
+        Assert.Equal(3, context.Douyin.DouyinArchiveCount);
+
+        context.Douyin.SelectedDouyinArchiveTypeFilter = "全部";
+        context.Douyin.DouyinArchiveSearchKeyword = "作者 C";
+
+        var music = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("原声音频", music.Title);
+        Assert.Equal(1, context.Douyin.FilteredDouyinArchiveCount);
+    }
+
+    [Fact]
+    public void DouyinViewModelArchiveTypeFilterFallsBackToAllForUnknownValues()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "抖音视频",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/123",
+            Format = "mp4"
+        });
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("不存在的类型");
+
+        Assert.Equal("全部", context.Douyin.SelectedDouyinArchiveTypeFilter);
+        var item = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("抖音视频", item.Title);
+        Assert.Equal(1, context.Douyin.FilteredDouyinArchiveCount);
+    }
+
+    [Fact]
+    public void DouyinViewModelClassifiesLegacyArchiveItemsByFormatWhenManifestIsMissing()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "旧视频",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/legacy-video",
+            Format = "mp4"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "旧图文",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/note/legacy-gallery",
+            Format = "jpg"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "旧音乐",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/music/legacy-music",
+            Format = "mp3"
+        });
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("视频");
+        var video = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("旧视频", video.Title);
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("图文");
+        var gallery = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("旧图文", gallery.Title);
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("音乐");
+        var music = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("旧音乐", music.Title);
+    }
+
+    [Fact]
+    public void DouyinViewModelDoesNotUseFormatFallbackWhenArchiveManifestExists()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "图文任务",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/note/gallery-task",
+            Format = "mp4",
+            DouyinManifestSummaryText = "作品 1 / 图文 1 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                1,
+                1,
+                0,
+                1,
+                0,
+                0,
+                2,
+                false,
+                [
+                    new DouyinManifestItem(
+                        "gallery-task",
+                        "gallery",
+                        "图文",
+                        "这是真正的图文作品",
+                        "作者 D",
+                        "2026-07-04",
+                        "",
+                        ["图文"],
+                        ["gallery_1.jpg", "gallery_2.jpg"])
+                ])
+        });
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("视频");
+
+        Assert.Empty(context.Douyin.DouyinHistoryItems);
+        Assert.Equal(0, context.Douyin.FilteredDouyinArchiveCount);
+        Assert.Equal(1, context.Douyin.DouyinArchiveCount);
+        Assert.True(context.Douyin.HasDouyinArchiveItems);
+        Assert.False(context.Douyin.HasFilteredDouyinArchiveItems);
+    }
+
+    [Fact]
+    public void DouyinViewModelUsesManifestSummaryCountsAndSearchTextBeyondDisplayedItems()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "批量主页",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/user/example",
+            Format = "mp4",
+            DouyinManifestSummaryText = "作品 25 / 视频 20 / 图文 5 / 附属 30",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                25,
+                25,
+                20,
+                5,
+                0,
+                0,
+                30,
+                true,
+                [
+                    new DouyinManifestItem(
+                        "video-1",
+                        "video",
+                        "视频",
+                        "展示列表里的视频",
+                        "作者 E",
+                        "2026-07-05",
+                        "",
+                        ["视频"],
+                        ["video_1.mp4"])
+                ],
+                "hidden-gallery-25 第 25 条图文 作者 Z 隐藏标签")
+        });
+
+        context.Douyin.SetDouyinArchiveTypeFilterCommand.Execute("图文");
+
+        var gallery = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("批量主页", gallery.Title);
+
+        context.Douyin.DouyinArchiveSearchKeyword = "隐藏标签";
+
+        var hiddenKeywordMatch = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("批量主页", hiddenKeywordMatch.Title);
+    }
+
+    [Fact]
     public void DouyinViewModelExposesOnlyDouyinManifestSummaryItems()
     {
         using var context = CreateViewModelContext();

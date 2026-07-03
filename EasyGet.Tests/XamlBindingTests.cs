@@ -792,6 +792,16 @@ public class XamlBindingTests
         Assert.Contains("Visibility=\"{Binding FileRoleSummaryText, Converter={StaticResource StringToVisibility}}\"", source);
         Assert.Contains("ToolTip=\"{Binding FileNamesText, Mode=OneWay}\"", source);
         Assert.Contains("DouyinHistoryItems", source);
+        Assert.Contains("DouyinArchiveTypeFilterOptions", source);
+        Assert.Contains("SelectedDouyinArchiveTypeFilter", source);
+        Assert.Contains("DouyinArchiveSearchKeyword", source);
+        Assert.Contains("FilteredDouyinArchiveCount", source);
+        Assert.Contains("DouyinArchiveCount", source);
+        Assert.Contains("HasDouyinArchiveItems", source);
+        Assert.Contains("HasFilteredDouyinArchiveItems", source);
+        Assert.Contains("搜索作者、标题、作品 ID 或标签", source);
+        Assert.Contains("未找到匹配作品", source);
+        Assert.Contains("换个关键词或清除筛选再试", source);
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
 

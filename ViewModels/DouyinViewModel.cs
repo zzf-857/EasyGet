@@ -19,12 +19,19 @@ public partial class DouyinViewModel : ObservableObject
     public SettingsViewModel Settings { get; }
 
     public string[] DouyinTaskFilterOptions { get; } = ["全部", "进行中", "已完成", "失败", "已暂停", "已取消"];
+    public string[] DouyinArchiveTypeFilterOptions { get; } = ["全部", "视频", "图文", "音乐"];
 
     [ObservableProperty]
     private string _selectedDouyinTaskFilter = "全部";
 
     [ObservableProperty]
     private string _douyinTaskSearchKeyword = "";
+
+    [ObservableProperty]
+    private string _selectedDouyinArchiveTypeFilter = "全部";
+
+    [ObservableProperty]
+    private string _douyinArchiveSearchKeyword = "";
 
     public IEnumerable<DownloadTask> DouyinTasks => DouyinTaskItems;
     public ObservableCollection<DownloadTask> DouyinTaskItems { get; } = [];
@@ -48,6 +55,14 @@ public partial class DouyinViewModel : ObservableObject
         task.Status == DownloadStatus.Failed);
 
     public int DouyinManifestSummaryCount => DouyinManifestSummaryItems.Count;
+
+    public int DouyinArchiveCount => CountDouyinHistoryItems();
+
+    public int FilteredDouyinArchiveCount => DouyinHistoryItems.Count;
+
+    public bool HasDouyinArchiveItems => DouyinArchiveCount > 0;
+
+    public bool HasFilteredDouyinArchiveItems => FilteredDouyinArchiveCount > 0;
 
     public DouyinViewModel(
         ConfigService configService,
@@ -192,7 +207,9 @@ public partial class DouyinViewModel : ObservableObject
         DouyinManifestSummaryItems.Clear();
         foreach (var item in History.HistoryItems.Where(IsDouyinHistoryItem))
         {
-            DouyinHistoryItems.Add(item);
+            if (MatchesArchiveFilter(item))
+                DouyinHistoryItems.Add(item);
+
             if (!string.IsNullOrWhiteSpace(item.DouyinManifestSummaryText))
             {
                 DouyinManifestSummaryItems.Add(item);
@@ -200,6 +217,10 @@ public partial class DouyinViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(DouyinHistoryItems));
+        OnPropertyChanged(nameof(DouyinArchiveCount));
+        OnPropertyChanged(nameof(FilteredDouyinArchiveCount));
+        OnPropertyChanged(nameof(HasDouyinArchiveItems));
+        OnPropertyChanged(nameof(HasFilteredDouyinArchiveItems));
         OnPropertyChanged(nameof(DouyinManifestSummaryItems));
         OnPropertyChanged(nameof(DouyinManifestSummaryCount));
     }
@@ -226,10 +247,34 @@ public partial class DouyinViewModel : ObservableObject
         SyncDouyinTaskItems();
     }
 
+    partial void OnSelectedDouyinArchiveTypeFilterChanged(string value)
+    {
+        if (!DouyinArchiveTypeFilterOptions.Contains(value, StringComparer.Ordinal))
+        {
+            SelectedDouyinArchiveTypeFilter = "全部";
+            return;
+        }
+
+        SyncDouyinHistoryItems();
+    }
+
+    partial void OnDouyinArchiveSearchKeywordChanged(string value)
+    {
+        SyncDouyinHistoryItems();
+    }
+
     [RelayCommand]
     private void SetDouyinTaskFilter(string filter)
     {
         SelectedDouyinTaskFilter = DouyinTaskFilterOptions.Contains(filter, StringComparer.Ordinal)
+            ? filter
+            : "全部";
+    }
+
+    [RelayCommand]
+    private void SetDouyinArchiveTypeFilter(string filter)
+    {
+        SelectedDouyinArchiveTypeFilter = DouyinArchiveTypeFilterOptions.Contains(filter, StringComparer.Ordinal)
             ? filter
             : "全部";
     }
@@ -269,6 +314,77 @@ public partial class DouyinViewModel : ObservableObject
     private static bool ContainsKeyword(string value, string keyword)
         => !string.IsNullOrWhiteSpace(value)
            && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+
+    private int CountDouyinHistoryItems()
+        => History.HistoryItems.Count(IsDouyinHistoryItem);
+
+    private bool MatchesArchiveFilter(DownloadHistory item)
+        => MatchesArchiveTypeFilter(item) && MatchesArchiveSearchKeyword(item);
+
+    private bool MatchesArchiveTypeFilter(DownloadHistory item)
+    {
+        var summary = item.DouyinManifestSummary;
+        if (summary is not null)
+            return SelectedDouyinArchiveTypeFilter switch
+            {
+                "视频" => summary.VideoCount > 0,
+                "图文" => summary.GalleryCount > 0,
+                "音乐" => summary.MusicCount > 0,
+                _ => true
+            };
+
+        return SelectedDouyinArchiveTypeFilter switch
+        {
+            "视频" => IsVideoFormat(item.Format),
+            "图文" => IsImageFormat(item.Format),
+            "音乐" => IsAudioFormat(item.Format),
+            _ => true
+        };
+    }
+
+    private bool MatchesArchiveSearchKeyword(DownloadHistory item)
+    {
+        var keyword = DouyinArchiveSearchKeyword?.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+            return true;
+
+        return ContainsKeyword(item.Title, keyword)
+            || ContainsKeyword(item.Url, keyword)
+            || ContainsKeyword(item.Platform, keyword)
+            || ContainsKeyword(item.Format, keyword)
+            || ContainsKeyword(item.Quality, keyword)
+            || ContainsKeyword(item.DouyinManifestSummaryText, keyword)
+            || ContainsKeyword(item.DouyinManifestSummary?.SearchText ?? "", keyword)
+            || item.DouyinManifestItems.Any(manifestItem => MatchesManifestItemSearchKeyword(manifestItem, keyword));
+    }
+
+    private static bool MatchesManifestItemSearchKeyword(DouyinManifestItem item, string keyword)
+        => ContainsKeyword(item.AwemeId, keyword)
+           || ContainsKeyword(item.MediaTypeText, keyword)
+           || ContainsKeyword(item.Description, keyword)
+           || ContainsKeyword(item.AuthorName, keyword)
+           || ContainsKeyword(item.DateText, keyword)
+           || ContainsKeyword(item.TagsText, keyword)
+           || ContainsKeyword(item.FileNamesText, keyword)
+           || ContainsKeyword(item.FileRoleSummaryText, keyword);
+
+    private static bool IsVideoFormat(string format)
+        => IsFormat(format, "mp4", "mkv", "webm", "avi", "mov", "flv", "wmv", "m4v");
+
+    private static bool IsImageFormat(string format)
+        => IsFormat(format, "jpg", "jpeg", "png", "webp", "gif");
+
+    private static bool IsAudioFormat(string format)
+        => IsFormat(format, "mp3", "m4a", "wav", "flac", "aac", "opus", "ogg");
+
+    private static bool IsFormat(string format, params string[] values)
+    {
+        if (string.IsNullOrWhiteSpace(format))
+            return false;
+
+        var normalized = format.Trim().TrimStart('.').ToLowerInvariant();
+        return values.Contains(normalized, StringComparer.Ordinal);
+    }
 
     private static bool IsDouyinTask(DownloadTask task)
     {

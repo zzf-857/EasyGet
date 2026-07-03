@@ -1,4 +1,5 @@
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using EasyGet.Models;
 
@@ -30,6 +31,7 @@ public static class DouyinManifestReader
             var fileCount = 0;
             var workIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var items = new List<DouyinManifestItem>();
+            var searchText = new StringBuilder();
 
             using var reader = new StreamReader(manifestPath);
             for (var lineIndex = 0; lineIndex < maxLines; lineIndex++)
@@ -63,6 +65,17 @@ public static class DouyinManifestReader
                 }
 
                 fileCount += item.FileCount;
+                AppendSearchText(
+                    searchText,
+                    item.AwemeId,
+                    item.MediaTypeText,
+                    item.Description,
+                    item.AuthorName,
+                    item.DateText,
+                    item.RecordedAtText,
+                    item.TagsText,
+                    item.FileNamesText,
+                    item.FileRoleSummaryText);
                 if (items.Count < maxItems)
                     items.Add(item);
             }
@@ -78,7 +91,8 @@ public static class DouyinManifestReader
                     unknownCount,
                     fileCount,
                     isTruncated,
-                    items)
+                    items,
+                    searchText.ToString())
                 : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or PathTooLongException)
@@ -114,6 +128,20 @@ public static class DouyinManifestReader
         catch (JsonException)
         {
             return null;
+        }
+    }
+
+    private static void AppendSearchText(StringBuilder builder, params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                continue;
+
+            if (builder.Length > 0)
+                builder.Append(' ');
+
+            builder.Append(value.Trim());
         }
     }
 

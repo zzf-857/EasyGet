@@ -9,7 +9,8 @@ public sealed record DouyinManifestSummary(
     int UnknownCount,
     int FileCount,
     bool IsTruncated,
-    IReadOnlyList<DouyinManifestItem> Items);
+    IReadOnlyList<DouyinManifestItem> Items,
+    string SearchText = "");
 
 public sealed record DouyinManifestItem(
     string AwemeId,
