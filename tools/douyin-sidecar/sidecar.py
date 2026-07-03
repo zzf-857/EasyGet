@@ -137,6 +137,9 @@ def build_config(
     include_comments: bool = False,
     enable_database: bool = False,
     incremental: bool = False,
+    start_time: str = "",
+    end_time: str = "",
+    download_pinned: bool = False,
 ) -> Dict[str, Any]:
     modes = normalize_modes(mode)
     numbers = {name: 0 for name in KNOWN_NUMBER_MODES}
@@ -158,8 +161,10 @@ def build_config(
         increase["allmix"] = increase["mix"]
 
     database_path = output_dir.expanduser().resolve() / SIDECAR_STATE_DIR_NAME / "dy_downloader.db"
+    normalized_start_time = (start_time or "").strip()
+    normalized_end_time = (end_time or "").strip()
 
-    return {
+    config = {
         "link": [url],
         "path": str(output_dir),
         "music": bool(include_music),
@@ -167,14 +172,11 @@ def build_config(
         "avatar": bool(include_avatar),
         "json": bool(include_json),
         "video_quality": normalize_video_quality(quality),
-        "start_time": "",
-        "end_time": "",
         "folderstyle": True,
         "filename_template": "{date}_{title}_{id}",
         "folder_template": "{date}_{title}_{id}",
         "author_dir": "nickname",
         "group_by_mode": True,
-        "download_pinned": False,
         "mode": modes,
         "number": numbers,
         "increase": increase,
@@ -216,6 +218,13 @@ def build_config(
         },
         "cookies": parse_cookie(cookie),
     }
+    if normalized_start_time:
+        config["start_time"] = normalized_start_time
+    if normalized_end_time:
+        config["end_time"] = normalized_end_time
+    if download_pinned:
+        config["download_pinned"] = True
+    return config
 
 
 def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[Dict[str, Any], Dict[str, Any], List[str]]:
@@ -235,6 +244,9 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         include_comments=args.include_comments,
         enable_database=args.enable_database,
         incremental=args.incremental,
+        start_time=args.start_time,
+        end_time=args.end_time,
+        download_pinned=args.download_pinned,
     )
     return config, cookie_source, cookie_redaction_secrets(cookie_text, config)
 
@@ -1113,6 +1125,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--include-comments", action="store_true", help="Collect comments when supported")
     parser.add_argument("--enable-database", action="store_true", help="Enable local SQLite deduplication/history database")
     parser.add_argument("--incremental", action="store_true", help="Enable incremental download for supported batch modes")
+    parser.add_argument("--start-time", default="", help="Pass through third-party start_time filter value")
+    parser.add_argument("--end-time", default="", help="Pass through third-party end_time filter value")
+    parser.add_argument("--download-pinned", action="store_true", help="Enable third-party pinned-video downloads")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")

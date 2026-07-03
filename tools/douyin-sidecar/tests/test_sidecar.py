@@ -103,6 +103,47 @@ class SidecarCliTests(unittest.TestCase):
             self.assertEqual(config["number"]["collect"], 7)
             self.assertEqual(config["number"]["collectmix"], 7)
 
+    def test_dry_run_maps_filter_arguments_to_third_party_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--start-time",
+                    " 2026-06-01 ",
+                    "--end-time",
+                    "2026-06-30",
+                    "--download-pinned",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["start_time"], "2026-06-01")
+            self.assertEqual(config["end_time"], "2026-06-30")
+            self.assertTrue(config["download_pinned"])
+
+    def test_dry_run_omits_blank_filter_arguments_from_third_party_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--start-time",
+                    " \t ",
+                    "--end-time",
+                    "",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertNotIn("start_time", config)
+            self.assertNotIn("end_time", config)
+            self.assertNotIn("download_pinned", config)
+
     def test_dry_run_accepts_csharp_runner_arguments_and_include_flags(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(
