@@ -418,6 +418,112 @@
 
             <StackPanel Margin="0,0,0,26">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="&#xE9D2;"
+                               Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeLarge}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Margin="0,0,8,0"/>
+                    <TextBlock Text="下载成果摘要" Style="{StaticResource TextSection}"/>
+                    <Border Background="{DynamicResource AccentMutedBrush}"
+                            CornerRadius="4"
+                            Padding="8,2"
+                            Margin="10,0,0,0"
+                            VerticalAlignment="Center">
+                        <TextBlock Style="{StaticResource TextCaption}">
+                            <Run Text="{Binding DouyinManifestSummaryCount, Mode=OneWay}"/>
+                            <Run Text=" 条摘要"/>
+                        </TextBlock>
+                    </Border>
+                </StackPanel>
+
+                <Border Style="{StaticResource ToolPanelBorder}" Padding="0" MinHeight="180">
+                    <Grid>
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,34,0,34">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding DouyinManifestSummaryCount}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <TextBlock Text="&#xE8A5;"
+                                       Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeEmptyState}"
+                                       Foreground="{StaticResource BorderPrimaryBrush}"
+                                       HorizontalAlignment="Center"/>
+                            <TextBlock Text="暂无下载成果摘要"
+                                       Style="{StaticResource TextBodyStrong}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,14,0,0"/>
+                            <TextBlock Text="完成包含 manifest 的抖音下载后会在这里汇总成果"
+                                       Style="{StaticResource TextBody}"
+                                       HorizontalAlignment="Center"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <ListBox ItemsSource="{Binding DouyinManifestSummaryItems}"
+                                 Background="Transparent"
+                                 BorderThickness="0"
+                                 Padding="16"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel/>
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0,0,0,10"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Style="{StaticResource ToolPanelBorder}" Padding="16,14">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0">
+                                                <TextBlock Text="{Binding Title}"
+                                                           Style="{StaticResource TextBodyStrong}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding DouyinManifestSummaryText, Mode=OneWay}"
+                                                           Style="{StaticResource TextBody}"
+                                                           Foreground="{DynamicResource AccentBrush}"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,6,0,0"/>
+                                                <TextBlock Text="{Binding DownloadTimeText, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"
+                                                           Margin="0,6,0,0"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding AttachmentSummaryText, Mode=OneWay}"
+                                                       Style="{StaticResource TextCaption}"
+                                                       Margin="16,0,0,0"
+                                                       VerticalAlignment="Top"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Margin="0,0,0,26">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE8F9;"
                                Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"

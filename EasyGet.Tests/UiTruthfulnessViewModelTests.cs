@@ -197,6 +197,72 @@ public class UiTruthfulnessViewModelTests
             item => Assert.Equal("douyin by url", item.Title));
     }
 
+    [Fact]
+    public void DouyinViewModelExposesOnlyDouyinManifestSummaryItems()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "douyin manifest",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/123",
+            DouyinManifestSummaryText = "作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 2"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "douyin without manifest",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/456",
+            DouyinManifestSummaryText = ""
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "other manifest",
+            Platform = "YouTube",
+            Url = "https://youtube.com/watch?v=abc",
+            DouyinManifestSummaryText = "作品 1 / 视频 1 / 附属 0"
+        });
+
+        Assert.Collection(
+            context.Douyin.DouyinManifestSummaryItems,
+            item =>
+            {
+                Assert.Equal("douyin manifest", item.Title);
+                Assert.Equal("作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 2", item.DouyinManifestSummaryText);
+            });
+    }
+
+    [Fact]
+    public void DouyinViewModelNotifiesManifestSummaryCountChanges()
+    {
+        using var context = CreateViewModelContext();
+        var notificationCount = 0;
+        context.Douyin.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DouyinViewModel.DouyinManifestSummaryCount))
+                notificationCount++;
+        };
+
+        var item = new DownloadHistory
+        {
+            Title = "douyin manifest",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/123",
+            DouyinManifestSummaryText = "作品 1 / 视频 1 / 附属 0"
+        };
+
+        context.History.HistoryItems.Add(item);
+
+        Assert.Equal(1, context.Douyin.DouyinManifestSummaryCount);
+        Assert.Equal(1, notificationCount);
+
+        context.History.HistoryItems.Clear();
+
+        Assert.Equal(0, context.Douyin.DouyinManifestSummaryCount);
+        Assert.Equal(2, notificationCount);
+    }
+
     [Theory]
     [InlineData(1024L, "1 KB 可用")]
     [InlineData(1024L * 1024L * 1536L, "1.5 GB 可用")]

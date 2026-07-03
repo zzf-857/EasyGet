@@ -20,6 +20,7 @@ public partial class DouyinViewModel : ObservableObject
     public IEnumerable<DownloadTask> DouyinTasks => DouyinTaskItems;
     public ObservableCollection<DownloadTask> DouyinTaskItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinHistoryItems { get; } = [];
+    public ObservableCollection<DownloadHistory> DouyinManifestSummaryItems { get; } = [];
 
     public int DouyinTaskCount => DouyinTaskItems.Count;
 
@@ -34,6 +35,8 @@ public partial class DouyinViewModel : ObservableObject
 
     public int FailedDouyinTaskCount => CountDouyinTasks(task =>
         task.Status == DownloadStatus.Failed);
+
+    public int DouyinManifestSummaryCount => DouyinManifestSummaryItems.Count;
 
     public DouyinViewModel(
         ConfigService configService,
@@ -166,12 +169,19 @@ public partial class DouyinViewModel : ObservableObject
     private void SyncDouyinHistoryItems()
     {
         DouyinHistoryItems.Clear();
+        DouyinManifestSummaryItems.Clear();
         foreach (var item in History.HistoryItems.Where(IsDouyinHistoryItem))
         {
             DouyinHistoryItems.Add(item);
+            if (!string.IsNullOrWhiteSpace(item.DouyinManifestSummaryText))
+            {
+                DouyinManifestSummaryItems.Add(item);
+            }
         }
 
         OnPropertyChanged(nameof(DouyinHistoryItems));
+        OnPropertyChanged(nameof(DouyinManifestSummaryItems));
+        OnPropertyChanged(nameof(DouyinManifestSummaryCount));
     }
 
     private int CountDouyinTasks(Func<DownloadTask, bool>? predicate = null)

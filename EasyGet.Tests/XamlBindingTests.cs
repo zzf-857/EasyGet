@@ -730,6 +730,7 @@ public class XamlBindingTests
         Assert.Contains("快速下载", texts);
         Assert.Contains("任务中心", texts);
         Assert.Contains("专项任务队列", texts);
+        Assert.Contains("下载成果摘要", texts);
         Assert.Contains("作品档案", texts);
         Assert.Contains("专项设置", texts);
         Assert.Contains("启用专项引擎", texts);
@@ -751,6 +752,9 @@ public class XamlBindingTests
         Assert.Contains("Batch.CancelTaskCommand", source);
         Assert.Contains("Progress", source);
         Assert.Contains("ErrorMessage", source);
+        Assert.Contains("DouyinManifestSummaryItems", source);
+        Assert.Contains("DouyinManifestSummaryCount", source);
+        Assert.Contains("DouyinManifestSummaryText", source);
         Assert.Contains("DouyinHistoryItems", source);
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
