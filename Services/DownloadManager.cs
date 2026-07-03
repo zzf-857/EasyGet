@@ -292,6 +292,7 @@ public class DownloadManager
         task.Eta = 0;
         task.DownloadedSize = 0;
         task.ErrorMessage = "";
+        ClearDouyinTaskAttemptState(task);
         task.Cts = new CancellationTokenSource();
 
         // 从队列中移除再重新入队
@@ -571,8 +572,17 @@ public class DownloadManager
     {
         log($"[douyin-sidecar] unavailable; falling back to yt-dlp: {reason}");
         task.ErrorMessage = "";
+        ClearDouyinTaskAttemptState(task);
         task.Status = DownloadStatus.Waiting;
         await _ytDlpService.DownloadAsync(task, progress, log, token);
+    }
+
+    private static void ClearDouyinTaskAttemptState(DownloadTask task)
+    {
+        task.DouyinSuccessCount = 0;
+        task.DouyinFailedCount = 0;
+        task.DouyinSkippedCount = 0;
+        task.DouyinTaskEventLog = "";
     }
 
     private static bool IsSupportedDouyinSpecialKind(DouyinUrlKind kind)

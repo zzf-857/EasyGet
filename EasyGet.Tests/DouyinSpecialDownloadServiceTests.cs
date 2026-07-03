@@ -28,6 +28,38 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public void TryParseStdoutLine_ParsesOutcomeCounts()
+    {
+        const string line = """
+            {"event":"progress","summary":{"success_count":4,"failed_count":1,"skipped_count":2},"percent":75}
+            """;
+
+        var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(line, out var message);
+
+        Assert.True(parsed);
+        Assert.Equal(DouyinSidecarEventKind.Progress, message.Kind);
+        Assert.Equal(4, message.SuccessCount);
+        Assert.Equal(1, message.FailedCount);
+        Assert.Equal(2, message.SkippedCount);
+    }
+
+    [Fact]
+    public void TryParseStdoutLine_ParsesNestedDetailsCounts()
+    {
+        const string line = """
+            {"event":"success","details":{"counts":{"success":4,"failed":1,"skipped":2}}}
+            """;
+
+        var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(line, out var message);
+
+        Assert.True(parsed);
+        Assert.Equal(DouyinSidecarEventKind.Success, message.Kind);
+        Assert.Equal(4, message.SuccessCount);
+        Assert.Equal(1, message.FailedCount);
+        Assert.Equal(2, message.SkippedCount);
+    }
+
+    [Fact]
     public void TryParseStdoutLine_IgnoresNonJsonLine()
     {
         var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(
@@ -484,6 +516,34 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_CapturesRecentEventsAndOutcomeCounts()
+    {
+        var runner = new FakeSidecarRunner(
+            """{"event":"log","message":"开始解析主页"}""",
+            """{"event":"progress","percent":50,"summary":{"success_count":2,"failed_count":1,"skipped_count":3}}""",
+            """{"event":"success","message":"批量下载完成","summary":{"title":"done","file_size_bytes":1000,"output_file_path":"D:\\Videos\\done.mp4","success_count":4,"failed_count":1,"skipped_count":2}}""");
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/user/MS4wLjABAAAA_test",
+            OutputDirectory = "D:\\Videos"
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Equal(4, task.DouyinSuccessCount);
+        Assert.Equal(1, task.DouyinFailedCount);
+        Assert.Equal(2, task.DouyinSkippedCount);
+        Assert.Equal("成功 4 / 失败 1 / 跳过 2", task.DouyinTaskOutcomeSummaryText);
+        Assert.True(task.HasDouyinTaskOutcome);
+        Assert.True(task.HasDouyinTaskEventLog);
+        Assert.Contains("开始解析主页", task.DouyinTaskEventLog, StringComparison.Ordinal);
+        Assert.Contains("进度 50%", task.DouyinTaskEventLog, StringComparison.Ordinal);
+        Assert.Contains("已完成", task.DouyinTaskEventLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DownloadAsync_TerminalSuccessStillObservesRunnerExitFailure()
     {
         var runner = new ThrowingAfterTerminalSidecarRunner();
@@ -723,6 +783,36 @@ public class DouyinSpecialDownloadServiceTests
         Assert.DoesNotContain(cookie, task.ErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain(cookie, string.Join(Environment.NewLine, logs), StringComparison.Ordinal);
         Assert.Contains("[redacted]", task.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("success", DownloadStatus.Completed)]
+    [InlineData("cancelled", DownloadStatus.Cancelled)]
+    public async Task DownloadAsync_RedactsCookieFromTerminalTaskEventLog(
+        string eventName,
+        DownloadStatus expectedStatus)
+    {
+        const string cookie = "ttwid=secret; odin_tt=hidden";
+        var runner = new FakeSidecarRunner(
+            $$"""
+            {"event":"{{eventName}}","message":"terminal {{cookie}}","title":"done","output_file_path":"D:\\Videos\\done.mp4"}
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/123",
+            OutputDirectory = "D:\\Videos"
+        };
+        var config = new AppConfig
+        {
+            CookieContent = cookie
+        };
+
+        await InvokeConfigDownloadAsync(service, task, config);
+
+        Assert.Equal(expectedStatus, task.Status);
+        Assert.DoesNotContain(cookie, task.DouyinTaskEventLog, StringComparison.Ordinal);
+        Assert.Contains("[redacted]", task.DouyinTaskEventLog, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

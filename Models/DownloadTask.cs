@@ -89,6 +89,25 @@ public partial class DownloadTask : ObservableObject
     /// <summary>错误信息</summary>
     [ObservableProperty] private string _errorMessage = "";
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDouyinTaskOutcome))]
+    [NotifyPropertyChangedFor(nameof(DouyinTaskOutcomeSummaryText))]
+    private int _douyinSuccessCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDouyinTaskOutcome))]
+    [NotifyPropertyChangedFor(nameof(DouyinTaskOutcomeSummaryText))]
+    private int _douyinFailedCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDouyinTaskOutcome))]
+    [NotifyPropertyChangedFor(nameof(DouyinTaskOutcomeSummaryText))]
+    private int _douyinSkippedCount;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDouyinTaskEventLog))]
+    private string _douyinTaskEventLog = "";
+
     /// <summary>取消令牌源</summary>
     public CancellationTokenSource? Cts { get; set; }
 
@@ -96,6 +115,27 @@ public partial class DownloadTask : ObservableObject
     /// 格式化的文件大小
     /// </summary>
     public string FileSizeText => ByteSizeFormatter.FormatClampZero(FileSize);
+
+    public bool HasDouyinTaskOutcome
+        => DouyinSuccessCount > 0 || DouyinFailedCount > 0 || DouyinSkippedCount > 0;
+
+    public string DouyinTaskOutcomeSummaryText
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (DouyinSuccessCount > 0)
+                parts.Add($"成功 {DouyinSuccessCount}");
+            if (DouyinFailedCount > 0)
+                parts.Add($"失败 {DouyinFailedCount}");
+            if (DouyinSkippedCount > 0)
+                parts.Add($"跳过 {DouyinSkippedCount}");
+
+            return string.Join(" / ", parts);
+        }
+    }
+
+    public bool HasDouyinTaskEventLog => !string.IsNullOrWhiteSpace(DouyinTaskEventLog);
 
     /// <summary>
     /// 格式化的下载速度

@@ -775,6 +775,10 @@ public class XamlBindingTests
         Assert.Contains("Batch.CancelTaskCommand", source);
         Assert.Contains("Progress", source);
         Assert.Contains("ErrorMessage", source);
+        Assert.Contains("DouyinTaskOutcomeSummaryText", source);
+        Assert.Contains("DouyinTaskEventLog", source);
+        Assert.Contains("HasDouyinTaskOutcome", source);
+        Assert.Contains("HasDouyinTaskEventLog", source);
         Assert.Contains("DouyinManifestSummaryItems", source);
         Assert.Contains("DouyinManifestSummaryCount", source);
         Assert.Contains("DouyinManifestSummaryText", source);

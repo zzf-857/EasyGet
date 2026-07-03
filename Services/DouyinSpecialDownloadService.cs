@@ -21,6 +21,7 @@ public interface IDouyinSpecialDownloadService
 public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 {
     internal const string DouyinCookieEnvironmentVariableName = "EASYGET_DOUYIN_COOKIE";
+    private const int MaxTaskEventLogLines = 5;
     private const string DouyinManifestFileName = "download_manifest.jsonl";
     private const string DouyinManifestSnapshotPrefix = "download_manifest.easyget-";
     private const string DouyinManifestExtension = ".jsonl";
@@ -83,13 +84,22 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 switch (message.Kind)
                 {
                     case DouyinSidecarEventKind.Progress:
+                        ApplyOutcomeCounts(task, message);
                         if (!sawTerminalSummary && TryMapProgress(message, out var mappedProgress))
+                        {
                             progress?.Report(mappedProgress);
+                            AppendTaskEvent(task, $"进度 {mappedProgress.Percent:F0}%");
+                        }
                         break;
                     case DouyinSidecarEventKind.Success:
                         if (!sawTerminalSummary)
                         {
                             ApplySuccessSummary(task, message);
+                            AppendTaskEvent(
+                                task,
+                                FormatTerminalEvent(
+                                    "已完成",
+                                    RedactSensitiveText(message.Message, request.Cookie)));
                             sawTerminalSummary = true;
                         }
                         break;
@@ -98,6 +108,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                         {
                             ApplyFailureSummary(task, message);
                             task.ErrorMessage = RedactSensitiveText(task.ErrorMessage, request.Cookie);
+                            AppendTaskEvent(task, FormatTerminalEvent("失败", SelectFirstNonEmpty(task.ErrorMessage, message.Message)));
                             sawTerminalSummary = true;
                         }
                         break;
@@ -105,13 +116,20 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                         if (!sawTerminalSummary)
                         {
                             ApplyCancelledSummary(task, message);
+                            AppendTaskEvent(
+                                task,
+                                FormatTerminalEvent(
+                                    "已取消",
+                                    RedactSensitiveText(message.Message, request.Cookie)));
                             sawTerminalSummary = true;
                         }
                         break;
                     case DouyinSidecarEventKind.Log:
-                        logCallback?.Invoke(RedactSensitiveText(
+                        var logMessage = RedactSensitiveText(
                             SelectFirstNonEmpty(message.Message, message.RawLine),
-                            request.Cookie));
+                            request.Cookie);
+                        logCallback?.Invoke(logMessage);
+                        AppendTaskEvent(task, logMessage);
                         break;
                 }
             }
@@ -120,6 +138,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             {
                 task.Status = DownloadStatus.Failed;
                 task.ErrorMessage = "Douyin sidecar did not return a terminal summary.";
+                AppendTaskEvent(task, task.ErrorMessage);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -143,6 +162,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             var message = RedactSensitiveText(ex.Message, request.Cookie);
             task.Status = DownloadStatus.Failed;
             task.ErrorMessage = message;
+            AppendTaskEvent(task, message);
             logCallback?.Invoke($"[douyin-sidecar] failed: {message}");
         }
     }
@@ -174,6 +194,9 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             var summary = GetOptionalObject(root, "summary") ?? root;
             var progress = GetOptionalObject(root, "progress") ?? root;
             var details = GetOptionalObject(root, "details") ?? GetOptionalObject(summary, "details");
+            var counts = details.HasValue
+                ? GetOptionalObject(details.Value, "counts")
+                : null;
 
             if (kind == DouyinSidecarEventKind.Unknown && HasProgressFields(progress))
                 kind = DouyinSidecarEventKind.Progress;
@@ -196,6 +219,9 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             message.EtaSeconds = GetDouble(progress, root, "eta_seconds", "eta");
             message.DownloadedBytes = GetInt64(progress, root, "downloaded_bytes", "downloaded");
             message.TotalBytes = GetInt64(progress, root, "total_bytes", "total");
+            message.SuccessCount = GetInt32(counts, summary, root, "success_count", "success", "succeeded");
+            message.FailedCount = GetInt32(counts, summary, root, "failed_count", "failed", "failure_count");
+            message.SkippedCount = GetInt32(counts, summary, root, "skipped_count", "skipped", "skip_count");
 
             return message.Kind != DouyinSidecarEventKind.Unknown;
         }
@@ -232,6 +258,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     internal static void ApplySuccessSummary(DownloadTask task, DouyinSidecarMessage message)
     {
         ApplySummaryMetadata(task, message, useDefaultDouyinPlatform: true);
+        ApplyOutcomeCounts(task, message);
 
         if (!string.IsNullOrWhiteSpace(message.OutputFilePath))
         {
@@ -279,6 +306,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     internal static void ApplyFailureSummary(DownloadTask task, DouyinSidecarMessage message)
     {
         ApplySummaryMetadata(task, message, useDefaultDouyinPlatform: true);
+        ApplyOutcomeCounts(task, message);
 
         task.Status = DownloadStatus.Failed;
         task.ErrorMessage = SelectFirstNonEmpty(
@@ -290,6 +318,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     internal static void ApplyCancelledSummary(DownloadTask task, DouyinSidecarMessage message)
     {
         ApplySummaryMetadata(task, message, useDefaultDouyinPlatform: false);
+        ApplyOutcomeCounts(task, message);
 
         if (task.Status == DownloadStatus.Paused)
         {
@@ -319,6 +348,39 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 
         if (!string.IsNullOrWhiteSpace(message.ThumbnailUrl))
             task.ThumbnailUrl = message.ThumbnailUrl.Trim();
+    }
+
+    private static void ApplyOutcomeCounts(DownloadTask task, DouyinSidecarMessage message)
+    {
+        if (message.SuccessCount.HasValue)
+            task.DouyinSuccessCount = Math.Max(0, message.SuccessCount.Value);
+        if (message.FailedCount.HasValue)
+            task.DouyinFailedCount = Math.Max(0, message.FailedCount.Value);
+        if (message.SkippedCount.HasValue)
+            task.DouyinSkippedCount = Math.Max(0, message.SkippedCount.Value);
+    }
+
+    private static void AppendTaskEvent(DownloadTask task, string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+            return;
+
+        var existingLines = task.DouyinTaskEventLog
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        existingLines.Add(message.Trim());
+        if (existingLines.Count > MaxTaskEventLogLines)
+            existingLines = existingLines[^MaxTaskEventLogLines..];
+
+        task.DouyinTaskEventLog = string.Join(Environment.NewLine, existingLines);
+    }
+
+    private static string FormatTerminalEvent(string statusText, string message)
+    {
+        var detail = message.Trim();
+        return string.IsNullOrWhiteSpace(detail)
+            ? statusText
+            : $"{statusText}: {detail}";
     }
 
     private static DouyinSidecarEventKind ParseEventKind(string value)
@@ -460,6 +522,18 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         }
 
         return null;
+    }
+
+    private static int? GetInt32(JsonElement? primary, JsonElement secondary, JsonElement fallback, params string[] propertyNames)
+    {
+        var value = primary.HasValue
+            ? GetInt64(primary.Value, secondary, propertyNames)
+            : null;
+        value ??= GetInt64(secondary, fallback, propertyNames);
+        if (!value.HasValue)
+            return null;
+
+        return (int)Math.Clamp(value.Value, int.MinValue, int.MaxValue);
     }
 
     private static string GetOptionalString(JsonElement element, string propertyName)
@@ -762,6 +836,9 @@ internal sealed class DouyinSidecarMessage
     public double? EtaSeconds { get; set; }
     public long? DownloadedBytes { get; set; }
     public long? TotalBytes { get; set; }
+    public int? SuccessCount { get; set; }
+    public int? FailedCount { get; set; }
+    public int? SkippedCount { get; set; }
 }
 
 internal sealed record DouyinSidecarRequest(

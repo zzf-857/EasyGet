@@ -354,6 +354,21 @@
                                                                Foreground="{StaticResource ErrorBrush}"
                                                                TextTrimming="CharacterEllipsis"
                                                                Margin="0,7,0,0"/>
+
+                                                    <TextBlock Text="{Binding DouyinTaskOutcomeSummaryText}"
+                                                               Style="{StaticResource TextCaption}"
+                                                               Foreground="{DynamicResource AccentBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Visibility="{Binding HasDouyinTaskOutcome, Converter={StaticResource BoolToVisibility}}"
+                                                               Margin="0,7,0,0"/>
+
+                                                    <TextBlock Text="{Binding DouyinTaskEventLog}"
+                                                               Style="{StaticResource TextCaption}"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               TextWrapping="Wrap"
+                                                               MaxHeight="44"
+                                                               Visibility="{Binding HasDouyinTaskEventLog, Converter={StaticResource BoolToVisibility}}"
+                                                               Margin="0,5,0,0"/>
                                                 </StackPanel>
 
                                                 <StackPanel Grid.Column="3"

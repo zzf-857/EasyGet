@@ -337,6 +337,10 @@ public class DownloadManagerTests
                 {
                     downloadTask.Status = DownloadStatus.Failed;
                     downloadTask.ErrorMessage = "douyin-downloader-promax root not found";
+                    downloadTask.DouyinSuccessCount = 1;
+                    downloadTask.DouyinFailedCount = 1;
+                    downloadTask.DouyinSkippedCount = 1;
+                    downloadTask.DouyinTaskEventLog = "sidecar root missing";
                     return Task.CompletedTask;
                 }
             };
@@ -353,6 +357,12 @@ public class DownloadManagerTests
             Assert.Equal(1, ytDlp.DownloadCallCount);
             Assert.Equal(DownloadStatus.Completed, task.Status);
             Assert.Equal("", task.ErrorMessage);
+            Assert.Equal(0, task.DouyinSuccessCount);
+            Assert.Equal(0, task.DouyinFailedCount);
+            Assert.Equal(0, task.DouyinSkippedCount);
+            Assert.Equal("", task.DouyinTaskEventLog);
+            Assert.False(task.HasDouyinTaskOutcome);
+            Assert.False(task.HasDouyinTaskEventLog);
         }
         finally
         {
@@ -686,6 +696,50 @@ public class DownloadManagerTests
         }
     }
 
+    [Fact]
+    public async Task RetryAsync_ClearsDouyinTaskOutcomeAndEventLog()
+    {
+        var outputDir = CreateTempOutputDirectory();
+        var dbPath = TestTempPaths.CreateSqliteDatabasePath("easyget-douyin-retry-reset");
+        try
+        {
+            var configService = CreateConfigService(outputDir, enableDouyinSpecialEngine: false);
+            using var historyService = new HistoryService(dbPath);
+            var ytDlp = new FakeYtDlpDownloadService();
+            var sidecar = new FakeDouyinSpecialDownloadService();
+            var manager = CreateManager(ytDlp, sidecar, historyService, configService);
+            var task = new DownloadTask
+            {
+                Url = "https://example.com/video",
+                OutputDirectory = outputDir,
+                Status = DownloadStatus.Failed,
+                Progress = 80,
+                ErrorMessage = "old failure",
+                DouyinSuccessCount = 4,
+                DouyinFailedCount = 1,
+                DouyinSkippedCount = 2,
+                DouyinTaskEventLog = "old event"
+            };
+            manager.Tasks.Add(task);
+
+            var finished = await RetryAndWaitAsync(manager, task);
+
+            Assert.Same(task, finished);
+            Assert.Equal(DownloadStatus.Completed, task.Status);
+            Assert.Equal(0, task.DouyinSuccessCount);
+            Assert.Equal(0, task.DouyinFailedCount);
+            Assert.Equal(0, task.DouyinSkippedCount);
+            Assert.Equal("", task.DouyinTaskEventLog);
+            Assert.False(task.HasDouyinTaskOutcome);
+            Assert.False(task.HasDouyinTaskEventLog);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDir);
+            TestTempPaths.TryDeleteSqliteDatabase(dbPath);
+        }
+    }
+
     private static void ApplyProgress(DownloadTask task, DownloadProgress progress)
     {
         var method = typeof(DownloadManager).GetMethod(
@@ -765,6 +819,31 @@ public class DownloadManagerTests
         try
         {
             await manager.EnqueueAsync(task);
+            var completed = await Task.WhenAny(finished.Task, Task.Delay(TimeSpan.FromSeconds(3)));
+            Assert.Same(finished.Task, completed);
+            return await finished.Task;
+        }
+        finally
+        {
+            manager.TaskFinished -= OnTaskFinished;
+        }
+    }
+
+    private static async Task<DownloadTask> RetryAndWaitAsync(DownloadManager manager, DownloadTask task)
+    {
+        var finished = new TaskCompletionSource<DownloadTask>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnTaskFinished(DownloadTask finishedTask)
+        {
+            if (ReferenceEquals(task, finishedTask))
+                finished.TrySetResult(finishedTask);
+        }
+
+        manager.TaskFinished += OnTaskFinished;
+        try
+        {
+            await manager.RetryAsync(task.Id);
             var completed = await Task.WhenAny(finished.Task, Task.Delay(TimeSpan.FromSeconds(3)));
             Assert.Same(finished.Task, completed);
             return await finished.Task;
