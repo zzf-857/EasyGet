@@ -98,6 +98,70 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelMaintainsFilteredTaskCenterItems()
+    {
+        using var context = CreateViewModelContext();
+        var douyinTask = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/123",
+            Platform = "",
+            Status = DownloadStatus.Waiting,
+            Title = "douyin task"
+        };
+        var nonDouyinTask = new DownloadTask
+        {
+            Url = "https://example.com/video",
+            Platform = "YouTube",
+            Status = DownloadStatus.Waiting,
+            Title = "other task"
+        };
+
+        context.BatchContext.Manager.Tasks.Add(douyinTask);
+        context.BatchContext.Manager.Tasks.Add(nonDouyinTask);
+
+        Assert.Collection(
+            context.Douyin.DouyinTaskItems,
+            item => Assert.Equal("douyin task", item.Title));
+
+        nonDouyinTask.Platform = "Douyin";
+
+        Assert.Collection(
+            context.Douyin.DouyinTaskItems,
+            item => Assert.Equal("douyin task", item.Title),
+            item => Assert.Equal("other task", item.Title));
+
+        context.BatchContext.Manager.Tasks.Remove(douyinTask);
+
+        Assert.Collection(
+            context.Douyin.DouyinTaskItems,
+            item => Assert.Equal("other task", item.Title));
+    }
+
+    [Fact]
+    public void DouyinViewModelIgnoresClearedTaskStateChanges()
+    {
+        using var context = CreateViewModelContext();
+        var clearedTask = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/123",
+            Status = DownloadStatus.Downloading
+        };
+        context.BatchContext.Manager.Tasks.Add(clearedTask);
+        context.BatchContext.Manager.Tasks.Clear();
+
+        var notificationCount = 0;
+        context.Douyin.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DouyinViewModel.DouyinTaskCount))
+                notificationCount++;
+        };
+
+        clearedTask.Status = DownloadStatus.Completed;
+
+        Assert.Equal(0, notificationCount);
+    }
+
+    [Fact]
     public void DouyinViewModelFiltersArchiveHistoryToDouyinItems()
     {
         using var context = CreateViewModelContext();

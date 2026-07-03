@@ -729,6 +729,7 @@ public class XamlBindingTests
         Assert.Contains("抖音工作台", texts);
         Assert.Contains("快速下载", texts);
         Assert.Contains("任务中心", texts);
+        Assert.Contains("专项任务队列", texts);
         Assert.Contains("作品档案", texts);
         Assert.Contains("专项设置", texts);
         Assert.Contains("启用专项引擎", texts);
@@ -743,6 +744,13 @@ public class XamlBindingTests
         Assert.Contains("Settings.EnableDouyinSpecialEngine", source);
         Assert.Contains("Settings.DouyinMode", source);
         Assert.Contains("Settings.DouyinDownloadComments", source);
+        Assert.Contains("DouyinTaskItems", source);
+        Assert.Contains("Batch.PauseTaskCommand", source);
+        Assert.Contains("Batch.ResumeTaskCommand", source);
+        Assert.Contains("Batch.RetryTaskCommand", source);
+        Assert.Contains("Batch.CancelTaskCommand", source);
+        Assert.Contains("Progress", source);
+        Assert.Contains("ErrorMessage", source);
         Assert.Contains("DouyinHistoryItems", source);
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
