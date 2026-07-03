@@ -722,6 +722,83 @@ def make_fake_downloader(
     return run_py
 
 
+def make_manifest_summary_downloader(root: Path) -> Path:
+    run_py = root / "run.py"
+    run_py.write_text(
+        textwrap.dedent(
+            """
+            import json
+            import sys
+            from pathlib import Path
+
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            video_path = output_dir / "video.mp4"
+            gallery_path = output_dir / "gallery.jpg"
+            music_path = output_dir / "music.mp3"
+            for path in (video_path, gallery_path, music_path):
+                path.write_bytes(b"media")
+
+            manifest = output_dir / "download_manifest.jsonl"
+            manifest.write_text(
+                "\\n".join(
+                    [
+                        "",
+                        "{malformed json",
+                        json.dumps(["not", "an", "object"], ensure_ascii=False),
+                        json.dumps(
+                            {
+                                "aweme_id": "video-1",
+                                "media_type": "video",
+                                "date": "2026-07-01",
+                                "publish_timestamp": 1782892800,
+                                "recorded_at": "2026-07-01T12:00:00Z",
+                                "author_name": "Alice",
+                                "desc": "video desc",
+                                "tags": ["tag-a", "tag-b"],
+                                "file_paths": [str(video_path)],
+                                "file_names": [video_path.name],
+                            },
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            {
+                                "aweme_id": "gallery-1",
+                                "media_type": "gallery",
+                                "date": "2026-07-02",
+                                "author_name": "Bob",
+                                "desc": "gallery desc",
+                                "file_paths": [str(gallery_path)],
+                                "file_names": [gallery_path.name],
+                            },
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            {
+                                "aweme_id": "music-1",
+                                "media_type": "music",
+                                "date": "2026-07-03",
+                                "author_name": "Carol",
+                                "desc": "music desc without optional fields",
+                                "file_paths": [str(music_path)],
+                                "file_names": [music_path.name],
+                            },
+                            ensure_ascii=False,
+                        ),
+                    ]
+                )
+                + "\\n",
+                encoding="utf-8",
+            )
+            print("Total: 3, Success: 3, Failed: 0, Skipped: 0")
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
 def make_fake_importable_downloader(root: Path) -> None:
     root.mkdir(parents=True)
     (root / "run.py").write_text("", encoding="utf-8")
@@ -774,6 +851,69 @@ class SidecarRunnerTests(unittest.TestCase):
             self.assertEqual([event["event"] for event in events], ["progress", "success"])
             self.assertEqual(events[-1]["title"], "fake in-process video")
             self.assertTrue((output_dir / "runtime-probe.json").exists())
+
+    def test_run_real_success_details_include_manifest_summary(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_manifest_summary_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            success = events[-1]
+            details = success["details"]
+            manifest_path = output_dir / "download_manifest.jsonl"
+
+            self.assertEqual(success["event"], "success")
+            self.assertEqual(details["manifest_path"], str(manifest_path.resolve()))
+            self.assertEqual(details["manifest_item_count"], 3)
+            self.assertEqual(details["media_type_counts"], {"video": 1, "gallery": 1, "music": 1})
+            self.assertEqual(len(details["manifest_items"]), 3)
+            self.assertEqual(details["manifest_items"][0]["aweme_id"], "video-1")
+            self.assertEqual(details["manifest_items"][0]["file_count"], 1)
+            self.assertEqual(details["manifest_items"][0]["file_names"], ["video.mp4"])
+            self.assertEqual(details["manifest_items"][2]["media_type"], "music")
+
+    def test_run_real_manifest_items_omit_raw_file_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_manifest_summary_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            manifest_items = events[-1]["details"]["manifest_items"]
+
+            self.assertTrue(manifest_items)
+            for item in manifest_items:
+                self.assertNotIn("file_paths", item)
+                self.assertLessEqual(
+                    set(item),
+                    {
+                        "aweme_id",
+                        "media_type",
+                        "date",
+                        "publish_timestamp",
+                        "recorded_at",
+                        "author_name",
+                        "desc",
+                        "tags",
+                        "file_count",
+                        "file_names",
+                    },
+                )
 
     def test_run_real_default_temp_config_stays_outside_output_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:

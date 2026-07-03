@@ -21,6 +21,7 @@ public interface IDouyinSpecialDownloadService
 public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 {
     internal const string DouyinCookieEnvironmentVariableName = "EASYGET_DOUYIN_COOKIE";
+    private const string DouyinManifestFileName = "download_manifest.jsonl";
     private const string SensitiveValueRedaction = "[redacted]";
 
     private readonly IDouyinSidecarProcessRunner _runner;
@@ -183,6 +184,9 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             message.FileSizeBytes = GetInt64(summary, root, "file_size_bytes", "file_size", "filesize");
             message.OutputFilePath = GetString(summary, root, "output_file_path", "output_path", "file_path");
             message.OutputFilePaths = GetStringList(details, summary, root, "output_files");
+            message.ManifestPath = SelectFirstNonEmpty(
+                details.HasValue ? GetOptionalString(details.Value, "manifest_path") : "",
+                GetString(summary, root, "manifest_path"));
             message.Percent = GetDouble(progress, root, "percent", "percentage");
             message.SpeedBytesPerSecond = GetDouble(progress, root, "speed_bytes_per_sec", "speed_bytes_per_second", "speed");
             message.EtaSeconds = GetDouble(progress, root, "eta_seconds", "eta");
@@ -243,6 +247,11 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             && !ContainsEquivalentPath(safeOutputFilePaths, task.OutputFilePath))
         {
             safeOutputFilePaths.Insert(0, task.OutputFilePath);
+        }
+        if (TryGetSafeManifestPath(task.OutputDirectory, message.ManifestPath, out var manifestPath)
+            && !ContainsEquivalentPath(safeOutputFilePaths, manifestPath))
+        {
+            safeOutputFilePaths.Add(manifestPath);
         }
 
         task.OutputFilePaths = safeOutputFilePaths;
@@ -577,6 +586,34 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         return safePaths;
     }
 
+    private static bool TryGetSafeManifestPath(string? outputDirectory, string? manifestPath, out string safeManifestPath)
+    {
+        safeManifestPath = "";
+        if (string.IsNullOrWhiteSpace(manifestPath))
+            return false;
+
+        try
+        {
+            var fullManifestPath = Path.GetFullPath(manifestPath.Trim());
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            if (!string.Equals(Path.GetFileName(fullManifestPath), DouyinManifestFileName, comparison)
+                || !IsSafeOutputFilePath(outputDirectory, fullManifestPath)
+                || !File.Exists(fullManifestPath))
+            {
+                return false;
+            }
+
+            safeManifestPath = fullManifestPath;
+            return true;
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
     private static bool ContainsEquivalentPath(IEnumerable<string> paths, string candidate)
         => paths.Any(path => AreEquivalentPaths(path, candidate));
 
@@ -639,6 +676,7 @@ internal sealed class DouyinSidecarMessage
     public long? FileSizeBytes { get; set; }
     public string OutputFilePath { get; set; } = "";
     public List<string> OutputFilePaths { get; set; } = [];
+    public string ManifestPath { get; set; } = "";
     public double? Percent { get; set; }
     public double? SpeedBytesPerSecond { get; set; }
     public double? EtaSeconds { get; set; }

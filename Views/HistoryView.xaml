@@ -385,14 +385,14 @@
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal"
                                                         Margin="0,6,0,0"
-                                                        ToolTip="附属文件数量"
-                                                        Visibility="{Binding HasAttachmentFiles, Converter={StaticResource BoolToVisibility}}">
+                                                        ToolTip="附属文件摘要"
+                                                        Visibility="{Binding HasAttachmentSummary, Converter={StaticResource BoolToVisibility}}">
                                                 <TextBlock Text="&#xE8A5;"
                                                            Style="{StaticResource IconGlyph}"
                                                            FontSize="{StaticResource IconSizeBody}"
                                                            Foreground="{StaticResource TextSecondaryBrush}"
                                                            Margin="0,0,4,0"/>
-                                                <TextBlock Text="{Binding AttachmentCountText, Mode=OneWay}"
+                                                <TextBlock Text="{Binding AttachmentSummaryText, Mode=OneWay}"
                                                            Style="{StaticResource TextCaption}"/>
                                             </StackPanel>
                                         </StackPanel>

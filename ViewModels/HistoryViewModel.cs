@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
+using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
@@ -14,6 +16,9 @@ namespace EasyGet.ViewModels;
 public partial class HistoryViewModel : ObservableObject
 {
     private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(300);
+    private const string DouyinManifestFileName = "download_manifest.jsonl";
+    private const int MaxDouyinManifestLines = 1000;
+    private const long MaxDouyinManifestBytes = 1024 * 1024;
 
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
@@ -156,7 +161,8 @@ public partial class HistoryViewModel : ObservableObject
             .Select(item => new
             {
                 Item = item,
-                AvailableFilePath = ResolveExistingHistoryPath(item)
+                AvailableFilePath = ResolveExistingHistoryPath(item),
+                DouyinManifestSummaryText = BuildDouyinManifestSummaryText(item)
             })
             .ToList());
 
@@ -165,6 +171,7 @@ public partial class HistoryViewModel : ObservableObject
         {
             result.Item.AvailableFilePath = result.AvailableFilePath;
             result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
+            result.Item.DouyinManifestSummaryText = result.DouyinManifestSummaryText;
             HistoryItems.Add(result.Item);
         }
     }
@@ -366,10 +373,223 @@ public partial class HistoryViewModel : ObservableObject
         if (PathExists(item.FilePath))
             return item.FilePath;
 
-        return item.AttachmentFilePaths.FirstOrDefault(PathExists) ?? "";
+        return item.AttachmentFilePaths
+            .FirstOrDefault(path => !IsDouyinManifestPath(path) && PathExists(path))
+            ?? "";
+    }
+
+    private static string BuildDouyinManifestSummaryText(DownloadHistory item)
+    {
+        var manifestPath = ResolveSafeDouyinManifestPath(item);
+        if (string.IsNullOrWhiteSpace(manifestPath))
+            return "";
+
+        var summary = TryReadDouyinManifestSummary(manifestPath);
+        if (summary is null)
+            return "";
+
+        var attachmentCount = item.AttachmentFilePaths
+            .Count(path => !AreEquivalentPaths(path, manifestPath));
+        return FormatDouyinManifestSummary(summary, attachmentCount);
+    }
+
+    private static string ResolveSafeDouyinManifestPath(DownloadHistory item)
+    {
+        var outputDirectory = ResolveHistoryOutputDirectory(item);
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+            return "";
+
+        foreach (var rawPath in item.AttachmentFilePaths)
+        {
+            if (!IsDouyinManifestPath(rawPath))
+                continue;
+
+            try
+            {
+                var fullPath = Path.GetFullPath(rawPath.Trim());
+                if (File.Exists(fullPath) && IsPathInsideDirectory(fullPath, outputDirectory))
+                    return fullPath;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+            }
+        }
+
+        return "";
+    }
+
+    private static string ResolveHistoryOutputDirectory(DownloadHistory item)
+    {
+        var candidates = new List<string>();
+        if (!string.IsNullOrWhiteSpace(item.FilePath))
+            candidates.Add(item.FilePath);
+        candidates.AddRange(item.AttachmentFilePaths.Where(path => !IsDouyinManifestPath(path)));
+
+        foreach (var rawPath in candidates)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath))
+                continue;
+
+            try
+            {
+                var fullPath = Path.GetFullPath(rawPath.Trim());
+                if (Directory.Exists(fullPath))
+                    return fullPath;
+
+                var directory = Path.GetDirectoryName(fullPath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                    return directory;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+            }
+        }
+
+        return "";
+    }
+
+    private static DouyinManifestHistorySummary? TryReadDouyinManifestSummary(string manifestPath)
+    {
+        try
+        {
+            var fileInfo = new FileInfo(manifestPath);
+            if (!fileInfo.Exists || fileInfo.Length > MaxDouyinManifestBytes)
+                return null;
+
+            var itemCount = 0;
+            var videoCount = 0;
+            var galleryCount = 0;
+            var musicCount = 0;
+            using var reader = new StreamReader(manifestPath, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+            for (var lineIndex = 0; lineIndex < MaxDouyinManifestLines; lineIndex++)
+            {
+                var line = reader.ReadLine();
+                if (line is null)
+                    break;
+                if (string.IsNullOrWhiteSpace(line))
+                    continue;
+
+                try
+                {
+                    using var document = JsonDocument.Parse(line);
+                    var root = document.RootElement;
+                    if (root.ValueKind != JsonValueKind.Object)
+                        continue;
+
+                    itemCount++;
+                    switch (NormalizeManifestMediaType(root))
+                    {
+                        case "video":
+                            videoCount++;
+                            break;
+                        case "gallery":
+                            galleryCount++;
+                            break;
+                        case "music":
+                            musicCount++;
+                            break;
+                    }
+                }
+                catch (JsonException)
+                {
+                }
+            }
+
+            return itemCount > 0
+                ? new DouyinManifestHistorySummary(itemCount, videoCount, galleryCount, musicCount)
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    private static string NormalizeManifestMediaType(JsonElement root)
+    {
+        if (root.TryGetProperty("media_type", out var mediaTypeElement)
+            && mediaTypeElement.ValueKind == JsonValueKind.String)
+        {
+            return (mediaTypeElement.GetString() ?? "").Trim().ToLowerInvariant();
+        }
+
+        return "unknown";
+    }
+
+    private static string FormatDouyinManifestSummary(DouyinManifestHistorySummary summary, int attachmentCount)
+    {
+        var parts = new List<string> { $"作品 {summary.ItemCount}" };
+        if (summary.VideoCount > 0)
+            parts.Add($"视频 {summary.VideoCount}");
+        if (summary.GalleryCount > 0)
+            parts.Add($"图文 {summary.GalleryCount}");
+        if (summary.MusicCount > 0)
+            parts.Add($"音乐 {summary.MusicCount}");
+        parts.Add($"附属 {Math.Max(0, attachmentCount)}");
+        return string.Join(" / ", parts);
+    }
+
+    private static bool IsDouyinManifestPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return false;
+
+        try
+        {
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return string.Equals(Path.GetFileName(path.Trim()), DouyinManifestFileName, comparison);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsPathInsideDirectory(string path, string directory)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var fullDirectory = Path.GetFullPath(directory);
+            var directoryWithSeparator = fullDirectory.EndsWith(Path.DirectorySeparatorChar)
+                || fullDirectory.EndsWith(Path.AltDirectorySeparatorChar)
+                    ? fullDirectory
+                    : fullDirectory + Path.DirectorySeparatorChar;
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return fullPath.StartsWith(directoryWithSeparator, comparison);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return false;
+        }
+    }
+
+    private static bool AreEquivalentPaths(string left, string right)
+    {
+        try
+        {
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return string.Equals(left, right, StringComparison.Ordinal);
+        }
     }
 
     private static bool PathExists(string path)
         => !string.IsNullOrWhiteSpace(path)
            && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path));
+
+    private sealed record DouyinManifestHistorySummary(
+        int ItemCount,
+        int VideoCount,
+        int GalleryCount,
+        int MusicCount);
 }

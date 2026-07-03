@@ -202,6 +202,96 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public void ApplySuccessSummary_AddsSafeManifestPathToOutputFiles()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-manifest-{Guid.NewGuid():N}");
+        var primaryPath = Path.Combine(outputDirectory, "video.mp4");
+        var manifestPath = Path.Combine(outputDirectory, "download_manifest.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            File.WriteAllText(manifestPath, "{}");
+            var task = new DownloadTask
+            {
+                Url = "https://www.douyin.com/video/123",
+                OutputDirectory = outputDirectory,
+                Status = DownloadStatus.Downloading
+            };
+            DouyinSpecialDownloadService.TryParseStdoutLine(
+                $$"""
+                {
+                  "event": "success",
+                  "output_file_path": "{{JsonEscaped(primaryPath)}}",
+                  "details": {
+                    "output_files": ["{{JsonEscaped(primaryPath)}}"],
+                    "manifest_path": "{{JsonEscaped(manifestPath)}}"
+                  }
+                }
+                """,
+                out var message);
+
+            DouyinSpecialDownloadService.ApplySuccessSummary(task, message);
+
+            var outputFiles = GetStringListProperty(task, "OutputFilePaths");
+
+            Assert.Equal(DownloadStatus.Completed, task.Status);
+            Assert.Equal([primaryPath, manifestPath], outputFiles);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplySuccessSummary_DoesNotAddManifestPathOutsideOutputDirectory()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-manifest-safe-{Guid.NewGuid():N}");
+        var unsafeDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-manifest-unsafe-{Guid.NewGuid():N}");
+        var primaryPath = Path.Combine(outputDirectory, "video.mp4");
+        var unsafeManifestPath = Path.Combine(unsafeDirectory, "download_manifest.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            Directory.CreateDirectory(unsafeDirectory);
+            File.WriteAllText(unsafeManifestPath, "{}");
+            var task = new DownloadTask
+            {
+                Url = "https://www.douyin.com/video/123",
+                OutputDirectory = outputDirectory,
+                Status = DownloadStatus.Downloading
+            };
+            DouyinSpecialDownloadService.TryParseStdoutLine(
+                $$"""
+                {
+                  "event": "success",
+                  "output_file_path": "{{JsonEscaped(primaryPath)}}",
+                  "details": {
+                    "output_files": ["{{JsonEscaped(primaryPath)}}"],
+                    "manifest_path": "{{JsonEscaped(unsafeManifestPath)}}"
+                  }
+                }
+                """,
+                out var message);
+
+            DouyinSpecialDownloadService.ApplySuccessSummary(task, message);
+
+            var outputFiles = GetStringListProperty(task, "OutputFilePaths");
+
+            Assert.Equal(DownloadStatus.Completed, task.Status);
+            Assert.Equal([primaryPath], outputFiles);
+            Assert.DoesNotContain(unsafeManifestPath, outputFiles);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+            TryDeleteDirectory(unsafeDirectory);
+        }
+    }
+
+    [Fact]
     public void ApplyFailureSummary_UpdatesDownloadTask()
     {
         var task = new DownloadTask
@@ -750,6 +840,18 @@ public class DouyinSpecialDownloadServiceTests
         var value = property!.GetValue(instance);
         var strings = Assert.IsAssignableFrom<IEnumerable<string>>(value);
         return strings.ToList();
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+        }
     }
 
     private static void AssertArgument(IReadOnlyList<string> args, string name, string expectedValue)

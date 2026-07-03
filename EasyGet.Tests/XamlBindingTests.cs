@@ -603,12 +603,12 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void HistoryViewShowsAttachmentCountOnHistoryCards()
+    public void HistoryViewShowsAttachmentSummaryOnHistoryCards()
     {
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
 
-        Assert.Contains("AttachmentCountText", source, StringComparison.Ordinal);
-        Assert.Contains("HasAttachmentFiles", source, StringComparison.Ordinal);
+        Assert.Contains("AttachmentSummaryText", source, StringComparison.Ordinal);
+        Assert.Contains("HasAttachmentSummary", source, StringComparison.Ordinal);
         Assert.Contains("附属", source, StringComparison.Ordinal);
     }
 

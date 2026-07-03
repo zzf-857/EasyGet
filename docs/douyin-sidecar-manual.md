@@ -173,9 +173,36 @@ python .\tools\douyin-sidecar\sidecar.py `
   "duration_seconds": 0,
   "thumbnail_url": null,
   "file_size_bytes": 123456,
-  "output_file_path": "F:\\Downloads\\Douyin\\author\\post\\item\\video.mp4"
+  "output_file_path": "F:\\Downloads\\Douyin\\author\\post\\item\\video.mp4",
+  "details": {
+    "return_code": 0,
+    "counts": { "total": 3, "success": 3, "failed": 0, "skipped": 0 },
+    "output_files": [
+      "F:\\Downloads\\Douyin\\author\\post\\item\\video.mp4"
+    ],
+    "manifest_entries": 3,
+    "manifest_path": "F:\\Downloads\\Douyin\\download_manifest.jsonl",
+    "manifest_item_count": 3,
+    "media_type_counts": { "video": 1, "gallery": 1, "music": 1 },
+    "manifest_items": [
+      {
+        "aweme_id": "7350000000000000000",
+        "media_type": "video",
+        "date": "2026-07-03",
+        "publish_timestamp": 1783094400,
+        "recorded_at": "2026-07-03T12:00:00Z",
+        "author_name": "作者昵称",
+        "desc": "作品描述",
+        "tags": ["tag"],
+        "file_count": 1,
+        "file_names": ["video.mp4"]
+      }
+    ]
+  }
 }
 ```
+
+真实下载完成后，`details.manifest_path` 仅在输出目录存在 `download_manifest.jsonl` 时填写绝对路径；`manifest_item_count` 是本次新增 manifest entry 数，`media_type_counts` 按 `media_type` 汇总，`manifest_items` 最多包含前 5 条白名单摘要字段。`manifest_items` 不包含 raw `file_paths`，也不包含原始 URL、Cookie 或 stdout/stderr。
 
 `failed` / `cancelled` 字段：
 
@@ -208,7 +235,7 @@ Cookie 输出规则：
 - 调用第三方 `douyin-downloader-promax/run.py`
 - 通过临时 config 传入 `url`、`output_dir`、`cookie`、`proxy`、`mode`、`limit`、`filename_template`、`folder_template`、`include-cover`、`include-music`、`include-json`
 - 支持第三方已有能力：单视频 `/video`、图文 `/note`/`/gallery`、用户主页 `post`/`like`/`mix`/`music` 批量、本人收藏 `collect`/`collectmix`、合集/混剪/音乐单链接 `/collection`/`/mix`/`/music`
-- 读取 `download_manifest.jsonl` 汇总 `output_files`
+- 读取 `download_manifest.jsonl` 汇总 `output_files`，并在 success `details` 中输出保守 manifest 摘要字段
 - C# runner 默认从 `AppContext.BaseDirectory` 向上优先寻找 `tools\douyin-sidecar\sidecar.py`，便于开发联调；发布包仍可放置 `sidecars\douyin\EasyGet.DouyinSidecar.exe` 或 `sidecars\douyin_sidecar.py`
 - C# runner 仍会传 `--format`、`--quality`、`--title`；Python sidecar 会把 `--quality` 映射到第三方 `video_quality`，并在 `--dry-run` 的 `details.runner_options` 中记录非空兼容参数
 

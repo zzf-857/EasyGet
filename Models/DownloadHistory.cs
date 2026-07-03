@@ -44,6 +44,24 @@ public partial class DownloadHistory : ObservableObject
             {
                 OnPropertyChanged(nameof(HasAttachmentFiles));
                 OnPropertyChanged(nameof(AttachmentCountText));
+                OnPropertyChanged(nameof(HasAttachmentSummary));
+                OnPropertyChanged(nameof(AttachmentSummaryText));
+            }
+        }
+    }
+
+    private string _douyinManifestSummaryText = "";
+
+    /// <summary>抖音 manifest 的非持久化展示摘要，由历史 ViewModel 加载时刷新</summary>
+    public string DouyinManifestSummaryText
+    {
+        get => _douyinManifestSummaryText;
+        set
+        {
+            if (SetProperty(ref _douyinManifestSummaryText, value ?? ""))
+            {
+                OnPropertyChanged(nameof(HasAttachmentSummary));
+                OnPropertyChanged(nameof(AttachmentSummaryText));
             }
         }
     }
@@ -79,4 +97,10 @@ public partial class DownloadHistory : ObservableObject
     public string AttachmentCountText => HasAttachmentFiles
         ? $"附属 {AttachmentFilePaths.Count}"
         : "";
+
+    public bool HasAttachmentSummary => !string.IsNullOrWhiteSpace(AttachmentSummaryText);
+
+    public string AttachmentSummaryText => !string.IsNullOrWhiteSpace(DouyinManifestSummaryText)
+        ? DouyinManifestSummaryText
+        : AttachmentCountText;
 }

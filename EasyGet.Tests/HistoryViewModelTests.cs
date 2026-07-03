@@ -146,6 +146,103 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public async Task LoadHistory_BuildsDouyinManifestSummaryAndExcludesManifestFromAttachmentCount()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-manifest-{Guid.NewGuid():N}");
+        var primaryPath = Path.Combine(outputDir, "video.mp4");
+        var coverPath = Path.Combine(outputDir, "cover.jpg");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(primaryPath, "video");
+            await File.WriteAllTextAsync(coverPath, "cover");
+            await File.WriteAllTextAsync(
+                manifestPath,
+                """
+                {"aweme_id":"v1","media_type":"video"}
+                {"aweme_id":"g1","media_type":"gallery"}
+                {"aweme_id":"m1","media_type":"music"}
+                {malformed json
+                []
+                """);
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/user/MS4wLjABAAAA_test",
+                Title = "douyin batch",
+                Platform = "Douyin",
+                Format = "mp4",
+                FilePath = primaryPath,
+                DownloadTime = new DateTime(2026, 7, 3, 12, 0, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, coverPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal("作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 1", GetStringProperty(item, "AttachmentSummaryText"));
+            Assert.True(GetBoolProperty(item, "HasAttachmentSummary"));
+            Assert.DoesNotContain("附属 2", GetStringProperty(item, "AttachmentSummaryText"), StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_UsesFirstNonManifestAttachmentForQuickActionsWhenPrimaryIsMissing()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-manifest-action-{Guid.NewGuid():N}");
+        var missingPrimaryPath = Path.Combine(outputDir, "missing.mp4");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+        var mediaPath = Path.Combine(outputDir, "gallery.jpg");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(manifestPath, """{"media_type":"gallery"}""");
+            await File.WriteAllTextAsync(mediaPath, "image");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/note/123",
+                Title = "douyin gallery",
+                Platform = "Douyin",
+                Format = "jpg",
+                FilePath = missingPrimaryPath,
+                DownloadTime = new DateTime(2026, 7, 3, 13, 0, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, mediaPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.True(item.FileExists);
+            Assert.Equal(mediaPath, item.AvailableFilePath);
+            Assert.NotEqual(manifestPath, item.AvailableFilePath);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
     public void HistoryViewModelExposesHistoryCardQuickActionCommands()
     {
         var commandProperties = typeof(HistoryViewModel)
@@ -386,6 +483,20 @@ public class HistoryViewModelTests
         collection.Clear();
         foreach (var value in values)
             collection.Add(value);
+    }
+
+    private static string GetStringProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<string>(property!.GetValue(instance));
+    }
+
+    private static bool GetBoolProperty(object instance, string propertyName)
+    {
+        var property = instance.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        return Assert.IsType<bool>(property!.GetValue(instance));
     }
 
     [Fact]

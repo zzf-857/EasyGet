@@ -28,6 +28,9 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 KNOWN_NUMBER_MODES = ("post", "like", "mix", "music", "collect", "collectmix", "allmix")
+MANIFEST_FILE_NAME = "download_manifest.jsonl"
+MAX_MANIFEST_SUMMARY_ITEMS = 5
+MAX_MANIFEST_TEXT_LENGTH = 300
 PRIMARY_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".flv", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".m4a")
 SECONDARY_NAME_MARKERS = ("_cover", "_avatar", "_music", "_data", "_comments", ".transcript")
 SECONDARY_OUTPUT_SUFFIXES = {".json", ".txt"}
@@ -580,7 +583,7 @@ def write_json_config(config: Dict[str, Any], config_path: Path) -> None:
 
 
 def manifest_line_count(output_dir: Path) -> int:
-    manifest = output_dir / "download_manifest.jsonl"
+    manifest = output_dir / MANIFEST_FILE_NAME
     if not manifest.exists():
         return 0
     try:
@@ -590,7 +593,7 @@ def manifest_line_count(output_dir: Path) -> int:
 
 
 def manifest_output_files(output_dir: Path, start_line: int) -> Tuple[List[str], List[Dict[str, Any]]]:
-    manifest = output_dir / "download_manifest.jsonl"
+    manifest = output_dir / MANIFEST_FILE_NAME
     if not manifest.exists():
         return [], []
 
@@ -628,6 +631,90 @@ def manifest_output_files(output_dir: Path, start_line: int) -> Tuple[List[str],
     return _dedupe(output_files), entries
 
 
+def build_manifest_summary_details(output_dir: Path, entries: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    manifest = output_dir / MANIFEST_FILE_NAME
+    manifest_path = ""
+    if manifest.exists():
+        try:
+            manifest_path = str(manifest.resolve())
+        except OSError:
+            manifest_path = str(manifest)
+
+    media_type_counts: Dict[str, int] = {}
+    manifest_items: List[Dict[str, Any]] = []
+    for entry in entries:
+        media_type = normalize_manifest_media_type(entry.get("media_type"))
+        media_type_counts[media_type] = media_type_counts.get(media_type, 0) + 1
+        if len(manifest_items) < MAX_MANIFEST_SUMMARY_ITEMS:
+            manifest_items.append(summarize_manifest_item(entry, media_type))
+
+    return {
+        "manifest_path": manifest_path,
+        "manifest_item_count": len(entries),
+        "media_type_counts": media_type_counts,
+        "manifest_items": manifest_items,
+    }
+
+
+def normalize_manifest_media_type(value: Any) -> str:
+    media_type = str(value).strip().lower() if value is not None else ""
+    return media_type or "unknown"
+
+
+def summarize_manifest_item(entry: Dict[str, Any], media_type: str) -> Dict[str, Any]:
+    item: Dict[str, Any] = {}
+    for key in ("aweme_id", "date", "publish_timestamp", "recorded_at", "author_name", "desc"):
+        value = entry.get(key)
+        if value is None:
+            continue
+        item[key] = truncate_manifest_text(value)
+
+    item["media_type"] = media_type
+
+    tags = entry.get("tags")
+    if isinstance(tags, list):
+        item["tags"] = [truncate_manifest_text(value) for value in tags if value is not None]
+
+    file_names = summarize_manifest_file_names(entry.get("file_names"))
+    if file_names:
+        item["file_names"] = file_names
+
+    item["file_count"] = manifest_file_count(entry, file_names)
+    return item
+
+
+def summarize_manifest_file_names(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    names: List[str] = []
+    for raw_name in value:
+        if raw_name is None:
+            continue
+        text = str(raw_name).replace("\\", "/").rstrip("/")
+        name = text.rsplit("/", 1)[-1] if text else ""
+        if name:
+            names.append(truncate_manifest_text(name))
+    return names
+
+
+def manifest_file_count(entry: Dict[str, Any], file_names: Sequence[str]) -> int:
+    file_paths = entry.get("file_paths")
+    if isinstance(file_paths, list):
+        return len(file_paths)
+    if file_names:
+        return len(file_names)
+    return 0
+
+
+def truncate_manifest_text(value: Any) -> Any:
+    if isinstance(value, (int, float, bool)):
+        return value
+    text = str(value)
+    if len(text) <= MAX_MANIFEST_TEXT_LENGTH:
+        return text
+    return text[:MAX_MANIFEST_TEXT_LENGTH]
+
+
 def is_path_inside(path: Path, directory: Path) -> bool:
     try:
         path.resolve().relative_to(directory.resolve())
@@ -654,7 +741,7 @@ def scan_recent_output_files(output_dir: Path, since_timestamp: float) -> List[s
             continue
         if is_sidecar_state_path(path, output_dir):
             continue
-        if path.name in {"download_manifest.jsonl", "dy_downloader.db"}:
+        if path.name in {MANIFEST_FILE_NAME, "dy_downloader.db"}:
             continue
         if not is_supported_output_file(path):
             continue
@@ -732,6 +819,7 @@ def file_size(path_text: str) -> int:
 def build_success_summary(
     *,
     url: str,
+    output_dir: Path,
     output_files: Sequence[str],
     manifest_entries: Sequence[Dict[str, Any]],
     counts: Dict[str, int],
@@ -759,6 +847,7 @@ def build_success_summary(
             "counts": counts,
             "output_files": list(output_files),
             "manifest_entries": len(manifest_entries),
+            **build_manifest_summary_details(output_dir, manifest_entries),
         },
     )
 
@@ -1120,6 +1209,7 @@ def _invoke_downloader(
     return (
         build_success_summary(
             url=args.url,
+            output_dir=output_dir,
             output_files=output_files,
             manifest_entries=manifest_entries,
             counts=counts,
