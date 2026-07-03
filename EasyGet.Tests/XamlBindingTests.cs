@@ -760,8 +760,14 @@ public class XamlBindingTests
         Assert.Contains("保存原始 JSON", texts);
 
         Assert.Contains("Download.Url", source);
+        Assert.Contains("Download.SelectedFormat", source);
+        Assert.Contains("Download.SelectedQuality", source);
+        Assert.Contains("Download.DownloadDirectory", source);
         Assert.Contains("Download.ParseCommand", source);
         Assert.Contains("Download.StartDownloadCommand", source);
+        Assert.Contains("DouyinQuickDownloadEngineStatusText", source);
+        Assert.Contains("DouyinQuickDownloadCookieStatusText", source);
+        Assert.Contains("DouyinQuickDownloadProxyStatusText", source);
         Assert.Contains("DouyinDiscoveryKeyword", source);
         Assert.Contains("DouyinDiscoverySearchMax", source);
         Assert.Contains("LoadDouyinHotBoardCommand", source);

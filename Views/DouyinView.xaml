@@ -131,6 +131,52 @@
                                 </StackPanel>
                             </Button>
                         </Grid>
+
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.1*"/>
+                                <ColumnDefinition Width="1.3*"/>
+                                <ColumnDefinition Width="1.6*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="0,0,18,0">
+                                <TextBlock Text="格式 / 画质"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Style="{StaticResource TextBodyStrong}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,4,0,0">
+                                    <Run Text="{Binding Download.SelectedFormat, Mode=OneWay}"/>
+                                    <Run Text=" · "/>
+                                    <Run Text="{Binding Download.SelectedQuality, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="0,0,18,0">
+                                <TextBlock Text="输出目录"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding Download.DownloadDirectory, Mode=OneWay}"
+                                           Style="{StaticResource TextBodyStrong}"
+                                           TextTrimming="CharacterEllipsis"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="抖音运行状态"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Style="{StaticResource TextBodyStrong}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0">
+                                    <Run Text="{Binding DouyinQuickDownloadEngineStatusText, Mode=OneWay}"/>
+                                    <Run Text=" · "/>
+                                    <Run Text="{Binding DouyinQuickDownloadCookieStatusText, Mode=OneWay}"/>
+                                    <Run Text=" · "/>
+                                    <Run Text="{Binding DouyinQuickDownloadProxyStatusText, Mode=OneWay}"/>
+                                </TextBlock>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
                 </Border>
             </StackPanel>

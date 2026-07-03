@@ -98,6 +98,18 @@ public partial class DouyinViewModel : ObservableObject
 
     public bool HasDouyinDiscoveryError => !string.IsNullOrWhiteSpace(DouyinDiscoveryErrorMessage);
 
+    public string DouyinQuickDownloadEngineStatusText => Settings.EnableDouyinSpecialEngine
+        ? $"专项引擎已启用 · {Settings.DouyinMode.Trim()}"
+        : "专项引擎未启用";
+
+    public string DouyinQuickDownloadCookieStatusText => string.IsNullOrWhiteSpace(Settings.CookieContent)
+        ? "Cookie 未配置"
+        : "Cookie 已配置";
+
+    public string DouyinQuickDownloadProxyStatusText => Settings.UseProxy
+        ? $"代理 {Settings.ProxyAddress.Trim()}"
+        : "代理未启用";
+
     public bool IsDouyinArchiveFilterActive
         => !string.IsNullOrWhiteSpace(DouyinArchiveSearchKeyword)
            || SelectedDouyinArchiveTypeFilter != "全部";
@@ -129,7 +141,20 @@ public partial class DouyinViewModel : ObservableObject
         SyncDouyinTaskItems();
 
         History.HistoryItems.CollectionChanged += OnHistoryItemsCollectionChanged;
+        Settings.PropertyChanged += OnSettingsPropertyChanged;
         SyncDouyinHistoryItems();
+    }
+
+    private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(Settings.EnableDouyinSpecialEngine) or nameof(Settings.DouyinMode))
+            OnPropertyChanged(nameof(DouyinQuickDownloadEngineStatusText));
+
+        if (e.PropertyName == nameof(Settings.CookieContent))
+            OnPropertyChanged(nameof(DouyinQuickDownloadCookieStatusText));
+
+        if (e.PropertyName is nameof(Settings.UseProxy) or nameof(Settings.ProxyAddress))
+            OnPropertyChanged(nameof(DouyinQuickDownloadProxyStatusText));
     }
 
     private void OnTasksCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)

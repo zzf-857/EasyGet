@@ -47,6 +47,30 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSummarizesQuickDownloadRuntimeState()
+    {
+        using var context = CreateViewModelContext();
+        context.Settings.EnableDouyinSpecialEngine = false;
+        context.Settings.DouyinMode = "post";
+        context.Settings.CookieContent = "";
+        context.Settings.UseProxy = false;
+        context.Settings.ProxyAddress = "socks5://127.0.0.1:7890";
+
+        Assert.Equal("专项引擎未启用", context.Douyin.DouyinQuickDownloadEngineStatusText);
+        Assert.Equal("Cookie 未配置", context.Douyin.DouyinQuickDownloadCookieStatusText);
+        Assert.Equal("代理未启用", context.Douyin.DouyinQuickDownloadProxyStatusText);
+
+        context.Settings.EnableDouyinSpecialEngine = true;
+        context.Settings.DouyinMode = "mix";
+        context.Settings.CookieContent = "ttwid=abc";
+        context.Settings.UseProxy = true;
+
+        Assert.Equal("专项引擎已启用 · mix", context.Douyin.DouyinQuickDownloadEngineStatusText);
+        Assert.Equal("Cookie 已配置", context.Douyin.DouyinQuickDownloadCookieStatusText);
+        Assert.Equal("代理 socks5://127.0.0.1:7890", context.Douyin.DouyinQuickDownloadProxyStatusText);
+    }
+
+    [Fact]
     public void BatchDownloadViewModelCountsOnlyActiveDownloads()
     {
         using var context = CreateBatchContext();
