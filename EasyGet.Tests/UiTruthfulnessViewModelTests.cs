@@ -981,6 +981,53 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public async Task DouyinViewModelSearchesDiscoveryItemWord()
+    {
+        var discovery = new FakeDouyinDiscoveryService(
+            new DouyinDiscoveryResult(
+                "search",
+                @"D:\Videos\search\cat.jsonl",
+                1,
+                [
+                    new DouyinDiscoveryItem(
+                        AwemeId: "7604129988555574538",
+                        Description: "猫咪晒太阳",
+                        Url: "https://www.douyin.com/video/7604129988555574538")
+                ],
+                Keyword: "猫咪",
+                SearchMax: 12));
+        using var context = CreateViewModelContext(discovery);
+        context.Douyin.DouyinDiscoverySearchMax = 12;
+        var hotWord = new DouyinDiscoveryItem(Word: " 猫咪 ", HotValue: 123);
+
+        await context.Douyin.SearchDouyinDiscoveryItemWordCommand.ExecuteAsync(hotWord);
+
+        Assert.Equal("猫咪", context.Douyin.DouyinDiscoveryKeyword);
+        Assert.NotNull(discovery.LastRequest);
+        Assert.Equal(DouyinDiscoveryType.Search, discovery.LastRequest.Type);
+        Assert.Equal("猫咪", discovery.LastRequest.Keyword);
+        Assert.Equal(12, discovery.LastRequest.SearchMax);
+        Assert.False(context.Douyin.HasDouyinDiscoveryError);
+        var item = Assert.Single(context.Douyin.DouyinDiscoveryItems);
+        Assert.Equal("7604129988555574538", item.AwemeId);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelRejectsDiscoveryItemSearchWithoutWord()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var item = new DouyinDiscoveryItem(AwemeId: "7604129988555574538");
+
+        await context.Douyin.SearchDouyinDiscoveryItemWordCommand.ExecuteAsync(item);
+
+        Assert.Null(discovery.LastRequest);
+        Assert.True(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("关键词", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("无法搜索", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DouyinViewModelReportsDiscoveryErrors()
     {
         var discovery = new FakeDouyinDiscoveryService(null, new InvalidOperationException("请先登录"));

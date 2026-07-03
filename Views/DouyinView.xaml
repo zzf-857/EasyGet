@@ -327,12 +327,26 @@
                                                                HorizontalAlignment="Right"
                                                                Margin="0,4,0,0"/>
                                                     <Button Style="{StaticResource SurfaceButton}"
+                                                            Command="{Binding DataContext.SearchDouyinDiscoveryItemWordCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding}"
+                                                            ToolTip="用该热榜词搜索"
+                                                            AutomationProperties.Name="用该热榜词搜索"
+                                                            HorizontalAlignment="Right"
+                                                            Margin="0,10,0,0"
+                                                            Padding="10,5">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="&#xE721;" Style="{StaticResource IconGlyph}"
+                                                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="搜同词" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Button>
+                                                    <Button Style="{StaticResource SurfaceButton}"
                                                             Command="{Binding DataContext.AddDouyinDiscoveryItemToQueueCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
                                                             ToolTip="加入下载队列"
                                                             AutomationProperties.Name="加入下载队列"
                                                             HorizontalAlignment="Right"
-                                                            Margin="0,10,0,0"
+                                                            Margin="0,8,0,0"
                                                             Padding="10,5">
                                                         <StackPanel Orientation="Horizontal">
                                                             <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"

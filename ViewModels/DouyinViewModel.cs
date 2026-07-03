@@ -379,6 +379,22 @@ public partial class DouyinViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task SearchDouyinDiscoveryItemWord(DouyinDiscoveryItem? item)
+    {
+        var keyword = item?.Word.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            DouyinDiscoveryErrorMessage = "当前发现条目缺少可搜索关键词";
+            DouyinDiscoveryStatusText = "无法搜索发现词条";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        DouyinDiscoveryKeyword = keyword;
+        await SearchDouyinDiscovery();
+    }
+
+    [RelayCommand]
     private async Task AddDouyinDiscoveryItemToQueue(DouyinDiscoveryItem? item)
     {
         if (item is null)
