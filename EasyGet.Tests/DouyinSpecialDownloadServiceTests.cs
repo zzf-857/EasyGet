@@ -613,6 +613,8 @@ public class DouyinSpecialDownloadServiceTests
         SetAppConfigBool(config, "DouyinDownloadPinned", value: true);
         SetAppConfigString(config, "DouyinFilenameTemplate", " {author}_{title}_{id} ");
         SetAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}");
+        SetAppConfigString(config, "DouyinAuthorDirectoryMode", " sec_uid ");
+        SetAppConfigBool(config, "DouyinGroupByMode", value: false);
 
         await InvokeConfigDownloadAsync(service, task, config);
 
@@ -638,6 +640,8 @@ public class DouyinSpecialDownloadServiceTests
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "DownloadPinned"));
         Assert.Equal("{author}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FilenameTemplate"));
         Assert.Equal("{date}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FolderTemplate"));
+        Assert.Equal("sec_uid", GetRequestValue<string>(runner.LastRequest, "AuthorDirectoryMode"));
+        Assert.False(GetRequestValue<bool>(runner.LastRequest, "GroupByMode"));
     }
 
     [Fact]
@@ -680,7 +684,9 @@ public class DouyinSpecialDownloadServiceTests
             ["EndTime"] = "2024-01-31",
             ["DownloadPinned"] = true,
             ["FilenameTemplate"] = "{author}_{title}_{id}",
-            ["FolderTemplate"] = "{date}_{id}"
+            ["FolderTemplate"] = "{date}_{id}",
+            ["AuthorDirectoryMode"] = "sec_uid",
+            ["GroupByMode"] = false
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -705,6 +711,7 @@ public class DouyinSpecialDownloadServiceTests
         AssertArgument(args, "--end-time", "2024-01-31");
         AssertArgument(args, "--filename-template", "{author}_{title}_{id}");
         AssertArgument(args, "--folder-template", "{date}_{id}");
+        AssertArgument(args, "--author-dir", "sec_uid");
         Assert.Contains("--include-cover", args);
         Assert.DoesNotContain("--include-music", args);
         Assert.Contains("--include-json", args);
@@ -713,6 +720,7 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Contains("--enable-database", args);
         Assert.Contains("--incremental", args);
         Assert.Contains("--download-pinned", args);
+        Assert.Contains("--no-group-by-mode", args);
     }
 
     [Fact]

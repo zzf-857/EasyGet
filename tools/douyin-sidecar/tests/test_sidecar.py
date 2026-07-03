@@ -70,7 +70,10 @@ class SidecarCliTests(unittest.TestCase):
             self.assertEqual(summary["event"], "log")
             self.assertEqual(summary["message"], "dry_run")
             self.assertIn("planned_command", summary["details"])
-            self.assertEqual(summary["details"]["config"]["number"]["post"], 3)
+            config = summary["details"]["config"]
+            self.assertEqual(config["number"]["post"], 3)
+            self.assertEqual(config["author_dir"], "nickname")
+            self.assertIs(config["group_by_mode"], True)
 
     def test_dry_run_uses_custom_filename_and_folder_templates(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -109,6 +112,36 @@ class SidecarCliTests(unittest.TestCase):
             config = events[0]["details"]["config"]
             self.assertEqual(config["filename_template"], "{date}_{title}_{id}")
             self.assertEqual(config["folder_template"], "{date}_{title}_{id}")
+
+    def test_dry_run_uses_author_directory_and_mode_grouping_options(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--author-dir",
+                    "sec_uid",
+                    "--no-group-by-mode",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["author_dir"], "sec_uid")
+            self.assertIs(config["group_by_mode"], False)
+
+    def test_dry_run_defaults_unknown_author_directory_mode(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--author-dir", "unknown"],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["author_dir"], "nickname")
 
     def test_dry_run_rejects_unknown_template_variable(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -739,6 +739,8 @@ public class XamlBindingTests
         Assert.Contains("下载数量上限", texts);
         Assert.Contains("文件名模板", texts);
         Assert.Contains("作品文件夹模板", texts);
+        Assert.Contains("作者目录命名", texts);
+        Assert.Contains("按模式分层目录", texts);
         Assert.Contains("开始时间", texts);
         Assert.Contains("结束时间", texts);
         Assert.Contains("包含置顶作品", texts);
@@ -758,6 +760,9 @@ public class XamlBindingTests
         Assert.Contains("IsEditable=\"True\"", source);
         Assert.Contains("Settings.DouyinDownloadComments", source);
         Assert.Contains("Settings.DouyinFolderTemplate", source);
+        Assert.Contains("Settings.DouyinAuthorDirectoryMode", source);
+        Assert.Contains("Settings.DouyinAuthorDirectoryModeOptions", source);
+        Assert.Contains("Settings.DouyinGroupByMode", source);
         Assert.Contains("Settings.DouyinStartTime", source);
         Assert.Contains("Settings.DouyinEndTime", source);
         Assert.Contains("Settings.DouyinDownloadPinned", source);
@@ -1036,6 +1041,8 @@ public class XamlBindingTests
         Assert.Contains("下载数量上限", texts);
         Assert.Contains("文件名模板", texts);
         Assert.Contains("作品文件夹模板", texts);
+        Assert.Contains("作者目录命名", texts);
+        Assert.Contains("按模式分层目录", texts);
         Assert.Contains("控制媒体文件名，必须包含 {id}", texts);
         Assert.Contains("控制每个作品子文件夹，必须包含 {id}", texts);
         Assert.Contains("下载封面", texts);
@@ -1057,6 +1064,9 @@ public class XamlBindingTests
         Assert.Contains("DouyinLimit", source);
         Assert.Contains("DouyinFilenameTemplate", source);
         Assert.Contains("DouyinFolderTemplate", source);
+        Assert.Contains("DouyinAuthorDirectoryMode", source);
+        Assert.Contains("DouyinAuthorDirectoryModeOptions", source);
+        Assert.Contains("DouyinGroupByMode", source);
         Assert.Contains("DouyinDownloadCover", source);
         Assert.Contains("DouyinDownloadMusic", source);
         Assert.Contains("DouyinDownloadComments", source);

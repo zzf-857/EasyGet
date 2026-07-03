@@ -486,6 +486,42 @@
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="220"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="作者目录命名" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="选择作者层级目录使用昵称、sec_uid 或组合命名"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ComboBox Grid.Column="1"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding DouyinAuthorDirectoryModeOptions}"
+                                      SelectedItem="{Binding DouyinAuthorDirectoryMode, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                      IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="按模式分层目录" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="在作者目录下按 post、like、mix、music 等模式分组"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinGroupByMode}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="140"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="开始时间"

@@ -862,7 +862,9 @@ internal sealed record DouyinSidecarRequest(
     bool IncludeDatabase = false,
     bool IncrementalDownload = false,
     string FilenameTemplate = AppConfig.DefaultDouyinTemplate,
-    string FolderTemplate = AppConfig.DefaultDouyinTemplate)
+    string FolderTemplate = AppConfig.DefaultDouyinTemplate,
+    string AuthorDirectoryMode = "nickname",
+    bool GroupByMode = true)
 {
     public static DouyinSidecarRequest FromTask(DownloadTask task, AppConfig? config)
     {
@@ -891,7 +893,9 @@ internal sealed record DouyinSidecarRequest(
             IncludeDatabase: config?.DouyinEnableDatabase ?? false,
             IncrementalDownload: config?.DouyinIncrementalDownload ?? false,
             FilenameTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFilenameTemplate),
-            FolderTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFolderTemplate));
+            FolderTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFolderTemplate),
+            AuthorDirectoryMode: ConfigService.NormalizeDouyinAuthorDirectoryMode(config?.DouyinAuthorDirectoryMode),
+            GroupByMode: config?.DouyinGroupByMode ?? true);
     }
 
     private static string NormalizeText(string? value, string fallback = "")
@@ -987,7 +991,9 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddArgument(psi, "--end-time", request.EndTime);
         AddArgument(psi, "--filename-template", request.FilenameTemplate);
         AddArgument(psi, "--folder-template", request.FolderTemplate);
+        AddArgument(psi, "--author-dir", request.AuthorDirectoryMode);
         AddSwitch(psi, "--download-pinned", request.DownloadPinned);
+        AddSwitch(psi, "--no-group-by-mode", !request.GroupByMode);
         AddSwitch(psi, "--include-cover", request.IncludeCover);
         AddSwitch(psi, "--include-avatar", request.IncludeAvatar);
         AddSwitch(psi, "--include-music", request.IncludeMusic);

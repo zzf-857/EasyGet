@@ -29,6 +29,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 
 KNOWN_NUMBER_MODES = ("post", "like", "mix", "music", "collect", "collectmix", "allmix")
+KNOWN_AUTHOR_DIRECTORY_MODES = ("nickname", "sec_uid", "nickname_uid", "user_sec_uid")
 MANIFEST_FILE_NAME = "download_manifest.jsonl"
 MANIFEST_SNAPSHOT_PREFIX = "download_manifest.easyget-"
 MAX_MANIFEST_SUMMARY_ITEMS = 5
@@ -130,6 +131,13 @@ def normalize_modes(mode: str) -> List[str]:
     if not modes or modes == ["auto"]:
         return ["post"]
     return modes
+
+
+def normalize_author_dir(value: str) -> str:
+    candidate = (value or "").strip().lower()
+    if candidate in KNOWN_AUTHOR_DIRECTORY_MODES:
+        return candidate
+    return "nickname"
 
 
 def normalize_video_quality(quality: str) -> str:
@@ -245,6 +253,8 @@ def build_config(
     download_pinned: bool = False,
     filename_template: str = "",
     folder_template: str = "",
+    author_dir: str = "nickname",
+    group_by_mode: bool = True,
 ) -> Dict[str, Any]:
     modes = normalize_modes(mode)
     numbers = {name: 0 for name in KNOWN_NUMBER_MODES}
@@ -282,8 +292,8 @@ def build_config(
         "folderstyle": True,
         "filename_template": normalized_filename_template,
         "folder_template": normalized_folder_template,
-        "author_dir": "nickname",
-        "group_by_mode": True,
+        "author_dir": normalize_author_dir(author_dir),
+        "group_by_mode": bool(group_by_mode),
         "mode": modes,
         "number": numbers,
         "increase": increase,
@@ -356,6 +366,8 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         download_pinned=args.download_pinned,
         filename_template=args.filename_template,
         folder_template=args.folder_template,
+        author_dir=args.author_dir,
+        group_by_mode=args.group_by_mode,
     )
     return config, cookie_source, cookie_redaction_secrets(cookie_text, config)
 
@@ -1349,6 +1361,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--download-pinned", action="store_true", help="Include pinned posts in third-party downloads")
     parser.add_argument("--filename-template", default="", help="Third-party filename_template; must contain {id}")
     parser.add_argument("--folder-template", default="", help="Third-party folder_template; must contain {id}")
+    parser.add_argument("--author-dir", default="nickname", help="Author directory style: nickname, sec_uid, nickname_uid, user_sec_uid")
+    parser.add_argument("--no-group-by-mode", dest="group_by_mode", action="store_false", help="Do not create post/like/mix/music mode subdirectories")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
@@ -1366,6 +1380,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         help="Downloader invocation mode; auto prefers in-process unless subprocess-only options are used",
     )
     parser.add_argument("--output-format", choices=("jsonl", "json"), default="jsonl")
+    parser.set_defaults(group_by_mode=True)
     args = parser.parse_args(argv)
     if args.limit < 0:
         parser.error("--limit must be >= 0")

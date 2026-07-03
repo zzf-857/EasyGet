@@ -14,6 +14,8 @@ public class ConfigService
     private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
     private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
     private static readonly string[] SupportedDouyinModes = ["post", "like", "mix", "music", "collect", "collectmix"];
+    private static readonly string[] SupportedDouyinAuthorDirectoryModes =
+        ["nickname", "sec_uid", "nickname_uid", "user_sec_uid"];
     private static readonly HashSet<string> SupportedDouyinTemplateVariables = new(StringComparer.Ordinal)
     {
         "id",
@@ -179,6 +181,9 @@ public class ConfigService
         config.DouyinLimit = Math.Max(0, config.DouyinLimit);
         config.DouyinFilenameTemplate = NormalizeDouyinTemplate(config.DouyinFilenameTemplate);
         config.DouyinFolderTemplate = NormalizeDouyinTemplate(config.DouyinFolderTemplate);
+        config.DouyinAuthorDirectoryMode = NormalizeDouyinAuthorDirectoryMode(
+            config.DouyinAuthorDirectoryMode,
+            defaults.DouyinAuthorDirectoryMode);
         config.DouyinStartTime = config.DouyinStartTime?.Trim() ?? "";
         config.DouyinEndTime = config.DouyinEndTime?.Trim() ?? "";
 
@@ -232,6 +237,9 @@ public class ConfigService
 
         return string.Join(",", normalizedModes);
     }
+
+    internal static string NormalizeDouyinAuthorDirectoryMode(string? value, string defaultValue = "nickname")
+        => NormalizeOption(value, SupportedDouyinAuthorDirectoryModes, defaultValue);
 
     internal static string NormalizeDouyinTemplate(string? value)
     {

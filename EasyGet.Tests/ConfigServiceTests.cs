@@ -241,6 +241,25 @@ public class ConfigServiceTests
         AssertAppConfigBool(config, "DouyinIncrementalDownload", expected: true);
     }
 
+    [Theory]
+    [InlineData("nickname", "nickname")]
+    [InlineData("sec_uid", "sec_uid")]
+    [InlineData("nickname_uid", "nickname_uid")]
+    [InlineData("user_sec_uid", "user_sec_uid")]
+    [InlineData(" SEC_UID ", "sec_uid")]
+    [InlineData("unknown", "nickname")]
+    public void NormalizeRuntimeConfig_NormalizesDouyinAuthorDirectoryMode(
+        string value,
+        string expected)
+    {
+        var config = new AppConfig();
+        SetAppConfigString(config, "DouyinAuthorDirectoryMode", value);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigString(config, "DouyinAuthorDirectoryMode", expected);
+    }
+
     [Fact]
     public void NormalizeRuntimeConfig_SanitizesDouyinTimeRangeOptions()
     {

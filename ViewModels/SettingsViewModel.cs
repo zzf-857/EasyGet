@@ -67,6 +67,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _douyinLimit;
     [ObservableProperty] private string _douyinFilenameTemplate = AppConfig.DefaultDouyinTemplate;
     [ObservableProperty] private string _douyinFolderTemplate = AppConfig.DefaultDouyinTemplate;
+    [ObservableProperty] private string _douyinAuthorDirectoryMode = "nickname";
+    [ObservableProperty] private bool _douyinGroupByMode = true;
     [ObservableProperty] private string _douyinStartTime = "";
     [ObservableProperty] private string _douyinEndTime = "";
     [ObservableProperty] private bool _douyinDownloadPinned;
@@ -128,6 +130,8 @@ public partial class SettingsViewModel : ObservableObject
         "collect",
         "collectmix"
     ];
+    public string[] DouyinAuthorDirectoryModeOptions { get; } =
+        ["nickname", "sec_uid", "nickname_uid", "user_sec_uid"];
 
     public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
@@ -189,6 +193,8 @@ public partial class SettingsViewModel : ObservableObject
             DouyinLimit = c.DouyinLimit;
             DouyinFilenameTemplate = c.DouyinFilenameTemplate;
             DouyinFolderTemplate = c.DouyinFolderTemplate;
+            DouyinAuthorDirectoryMode = c.DouyinAuthorDirectoryMode;
+            DouyinGroupByMode = c.DouyinGroupByMode;
             DouyinStartTime = c.DouyinStartTime;
             DouyinEndTime = c.DouyinEndTime;
             DouyinDownloadPinned = c.DouyinDownloadPinned;
@@ -309,6 +315,8 @@ public partial class SettingsViewModel : ObservableObject
         c.DouyinLimit = DouyinLimit;
         c.DouyinFilenameTemplate = DouyinFilenameTemplate;
         c.DouyinFolderTemplate = DouyinFolderTemplate;
+        c.DouyinAuthorDirectoryMode = DouyinAuthorDirectoryMode;
+        c.DouyinGroupByMode = DouyinGroupByMode;
         c.DouyinStartTime = DouyinStartTime;
         c.DouyinEndTime = DouyinEndTime;
         c.DouyinDownloadPinned = DouyinDownloadPinned;
@@ -348,6 +356,8 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinLimitChanged(int value) => AutoSave();
     partial void OnDouyinFilenameTemplateChanged(string value) => AutoSave();
     partial void OnDouyinFolderTemplateChanged(string value) => AutoSave();
+    partial void OnDouyinAuthorDirectoryModeChanged(string value) => AutoSave();
+    partial void OnDouyinGroupByModeChanged(bool value) => AutoSave();
     partial void OnDouyinStartTimeChanged(string value) => AutoSave();
     partial void OnDouyinEndTimeChanged(string value) => AutoSave();
     partial void OnDouyinDownloadPinnedChanged(bool value) => AutoSave();
@@ -416,6 +426,8 @@ public partial class SettingsViewModel : ObservableObject
             && DouyinLimit == config.DouyinLimit
             && DouyinFilenameTemplate == config.DouyinFilenameTemplate
             && DouyinFolderTemplate == config.DouyinFolderTemplate
+            && DouyinAuthorDirectoryMode == config.DouyinAuthorDirectoryMode
+            && DouyinGroupByMode == config.DouyinGroupByMode
             && DouyinStartTime == config.DouyinStartTime
             && DouyinEndTime == config.DouyinEndTime)
         {
@@ -429,6 +441,8 @@ public partial class SettingsViewModel : ObservableObject
             DouyinLimit = config.DouyinLimit;
             DouyinFilenameTemplate = config.DouyinFilenameTemplate;
             DouyinFolderTemplate = config.DouyinFolderTemplate;
+            DouyinAuthorDirectoryMode = config.DouyinAuthorDirectoryMode;
+            DouyinGroupByMode = config.DouyinGroupByMode;
             DouyinStartTime = config.DouyinStartTime;
             DouyinEndTime = config.DouyinEndTime;
         }

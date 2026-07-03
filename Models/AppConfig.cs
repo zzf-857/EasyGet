@@ -63,6 +63,12 @@ public class AppConfig
     /// <summary>抖音单作品子文件夹命名模板；必须包含 {id}</summary>
     public string DouyinFolderTemplate { get; set; } = DefaultDouyinTemplate;
 
+    /// <summary>抖音作者目录命名策略（nickname, sec_uid, nickname_uid, user_sec_uid）</summary>
+    public string DouyinAuthorDirectoryMode { get; set; } = "nickname";
+
+    /// <summary>抖音批量下载是否按 post/like/mix/music 模式分层目录</summary>
+    public bool DouyinGroupByMode { get; set; } = true;
+
     /// <summary>抖音作品筛选开始时间；空字符串表示不限制</summary>
     public string DouyinStartTime { get; set; } = "";
 

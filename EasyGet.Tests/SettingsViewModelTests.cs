@@ -91,6 +91,8 @@ public class SettingsViewModelTests
         SetAppConfigBool(config.Config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config.Config, "DouyinIncrementalDownload", value: true);
         SetAppConfigBool(config.Config, "DouyinDownloadPinned", value: true);
+        SetAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "sec_uid");
+        SetAppConfigBool(config.Config, "DouyinGroupByMode", value: false);
         var viewModel = CreateViewModel(config, new FakeAppUpdateService());
 
         viewModel.Initialize();
@@ -108,9 +110,14 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinEnableDatabase", expected: true);
         AssertViewModelBool(viewModel, "DouyinIncrementalDownload", expected: true);
         AssertViewModelBool(viewModel, "DouyinDownloadPinned", expected: true);
+        AssertViewModelString(viewModel, "DouyinAuthorDirectoryMode", "sec_uid");
+        AssertViewModelBool(viewModel, "DouyinGroupByMode", expected: false);
         Assert.Equal(
             ["post", "like", "mix", "music", "post,like,mix,music", "collect", "collectmix"],
             viewModel.DouyinModeOptions);
+        Assert.Equal(
+            ["nickname", "sec_uid", "nickname_uid", "user_sec_uid"],
+            viewModel.DouyinAuthorDirectoryModeOptions);
     }
 
     [Fact]
@@ -145,6 +152,8 @@ public class SettingsViewModelTests
         SetViewModelBool(viewModel, "DouyinEnableDatabase", value: true);
         SetViewModelBool(viewModel, "DouyinIncrementalDownload", value: true);
         SetViewModelBool(viewModel, "DouyinDownloadPinned", value: true);
+        SetViewModelString(viewModel, "DouyinAuthorDirectoryMode", " SEC_UID ");
+        SetViewModelBool(viewModel, "DouyinGroupByMode", value: false);
 
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
 
@@ -161,6 +170,10 @@ public class SettingsViewModelTests
         AssertAppConfigBool(config.Config, "DouyinEnableDatabase", expected: true);
         AssertAppConfigBool(config.Config, "DouyinIncrementalDownload", expected: true);
         AssertAppConfigBool(config.Config, "DouyinDownloadPinned", expected: true);
+        AssertAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "sec_uid");
+        AssertAppConfigBool(config.Config, "DouyinGroupByMode", expected: false);
+        AssertViewModelString(viewModel, "DouyinAuthorDirectoryMode", "sec_uid");
+        AssertViewModelBool(viewModel, "DouyinGroupByMode", expected: false);
     }
 
     [Fact]
@@ -192,6 +205,36 @@ public class SettingsViewModelTests
         var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
         Assert.Same(saved.Task, completed);
         AssertAppConfigBool(config.Config, "DouyinDownloadPinned", expected: true);
+    }
+
+    [Fact]
+    public async Task DouyinGroupByModeChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelBool(viewModel, "DouyinGroupByMode", value: false);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigBool(config.Config, "DouyinGroupByMode", expected: false);
+    }
+
+    [Fact]
+    public async Task DouyinAuthorDirectoryModeChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelString(viewModel, "DouyinAuthorDirectoryMode", "nickname_uid");
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "nickname_uid");
     }
 
     [Theory]
