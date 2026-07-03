@@ -755,6 +755,15 @@ public class XamlBindingTests
         Assert.Contains("DouyinManifestSummaryItems", source);
         Assert.Contains("DouyinManifestSummaryCount", source);
         Assert.Contains("DouyinManifestSummaryText", source);
+        Assert.Contains("DouyinManifestItems", source);
+        Assert.Contains("HasDouyinManifestDetails", source);
+        Assert.Contains("MediaTypeText", source);
+        Assert.Contains("Description", source);
+        Assert.Contains("AuthorName", source);
+        Assert.Contains("DateText", source);
+        Assert.Contains("FileCountText", source);
+        Assert.Contains("TagsText", source);
+        Assert.Contains("FileNamesText", source);
         Assert.Contains("DouyinHistoryItems", source);
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }

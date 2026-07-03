@@ -66,6 +66,26 @@ public partial class DownloadHistory : ObservableObject
         }
     }
 
+    private DouyinManifestSummary? _douyinManifestSummary;
+
+    /// <summary>抖音 manifest 的非持久化结构化摘要，由历史 ViewModel 加载时刷新</summary>
+    public DouyinManifestSummary? DouyinManifestSummary
+    {
+        get => _douyinManifestSummary;
+        set
+        {
+            if (SetProperty(ref _douyinManifestSummary, value))
+            {
+                OnPropertyChanged(nameof(DouyinManifestItems));
+                OnPropertyChanged(nameof(HasDouyinManifestDetails));
+            }
+        }
+    }
+
+    public IReadOnlyList<DouyinManifestItem> DouyinManifestItems => DouyinManifestSummary?.Items ?? [];
+
+    public bool HasDouyinManifestDetails => DouyinManifestItems.Count > 0;
+
     /// <summary>下载时间</summary>
     public DateTime DownloadTime { get; set; } = DateTime.Now;
 

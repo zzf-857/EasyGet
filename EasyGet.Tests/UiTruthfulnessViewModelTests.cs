@@ -207,7 +207,28 @@ public class UiTruthfulnessViewModelTests
             Title = "douyin manifest",
             Platform = "Douyin",
             Url = "https://www.douyin.com/video/123",
-            DouyinManifestSummaryText = "作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 2"
+            DouyinManifestSummaryText = "作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 2",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                3,
+                2,
+                1,
+                1,
+                1,
+                0,
+                4,
+                false,
+                [
+                    new DouyinManifestItem(
+                        "v1",
+                        "video",
+                        "视频",
+                        "视频标题",
+                        "作者 A",
+                        "2026-07-01",
+                        "2026-07-03T10:00:00",
+                        ["旅行", "美食"],
+                        ["video.mp4"])
+                ])
         });
         context.History.HistoryItems.Add(new DownloadHistory
         {
@@ -230,7 +251,48 @@ public class UiTruthfulnessViewModelTests
             {
                 Assert.Equal("douyin manifest", item.Title);
                 Assert.Equal("作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 2", item.DouyinManifestSummaryText);
+                Assert.True(item.HasDouyinManifestDetails);
+                var detail = Assert.Single(item.DouyinManifestItems);
+                Assert.Equal("视频", detail.MediaTypeText);
+                Assert.Equal("视频标题", detail.Description);
+                Assert.Equal("作者 A", detail.AuthorName);
+                Assert.Equal("video.mp4", detail.FileNamesText);
             });
+    }
+
+    [Fact]
+    public void DownloadHistoryNotifiesWhenStructuredDouyinManifestSummaryChanges()
+    {
+        var item = new DownloadHistory();
+        var propertyNames = new List<string>();
+        item.PropertyChanged += (_, e) => propertyNames.Add(e.PropertyName ?? "");
+
+        item.DouyinManifestSummary = new DouyinManifestSummary(
+            1,
+            1,
+            1,
+            0,
+            0,
+            0,
+            1,
+            false,
+            [
+                new DouyinManifestItem(
+                    "v1",
+                    "video",
+                    "视频",
+                    "视频标题",
+                    "作者 A",
+                    "2026-07-01",
+                    "",
+                    [],
+                    ["video.mp4"])
+            ]);
+
+        Assert.Contains(nameof(DownloadHistory.DouyinManifestSummary), propertyNames);
+        Assert.Contains(nameof(DownloadHistory.DouyinManifestItems), propertyNames);
+        Assert.Contains(nameof(DownloadHistory.HasDouyinManifestDetails), propertyNames);
+        Assert.True(item.HasDouyinManifestDetails);
     }
 
     [Fact]

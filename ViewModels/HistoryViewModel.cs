@@ -1,8 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
-using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
@@ -16,7 +14,6 @@ namespace EasyGet.ViewModels;
 public partial class HistoryViewModel : ObservableObject
 {
     private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(300);
-    private const int MaxDouyinManifestLines = 1000;
 
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
@@ -160,7 +157,7 @@ public partial class HistoryViewModel : ObservableObject
             {
                 Item = item,
                 AvailableFilePath = ResolveExistingHistoryPath(item),
-                DouyinManifestSummaryText = BuildDouyinManifestSummaryText(item)
+                DouyinManifestSummary = BuildDouyinManifestSummary(item)
             })
             .ToList());
 
@@ -169,7 +166,8 @@ public partial class HistoryViewModel : ObservableObject
         {
             result.Item.AvailableFilePath = result.AvailableFilePath;
             result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
-            result.Item.DouyinManifestSummaryText = result.DouyinManifestSummaryText;
+            result.Item.DouyinManifestSummary = result.DouyinManifestSummary.Summary;
+            result.Item.DouyinManifestSummaryText = result.DouyinManifestSummary.SummaryText;
             HistoryItems.Add(result.Item);
         }
     }
@@ -376,19 +374,21 @@ public partial class HistoryViewModel : ObservableObject
             ?? "";
     }
 
-    private static string BuildDouyinManifestSummaryText(DownloadHistory item)
+    private static DouyinManifestSummaryResult BuildDouyinManifestSummary(DownloadHistory item)
     {
         var manifestPath = ResolveSafeDouyinManifestPath(item);
         if (string.IsNullOrWhiteSpace(manifestPath))
-            return "";
+            return DouyinManifestSummaryResult.Empty;
 
-        var summary = TryReadDouyinManifestSummary(manifestPath);
+        var summary = DouyinManifestReader.ReadSummary(manifestPath);
         if (summary is null)
-            return "";
+            return DouyinManifestSummaryResult.Empty;
 
         var attachmentCount = item.AttachmentFilePaths
             .Count(path => !IsDouyinManifestPath(path));
-        return FormatDouyinManifestSummary(summary, attachmentCount);
+        return new DouyinManifestSummaryResult(
+            FormatDouyinManifestSummary(summary, attachmentCount),
+            summary);
     }
 
     private static string ResolveSafeDouyinManifestPath(DownloadHistory item)
@@ -511,76 +511,7 @@ public partial class HistoryViewModel : ObservableObject
     private static string TrimTrailingDirectorySeparators(string path)
         => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-    private static DouyinManifestHistorySummary? TryReadDouyinManifestSummary(string manifestPath)
-    {
-        try
-        {
-            var fileInfo = new FileInfo(manifestPath);
-            if (!fileInfo.Exists)
-                return null;
-
-            var itemCount = 0;
-            var videoCount = 0;
-            var galleryCount = 0;
-            var musicCount = 0;
-            using var reader = new StreamReader(manifestPath, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-            for (var lineIndex = 0; lineIndex < MaxDouyinManifestLines; lineIndex++)
-            {
-                var line = reader.ReadLine();
-                if (line is null)
-                    break;
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                try
-                {
-                    using var document = JsonDocument.Parse(line);
-                    var root = document.RootElement;
-                    if (root.ValueKind != JsonValueKind.Object)
-                        continue;
-
-                    itemCount++;
-                    switch (NormalizeManifestMediaType(root))
-                    {
-                        case "video":
-                            videoCount++;
-                            break;
-                        case "gallery":
-                            galleryCount++;
-                            break;
-                        case "music":
-                            musicCount++;
-                            break;
-                    }
-                }
-                catch (JsonException)
-                {
-                }
-            }
-
-            var isTruncated = reader.ReadLine() is not null;
-            return itemCount > 0
-                ? new DouyinManifestHistorySummary(itemCount, videoCount, galleryCount, musicCount, isTruncated)
-                : null;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return null;
-        }
-    }
-
-    private static string NormalizeManifestMediaType(JsonElement root)
-    {
-        if (root.TryGetProperty("media_type", out var mediaTypeElement)
-            && mediaTypeElement.ValueKind == JsonValueKind.String)
-        {
-            return (mediaTypeElement.GetString() ?? "").Trim().ToLowerInvariant();
-        }
-
-        return "unknown";
-    }
-
-    private static string FormatDouyinManifestSummary(DouyinManifestHistorySummary summary, int attachmentCount)
+    private static string FormatDouyinManifestSummary(DouyinManifestSummary summary, int attachmentCount)
     {
         var itemCountText = summary.IsTruncated
             ? $"{summary.ItemCount}+"
@@ -618,10 +549,10 @@ public partial class HistoryViewModel : ObservableObject
         => !string.IsNullOrWhiteSpace(path)
            && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path));
 
-    private sealed record DouyinManifestHistorySummary(
-        int ItemCount,
-        int VideoCount,
-        int GalleryCount,
-        int MusicCount,
-        bool IsTruncated);
+    private sealed record DouyinManifestSummaryResult(
+        string SummaryText,
+        DouyinManifestSummary? Summary)
+    {
+        public static DouyinManifestSummaryResult Empty { get; } = new("", null);
+    }
 }

@@ -504,6 +504,74 @@
                                                            Foreground="{DynamicResource AccentBrush}"
                                                            TextWrapping="Wrap"
                                                            Margin="0,6,0,0"/>
+                                                <ItemsControl ItemsSource="{Binding DouyinManifestItems, Mode=OneWay}"
+                                                              Visibility="{Binding HasDouyinManifestDetails, Converter={StaticResource BoolToVisibility}}"
+                                                              Margin="0,10,0,0">
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <StackPanel/>
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}"
+                                                                    BorderThickness="0,1,0,0"
+                                                                    Padding="0,9,0,0"
+                                                                    Margin="0,0,0,9">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <Border Grid.Column="0"
+                                                                            Background="{DynamicResource AccentMutedBrush}"
+                                                                            CornerRadius="4"
+                                                                            Padding="7,2"
+                                                                            Margin="0,1,10,0"
+                                                                            VerticalAlignment="Top">
+                                                                        <TextBlock Text="{Binding MediaTypeText, Mode=OneWay}"
+                                                                                   Style="{StaticResource TextCaption}"
+                                                                                   Foreground="{DynamicResource AccentBrush}"/>
+                                                                    </Border>
+
+                                                                    <StackPanel Grid.Column="1">
+                                                                        <TextBlock Text="{Binding Description, Mode=OneWay}"
+                                                                                   Style="{StaticResource TextBodyStrong}"
+                                                                                   TextTrimming="CharacterEllipsis"/>
+                                                                        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                                                                            <TextBlock Text="{Binding AuthorName, Mode=OneWay}"
+                                                                                       Style="{StaticResource TextCaption}"
+                                                                                       Visibility="{Binding AuthorName, Converter={StaticResource StringToVisibility}}"
+                                                                                       Margin="0,0,10,0"/>
+                                                                            <TextBlock Text="{Binding DateText, Mode=OneWay}"
+                                                                                       Style="{StaticResource TextCaption}"
+                                                                                       Visibility="{Binding DateText, Converter={StaticResource StringToVisibility}}"/>
+                                                                        </StackPanel>
+                                                                        <TextBlock Text="{Binding TagsText, Mode=OneWay}"
+                                                                                   Style="{StaticResource TextCaption}"
+                                                                                   Foreground="{DynamicResource AccentBrush}"
+                                                                                   TextTrimming="CharacterEllipsis"
+                                                                                   Visibility="{Binding TagsText, Converter={StaticResource StringToVisibility}}"
+                                                                                   Margin="0,4,0,0"/>
+                                                                        <TextBlock Text="{Binding FileNamesText, Mode=OneWay}"
+                                                                                   Style="{StaticResource TextCaption}"
+                                                                                   TextTrimming="CharacterEllipsis"
+                                                                                   Visibility="{Binding FileNamesText, Converter={StaticResource StringToVisibility}}"
+                                                                                   Margin="0,4,0,0"/>
+                                                                    </StackPanel>
+
+                                                                    <TextBlock Grid.Column="2"
+                                                                               Text="{Binding FileCountText, Mode=OneWay}"
+                                                                               Style="{StaticResource TextCaption}"
+                                                                               Margin="12,1,0,0"
+                                                                               VerticalAlignment="Top"/>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                                 <TextBlock Text="{Binding DownloadTimeText, Mode=OneWay}"
                                                            Style="{StaticResource TextCaption}"
                                                            Margin="0,6,0,0"/>

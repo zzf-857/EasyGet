@@ -163,9 +163,9 @@ public class HistoryViewModelTests
             await File.WriteAllTextAsync(
                 manifestPath,
                 """
-                {"aweme_id":"v1","media_type":"video"}
-                {"aweme_id":"g1","media_type":"gallery"}
-                {"aweme_id":"m1","media_type":"music"}
+                {"aweme_id":"v1","media_type":"video","desc":"视频标题","author_name":"作者 A","date":"2026-07-01","file_names":["video.mp4"],"tags":["旅行","美食"]}
+                {"aweme_id":"g1","media_type":"gallery","desc":"图文标题","author_name":"作者 B","file_paths":["gallery/1.jpg","gallery/2.jpg"]}
+                {"aweme_id":"m1","media_type":"music","desc":"原声","author_name":"作者 A","file_names":["music.mp3"]}
                 {malformed json
                 []
                 """);
@@ -191,6 +191,28 @@ public class HistoryViewModelTests
             Assert.Equal("作品 3 / 视频 1 / 图文 1 / 音乐 1 / 附属 1", GetStringProperty(item, "AttachmentSummaryText"));
             Assert.True(GetBoolProperty(item, "HasAttachmentSummary"));
             Assert.DoesNotContain("附属 2", GetStringProperty(item, "AttachmentSummaryText"), StringComparison.Ordinal);
+            Assert.NotNull(item.DouyinManifestSummary);
+            Assert.Equal(3, item.DouyinManifestSummary!.ItemCount);
+            Assert.Equal(4, item.DouyinManifestSummary.FileCount);
+            Assert.True(item.HasDouyinManifestDetails);
+            Assert.Collection(
+                item.DouyinManifestItems,
+                detail =>
+                {
+                    Assert.Equal("v1", detail.AwemeId);
+                    Assert.Equal("视频", detail.MediaTypeText);
+                    Assert.Equal("视频标题", detail.Description);
+                    Assert.Equal("作者 A", detail.AuthorName);
+                    Assert.Equal("2026-07-01", detail.DateText);
+                    Assert.Equal("旅行、 美食", detail.TagsText);
+                    Assert.Equal("video.mp4", detail.FileNamesText);
+                },
+                detail =>
+                {
+                    Assert.Equal("图文", detail.MediaTypeText);
+                    Assert.Equal("gallery/1.jpg, gallery/2.jpg", detail.FileNamesText);
+                },
+                detail => Assert.Equal("音乐", detail.MediaTypeText));
         }
         finally
         {
@@ -299,6 +321,8 @@ public class HistoryViewModelTests
 
             var item = Assert.Single(viewModel.HistoryItems);
             Assert.Equal("", GetStringProperty(item, "DouyinManifestSummaryText"));
+            Assert.Null(item.DouyinManifestSummary);
+            Assert.False(item.HasDouyinManifestDetails);
             Assert.DoesNotContain("作品", GetStringProperty(item, "AttachmentSummaryText"), StringComparison.Ordinal);
             Assert.True(item.FileExists);
             Assert.Equal(mediaPath, item.AvailableFilePath);
