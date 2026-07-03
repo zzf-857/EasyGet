@@ -22,6 +22,7 @@ import tempfile
 import time
 import traceback
 import unicodedata
+import uuid
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -29,6 +30,7 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 KNOWN_NUMBER_MODES = ("post", "like", "mix", "music", "collect", "collectmix", "allmix")
 MANIFEST_FILE_NAME = "download_manifest.jsonl"
+MANIFEST_SNAPSHOT_PREFIX = "download_manifest.easyget-"
 MAX_MANIFEST_SUMMARY_ITEMS = 5
 MAX_MANIFEST_TEXT_LENGTH = 300
 PRIMARY_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".flv", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".m4a")
@@ -587,7 +589,8 @@ def manifest_line_count(output_dir: Path) -> int:
     if not manifest.exists():
         return 0
     try:
-        return len(manifest.read_text(encoding="utf-8").splitlines())
+        with manifest.open("r", encoding="utf-8") as handle:
+            return sum(1 for _ in handle)
     except OSError:
         return 0
 
@@ -597,49 +600,49 @@ def manifest_output_files(output_dir: Path, start_line: int) -> Tuple[List[str],
     if not manifest.exists():
         return [], []
 
-    try:
-        lines = manifest.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return [], []
-
     output_files: List[str] = []
     entries: List[Dict[str, Any]] = []
-    for line in lines[start_line:]:
-        if not line.strip():
-            continue
-        try:
-            entry = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(entry, dict):
-            continue
-        entries.append(entry)
-        for raw_path in entry.get("file_paths") or []:
-            path = Path(str(raw_path))
-            if not path.is_absolute():
-                path = output_dir / path
-            resolved_path = path.resolve()
-            if not is_path_inside(resolved_path, output_dir):
-                continue
-            if is_sidecar_state_path(resolved_path, output_dir):
-                continue
-            if not resolved_path.is_file():
-                continue
-            if not is_supported_output_file(resolved_path):
-                continue
-            output_files.append(str(resolved_path))
+    try:
+        with manifest.open("r", encoding="utf-8") as handle:
+            for index, line in enumerate(handle):
+                if index < max(0, start_line):
+                    continue
+                entry = parse_manifest_entry(line)
+                if entry is None:
+                    continue
+                entries.append(entry)
+                for raw_path in entry.get("file_paths") or []:
+                    path = Path(str(raw_path))
+                    if not path.is_absolute():
+                        path = output_dir / path
+                    resolved_path = path.resolve()
+                    if not is_path_inside(resolved_path, output_dir):
+                        continue
+                    if is_sidecar_state_path(resolved_path, output_dir):
+                        continue
+                    if not resolved_path.is_file():
+                        continue
+                    if not is_supported_output_file(resolved_path):
+                        continue
+                    output_files.append(str(resolved_path))
+    except OSError:
+        return [], []
     return _dedupe(output_files), entries
 
 
-def build_manifest_summary_details(output_dir: Path, entries: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
-    manifest = output_dir / MANIFEST_FILE_NAME
-    manifest_path = ""
-    if manifest.exists():
-        try:
-            manifest_path = str(manifest.resolve())
-        except OSError:
-            manifest_path = str(manifest)
+def parse_manifest_entry(line: str) -> Optional[Dict[str, Any]]:
+    if not line.strip():
+        return None
+    try:
+        entry = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(entry, dict):
+        return None
+    return entry
 
+
+def build_manifest_summary_details(output_dir: Path, entries: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     media_type_counts: Dict[str, int] = {}
     manifest_items: List[Dict[str, Any]] = []
     for entry in entries:
@@ -649,11 +652,36 @@ def build_manifest_summary_details(output_dir: Path, entries: Sequence[Dict[str,
             manifest_items.append(summarize_manifest_item(entry, media_type))
 
     return {
-        "manifest_path": manifest_path,
+        "manifest_path": write_manifest_snapshot(output_dir, entries),
         "manifest_item_count": len(entries),
         "media_type_counts": media_type_counts,
         "manifest_items": manifest_items,
     }
+
+
+def write_manifest_snapshot(output_dir: Path, entries: Sequence[Dict[str, Any]]) -> str:
+    if not entries:
+        return ""
+
+    timestamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return ""
+
+    for _ in range(5):
+        snapshot = output_dir / f"{MANIFEST_SNAPSHOT_PREFIX}{timestamp}-{uuid.uuid4().hex[:8]}.jsonl"
+        try:
+            with snapshot.open("x", encoding="utf-8", newline="\n") as handle:
+                for entry in entries:
+                    handle.write(json.dumps(entry, ensure_ascii=False))
+                    handle.write("\n")
+            return str(snapshot.resolve())
+        except FileExistsError:
+            continue
+        except OSError:
+            return ""
+    return ""
 
 
 def normalize_manifest_media_type(value: Any) -> str:

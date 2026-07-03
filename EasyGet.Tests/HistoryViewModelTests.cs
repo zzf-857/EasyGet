@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using EasyGet.Models;
 using EasyGet.Services;
 using EasyGet.ViewModels;
@@ -199,6 +200,255 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public async Task LoadHistory_AcceptsRootManifestWhenMediaAttachmentIsNested()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-nested-manifest-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDir, "author", "post", "video.mp4");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(mediaPath)!);
+            await File.WriteAllTextAsync(mediaPath, "video");
+            await File.WriteAllTextAsync(manifestPath, """{"aweme_id":"v1","media_type":"video"}""");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/video/123",
+                Title = "nested douyin",
+                Platform = "Douyin",
+                Format = "mp4",
+                DownloadTime = new DateTime(2026, 7, 3, 14, 0, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, mediaPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal("作品 1 / 视频 1 / 附属 1", GetStringProperty(item, "AttachmentSummaryText"));
+            Assert.True(GetBoolProperty(item, "HasAttachmentSummary"));
+            Assert.True(item.FileExists);
+            Assert.Equal(mediaPath, item.AvailableFilePath);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public void IsSafeDouyinManifestParentDirectory_RejectsFilesystemRoot()
+    {
+        var root = Path.GetPathRoot(Path.GetTempPath());
+        Assert.False(string.IsNullOrWhiteSpace(root));
+
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-nonroot-manifest-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+
+            Assert.False(HistoryViewModel.IsSafeDouyinManifestParentDirectory(root!));
+            Assert.True(HistoryViewModel.IsSafeDouyinManifestParentDirectory(outputDir));
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_RejectsManifestWhenAnyExistingNonManifestAnchorIsOutsideManifestParent()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-cross-anchor-{Guid.NewGuid():N}");
+        var outsideDir = Path.Combine(Path.GetTempPath(), $"easyget-history-cross-anchor-outside-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDir, "author", "post", "video.mp4");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+        var outsideAttachmentPath = Path.Combine(outsideDir, "sidecar.json");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(mediaPath)!);
+            Directory.CreateDirectory(outsideDir);
+            await File.WriteAllTextAsync(mediaPath, "video");
+            await File.WriteAllTextAsync(manifestPath, """{"aweme_id":"v1","media_type":"video"}""");
+            await File.WriteAllTextAsync(outsideAttachmentPath, "{}");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/video/123",
+                Title = "cross anchor douyin",
+                Platform = "Douyin",
+                Format = "mp4",
+                DownloadTime = new DateTime(2026, 7, 3, 14, 15, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, mediaPath, outsideAttachmentPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal("", GetStringProperty(item, "DouyinManifestSummaryText"));
+            Assert.DoesNotContain("作品", GetStringProperty(item, "AttachmentSummaryText"), StringComparison.Ordinal);
+            Assert.True(item.FileExists);
+            Assert.Equal(mediaPath, item.AvailableFilePath);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+            TryDeleteDirectory(outsideDir);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_RecognizesSnapshotManifestAndExcludesItFromAttachmentsAndQuickActions()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-snapshot-manifest-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDir, "author", "post", "gallery.jpg");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.easyget-20260703T123456Z-abcdef12.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(mediaPath)!);
+            await File.WriteAllTextAsync(mediaPath, "image");
+            await File.WriteAllTextAsync(manifestPath, """{"aweme_id":"g1","media_type":"gallery"}""");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/note/123",
+                Title = "snapshot douyin",
+                Platform = "Douyin",
+                Format = "jpg",
+                DownloadTime = new DateTime(2026, 7, 3, 14, 30, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, mediaPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal("作品 1 / 图文 1 / 附属 1", GetStringProperty(item, "AttachmentSummaryText"));
+            Assert.True(GetBoolProperty(item, "HasAttachmentSummary"));
+            Assert.True(item.FileExists);
+            Assert.Equal(mediaPath, item.AvailableFilePath);
+            Assert.NotEqual(manifestPath, item.AvailableFilePath);
+            Assert.DoesNotContain("附属 2", GetStringProperty(item, "AttachmentSummaryText"), StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_DoesNotUseManifestAsAnchorWhenNoNonManifestPathExists()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-manifest-only-{Guid.NewGuid():N}");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(manifestPath, """{"aweme_id":"v1","media_type":"video"}""");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/video/123",
+                Title = "manifest only",
+                Platform = "Douyin",
+                Format = "mp4",
+                FilePath = manifestPath,
+                DownloadTime = new DateTime(2026, 7, 3, 15, 0, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal("", GetStringProperty(item, "DouyinManifestSummaryText"));
+            Assert.DoesNotContain("作品", GetStringProperty(item, "AttachmentSummaryText"), StringComparison.Ordinal);
+            Assert.False(item.FileExists);
+            Assert.Equal("", item.AvailableFilePath);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_TruncatedManifestShowsPlusAndCountsFirstThousandItems()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-long-manifest-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDir, "author", "post", "video.mp4");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+        var padding = new string('x', 1100);
+        var manifest = new StringBuilder();
+
+        for (var index = 0; index < 500; index++)
+            manifest.AppendLine($$"""{"aweme_id":"v{{index}}","media_type":"video","padding":"{{padding}}"}""");
+        for (var index = 0; index < 300; index++)
+            manifest.AppendLine($$"""{"aweme_id":"g{{index}}","media_type":"gallery","padding":"{{padding}}"}""");
+        for (var index = 0; index < 200; index++)
+            manifest.AppendLine($$"""{"aweme_id":"m{{index}}","media_type":"music","padding":"{{padding}}"}""");
+        manifest.AppendLine($$"""{"aweme_id":"extra","media_type":"video","padding":"{{padding}}"}""");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(mediaPath)!);
+            await File.WriteAllTextAsync(mediaPath, "video");
+            await File.WriteAllTextAsync(manifestPath, manifest.ToString());
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/user/MS4wLjABAAAA_test",
+                Title = "large douyin batch",
+                Platform = "Douyin",
+                Format = "mp4",
+                DownloadTime = new DateTime(2026, 7, 3, 15, 30, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, mediaPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal("作品 1000+ / 视频 500 / 图文 300 / 音乐 200 / 附属 1", GetStringProperty(item, "AttachmentSummaryText"));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
     public async Task LoadHistory_UsesFirstNonManifestAttachmentForQuickActionsWhenPrimaryIsMissing()
     {
         var dbPath = CreateTempDatabasePath();
@@ -234,6 +484,53 @@ public class HistoryViewModelTests
             Assert.True(item.FileExists);
             Assert.Equal(mediaPath, item.AvailableFilePath);
             Assert.NotEqual(manifestPath, item.AvailableFilePath);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_UsesFirstNonManifestAttachmentForQuickActionsWhenManifestAndSnapshotAreFirst()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-snapshot-action-{Guid.NewGuid():N}");
+        var missingPrimaryPath = Path.Combine(outputDir, "missing.mp4");
+        var manifestPath = Path.Combine(outputDir, "download_manifest.jsonl");
+        var snapshotManifestPath = Path.Combine(outputDir, "download_manifest.easyget-20260703T123456Z-abcdef12.jsonl");
+        var mediaPath = Path.Combine(outputDir, "author", "post", "video.mp4");
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(mediaPath)!);
+            await File.WriteAllTextAsync(manifestPath, """{"media_type":"video"}""");
+            await File.WriteAllTextAsync(snapshotManifestPath, """{"media_type":"video"}""");
+            await File.WriteAllTextAsync(mediaPath, "video");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://www.douyin.com/video/123",
+                Title = "douyin quick action",
+                Platform = "Douyin",
+                Format = "mp4",
+                FilePath = missingPrimaryPath,
+                DownloadTime = new DateTime(2026, 7, 3, 16, 0, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [manifestPath, snapshotManifestPath, mediaPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            Assert.True(item.FileExists);
+            Assert.Equal(mediaPath, item.AvailableFilePath);
+            Assert.NotEqual(manifestPath, item.AvailableFilePath);
+            Assert.NotEqual(snapshotManifestPath, item.AvailableFilePath);
         }
         finally
         {

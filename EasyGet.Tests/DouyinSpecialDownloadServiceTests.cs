@@ -245,6 +245,17 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public void IsDouyinManifestPath_MatchesExactAndContractSnapshotOnly()
+    {
+        Assert.True(DouyinSpecialDownloadService.IsDouyinManifestPath("download_manifest.jsonl"));
+        Assert.True(DouyinSpecialDownloadService.IsDouyinManifestPath("download_manifest.easyget-20260703T123456Z-abcdef12.jsonl"));
+
+        Assert.False(DouyinSpecialDownloadService.IsDouyinManifestPath("download_manifest.easyget-20260703-abcdef12.jsonl"));
+        Assert.False(DouyinSpecialDownloadService.IsDouyinManifestPath("download_manifest.easyget-20260703T123456Z-nothexzz.jsonl"));
+        Assert.False(DouyinSpecialDownloadService.IsDouyinManifestPath("download_manifest.easyget-20260703T123456Z-abcdef123.jsonl"));
+    }
+
+    [Fact]
     public void ApplySuccessSummary_DoesNotAddManifestPathOutsideOutputDirectory()
     {
         var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-manifest-safe-{Guid.NewGuid():N}");
@@ -288,6 +299,124 @@ public class DouyinSpecialDownloadServiceTests
         {
             TryDeleteDirectory(outputDirectory);
             TryDeleteDirectory(unsafeDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplySuccessSummary_AcceptsSnapshotManifestInsideOutputDirectoryAndRejectsOutsideSnapshot()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-snapshot-safe-{Guid.NewGuid():N}");
+        var unsafeDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-snapshot-unsafe-{Guid.NewGuid():N}");
+        var primaryPath = Path.Combine(outputDirectory, "video.mp4");
+        var safeManifestPath = Path.Combine(outputDirectory, "download_manifest.easyget-20260703T123456Z-abcdef12.jsonl");
+        var unsafeManifestPath = Path.Combine(unsafeDirectory, "download_manifest.easyget-20260703T123456Z-abcdef12.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            Directory.CreateDirectory(unsafeDirectory);
+            File.WriteAllText(safeManifestPath, "{}");
+            File.WriteAllText(unsafeManifestPath, "{}");
+
+            var safeTask = new DownloadTask
+            {
+                Url = "https://www.douyin.com/video/123",
+                OutputDirectory = outputDirectory,
+                Status = DownloadStatus.Downloading
+            };
+            DouyinSpecialDownloadService.TryParseStdoutLine(
+                $$"""
+                {
+                  "event": "success",
+                  "output_file_path": "{{JsonEscaped(primaryPath)}}",
+                  "details": {
+                    "output_files": ["{{JsonEscaped(primaryPath)}}"],
+                    "manifest_path": "{{JsonEscaped(safeManifestPath)}}"
+                  }
+                }
+                """,
+                out var safeMessage);
+
+            DouyinSpecialDownloadService.ApplySuccessSummary(safeTask, safeMessage);
+
+            var safeOutputFiles = GetStringListProperty(safeTask, "OutputFilePaths");
+            Assert.Equal(DownloadStatus.Completed, safeTask.Status);
+            Assert.Equal([primaryPath, safeManifestPath], safeOutputFiles);
+
+            var unsafeTask = new DownloadTask
+            {
+                Url = "https://www.douyin.com/video/123",
+                OutputDirectory = outputDirectory,
+                Status = DownloadStatus.Downloading
+            };
+            DouyinSpecialDownloadService.TryParseStdoutLine(
+                $$"""
+                {
+                  "event": "success",
+                  "output_file_path": "{{JsonEscaped(primaryPath)}}",
+                  "details": {
+                    "output_files": ["{{JsonEscaped(primaryPath)}}"],
+                    "manifest_path": "{{JsonEscaped(unsafeManifestPath)}}"
+                  }
+                }
+                """,
+                out var unsafeMessage);
+
+            DouyinSpecialDownloadService.ApplySuccessSummary(unsafeTask, unsafeMessage);
+
+            var unsafeOutputFiles = GetStringListProperty(unsafeTask, "OutputFilePaths");
+            Assert.Equal(DownloadStatus.Completed, unsafeTask.Status);
+            Assert.Equal([primaryPath], unsafeOutputFiles);
+            Assert.DoesNotContain(unsafeManifestPath, unsafeOutputFiles);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+            TryDeleteDirectory(unsafeDirectory);
+        }
+    }
+
+    [Fact]
+    public void ApplySuccessSummary_DoesNotAddMalformedSnapshotManifestInsideOutputDirectory()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-snapshot-invalid-{Guid.NewGuid():N}");
+        var primaryPath = Path.Combine(outputDirectory, "video.mp4");
+        var malformedManifestPath = Path.Combine(outputDirectory, "download_manifest.easyget-20260703-abcdef12.jsonl");
+
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            File.WriteAllText(malformedManifestPath, "{}");
+
+            var task = new DownloadTask
+            {
+                Url = "https://www.douyin.com/video/123",
+                OutputDirectory = outputDirectory,
+                Status = DownloadStatus.Downloading
+            };
+            DouyinSpecialDownloadService.TryParseStdoutLine(
+                $$"""
+                {
+                  "event": "success",
+                  "output_file_path": "{{JsonEscaped(primaryPath)}}",
+                  "details": {
+                    "output_files": ["{{JsonEscaped(primaryPath)}}"],
+                    "manifest_path": "{{JsonEscaped(malformedManifestPath)}}"
+                  }
+                }
+                """,
+                out var message);
+
+            DouyinSpecialDownloadService.ApplySuccessSummary(task, message);
+
+            var outputFiles = GetStringListProperty(task, "OutputFilePaths");
+            Assert.Equal(DownloadStatus.Completed, task.Status);
+            Assert.Equal([primaryPath], outputFiles);
+            Assert.DoesNotContain(malformedManifestPath, outputFiles);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
         }
     }
 

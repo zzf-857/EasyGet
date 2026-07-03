@@ -189,6 +189,21 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void WindowsPublishScriptExpandsDouyinSnapshotManifestDuringRealSmoke()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "publish-win-x64.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        Assert.Contains("function Test-DouyinManifestFileName", script, StringComparison.Ordinal);
+        Assert.Contains("download_manifest.jsonl", script, StringComparison.Ordinal);
+        Assert.Contains(@"^download_manifest\.easyget-\d{8}T\d{6}Z-[0-9a-f]{8}\.jsonl$", script, StringComparison.Ordinal);
+        Assert.Contains("Test-DouyinManifestFileName -FileName ([System.IO.Path]::GetFileName($_))", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-DouyinSmokePathInsideOutputDir -Path $manifestCandidate -OutputDir $smokeOutputDir", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[System.IO.Path]::GetFileName($_) -eq \"download_manifest.jsonl\"", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void WindowsPublishScriptRejectsDouyinRealDownloadSmokeWithoutUrlBeforePublishing()
     {
         var root = TestRepositoryPaths.Root;

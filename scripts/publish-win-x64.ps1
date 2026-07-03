@@ -426,6 +426,23 @@ function Resolve-DouyinSmokeOutputPath {
     return [System.IO.Path]::GetFullPath((Join-Path $OutputDir $Path))
 }
 
+function Test-DouyinManifestFileName {
+    param(
+        [AllowNull()]
+        [string]$FileName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($FileName)) {
+        return $false
+    }
+
+    if ($FileName.Equals("download_manifest.jsonl", [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $true
+    }
+
+    return $FileName -match '^download_manifest\.easyget-\d{8}T\d{6}Z-[0-9a-f]{8}\.jsonl$'
+}
+
 function Assert-DouyinSmokePathInsideOutputDir {
     param(
         [Parameter(Mandatory = $true)]
@@ -624,9 +641,9 @@ function Test-DouyinSidecarRealDownloadSmoke {
         Add-DouyinSmokePathCandidate -Paths $declaredPaths -Value $details
 
         $manifestCandidates = $declaredPaths |
-            Where-Object { [System.IO.Path]::GetFileName($_) -eq "download_manifest.jsonl" }
+            Where-Object { Test-DouyinManifestFileName -FileName ([System.IO.Path]::GetFileName($_)) }
         foreach ($manifestCandidate in @($manifestCandidates)) {
-            $resolvedManifestCandidate = Resolve-DouyinSmokeOutputPath -Path $manifestCandidate -OutputDir $smokeOutputDir
+            $resolvedManifestCandidate = Assert-DouyinSmokePathInsideOutputDir -Path $manifestCandidate -OutputDir $smokeOutputDir
             Add-DouyinManifestOutputPathCandidates -Paths $declaredPaths -ManifestPath $resolvedManifestCandidate
         }
 

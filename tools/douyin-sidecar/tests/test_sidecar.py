@@ -8,6 +8,7 @@ import sys
 import tempfile
 import textwrap
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -799,6 +800,96 @@ def make_manifest_summary_downloader(root: Path) -> Path:
     return run_py
 
 
+def make_append_manifest_downloader(root: Path) -> Path:
+    run_py = root / "run.py"
+    run_py.write_text(
+        textwrap.dedent(
+            """
+            import json
+            import sys
+            from pathlib import Path
+
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            video_path = output_dir / "new-video.mp4"
+            gallery_path = output_dir / "new-gallery.jpg"
+            for path in (video_path, gallery_path):
+                path.write_bytes(b"media")
+
+            manifest = output_dir / "download_manifest.jsonl"
+            with manifest.open("a", encoding="utf-8") as handle:
+                handle.write(
+                    json.dumps(
+                        {
+                            "aweme_id": "new-video",
+                            "media_type": "video",
+                            "desc": "new video",
+                            "file_paths": [str(video_path)],
+                            "file_names": [video_path.name],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\\n"
+                )
+                handle.write(
+                    json.dumps(
+                        {
+                            "aweme_id": "new-gallery",
+                            "media_type": "gallery",
+                            "desc": "new gallery",
+                            "file_paths": [str(gallery_path)],
+                            "file_names": [gallery_path.name],
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\\n"
+                )
+            print("Total: 2, Success: 2, Failed: 0, Skipped: 0")
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
+def make_file_only_downloader(root: Path, *, produce_outputs: bool = True, count_success: int = 1) -> Path:
+    run_py = root / "run.py"
+    output_block = """
+            media_path = output_dir / "file-only-video.mp4"
+            media_path.write_bytes(b"media")
+    """ if produce_outputs else ""
+    run_py.write_text(
+        textwrap.dedent(
+            f"""
+            import sys
+            from pathlib import Path
+
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+{output_block}
+            print("Total: 1, Success: {int(count_success)}, Failed: 0, Skipped: 0")
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
+def read_jsonl(path: Path):
+    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def assert_no_file_paths_field(test_case: unittest.TestCase, value):
+    if isinstance(value, dict):
+        test_case.assertNotIn("file_paths", value)
+        for child in value.values():
+            assert_no_file_paths_field(test_case, child)
+    elif isinstance(value, list):
+        for child in value:
+            assert_no_file_paths_field(test_case, child)
+
+
 def make_fake_importable_downloader(root: Path) -> None:
     root.mkdir(parents=True)
     (root / "run.py").write_text("", encoding="utf-8")
@@ -868,10 +959,15 @@ class SidecarRunnerTests(unittest.TestCase):
             events = [json.loads(line) for line in result.stdout.splitlines()]
             success = events[-1]
             details = success["details"]
-            manifest_path = output_dir / "download_manifest.jsonl"
+            cumulative_manifest_path = output_dir / "download_manifest.jsonl"
+            manifest_path = Path(details["manifest_path"])
 
             self.assertEqual(success["event"], "success")
-            self.assertEqual(details["manifest_path"], str(manifest_path.resolve()))
+            self.assertNotEqual(manifest_path.resolve(), cumulative_manifest_path.resolve())
+            self.assertEqual(manifest_path.parent.resolve(), output_dir.resolve())
+            self.assertTrue(manifest_path.name.startswith("download_manifest.easyget-"))
+            self.assertEqual(manifest_path.suffix, ".jsonl")
+            self.assertEqual(len(read_jsonl(manifest_path)), 3)
             self.assertEqual(details["manifest_item_count"], 3)
             self.assertEqual(details["media_type_counts"], {"video": 1, "gallery": 1, "music": 1})
             self.assertEqual(len(details["manifest_items"]), 3)
@@ -879,6 +975,54 @@ class SidecarRunnerTests(unittest.TestCase):
             self.assertEqual(details["manifest_items"][0]["file_count"], 1)
             self.assertEqual(details["manifest_items"][0]["file_names"], ["video.mp4"])
             self.assertEqual(details["manifest_items"][2]["media_type"], "music")
+
+    def test_run_real_manifest_path_points_to_this_run_snapshot_only(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            output_dir.mkdir()
+            old_media = output_dir / "old-video.mp4"
+            old_media.write_bytes(b"old")
+            cumulative_manifest_path = output_dir / "download_manifest.jsonl"
+            cumulative_manifest_path.write_text(
+                json.dumps(
+                    {
+                        "aweme_id": "old-video",
+                        "media_type": "video",
+                        "desc": "old video",
+                        "file_paths": [str(old_media)],
+                        "file_names": [old_media.name],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            make_append_manifest_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            success = events[-1]
+            details = success["details"]
+            snapshot_path = Path(details["manifest_path"])
+
+            self.assertEqual(success["event"], "success")
+            self.assertNotEqual(snapshot_path.resolve(), cumulative_manifest_path.resolve())
+            self.assertEqual(snapshot_path.parent.resolve(), output_dir.resolve())
+            self.assertTrue(snapshot_path.name.startswith("download_manifest.easyget-"))
+            self.assertEqual(snapshot_path.suffix, ".jsonl")
+            snapshot_entries = read_jsonl(snapshot_path)
+            self.assertEqual([entry["aweme_id"] for entry in snapshot_entries], ["new-video", "new-gallery"])
+            self.assertNotIn("old-video", [entry["aweme_id"] for entry in snapshot_entries])
+            self.assertEqual(details["manifest_item_count"], 2)
+            self.assertEqual(details["media_type_counts"], {"video": 1, "gallery": 1})
+            self.assertEqual([item["aweme_id"] for item in details["manifest_items"]], ["new-video", "new-gallery"])
 
     def test_run_real_manifest_items_omit_raw_file_paths(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -914,6 +1058,102 @@ class SidecarRunnerTests(unittest.TestCase):
                         "file_names",
                     },
                 )
+
+    def test_run_real_manifest_summary_details_omit_raw_file_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_manifest_summary_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+
+            assert_no_file_paths_field(self, events[-1]["details"])
+
+    def test_run_real_success_without_new_manifest_entry_does_not_attach_stale_manifest_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            output_dir.mkdir()
+            old_media = output_dir / "old-video.mp4"
+            old_media.write_bytes(b"old")
+            os.utime(old_media, (946684800, 946684800))
+            (output_dir / "download_manifest.jsonl").write_text(
+                json.dumps(
+                    {
+                        "aweme_id": "old-video",
+                        "media_type": "video",
+                        "desc": "old video",
+                        "file_paths": [str(old_media)],
+                        "file_names": [old_media.name],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            make_file_only_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            details = events[-1]["details"]
+
+            self.assertEqual(events[-1]["event"], "success")
+            self.assertEqual(details["manifest_path"], "")
+            self.assertEqual(details["manifest_item_count"], 0)
+            self.assertEqual(details["media_type_counts"], {})
+            self.assertEqual(details["manifest_items"], [])
+
+    def test_run_real_failure_without_new_manifest_entry_does_not_attach_stale_manifest_path(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            output_dir.mkdir()
+            old_media = output_dir / "old-video.mp4"
+            old_media.write_bytes(b"old")
+            os.utime(old_media, (946684800, 946684800))
+            (output_dir / "download_manifest.jsonl").write_text(
+                json.dumps(
+                    {
+                        "aweme_id": "old-video",
+                        "media_type": "video",
+                        "desc": "old video",
+                        "file_paths": [str(old_media)],
+                        "file_names": [old_media.name],
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            make_file_only_downloader(root, produce_outputs=False, count_success=1)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            failure = events[-1]
+
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("no output files", failure["error"])
+            self.assertNotIn("manifest_path", failure["details"])
+            self.assertEqual(failure["details"]["output_files"], [])
 
     def test_run_real_default_temp_config_stays_outside_output_directory(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1371,6 +1611,42 @@ class SidecarConfigTests(unittest.TestCase):
             self.assertEqual(len(entries), 1)
             self.assertNotIn(str(probe_file.resolve()), output_files)
             self.assertNotIn(str(notes_file.resolve()), output_files)
+
+    def test_manifest_output_files_streams_from_start_line_and_skips_malformed_non_object_lines(self):
+        sidecar = load_sidecar_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            old_file = output_dir / "old.mp4"
+            new_file = output_dir / "new.mp4"
+            old_file.write_bytes(b"old")
+            new_file.write_bytes(b"new")
+            manifest = output_dir / "download_manifest.jsonl"
+            with manifest.open("w", encoding="utf-8") as handle:
+                handle.write(json.dumps({"aweme_id": "old", "file_paths": [str(old_file)]}) + "\n")
+                handle.write("\n")
+                handle.write("{bad json\n")
+                handle.write(json.dumps(["not", "an", "object"]) + "\n")
+                handle.write(json.dumps({"aweme_id": "new", "file_paths": [str(new_file)]}) + "\n")
+
+            with mock.patch.object(Path, "read_text", side_effect=AssertionError("read_text should not be used")):
+                output_files, entries = sidecar.manifest_output_files(output_dir, 1)
+
+            self.assertEqual(output_files, [str(new_file.resolve())])
+            self.assertEqual([entry["aweme_id"] for entry in entries], ["new"])
+
+    def test_manifest_line_count_streams_manifest_file(self):
+        sidecar = load_sidecar_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            manifest = output_dir / "download_manifest.jsonl"
+            with manifest.open("w", encoding="utf-8") as handle:
+                for index in range(250):
+                    handle.write(json.dumps({"index": index}) + "\n")
+
+            with mock.patch.object(Path, "read_text", side_effect=AssertionError("read_text should not be used")):
+                count = sidecar.manifest_line_count(output_dir)
+
+            self.assertEqual(count, 250)
 
     def test_scan_recent_output_files_ignores_unrecognized_json_and_txt_files(self):
         sidecar = load_sidecar_module()
