@@ -21,6 +21,7 @@ import sys
 import tempfile
 import time
 import traceback
+import unicodedata
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -181,7 +182,7 @@ def validate_template(template: str) -> str:
     if any(character in UNSAFE_TEMPLATE_CHARACTERS for character in template):
         return "contains an unsafe character."
 
-    if any(ord(character) < 32 or ord(character) == 127 for character in template):
+    if any(unicodedata.category(character) == "Cc" for character in template):
         return "contains a control character."
 
     if ".." in template:

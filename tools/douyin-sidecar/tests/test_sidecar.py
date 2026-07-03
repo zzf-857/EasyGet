@@ -139,6 +139,21 @@ class SidecarCliTests(unittest.TestCase):
             self.assertIn("unsafe character", failure["error"])
             self.assertNotIn("{author}/{id}", result.stdout)
 
+    def test_dry_run_rejects_unicode_control_character_template(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--filename-template", "{date}_{title}_{id}\u0085part"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            failure = json.loads(result.stdout)
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--filename-template", failure["error"])
+            self.assertIn("control character", failure["error"])
+            self.assertNotIn("part", result.stdout)
+
     def test_dry_run_rejects_template_missing_id(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(
