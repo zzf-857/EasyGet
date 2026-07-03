@@ -993,6 +993,77 @@ public class UiTruthfulnessViewModelTests
         Assert.Contains("请先登录", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task DouyinViewModelAddsSearchDiscoveryResultToDownloadQueue()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.BatchContext.Config.Config.EnableDouyinSpecialEngine = true;
+        context.BatchContext.Config.Config.DefaultDownloadPath = @"D:\Videos";
+        var item = new DouyinDiscoveryItem(
+            AwemeId: "aweme-1",
+            Description: "猫咪晒太阳",
+            AuthorNickname: "Alice",
+            SecUid: "sec-a",
+            Url: "https://www.douyin.com/video/aweme-1");
+
+        await context.Douyin.AddDouyinDiscoveryItemToQueueCommand.ExecuteAsync(item);
+
+        var task = Assert.Single(context.BatchContext.Manager.Tasks);
+        Assert.Equal("https://www.douyin.com/video/aweme-1", task.Url);
+        Assert.Equal("Douyin", task.Platform);
+        Assert.Equal("猫咪晒太阳", task.Title);
+        Assert.Equal("mp4", task.Format);
+        Assert.Equal("best", task.Quality);
+        Assert.StartsWith(@"D:\Videos", task.OutputDirectory, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("已加入", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.False(context.Douyin.HasDouyinDiscoveryError);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelBuildsDownloadUrlFromDiscoveryAwemeId()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.BatchContext.Config.Config.EnableDouyinSpecialEngine = true;
+        var item = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "只有作品 ID 的搜索结果");
+
+        await context.Douyin.AddDouyinDiscoveryItemToQueueCommand.ExecuteAsync(item);
+
+        var task = Assert.Single(context.BatchContext.Manager.Tasks);
+        Assert.Equal("https://www.douyin.com/video/7604129988555574538", task.Url);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelRejectsDiscoveryItemWithoutDownloadUrl()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var item = new DouyinDiscoveryItem(Word: "猫咪", HotValue: 123);
+
+        await context.Douyin.AddDouyinDiscoveryItemToQueueCommand.ExecuteAsync(item);
+
+        Assert.Empty(context.BatchContext.Manager.Tasks);
+        Assert.True(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("缺少可下载链接", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelRejectsDiscoveryItemWithNonNumericAwemeId()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var item = new DouyinDiscoveryItem(AwemeId: "not-a-video-id");
+
+        await context.Douyin.AddDouyinDiscoveryItemToQueueCommand.ExecuteAsync(item);
+
+        Assert.Empty(context.BatchContext.Manager.Tasks);
+        Assert.True(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("缺少可下载链接", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(1024L, "1 KB 可用")]
     [InlineData(1024L * 1024L * 1536L, "1.5 GB 可用")]
@@ -1003,7 +1074,7 @@ public class UiTruthfulnessViewModelTests
 
     private static ViewModelContext CreateViewModelContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
-        var batchContext = CreateBatchContext();
+        var batchContext = CreateBatchContext(douyinSpecialDownloadService);
         var settings = new SettingsViewModel(
             batchContext.Config,
             batchContext.Environment,
@@ -1036,10 +1107,11 @@ public class UiTruthfulnessViewModelTests
     }
 
     private sealed class FakeDouyinDiscoveryService(
-        DouyinDiscoveryResult? result,
+        DouyinDiscoveryResult? result = null,
         Exception? exception = null) : IDouyinSpecialDownloadService
     {
         public DouyinDiscoveryRequest? LastRequest { get; private set; }
+        public List<DownloadTask> DownloadedTasks { get; } = [];
 
         public Task DownloadAsync(
             DownloadTask task,
@@ -1047,7 +1119,12 @@ public class UiTruthfulnessViewModelTests
             IProgress<DownloadProgress>? progress = null,
             Action<string>? logCallback = null,
             CancellationToken cancellationToken = default)
-            => Task.CompletedTask;
+        {
+            DownloadedTasks.Add(task);
+            task.Progress = 100;
+            task.Status = DownloadStatus.Completed;
+            return Task.CompletedTask;
+        }
 
         public Task<DouyinDiscoveryResult> DiscoverAsync(
             DouyinDiscoveryRequest request,
@@ -1063,7 +1140,7 @@ public class UiTruthfulnessViewModelTests
         }
     }
 
-    private static BatchContext CreateBatchContext()
+    private static BatchContext CreateBatchContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
         var config = new ConfigService();
         var environment = new EnvironmentService();
@@ -1074,7 +1151,11 @@ public class UiTruthfulnessViewModelTests
             "history.db");
         var history = new HistoryService(historyPath);
         var ytDlp = new YtDlpService(config, environment);
-        var manager = new DownloadManager(ytDlp, history, config);
+        var manager = new DownloadManager(
+            ytDlp,
+            history,
+            config,
+            douyinSpecialDownloadService: douyinSpecialDownloadService);
         var batch = new BatchDownloadViewModel(manager, config, ytDlp);
 
         return new BatchContext(config, environment, history, ytDlp, manager, batch);

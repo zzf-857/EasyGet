@@ -764,6 +764,7 @@ public class XamlBindingTests
         Assert.Contains("DouyinDiscoverySearchMax", source);
         Assert.Contains("LoadDouyinHotBoardCommand", source);
         Assert.Contains("SearchDouyinDiscoveryCommand", source);
+        Assert.Contains("AddDouyinDiscoveryItemToQueueCommand", source);
         Assert.Contains("DouyinDiscoveryItems", source);
         Assert.Contains("DouyinDiscoveryStatusText", source);
         Assert.Contains("DouyinDiscoveryErrorMessage", source);

@@ -378,6 +378,50 @@ public partial class DouyinViewModel : ObservableObject
                 SearchMax: Math.Max(1, DouyinDiscoverySearchMax)));
     }
 
+    [RelayCommand]
+    private async Task AddDouyinDiscoveryItemToQueue(DouyinDiscoveryItem? item)
+    {
+        if (item is null)
+            return;
+
+        var url = BuildDouyinDiscoveryDownloadUrl(item);
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            DouyinDiscoveryErrorMessage = "当前发现条目缺少可下载链接";
+            DouyinDiscoveryStatusText = "无法加入下载队列";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        if (_downloadManager.Tasks.Any(task => IsSameUrl(task.Url, url)))
+        {
+            DouyinDiscoveryErrorMessage = "";
+            DouyinDiscoveryStatusText = "已跳过重复下载任务";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        var displayTitle = BuildDouyinDiscoveryTaskTitle(item);
+        var task = new DownloadTask
+        {
+            Url = url,
+            Title = displayTitle,
+            Platform = "Douyin",
+            Format = _configService.Config.DefaultFormat,
+            Quality = _configService.Config.DefaultQuality,
+            OutputDirectory = GetDiscoveryOutputDirectory()
+        };
+
+        await _downloadManager.EnqueueAsync(task);
+        if (!string.IsNullOrWhiteSpace(displayTitle))
+            task.Title = displayTitle;
+
+        DouyinDiscoveryErrorMessage = "";
+        DouyinDiscoveryStatusText = $"已加入下载队列：{displayTitle}";
+        NotifyDouyinTaskStateChanged();
+        NotifyDouyinDiscoveryStateChanged();
+    }
+
     private async Task RunDouyinDiscoveryAsync(DouyinDiscoveryRequest request)
     {
         IsDouyinDiscoveryLoading = true;
@@ -441,6 +485,31 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(HasDouyinDiscoveryItems));
         OnPropertyChanged(nameof(HasDouyinDiscoveryError));
     }
+
+    private static string BuildDouyinDiscoveryDownloadUrl(DouyinDiscoveryItem item)
+    {
+        var url = item.Url.Trim();
+        if (!string.IsNullOrWhiteSpace(url))
+            return url;
+
+        var awemeId = item.AwemeId.Trim();
+        return string.IsNullOrWhiteSpace(awemeId) || !awemeId.All(char.IsDigit)
+            ? ""
+            : $"https://www.douyin.com/video/{awemeId}";
+    }
+
+    private static string BuildDouyinDiscoveryTaskTitle(DouyinDiscoveryItem item)
+        => SelectFirstNonEmpty(
+            item.Description,
+            item.Word,
+            item.AwemeId,
+            "抖音发现作品");
+
+    private static bool IsSameUrl(string left, string right)
+        => string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static string SelectFirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
 
     private bool MatchesTaskCenterFilter(DownloadTask task)
         => MatchesSelectedTaskStatus(task) && MatchesTaskSearchKeyword(task);
