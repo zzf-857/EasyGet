@@ -72,8 +72,25 @@ class SidecarCliTests(unittest.TestCase):
             self.assertIn("planned_command", summary["details"])
             config = summary["details"]["config"]
             self.assertEqual(config["number"]["post"], 3)
+            self.assertEqual(config["thread"], 3)
             self.assertEqual(config["author_dir"], "nickname")
             self.assertIs(config["group_by_mode"], True)
+
+    def test_dry_run_uses_thread_count(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(["--dry-run", "--thread", "7"], Path(temp_dir))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["thread"], 7)
+
+    def test_dry_run_rejects_invalid_thread_count(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(["--dry-run", "--thread", "0"], Path(temp_dir))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--thread must be >= 1", result.stderr)
 
     def test_dry_run_uses_custom_filename_and_folder_templates(self):
         with tempfile.TemporaryDirectory() as temp_dir:

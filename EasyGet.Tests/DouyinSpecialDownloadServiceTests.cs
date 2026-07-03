@@ -604,6 +604,7 @@ public class DouyinSpecialDownloadServiceTests
             DouyinDownloadMusic = false,
             DouyinDownloadJson = true
         };
+        config.ConcurrentFragments = 7;
         SetAppConfigString(config, "DouyinStartTime", " 2024-01-01 ");
         SetAppConfigString(config, "DouyinEndTime", " 2024-01-31 ");
         SetAppConfigBool(config, "DouyinDownloadComments", value: true);
@@ -642,6 +643,32 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Equal("{date}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FolderTemplate"));
         Assert.Equal("sec_uid", GetRequestValue<string>(runner.LastRequest, "AuthorDirectoryMode"));
         Assert.False(GetRequestValue<bool>(runner.LastRequest, "GroupByMode"));
+        Assert.Equal(7, GetRequestValue<int>(runner.LastRequest, "ThreadCount"));
+    }
+
+    [Theory]
+    [InlineData(0, AppConfig.MinConcurrentFragments)]
+    [InlineData(AppConfig.MaxConcurrentFragments + 5, AppConfig.MaxConcurrentFragments)]
+    public async Task DownloadAsync_WithAppConfig_ClampsThreadCountForSidecarRequest(
+        int concurrentFragments,
+        int expectedThreadCount)
+    {
+        var runner = new CapturingSidecarRunner(
+            """{"event":"success","title":"done","output_file_path":"D:\\Videos\\done.mp4"}""");
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/user/MS4wLjABAAAA_test",
+            OutputDirectory = "D:\\Videos"
+        };
+        var config = new AppConfig
+        {
+            ConcurrentFragments = concurrentFragments
+        };
+
+        await InvokeConfigDownloadAsync(service, task, config);
+
+        Assert.Equal(expectedThreadCount, GetRequestValue<int>(runner.LastRequest, "ThreadCount"));
     }
 
     [Fact]
@@ -686,7 +713,8 @@ public class DouyinSpecialDownloadServiceTests
             ["FilenameTemplate"] = "{author}_{title}_{id}",
             ["FolderTemplate"] = "{date}_{id}",
             ["AuthorDirectoryMode"] = "sec_uid",
-            ["GroupByMode"] = false
+            ["GroupByMode"] = false,
+            ["ThreadCount"] = 7
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -712,6 +740,7 @@ public class DouyinSpecialDownloadServiceTests
         AssertArgument(args, "--filename-template", "{author}_{title}_{id}");
         AssertArgument(args, "--folder-template", "{date}_{id}");
         AssertArgument(args, "--author-dir", "sec_uid");
+        AssertArgument(args, "--thread", "7");
         Assert.Contains("--include-cover", args);
         Assert.DoesNotContain("--include-music", args);
         Assert.Contains("--include-json", args);

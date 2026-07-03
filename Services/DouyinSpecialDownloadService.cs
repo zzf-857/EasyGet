@@ -864,13 +864,18 @@ internal sealed record DouyinSidecarRequest(
     string FilenameTemplate = AppConfig.DefaultDouyinTemplate,
     string FolderTemplate = AppConfig.DefaultDouyinTemplate,
     string AuthorDirectoryMode = "nickname",
-    bool GroupByMode = true)
+    bool GroupByMode = true,
+    int ThreadCount = 3)
 {
     public static DouyinSidecarRequest FromTask(DownloadTask task, AppConfig? config)
     {
         var proxy = config is { UseProxy: true }
             ? NormalizeText(config.ProxyAddress)
             : "";
+        var threadCount = Math.Clamp(
+            config?.ConcurrentFragments ?? 3,
+            AppConfig.MinConcurrentFragments,
+            AppConfig.MaxConcurrentFragments);
 
         return new DouyinSidecarRequest(
             Url: NormalizeText(task.Url),
@@ -895,7 +900,8 @@ internal sealed record DouyinSidecarRequest(
             FilenameTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFilenameTemplate),
             FolderTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFolderTemplate),
             AuthorDirectoryMode: ConfigService.NormalizeDouyinAuthorDirectoryMode(config?.DouyinAuthorDirectoryMode),
-            GroupByMode: config?.DouyinGroupByMode ?? true);
+            GroupByMode: config?.DouyinGroupByMode ?? true,
+            ThreadCount: threadCount);
     }
 
     private static string NormalizeText(string? value, string fallback = "")
@@ -992,6 +998,7 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddArgument(psi, "--filename-template", request.FilenameTemplate);
         AddArgument(psi, "--folder-template", request.FolderTemplate);
         AddArgument(psi, "--author-dir", request.AuthorDirectoryMode);
+        AddArgument(psi, "--thread", request.ThreadCount.ToString(CultureInfo.InvariantCulture));
         AddSwitch(psi, "--download-pinned", request.DownloadPinned);
         AddSwitch(psi, "--no-group-by-mode", !request.GroupByMode);
         AddSwitch(psi, "--include-cover", request.IncludeCover);

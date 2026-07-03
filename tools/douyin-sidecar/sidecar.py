@@ -255,6 +255,7 @@ def build_config(
     folder_template: str = "",
     author_dir: str = "nickname",
     group_by_mode: bool = True,
+    thread: int = 3,
 ) -> Dict[str, Any]:
     modes = normalize_modes(mode)
     numbers = {name: 0 for name in KNOWN_NUMBER_MODES}
@@ -297,7 +298,7 @@ def build_config(
         "mode": modes,
         "number": numbers,
         "increase": increase,
-        "thread": 3,
+        "thread": max(1, int(thread or 3)),
         "retry_times": 3,
         "rate_limit": 2,
         "proxy": proxy or "",
@@ -368,6 +369,7 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         folder_template=args.folder_template,
         author_dir=args.author_dir,
         group_by_mode=args.group_by_mode,
+        thread=args.thread,
     )
     return config, cookie_source, cookie_redaction_secrets(cookie_text, config)
 
@@ -1363,6 +1365,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--folder-template", default="", help="Third-party folder_template; must contain {id}")
     parser.add_argument("--author-dir", default="nickname", help="Author directory style: nickname, sec_uid, nickname_uid, user_sec_uid")
     parser.add_argument("--no-group-by-mode", dest="group_by_mode", action="store_false", help="Do not create post/like/mix/music mode subdirectories")
+    parser.add_argument("--thread", type=int, default=3, help="Third-party downloader concurrency thread count")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
@@ -1384,6 +1387,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if args.limit < 0:
         parser.error("--limit must be >= 0")
+    if args.thread < 1:
+        parser.error("--thread must be >= 1")
     return args
 
 
