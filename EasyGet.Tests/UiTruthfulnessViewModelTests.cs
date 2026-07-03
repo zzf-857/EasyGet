@@ -1084,6 +1084,55 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public async Task DouyinViewModelAddsAllDownloadableDiscoveryResultsToQueue()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.BatchContext.Config.Config.EnableDouyinSpecialEngine = true;
+        context.BatchContext.Config.Config.DefaultDownloadPath = @"D:\Videos";
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/duplicate",
+            Platform = "Douyin"
+        });
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "duplicate",
+            Description: "重复作品",
+            Url: "https://www.douyin.com/video/duplicate"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "猫咪晒太阳"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "小狗散步",
+            Url: "https://www.douyin.com/video/7604129988555574539"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(Word: "热词", HotValue: 123));
+
+        await context.Douyin.AddAllDouyinDiscoveryItemsToQueueCommand.ExecuteAsync(null);
+
+        Assert.Equal(3, context.BatchContext.Manager.Tasks.Count);
+        Assert.Contains(context.BatchContext.Manager.Tasks, task => task.Url == "https://www.douyin.com/video/7604129988555574538");
+        Assert.Contains(context.BatchContext.Manager.Tasks, task => task.Url == "https://www.douyin.com/video/7604129988555574539");
+        Assert.Contains("已加入 2", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("跳过 1", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("失败 1", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("缺少可下载链接", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelRejectsAddingAllDiscoveryResultsWhenListIsEmpty()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+
+        await context.Douyin.AddAllDouyinDiscoveryItemsToQueueCommand.ExecuteAsync(null);
+
+        Assert.Empty(context.BatchContext.Manager.Tasks);
+        Assert.True(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("暂无发现结果", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DouyinViewModelRejectsDiscoveryItemWithoutDownloadUrl()
     {
         var discovery = new FakeDouyinDiscoveryService();

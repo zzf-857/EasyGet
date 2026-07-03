@@ -155,6 +155,7 @@
                                 <ColumnDefinition Width="96"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <Button Grid.Column="0"
@@ -202,7 +203,21 @@
                                 </StackPanel>
                             </Button>
 
-                            <StackPanel Grid.Column="4"
+                            <Button Grid.Column="4"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="16,8"
+                                    Margin="0,0,10,0"
+                                    ToolTip="把当前发现结果中可下载的条目全部加入队列"
+                                    AutomationProperties.Name="全部加入下载队列"
+                                    Command="{Binding AddAllDouyinDiscoveryItemsToQueueCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="全部入队" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <StackPanel Grid.Column="5"
                                         Orientation="Horizontal"
                                         VerticalAlignment="Center">
                                 <TextBlock Text="{Binding DouyinDiscoveryResultCount, Mode=OneWay, FallbackValue=0}"

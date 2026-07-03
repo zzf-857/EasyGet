@@ -438,6 +438,62 @@ public partial class DouyinViewModel : ObservableObject
         NotifyDouyinDiscoveryStateChanged();
     }
 
+    [RelayCommand]
+    private async Task AddAllDouyinDiscoveryItemsToQueue()
+    {
+        if (DouyinDiscoveryItems.Count == 0)
+        {
+            DouyinDiscoveryErrorMessage = "暂无发现结果可加入下载队列";
+            DouyinDiscoveryStatusText = "暂无发现结果";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        var added = 0;
+        var skipped = 0;
+        var failed = 0;
+
+        foreach (var item in DouyinDiscoveryItems.ToList())
+        {
+            var url = BuildDouyinDiscoveryDownloadUrl(item);
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                failed++;
+                continue;
+            }
+
+            if (_downloadManager.Tasks.Any(task => IsSameUrl(task.Url, url)))
+            {
+                skipped++;
+                continue;
+            }
+
+            var displayTitle = BuildDouyinDiscoveryTaskTitle(item);
+            var task = new DownloadTask
+            {
+                Url = url,
+                Title = displayTitle,
+                Platform = "Douyin",
+                Format = _configService.Config.DefaultFormat,
+                Quality = _configService.Config.DefaultQuality,
+                OutputDirectory = GetDiscoveryOutputDirectory()
+            };
+
+            await _downloadManager.EnqueueAsync(task);
+            if (!string.IsNullOrWhiteSpace(displayTitle))
+                task.Title = displayTitle;
+
+            added++;
+        }
+
+        DouyinDiscoveryStatusText = $"批量入队完成：已加入 {added}，跳过 {skipped}，失败 {failed}";
+        DouyinDiscoveryErrorMessage = failed > 0
+            ? $"{failed} 条发现结果缺少可下载链接"
+            : "";
+        NotifyDouyinTaskStateChanged();
+        NotifyDouyinDiscoveryStateChanged();
+    }
+
     private async Task RunDouyinDiscoveryAsync(DouyinDiscoveryRequest request)
     {
         IsDouyinDiscoveryLoading = true;
