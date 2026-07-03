@@ -323,6 +323,50 @@ class SidecarCliTests(unittest.TestCase):
             self.assertNotIn("sessionid=secret", json.dumps(failure, ensure_ascii=False))
             self.assertNotIn("secret", json.dumps(failure, ensure_ascii=False))
 
+    def assert_raw_cookie_rejection_does_not_leak(self, result, *secrets):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stderr, "")
+        for secret in secrets:
+            self.assertNotIn(secret, result.stdout)
+            self.assertNotIn(secret, result.stderr)
+        failure = json.loads(result.stdout)
+        self.assertEqual(failure["event"], "failed")
+        self.assertIn("Raw Cookie command-line input is not supported", failure["error"])
+        payload = json.dumps(failure, ensure_ascii=False)
+        for secret in secrets:
+            self.assertNotIn(secret, payload)
+
+    def test_raw_cookie_argument_with_extra_token_is_rejected_before_argparse_without_leaking_secret(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--cookie", "sessionid=SENTINEL", "odin_tt=SECOND_SENTINEL"],
+                Path(temp_dir),
+            )
+
+            self.assert_raw_cookie_rejection_does_not_leak(result, "SENTINEL", "SECOND_SENTINEL")
+
+    def test_raw_cookie_equals_argument_is_rejected_without_leaking_secret(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(["--dry-run", "--cookie=sessionid=SENTINEL"], Path(temp_dir))
+
+            self.assert_raw_cookie_rejection_does_not_leak(result, "SENTINEL")
+
+    def test_raw_cookie_argument_with_json_output_format_is_rejected_without_leaking_secret(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--output-format",
+                    "json",
+                    "--dry-run",
+                    "--cookie",
+                    "sessionid=SENTINEL",
+                    "extra=SECOND_SENTINEL",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assert_raw_cookie_rejection_does_not_leak(result, "SENTINEL", "SECOND_SENTINEL")
+
     def test_help_hides_raw_cookie_argument_but_keeps_secure_cookie_sources(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(["--help"], Path(temp_dir))

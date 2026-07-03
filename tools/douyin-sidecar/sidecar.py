@@ -37,6 +37,7 @@ COUNT_RE = re.compile(
 )
 COOKIE_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
 DATE_FILTER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+RAW_COOKIE_CLI_ERROR = "Raw Cookie command-line input is not supported; use --cookie-env or --cookie-file."
 PHASE_ONE_IMPORT_MODULES = (
     "config",
     "auth.cookie_manager",
@@ -269,7 +270,7 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
 def resolve_cookie_source(args: argparse.Namespace) -> Tuple[str, Dict[str, Any]]:
     legacy_cookie = getattr(args, "cookie", "") or ""
     if legacy_cookie:
-        raise CookieSourceError("Raw Cookie command-line input is not supported; use --cookie-env or --cookie-file.")
+        raise CookieSourceError(RAW_COOKIE_CLI_ERROR)
 
     cookie_env = (getattr(args, "cookie_env", "") or "").strip()
     cookie_file = (getattr(args, "cookie_file", "") or "").strip()
@@ -1163,9 +1164,30 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     return args
 
 
+def raw_cookie_argument_requested(argv: Sequence[str]) -> bool:
+    return any(arg == "--cookie" or arg.startswith("--cookie=") for arg in argv)
+
+
+def preparse_output_format(argv: Sequence[str]) -> str:
+    for index, arg in enumerate(argv):
+        if arg == "--output-format=json":
+            return "json"
+        if arg == "--output-format" and index + 1 < len(argv) and argv[index + 1] == "json":
+            return "json"
+    return "jsonl"
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
-        args = parse_args(argv)
+        raw_argv = list(sys.argv[1:] if argv is None else argv)
+        if raw_cookie_argument_requested(raw_argv):
+            write_events(
+                [make_failed_event(RAW_COOKIE_CLI_ERROR, details={"step": "parse_arguments"})],
+                preparse_output_format(raw_argv),
+            )
+            return 2
+
+        args = parse_args(raw_argv)
         if getattr(args, "cookie", ""):
             resolve_cookie_source(args)
         if explicit_secure_cookie_source_requested(args) and (args.emit_sample or args.self_test_imports):

@@ -34,7 +34,6 @@ python -m venv .venv
 ```text
 --url             抖音链接，必填
 --output-dir      下载输出目录，必填
---cookie          Cookie header 字符串或 JSON object，可选；兼容旧调用，不推荐用于真实 Cookie
 --cookie-env      从指定环境变量读取 Cookie；不与 --cookie-file 同用
 --cookie-file     从指定文件读取 Cookie；不与 --cookie-env 同用
 --proxy           HTTP/HTTPS 代理，可选
@@ -170,7 +169,8 @@ python .\tools\douyin-sidecar\sidecar.py `
 
 Cookie 输出规则：
 
-- 推荐用 `--cookie-env ENV_NAME` 或 `--cookie-file PATH` 传入真实 Cookie，避免 Cookie 原文出现在进程命令行。
+- 只能用 `--cookie-env ENV_NAME` 或 `--cookie-file PATH` 传入真实 Cookie，避免 Cookie 原文出现在进程命令行。
+- 命令行原文 Cookie 输入会在 argparse 前被拒绝，并返回 JSONL/JSON `failed` 事件；错误信息不会包含任何原始 argv 内容。
 - `--cookie-env` 和 `--cookie-file` 只能选一个；环境变量缺失/为空、文件不存在/为空都会返回 JSONL `failed` 事件。
 - dry-run 的 `details.cookie_source` 只显示来源类型、环境变量名或文件路径，以及 `redacted=true`；不会输出 Cookie 原文。
 - sidecar 会把 Cookie 写入自己管理的系统临时 config 目录再交给第三方 runner；默认运行结束后删除，不会创建在用户下载输出目录下。该目录不会被 manifest 或输出扫描当成下载文件。
