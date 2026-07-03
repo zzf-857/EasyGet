@@ -737,6 +737,15 @@ public class XamlBindingTests
         Assert.Contains("用户作品模式", texts);
         Assert.Contains("下载数量上限", texts);
         Assert.Contains("文件名模板", texts);
+        Assert.Contains("作品文件夹模板", texts);
+        Assert.Contains("开始时间", texts);
+        Assert.Contains("结束时间", texts);
+        Assert.Contains("包含置顶作品", texts);
+        Assert.Contains("启用本地去重数据库", texts);
+        Assert.Contains("增量下载", texts);
+        Assert.Contains("下载封面", texts);
+        Assert.Contains("下载作者头像", texts);
+        Assert.Contains("下载音乐", texts);
         Assert.Contains("保存原始 JSON", texts);
 
         Assert.Contains("Download.Url", source);
@@ -745,6 +754,16 @@ public class XamlBindingTests
         Assert.Contains("Settings.EnableDouyinSpecialEngine", source);
         Assert.Contains("Settings.DouyinMode", source);
         Assert.Contains("Settings.DouyinDownloadComments", source);
+        Assert.Contains("Settings.DouyinFolderTemplate", source);
+        Assert.Contains("Settings.DouyinStartTime", source);
+        Assert.Contains("Settings.DouyinEndTime", source);
+        Assert.Contains("Settings.DouyinDownloadPinned", source);
+        Assert.Contains("Settings.DouyinEnableDatabase", source);
+        Assert.Contains("Settings.DouyinIncrementalDownload", source);
+        Assert.Contains("Settings.DouyinDownloadCover", source);
+        Assert.Contains("Settings.DouyinDownloadAvatar", source);
+        Assert.Contains("Settings.DouyinDownloadMusic", source);
+        Assert.Contains("Settings.DouyinDownloadJson", source);
         Assert.Contains("DouyinTaskItems", source);
         Assert.Contains("Batch.PauseTaskCommand", source);
         Assert.Contains("Batch.ResumeTaskCommand", source);
