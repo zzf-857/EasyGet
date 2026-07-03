@@ -13,7 +13,7 @@ public class ConfigService
     private static readonly string[] SupportedFormats = ["mp4", "mkv", "webm", "mp3", "m4a"];
     private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
     private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
-    private static readonly string[] SupportedDouyinModes = ["post", "like", "mix", "music"];
+    private static readonly string[] SupportedDouyinModes = ["post", "like", "mix", "music", "collect", "collectmix"];
 
     private static readonly string DefaultConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");

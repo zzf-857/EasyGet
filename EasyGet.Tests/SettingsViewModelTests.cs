@@ -102,7 +102,7 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinDownloadAvatar", expected: true);
         AssertViewModelBool(viewModel, "DouyinEnableDatabase", expected: true);
         AssertViewModelBool(viewModel, "DouyinIncrementalDownload", expected: true);
-        Assert.Equal(new[] { "post", "like", "mix", "music" }, viewModel.DouyinModeOptions);
+        Assert.Equal(new[] { "post", "like", "mix", "music", "collect", "collectmix" }, viewModel.DouyinModeOptions);
     }
 
     [Fact]
@@ -140,6 +140,8 @@ public class SettingsViewModelTests
     [InlineData("like")]
     [InlineData("mix")]
     [InlineData("music")]
+    [InlineData("collect")]
+    [InlineData("collectmix")]
     public async Task SaveSettingsCommand_PersistsSupportedDouyinUserModes(string mode)
     {
         var config = CreateTempConfigService();

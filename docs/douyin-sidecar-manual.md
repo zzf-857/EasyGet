@@ -38,7 +38,7 @@ python -m venv .venv
 --cookie-env      从指定环境变量读取 Cookie；不与 --cookie-file 同用
 --cookie-file     从指定文件读取 Cookie；不与 --cookie-env 同用
 --proxy           HTTP/HTTPS 代理，可选
---mode            用户主页批量模式；支持 post、like、mix、music，可用逗号组合
+--mode            用户主页批量模式；支持 post、like、mix、music、collect、collectmix，可用逗号组合；collect/collectmix 仅适用于已登录账号收藏
 --limit           每个 mode 的数量限制；0 表示不限，默认 1
 --include-cover   下载封面；默认 false
 --include-music   下载音乐/音频副产物；默认 false
@@ -182,7 +182,7 @@ Cookie 输出规则：
 
 - 调用第三方 `douyin-downloader-promax/run.py`
 - 通过临时 config 传入 `url`、`output_dir`、`cookie`、`proxy`、`mode`、`limit`、`include-cover`、`include-music`、`include-json`
-- 支持第三方已有能力：单视频 `/video`、图文 `/note`/`/gallery`、用户主页 `post`/`like`/`mix`/`music` 批量、合集/混剪/音乐单链接 `/collection`/`/mix`/`/music`
+- 支持第三方已有能力：单视频 `/video`、图文 `/note`/`/gallery`、用户主页 `post`/`like`/`mix`/`music` 批量、本人收藏 `collect`/`collectmix`、合集/混剪/音乐单链接 `/collection`/`/mix`/`/music`
 - 读取 `download_manifest.jsonl` 汇总 `output_files`
 - C# runner 默认从 `AppContext.BaseDirectory` 向上优先寻找 `tools\douyin-sidecar\sidecar.py`，便于开发联调；发布包仍可放置 `sidecars\douyin\EasyGet.DouyinSidecar.exe` 或 `sidecars\douyin_sidecar.py`
 - C# runner 仍会传 `--format`、`--quality`、`--title`；Python sidecar 接受这些兼容参数并在 `--dry-run` 的 `details.runner_options` 中记录非空值，但当前不改变第三方下载配置

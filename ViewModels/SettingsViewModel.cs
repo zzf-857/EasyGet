@@ -113,7 +113,7 @@ public partial class SettingsViewModel : ObservableObject
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
     public string[] QualityOptions { get; } = ["最高画质", "2160p", "1080p", "720p", "480p"];
-    public string[] DouyinModeOptions { get; } = ["post", "like", "mix", "music"];
+    public string[] DouyinModeOptions { get; } = ["post", "like", "mix", "music", "collect", "collectmix"];
 
     public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);

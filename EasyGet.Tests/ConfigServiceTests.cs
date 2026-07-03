@@ -160,6 +160,8 @@ public class ConfigServiceTests
     [InlineData("like")]
     [InlineData("mix")]
     [InlineData("music")]
+    [InlineData("collect")]
+    [InlineData("collectmix")]
     public void NormalizeRuntimeConfig_AllowsSupportedDouyinUserModes(string mode)
     {
         var config = new AppConfig
@@ -179,7 +181,7 @@ public class ConfigServiceTests
     {
         var config = new AppConfig
         {
-            DouyinMode = "collect",
+            DouyinMode = "favorites",
             DouyinLimit = -5,
             DouyinDownloadCover = true,
             DouyinDownloadMusic = true,

@@ -406,7 +406,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="启用专项引擎" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="抖音单作品、图文、合集、音乐和用户主页可使用 sidecar。"
+                                <TextBlock Text="抖音单作品、图文、合集、音乐、用户主页和本人收藏可使用 sidecar。"
                                            Style="{StaticResource TextBody}"
                                            TextWrapping="Wrap"
                                            Margin="0,4,0,0"/>
@@ -424,7 +424,10 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="用户作品模式" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="用于用户主页批量下载" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                                <TextBlock Text="post/like/mix/music 用于用户主页；collect/collectmix 用于已登录账号收藏"
+                                           Style="{StaticResource TextBody}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
                             </StackPanel>
                             <ComboBox Grid.Column="1"
                                       Style="{StaticResource DarkComboBox}"

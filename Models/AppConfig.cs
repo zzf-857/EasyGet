@@ -50,7 +50,7 @@ public class AppConfig
     /// <summary>是否启用抖音专项引擎配置（下载流程接线后生效）</summary>
     public bool EnableDouyinSpecialEngine { get; set; } = false;
 
-    /// <summary>抖音用户主页批量模式（post, like, mix, music）</summary>
+    /// <summary>抖音用户主页批量模式（post, like, mix, music, collect, collectmix）</summary>
     public string DouyinMode { get; set; } = "post";
 
     /// <summary>抖音用户作品下载数量上限；0 表示不限制</summary>

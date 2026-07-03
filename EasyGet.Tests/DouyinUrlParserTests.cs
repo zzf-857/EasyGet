@@ -25,6 +25,7 @@ public class DouyinUrlParserTests
     [InlineData("https://www.douyin.com/gallery/7333344556677889900", "Gallery", "7333344556677889900")]
     [InlineData("https://www.douyin.com/slides/7223344556677889900", "Slides", "7223344556677889900")]
     [InlineData("https://www.douyin.com/user/MS4wLjABAAAAsec_uid-test_123", "User", "MS4wLjABAAAAsec_uid-test_123")]
+    [InlineData("https://www.douyin.com/user/self?showTab=favorite_collection", "User", "self")]
     [InlineData("https://www.douyin.com/collection/7123456789012345678", "Collection", "7123456789012345678")]
     [InlineData("https://www.douyin.com/mix/7123456789012345678", "Mix", "7123456789012345678")]
     [InlineData("https://www.douyin.com/music/7123456789012345678", "Music", "7123456789012345678")]

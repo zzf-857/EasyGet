@@ -88,6 +88,21 @@ class SidecarCliTests(unittest.TestCase):
             self.assertEqual(config["number"]["music"], 5)
             self.assertEqual(config["number"]["allmix"], 5)
 
+    def test_dry_run_maps_collect_modes_to_third_party_number_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--mode", "collect,collectmix", "--limit", "7"],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["mode"], ["collect", "collectmix"])
+            self.assertEqual(config["number"]["post"], 0)
+            self.assertEqual(config["number"]["collect"], 7)
+            self.assertEqual(config["number"]["collectmix"], 7)
+
     def test_dry_run_accepts_csharp_runner_arguments_and_include_flags(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(

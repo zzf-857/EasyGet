@@ -1080,7 +1080,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--cookie-env", default="", help="Read Cookie header string or JSON object from this environment variable")
     parser.add_argument("--cookie-file", default="", help="Read Cookie header string or JSON object from this file")
     parser.add_argument("--proxy", default="", help="HTTP/HTTPS proxy, for example http://127.0.0.1:7890")
-    parser.add_argument("--mode", default="post", help="User modes for profile downloads, for example post or like,mix,music")
+    parser.add_argument("--mode", default="post", help="User modes for profile downloads, for example post, like,mix,music, collect, or collectmix")
     parser.add_argument("--limit", type=int, default=1, help="Per-mode item limit; 0 means unlimited")
     parser.add_argument("--include-cover", action="store_true", help="Download cover images when supported")
     parser.add_argument("--include-avatar", action="store_true", help="Download author avatar images when supported")
