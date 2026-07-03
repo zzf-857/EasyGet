@@ -108,7 +108,9 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinEnableDatabase", expected: true);
         AssertViewModelBool(viewModel, "DouyinIncrementalDownload", expected: true);
         AssertViewModelBool(viewModel, "DouyinDownloadPinned", expected: true);
-        Assert.Equal(new[] { "post", "like", "mix", "music", "collect", "collectmix" }, viewModel.DouyinModeOptions);
+        Assert.Equal(
+            ["post", "like", "mix", "music", "post,like,mix,music", "collect", "collectmix"],
+            viewModel.DouyinModeOptions);
     }
 
     [Fact]
@@ -210,6 +212,22 @@ public class SettingsViewModelTests
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
 
         Assert.Equal(mode, config.Config.DouyinMode);
+        Assert.Equal(4, config.Config.DouyinLimit);
+    }
+
+    [Fact]
+    public async Task SaveSettingsCommand_PersistsNormalizedDouyinMultiMode()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.EnableDouyinSpecialEngine = true;
+        viewModel.DouyinMode = " like, mix , music ";
+        viewModel.DouyinLimit = 4;
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        Assert.Equal("like,mix,music", config.Config.DouyinMode);
+        Assert.Equal("like,mix,music", viewModel.DouyinMode);
         Assert.Equal(4, config.Config.DouyinLimit);
     }
 

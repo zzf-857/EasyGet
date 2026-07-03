@@ -424,7 +424,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="用户作品模式" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="post/like/mix/music 用于用户主页；collect/collectmix 用于已登录账号收藏"
+                                <TextBlock Text="用户主页可用逗号组合，例如 like,mix,music；collect/collectmix 仅单独用于已登录账号收藏"
                                            Style="{StaticResource TextBody}"
                                            TextWrapping="Wrap"
                                            Margin="0,4,0,0"/>
@@ -432,7 +432,8 @@
                             <ComboBox Grid.Column="1"
                                       Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding DouyinModeOptions}"
-                                      SelectedItem="{Binding DouyinMode}"
+                                      Text="{Binding DouyinMode, UpdateSourceTrigger=LostFocus}"
+                                      IsEditable="True"
                                       IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
                         </Grid>
 

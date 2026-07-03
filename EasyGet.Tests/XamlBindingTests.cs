@@ -735,6 +735,7 @@ public class XamlBindingTests
         Assert.Contains("专项设置", texts);
         Assert.Contains("启用专项引擎", texts);
         Assert.Contains("用户作品模式", texts);
+        Assert.Contains(texts, text => text.Contains("逗号组合", StringComparison.Ordinal));
         Assert.Contains("下载数量上限", texts);
         Assert.Contains("文件名模板", texts);
         Assert.Contains("作品文件夹模板", texts);
@@ -753,6 +754,8 @@ public class XamlBindingTests
         Assert.Contains("Download.StartDownloadCommand", source);
         Assert.Contains("Settings.EnableDouyinSpecialEngine", source);
         Assert.Contains("Settings.DouyinMode", source);
+        Assert.Contains("Text=\"{Binding Settings.DouyinMode, UpdateSourceTrigger=LostFocus}\"", source);
+        Assert.Contains("IsEditable=\"True\"", source);
         Assert.Contains("Settings.DouyinDownloadComments", source);
         Assert.Contains("Settings.DouyinFolderTemplate", source);
         Assert.Contains("Settings.DouyinStartTime", source);
@@ -1049,6 +1052,8 @@ public class XamlBindingTests
         Assert.Contains("EnableDouyinSpecialEngine", source);
         Assert.Contains("DouyinModeOptions", source);
         Assert.Contains("DouyinMode", source);
+        Assert.Contains("Text=\"{Binding DouyinMode, UpdateSourceTrigger=LostFocus}\"", source);
+        Assert.Contains("IsEditable=\"True\"", source);
         Assert.Contains("DouyinLimit", source);
         Assert.Contains("DouyinFilenameTemplate", source);
         Assert.Contains("DouyinFolderTemplate", source);

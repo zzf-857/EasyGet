@@ -878,7 +878,7 @@ internal sealed record DouyinSidecarRequest(
             Title: NormalizeText(task.Title),
             Cookie: NormalizeText(config?.CookieContent),
             Proxy: proxy,
-            Mode: NormalizeText(config?.DouyinMode, "post"),
+            Mode: ConfigService.NormalizeDouyinMode(config?.DouyinMode),
             Limit: Math.Max(0, config?.DouyinLimit ?? 1),
             StartTime: NormalizeText(config?.DouyinStartTime),
             EndTime: NormalizeText(config?.DouyinEndTime),

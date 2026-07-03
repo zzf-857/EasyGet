@@ -933,7 +933,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="用户作品模式" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="用于主页、合集、音乐或收藏类批量下载。"
+                                <TextBlock Text="用户主页可用逗号组合，例如 like,mix,music；收藏模式需单独使用。"
                                            Style="{StaticResource TextBody}"
                                            TextWrapping="Wrap"
                                            Margin="0,4,0,0"/>
@@ -941,7 +941,8 @@
                             <ComboBox Grid.Column="1"
                                       Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding Settings.DouyinModeOptions}"
-                                      SelectedItem="{Binding Settings.DouyinMode}"
+                                      Text="{Binding Settings.DouyinMode, UpdateSourceTrigger=LostFocus}"
+                                      IsEditable="True"
                                       IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
                         </Grid>
 

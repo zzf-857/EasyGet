@@ -175,7 +175,7 @@ public class ConfigService
         config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
         config.ProxyAddress = config.ProxyAddress?.Trim() ?? "";
         config.CookieContent ??= "";
-        config.DouyinMode = NormalizeOption(config.DouyinMode, SupportedDouyinModes, defaults.DouyinMode);
+        config.DouyinMode = NormalizeDouyinMode(config.DouyinMode, defaults.DouyinMode);
         config.DouyinLimit = Math.Max(0, config.DouyinLimit);
         config.DouyinFilenameTemplate = NormalizeDouyinTemplate(config.DouyinFilenameTemplate);
         config.DouyinFolderTemplate = NormalizeDouyinTemplate(config.DouyinFolderTemplate);
@@ -205,6 +205,32 @@ public class ConfigService
         }
 
         return defaultValue;
+    }
+
+    internal static string NormalizeDouyinMode(string? value, string defaultValue = "post")
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return defaultValue;
+
+        var normalizedModes = new List<string>();
+        foreach (var rawMode in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var mode = SupportedDouyinModes.FirstOrDefault(
+                supported => string.Equals(rawMode, supported, StringComparison.OrdinalIgnoreCase));
+            if (mode is null)
+                return defaultValue;
+            if (!normalizedModes.Contains(mode, StringComparer.Ordinal))
+                normalizedModes.Add(mode);
+        }
+
+        if (normalizedModes.Count == 0)
+            return defaultValue;
+
+        var containsCollectionMode = normalizedModes.Any(mode => mode is "collect" or "collectmix");
+        if (containsCollectionMode && normalizedModes.Count > 1)
+            return defaultValue;
+
+        return string.Join(",", normalizedModes);
     }
 
     internal static string NormalizeDouyinTemplate(string? value)

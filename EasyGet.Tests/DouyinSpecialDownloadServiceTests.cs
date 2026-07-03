@@ -598,7 +598,7 @@ public class DouyinSpecialDownloadServiceTests
             CookieContent = "ttwid=abc; odin_tt=def",
             UseProxy = true,
             ProxyAddress = "http://127.0.0.1:7890",
-            DouyinMode = "post",
+            DouyinMode = " like, mix , music ",
             DouyinLimit = 12,
             DouyinDownloadCover = true,
             DouyinDownloadMusic = false,
@@ -624,7 +624,7 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Equal("existing title", GetRequestValue<string>(runner.LastRequest, "Title"));
         Assert.Equal("ttwid=abc; odin_tt=def", GetRequestValue<string>(runner.LastRequest, "Cookie"));
         Assert.Equal("http://127.0.0.1:7890", GetRequestValue<string>(runner.LastRequest, "Proxy"));
-        Assert.Equal("post", GetRequestValue<string>(runner.LastRequest, "Mode"));
+        Assert.Equal("like,mix,music", GetRequestValue<string>(runner.LastRequest, "Mode"));
         Assert.Equal(12, GetRequestValue<int>(runner.LastRequest, "Limit"));
         Assert.Equal("2024-01-01", GetRequestValue<string>(runner.LastRequest, "StartTime"));
         Assert.Equal("2024-01-31", GetRequestValue<string>(runner.LastRequest, "EndTime"));

@@ -176,6 +176,42 @@ public class ConfigServiceTests
         Assert.Equal(5, config.DouyinLimit);
     }
 
+    [Theory]
+    [InlineData("post,like,mix,music", "post,like,mix,music")]
+    [InlineData(" like, mix , music ", "like,mix,music")]
+    [InlineData("POST,Like,MIX", "post,like,mix")]
+    [InlineData("post,post,like", "post,like")]
+    public void NormalizeRuntimeConfig_AllowsSupportedDouyinMultiModes(
+        string mode,
+        string expected)
+    {
+        var config = new AppConfig
+        {
+            DouyinMode = mode
+        };
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        Assert.Equal(expected, config.DouyinMode);
+    }
+
+    [Theory]
+    [InlineData("collect,post")]
+    [InlineData("collectmix,like")]
+    [InlineData("post,unknown")]
+    [InlineData(",")]
+    public void NormalizeRuntimeConfig_DefaultsInvalidDouyinMultiModes(string mode)
+    {
+        var config = new AppConfig
+        {
+            DouyinMode = mode
+        };
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        Assert.Equal("post", config.DouyinMode);
+    }
+
     [Fact]
     public void NormalizeRuntimeConfig_SanitizesDouyinSpecialOptions()
     {
