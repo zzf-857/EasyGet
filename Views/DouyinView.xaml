@@ -555,10 +555,12 @@
                                                                                    TextTrimming="CharacterEllipsis"
                                                                                    Visibility="{Binding TagsText, Converter={StaticResource StringToVisibility}}"
                                                                                    Margin="0,4,0,0"/>
-                                                                        <TextBlock Text="{Binding FileNamesText, Mode=OneWay}"
+                                                                        <TextBlock Text="{Binding FileRoleSummaryText, Mode=OneWay}"
                                                                                    Style="{StaticResource TextCaption}"
+                                                                                   Foreground="{DynamicResource AccentBrush}"
                                                                                    TextTrimming="CharacterEllipsis"
-                                                                                   Visibility="{Binding FileNamesText, Converter={StaticResource StringToVisibility}}"
+                                                                                   ToolTip="{Binding FileNamesText, Mode=OneWay}"
+                                                                                   Visibility="{Binding FileRoleSummaryText, Converter={StaticResource StringToVisibility}}"
                                                                                    Margin="0,4,0,0"/>
                                                                     </StackPanel>
 

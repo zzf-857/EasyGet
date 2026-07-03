@@ -764,6 +764,10 @@ public class XamlBindingTests
         Assert.Contains("FileCountText", source);
         Assert.Contains("TagsText", source);
         Assert.Contains("FileNamesText", source);
+        Assert.Contains("FileRoleSummaryText", source);
+        Assert.Contains("Text=\"{Binding FileRoleSummaryText, Mode=OneWay}\"", source);
+        Assert.Contains("Visibility=\"{Binding FileRoleSummaryText, Converter={StaticResource StringToVisibility}}\"", source);
+        Assert.Contains("ToolTip=\"{Binding FileNamesText, Mode=OneWay}\"", source);
         Assert.Contains("DouyinHistoryItems", source);
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
