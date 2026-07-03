@@ -10,6 +10,8 @@ namespace EasyGet.ViewModels;
 
 public partial class DouyinViewModel : ObservableObject
 {
+    private const int MaxRecentAuthorItems = 8;
+
     private readonly DownloadManager _downloadManager;
     private readonly HashSet<DownloadTask> _subscribedTasks = [];
 
@@ -39,6 +41,7 @@ public partial class DouyinViewModel : ObservableObject
     public ObservableCollection<DownloadTask> DouyinTaskItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinHistoryItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinManifestSummaryItems { get; } = [];
+    public ObservableCollection<DouyinRecentAuthorItem> DouyinRecentAuthorItems { get; } = [];
 
     public int DouyinTaskCount => CountDouyinTasks();
 
@@ -65,6 +68,8 @@ public partial class DouyinViewModel : ObservableObject
     public bool HasDouyinArchiveItems => DouyinArchiveCount > 0;
 
     public bool HasFilteredDouyinArchiveItems => FilteredDouyinArchiveCount > 0;
+
+    public bool HasDouyinRecentAuthorItems => DouyinRecentAuthorItems.Count > 0;
 
     public bool IsDouyinArchiveFilterActive
         => !string.IsNullOrWhiteSpace(DouyinArchiveSearchKeyword)
@@ -229,6 +234,7 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(HasFilteredDouyinArchiveItems));
         OnPropertyChanged(nameof(DouyinManifestSummaryItems));
         OnPropertyChanged(nameof(DouyinManifestSummaryCount));
+        SyncDouyinRecentAuthorItems();
     }
 
     private int CountDouyinTasks(Func<DownloadTask, bool>? predicate = null)
@@ -293,6 +299,24 @@ public partial class DouyinViewModel : ObservableObject
         SyncDouyinHistoryItems();
     }
 
+    [RelayCommand]
+    private void SetDouyinArchiveAuthorFilter(string authorName)
+    {
+        if (string.IsNullOrWhiteSpace(authorName))
+            return;
+
+        DouyinArchiveSearchKeyword = authorName.Trim();
+        SelectedDouyinArchiveTypeFilter = "全部";
+        SyncDouyinHistoryItems();
+    }
+
+    [RelayCommand]
+    private async Task LoadDouyinWorkspace()
+    {
+        await History.LoadAllHistoryForWorkspace();
+        SyncDouyinHistoryItems();
+    }
+
     private bool MatchesTaskCenterFilter(DownloadTask task)
         => MatchesSelectedTaskStatus(task) && MatchesTaskSearchKeyword(task);
 
@@ -331,6 +355,59 @@ public partial class DouyinViewModel : ObservableObject
 
     private int CountDouyinHistoryItems()
         => History.HistoryItems.Count(IsDouyinHistoryItem);
+
+    private void SyncDouyinRecentAuthorItems()
+    {
+        var authors = History.HistoryItems
+            .Where(IsDouyinHistoryItem)
+            .SelectMany(item => EnumerateManifestAuthorSummaries(item)
+                .Select(author => new
+                {
+                    author.AuthorName,
+                    author.WorkCount,
+                    item.DownloadTime
+                }))
+            .GroupBy(item => item.AuthorName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new DouyinRecentAuthorItem(
+                group.First().AuthorName,
+                group.Sum(item => item.WorkCount),
+                group.Max(item => item.DownloadTime)))
+            .OrderByDescending(item => item.WorkCount)
+            .ThenByDescending(item => item.LatestDownloadTime)
+            .ThenBy(item => item.AuthorName, StringComparer.Ordinal)
+            .Take(MaxRecentAuthorItems)
+            .ToList();
+
+        DouyinRecentAuthorItems.Clear();
+        foreach (var author in authors)
+        {
+            DouyinRecentAuthorItems.Add(author);
+        }
+
+        OnPropertyChanged(nameof(DouyinRecentAuthorItems));
+        OnPropertyChanged(nameof(HasDouyinRecentAuthorItems));
+    }
+
+    private static IEnumerable<DouyinManifestAuthorSummary> EnumerateManifestAuthorSummaries(DownloadHistory item)
+    {
+        if (item.DouyinManifestSummary?.Authors.Count > 0)
+        {
+            foreach (var author in item.DouyinManifestSummary.Authors)
+            {
+                if (!string.IsNullOrWhiteSpace(author.AuthorName) && author.WorkCount > 0)
+                    yield return new DouyinManifestAuthorSummary(author.AuthorName.Trim(), author.WorkCount);
+            }
+
+            yield break;
+        }
+
+        foreach (var group in item.DouyinManifestItems
+                     .Where(manifestItem => !string.IsNullOrWhiteSpace(manifestItem.AuthorName))
+                     .GroupBy(manifestItem => manifestItem.AuthorName.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+            yield return new DouyinManifestAuthorSummary(group.First().AuthorName.Trim(), group.Count());
+        }
+    }
 
     private bool MatchesArchiveFilter(DownloadHistory item)
         => MatchesArchiveTypeFilter(item) && MatchesArchiveSearchKeyword(item);

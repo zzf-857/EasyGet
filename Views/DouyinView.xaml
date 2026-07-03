@@ -3,7 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
              Background="Transparent"
-             behaviors:Motion.PageEnter="True">
+             behaviors:Motion.PageEnter="True"
+             Loaded="DouyinView_Loaded">
 
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="32,28,32,32" MaxWidth="980" HorizontalAlignment="Center">
@@ -752,6 +753,46 @@
                                         <TextBlock Text="清除筛选" Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </Button>
+                            </Grid>
+
+                            <Grid DockPanel.Dock="Top"
+                                  Margin="0,0,0,12"
+                                  Visibility="{Binding HasDouyinRecentAuthorItems, Converter={StaticResource BoolToVisibility}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0"
+                                           Text="最近下载作者"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           VerticalAlignment="Top"
+                                           Margin="0,6,10,0"/>
+                                <ItemsControl Grid.Column="1"
+                                              ItemsSource="{Binding DouyinRecentAuthorItems}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <WrapPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Style="{StaticResource SurfaceButton}"
+                                                    Command="{Binding DataContext.SetDouyinArchiveAuthorFilterCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding AuthorName}"
+                                                    ToolTip="{Binding AuthorName}"
+                                                    AutomationProperties.Name="{Binding AuthorName}"
+                                                    Margin="0,0,8,8"
+                                                    Padding="10,5">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{Binding AuthorName}" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text=" · " Style="{StaticResource TextCaption}" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding WorkCountText}" Style="{StaticResource TextCaption}" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
                             </Grid>
 
                             <ListBox ItemsSource="{Binding DouyinHistoryItems}"

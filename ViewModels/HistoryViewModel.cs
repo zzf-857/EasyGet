@@ -36,10 +36,8 @@ public partial class HistoryViewModel : ObservableObject
 
     partial void OnSearchKeywordChanged(string value)
     {
-        var previousSearchCts = _searchCts;
-        previousSearchCts?.Cancel();
+        CancelPendingSearch();
         _searchCts = new CancellationTokenSource();
-        previousSearchCts?.Dispose();
 
         _ = DebouncedLoadHistoryAsync(_searchCts.Token);
     }
@@ -144,12 +142,31 @@ public partial class HistoryViewModel : ObservableObject
     [RelayCommand]
     public async Task LoadHistory()
     {
-        var items = await _historyService.GetAllAsync(
-            string.IsNullOrWhiteSpace(SearchKeyword) ? null : SearchKeyword);
+        await LoadHistoryCore(
+            string.IsNullOrWhiteSpace(SearchKeyword) ? null : SearchKeyword,
+            SelectedMediaFilter);
+    }
 
+    public Task LoadAllHistoryForWorkspace()
+    {
+        CancelPendingSearch();
+        return LoadHistoryCore(null, "全部");
+    }
+
+    private void CancelPendingSearch()
+    {
+        var previousSearchCts = _searchCts;
+        _searchCts = null;
+        previousSearchCts?.Cancel();
+        previousSearchCts?.Dispose();
+    }
+
+    private async Task LoadHistoryCore(string? searchKeyword, string mediaFilter)
+    {
+        var items = await _historyService.GetAllAsync(searchKeyword);
         TotalHistoryCount = items.Count;
         var filteredItems = items
-            .Where(item => MatchesMediaFilter(item, SelectedMediaFilter))
+            .Where(item => MatchesMediaFilter(item, mediaFilter))
             .ToList();
 
         var fileExistsResults = await Task.Run(() => filteredItems

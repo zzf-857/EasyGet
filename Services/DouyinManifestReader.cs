@@ -32,6 +32,7 @@ public static class DouyinManifestReader
             var workIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var items = new List<DouyinManifestItem>();
             var searchText = new StringBuilder();
+            var authors = new Dictionary<string, (string AuthorName, int WorkCount)>(StringComparer.OrdinalIgnoreCase);
 
             using var reader = new StreamReader(manifestPath);
             for (var lineIndex = 0; lineIndex < maxLines; lineIndex++)
@@ -65,6 +66,7 @@ public static class DouyinManifestReader
                 }
 
                 fileCount += item.FileCount;
+                AddAuthor(authors, item.AuthorName);
                 AppendSearchText(
                     searchText,
                     item.AwemeId,
@@ -93,6 +95,9 @@ public static class DouyinManifestReader
                     isTruncated,
                     items,
                     searchText.ToString())
+                {
+                    Authors = BuildAuthorSummaries(authors)
+                }
                 : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or PathTooLongException)
@@ -130,6 +135,29 @@ public static class DouyinManifestReader
             return null;
         }
     }
+
+    private static void AddAuthor(Dictionary<string, (string AuthorName, int WorkCount)> authors, string authorName)
+    {
+        if (string.IsNullOrWhiteSpace(authorName))
+            return;
+
+        var normalized = authorName.Trim();
+        if (authors.TryGetValue(normalized, out var current))
+        {
+            authors[normalized] = (current.AuthorName, current.WorkCount + 1);
+            return;
+        }
+
+        authors[normalized] = (normalized, 1);
+    }
+
+    private static IReadOnlyList<DouyinManifestAuthorSummary> BuildAuthorSummaries(
+        Dictionary<string, (string AuthorName, int WorkCount)> authors)
+        => authors.Values
+            .Select(author => new DouyinManifestAuthorSummary(author.AuthorName, author.WorkCount))
+            .OrderByDescending(author => author.WorkCount)
+            .ThenBy(author => author.AuthorName, StringComparer.Ordinal)
+            .ToList();
 
     private static void AppendSearchText(StringBuilder builder, params string[] values)
     {

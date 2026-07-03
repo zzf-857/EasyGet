@@ -801,6 +801,13 @@ public class XamlBindingTests
         Assert.Contains("HasFilteredDouyinArchiveItems", source);
         Assert.Contains("IsDouyinArchiveFilterActive", source);
         Assert.Contains("ClearDouyinArchiveFiltersCommand", source);
+        Assert.Contains("DouyinRecentAuthorItems", source);
+        Assert.Contains("HasDouyinRecentAuthorItems", source);
+        Assert.Contains("SetDouyinArchiveAuthorFilterCommand", source);
+        Assert.Contains("LoadDouyinWorkspaceCommand", File.ReadAllText(GetRootPath(Path.Combine("Views", "DouyinView.xaml.cs"))));
+        Assert.Contains("Loaded=\"DouyinView_Loaded\"", source);
+        Assert.Contains("最近下载作者", source);
+        Assert.Contains("WorkCountText", source);
         Assert.Contains("搜索作者、标题、作品 ID 或标签", source);
         Assert.Contains("未找到匹配作品", source);
         Assert.Contains("换个关键词或清除筛选再试", source);

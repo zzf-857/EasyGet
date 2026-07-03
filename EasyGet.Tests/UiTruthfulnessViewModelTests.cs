@@ -453,6 +453,211 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelBuildsRecentAuthorShortcutsFromManifestItems()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "较早批量",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/user/older",
+            DownloadTime = new DateTime(2026, 7, 1, 10, 0, 0),
+            DouyinManifestSummaryText = "作品 3 / 视频 3 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                3,
+                3,
+                3,
+                0,
+                0,
+                0,
+                3,
+                false,
+                [
+                    new DouyinManifestItem("older-a1", "video", "视频", "作者 A 的视频 1", "作者 A", "2026-07-01", "", [], ["a1.mp4"]),
+                    new DouyinManifestItem("older-a2", "video", "视频", "作者 A 的视频 2", "作者 A", "2026-07-01", "", [], ["a2.mp4"]),
+                    new DouyinManifestItem("older-b1", "video", "视频", "作者 B 的视频 1", "作者 B", "2026-07-01", "", [], ["b1.mp4"])
+                ])
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "较新批量",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/user/newer",
+            DownloadTime = new DateTime(2026, 7, 3, 10, 0, 0),
+            DouyinManifestSummaryText = "作品 2 / 视频 2 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                2,
+                2,
+                2,
+                0,
+                0,
+                0,
+                2,
+                false,
+                [
+                    new DouyinManifestItem("newer-b1", "video", "视频", "作者 B 的视频 2", "作者 B", "2026-07-03", "", [], ["b2.mp4"]),
+                    new DouyinManifestItem("newer-c1", "video", "视频", "作者 C 的视频 1", "作者 C", "2026-07-03", "", [], ["c1.mp4"])
+                ])
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "非抖音作者",
+            Platform = "YouTube",
+            Url = "https://youtube.com/watch?v=abc",
+            DownloadTime = new DateTime(2026, 7, 4, 10, 0, 0),
+            DouyinManifestSummary = new DouyinManifestSummary(
+                1,
+                1,
+                1,
+                0,
+                0,
+                0,
+                1,
+                false,
+                [
+                    new DouyinManifestItem("ignored", "video", "视频", "不应纳入", "作者 Z", "2026-07-04", "", [], ["z.mp4"])
+                ])
+        });
+
+        Assert.True(context.Douyin.HasDouyinRecentAuthorItems);
+        Assert.Collection(
+            context.Douyin.DouyinRecentAuthorItems,
+            item =>
+            {
+                Assert.Equal("作者 B", item.AuthorName);
+                Assert.Equal(2, item.WorkCount);
+                Assert.Equal("2 个作品", item.WorkCountText);
+            },
+            item =>
+            {
+                Assert.Equal("作者 A", item.AuthorName);
+                Assert.Equal(2, item.WorkCount);
+            },
+            item =>
+            {
+                Assert.Equal("作者 C", item.AuthorName);
+                Assert.Equal(1, item.WorkCount);
+                Assert.Equal("1 个作品", item.WorkCountText);
+            });
+    }
+
+    [Fact]
+    public void DouyinViewModelBuildsRecentAuthorShortcutsFromFullManifestAuthorSummary()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "截断批量",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/user/truncated",
+            DownloadTime = new DateTime(2026, 7, 3, 10, 0, 0),
+            DouyinManifestSummaryText = "作品 25 / 视频 20 / 图文 5 / 附属 25",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                25,
+                25,
+                20,
+                5,
+                0,
+                0,
+                25,
+                true,
+                [
+                    new DouyinManifestItem("video-1", "video", "视频", "展示视频", "作者 A", "2026-07-03", "", [], ["video_1.mp4"])
+                ])
+            {
+                Authors =
+                [
+                    new DouyinManifestAuthorSummary("作者 A", 20),
+                    new DouyinManifestAuthorSummary("作者 Z", 5)
+                ]
+            }
+        });
+
+        Assert.Collection(
+            context.Douyin.DouyinRecentAuthorItems,
+            item =>
+            {
+                Assert.Equal("作者 A", item.AuthorName);
+                Assert.Equal(20, item.WorkCount);
+            },
+            item =>
+            {
+                Assert.Equal("作者 Z", item.AuthorName);
+                Assert.Equal(5, item.WorkCount);
+            });
+    }
+
+    [Fact]
+    public async Task DouyinViewModelLoadsWorkspaceHistoryIndependentlyFromHistoryPageFilters()
+    {
+        using var context = CreateViewModelContext();
+        await context.BatchContext.History.AddAsync(new DownloadHistory
+        {
+            Title = "数据库里的抖音视频",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/video/db-video",
+            Format = "mp4",
+            DownloadTime = new DateTime(2026, 7, 3, 10, 0, 0)
+        });
+        await context.BatchContext.History.AddAsync(new DownloadHistory
+        {
+            Title = "数据库里的非抖音音频",
+            Platform = "YouTube",
+            Url = "https://youtube.com/watch?v=abc",
+            Format = "mp3",
+            DownloadTime = new DateTime(2026, 7, 3, 11, 0, 0)
+        });
+        context.History.SearchKeyword = "no-match";
+        context.History.SelectedMediaFilter = "音频";
+
+        await context.Douyin.LoadDouyinWorkspaceCommand.ExecuteAsync(null);
+
+        Assert.Equal("no-match", context.History.SearchKeyword);
+        Assert.Equal("音频", context.History.SelectedMediaFilter);
+        Assert.Equal(1, context.Douyin.DouyinArchiveCount);
+        var item = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("数据库里的抖音视频", item.Title);
+    }
+
+    [Fact]
+    public void DouyinViewModelSetsArchiveSearchFromRecentAuthorShortcut()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "作者作品",
+            Platform = "Douyin",
+            Url = "https://www.douyin.com/user/author",
+            Format = "mp4",
+            DouyinManifestSummaryText = "作品 1 / 视频 1 / 附属 0",
+            DouyinManifestSummary = new DouyinManifestSummary(
+                1,
+                1,
+                1,
+                0,
+                0,
+                0,
+                1,
+                false,
+                [
+                    new DouyinManifestItem("author-video", "video", "视频", "作者作品", "作者 B", "2026-07-03", "", [], ["b.mp4"])
+                ])
+        });
+
+        context.Douyin.SelectedDouyinArchiveTypeFilter = "音乐";
+
+        context.Douyin.SetDouyinArchiveAuthorFilterCommand.Execute("作者 B");
+
+        Assert.Equal("作者 B", context.Douyin.DouyinArchiveSearchKeyword);
+        Assert.Equal("全部", context.Douyin.SelectedDouyinArchiveTypeFilter);
+        var item = Assert.Single(context.Douyin.DouyinHistoryItems);
+        Assert.Equal("作者作品", item.Title);
+    }
+
+    [Fact]
     public void DouyinViewModelClassifiesLegacyArchiveItemsByFormatWhenManifestIsMissing()
     {
         using var context = CreateViewModelContext();

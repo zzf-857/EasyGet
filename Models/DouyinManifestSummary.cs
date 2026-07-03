@@ -10,7 +10,19 @@ public sealed record DouyinManifestSummary(
     int FileCount,
     bool IsTruncated,
     IReadOnlyList<DouyinManifestItem> Items,
-    string SearchText = "");
+    string SearchText = "")
+{
+    public IReadOnlyList<DouyinManifestAuthorSummary> Authors { get; init; } = [];
+}
+
+public sealed record DouyinManifestAuthorSummary(
+    string AuthorName,
+    int WorkCount)
+{
+    public string WorkCountText => WorkCount == 1
+        ? "1 个作品"
+        : $"{WorkCount} 个作品";
+}
 
 public sealed record DouyinManifestItem(
     string AwemeId,

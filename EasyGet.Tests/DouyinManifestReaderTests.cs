@@ -123,6 +123,18 @@ public class DouyinManifestReaderTests
             Assert.Contains("hidden-gallery-25", summary.SearchText, StringComparison.Ordinal);
             Assert.Contains("作者 Z", summary.SearchText, StringComparison.Ordinal);
             Assert.Contains("隐藏标签", summary.SearchText, StringComparison.Ordinal);
+            Assert.Collection(
+                summary.Authors,
+                author =>
+                {
+                    Assert.Equal("作者 A", author.AuthorName);
+                    Assert.Equal(20, author.WorkCount);
+                },
+                author =>
+                {
+                    Assert.Equal("作者 Z", author.AuthorName);
+                    Assert.Equal(5, author.WorkCount);
+                });
         }
         finally
         {
