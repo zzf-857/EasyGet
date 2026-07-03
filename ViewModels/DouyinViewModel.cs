@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
 using EasyGet.Services;
 
@@ -17,12 +18,22 @@ public partial class DouyinViewModel : ObservableObject
     public HistoryViewModel History { get; }
     public SettingsViewModel Settings { get; }
 
+    public string[] DouyinTaskFilterOptions { get; } = ["全部", "进行中", "已完成", "失败", "已暂停", "已取消"];
+
+    [ObservableProperty]
+    private string _selectedDouyinTaskFilter = "全部";
+
+    [ObservableProperty]
+    private string _douyinTaskSearchKeyword = "";
+
     public IEnumerable<DownloadTask> DouyinTasks => DouyinTaskItems;
     public ObservableCollection<DownloadTask> DouyinTaskItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinHistoryItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinManifestSummaryItems { get; } = [];
 
-    public int DouyinTaskCount => DouyinTaskItems.Count;
+    public int DouyinTaskCount => CountDouyinTasks();
+
+    public int FilteredDouyinTaskCount => DouyinTaskItems.Count;
 
     public int ActiveDouyinTaskCount => CountDouyinTasks(task =>
         task.Status is DownloadStatus.Waiting
@@ -109,7 +120,12 @@ public partial class DouyinViewModel : ObservableObject
         }
         else if (e.PropertyName == nameof(DownloadTask.Status))
         {
+            SyncDouyinTaskItems();
             NotifyDouyinTaskStateChanged();
+        }
+        else if (e.PropertyName is nameof(DownloadTask.Title) or nameof(DownloadTask.ErrorMessage))
+        {
+            SyncDouyinTaskItems();
         }
     }
 
@@ -144,6 +160,7 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(DouyinTasks));
         OnPropertyChanged(nameof(DouyinTaskItems));
         OnPropertyChanged(nameof(DouyinTaskCount));
+        OnPropertyChanged(nameof(FilteredDouyinTaskCount));
         OnPropertyChanged(nameof(ActiveDouyinTaskCount));
         OnPropertyChanged(nameof(CompletedDouyinTaskCount));
         OnPropertyChanged(nameof(FailedDouyinTaskCount));
@@ -152,13 +169,16 @@ public partial class DouyinViewModel : ObservableObject
     private void SyncDouyinTaskItems()
     {
         DouyinTaskItems.Clear();
-        foreach (var task in _downloadManager.Tasks.Where(IsDouyinTask))
+        foreach (var task in _downloadManager.Tasks
+                     .Where(IsDouyinTask)
+                     .Where(MatchesTaskCenterFilter))
         {
             DouyinTaskItems.Add(task);
         }
 
         OnPropertyChanged(nameof(DouyinTasks));
         OnPropertyChanged(nameof(DouyinTaskItems));
+        OnPropertyChanged(nameof(FilteredDouyinTaskCount));
     }
 
     private void OnHistoryItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -186,8 +206,69 @@ public partial class DouyinViewModel : ObservableObject
 
     private int CountDouyinTasks(Func<DownloadTask, bool>? predicate = null)
     {
-        return DouyinTaskItems.Count(task => predicate is null || predicate(task));
+        return _downloadManager.Tasks.Count(task =>
+            IsDouyinTask(task) && (predicate is null || predicate(task)));
     }
+
+    partial void OnSelectedDouyinTaskFilterChanged(string value)
+    {
+        if (!DouyinTaskFilterOptions.Contains(value, StringComparer.Ordinal))
+        {
+            SelectedDouyinTaskFilter = "全部";
+            return;
+        }
+
+        SyncDouyinTaskItems();
+    }
+
+    partial void OnDouyinTaskSearchKeywordChanged(string value)
+    {
+        SyncDouyinTaskItems();
+    }
+
+    [RelayCommand]
+    private void SetDouyinTaskFilter(string filter)
+    {
+        SelectedDouyinTaskFilter = DouyinTaskFilterOptions.Contains(filter, StringComparer.Ordinal)
+            ? filter
+            : "全部";
+    }
+
+    private bool MatchesTaskCenterFilter(DownloadTask task)
+        => MatchesSelectedTaskStatus(task) && MatchesTaskSearchKeyword(task);
+
+    private bool MatchesSelectedTaskStatus(DownloadTask task)
+        => SelectedDouyinTaskFilter switch
+        {
+            "进行中" => IsActiveTaskStatus(task.Status),
+            "已完成" => task.Status == DownloadStatus.Completed,
+            "失败" => task.Status == DownloadStatus.Failed,
+            "已暂停" => task.Status == DownloadStatus.Paused,
+            "已取消" => task.Status == DownloadStatus.Cancelled,
+            _ => true
+        };
+
+    private static bool IsActiveTaskStatus(DownloadStatus status)
+        => status is DownloadStatus.Waiting
+            or DownloadStatus.Resolving
+            or DownloadStatus.Downloading
+            or DownloadStatus.Merging;
+
+    private bool MatchesTaskSearchKeyword(DownloadTask task)
+    {
+        var keyword = DouyinTaskSearchKeyword?.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+            return true;
+
+        return ContainsKeyword(task.Title, keyword)
+            || ContainsKeyword(task.Url, keyword)
+            || ContainsKeyword(task.Platform, keyword)
+            || ContainsKeyword(task.ErrorMessage, keyword);
+    }
+
+    private static bool ContainsKeyword(string value, string keyword)
+        => !string.IsNullOrWhiteSpace(value)
+           && value.Contains(keyword, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsDouyinTask(DownloadTask task)
     {

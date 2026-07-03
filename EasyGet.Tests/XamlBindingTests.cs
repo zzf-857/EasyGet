@@ -765,6 +765,10 @@ public class XamlBindingTests
         Assert.Contains("Settings.DouyinDownloadMusic", source);
         Assert.Contains("Settings.DouyinDownloadJson", source);
         Assert.Contains("DouyinTaskItems", source);
+        Assert.Contains("DouyinTaskFilterOptions", source);
+        Assert.Contains("SelectedDouyinTaskFilter", source);
+        Assert.Contains("DouyinTaskSearchKeyword", source);
+        Assert.Contains("FilteredDouyinTaskCount", source);
         Assert.Contains("Batch.PauseTaskCommand", source);
         Assert.Contains("Batch.ResumeTaskCommand", source);
         Assert.Contains("Batch.RetryTaskCommand", source);

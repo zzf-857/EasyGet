@@ -138,6 +138,83 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelFiltersTaskCenterByStatusAndSearchKeyword()
+    {
+        using var context = CreateViewModelContext();
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/active",
+            Platform = "",
+            Status = DownloadStatus.Downloading,
+            Title = "猫咪进行中"
+        });
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/dance",
+            Platform = "",
+            Status = DownloadStatus.Completed,
+            Title = "舞蹈完成"
+        });
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/fail",
+            Platform = "",
+            Status = DownloadStatus.Failed,
+            Title = "失败作品"
+        });
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://youtube.com/watch?v=abc",
+            Platform = "YouTube",
+            Status = DownloadStatus.Completed,
+            Title = "非抖音"
+        });
+
+        Assert.Equal(["全部", "进行中", "已完成", "失败", "已暂停", "已取消"], context.Douyin.DouyinTaskFilterOptions);
+        Assert.Equal(3, context.Douyin.DouyinTaskCount);
+        Assert.Equal(3, context.Douyin.FilteredDouyinTaskCount);
+
+        context.Douyin.SetDouyinTaskFilterCommand.Execute("已完成");
+
+        Assert.Equal("已完成", context.Douyin.SelectedDouyinTaskFilter);
+        Assert.Equal(3, context.Douyin.DouyinTaskCount);
+        Assert.Equal(1, context.Douyin.FilteredDouyinTaskCount);
+        var completed = Assert.Single(context.Douyin.DouyinTaskItems);
+        Assert.Equal("舞蹈完成", completed.Title);
+
+        context.Douyin.DouyinTaskSearchKeyword = "fail";
+        context.Douyin.SetDouyinTaskFilterCommand.Execute("全部");
+
+        var failed = Assert.Single(context.Douyin.DouyinTaskItems);
+        Assert.Equal("失败作品", failed.Title);
+        Assert.Equal(1, context.Douyin.FilteredDouyinTaskCount);
+        Assert.Equal(3, context.Douyin.DouyinTaskCount);
+    }
+
+    [Fact]
+    public void DouyinViewModelReappliesTaskCenterFilterWhenTaskStatusChanges()
+    {
+        using var context = CreateViewModelContext();
+        var activeTask = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/active",
+            Status = DownloadStatus.Downloading,
+            Title = "active task"
+        };
+        context.BatchContext.Manager.Tasks.Add(activeTask);
+
+        context.Douyin.SetDouyinTaskFilterCommand.Execute("进行中");
+
+        Assert.Equal(1, context.Douyin.FilteredDouyinTaskCount);
+
+        activeTask.Status = DownloadStatus.Completed;
+
+        Assert.Equal(0, context.Douyin.FilteredDouyinTaskCount);
+        Assert.Empty(context.Douyin.DouyinTaskItems);
+        Assert.Equal(1, context.Douyin.CompletedDouyinTaskCount);
+    }
+
+    [Fact]
     public void DouyinViewModelIgnoresClearedTaskStateChanges()
     {
         using var context = CreateViewModelContext();
