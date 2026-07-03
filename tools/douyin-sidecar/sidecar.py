@@ -267,6 +267,10 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
 
 
 def resolve_cookie_source(args: argparse.Namespace) -> Tuple[str, Dict[str, Any]]:
+    legacy_cookie = getattr(args, "cookie", "") or ""
+    if legacy_cookie:
+        raise CookieSourceError("Raw Cookie command-line input is not supported; use --cookie-env or --cookie-file.")
+
     cookie_env = (getattr(args, "cookie_env", "") or "").strip()
     cookie_file = (getattr(args, "cookie_file", "") or "").strip()
     if cookie_env and cookie_file:
@@ -306,13 +310,6 @@ def resolve_cookie_source(args: argparse.Namespace) -> Tuple[str, Dict[str, Any]
             "redacted": True,
         }
 
-    legacy_cookie = getattr(args, "cookie", "") or ""
-    if legacy_cookie:
-        return legacy_cookie, {
-            "source": "argument",
-            "present": True,
-            "redacted": True,
-        }
     return "", {
         "source": "none",
         "present": False,
@@ -1127,7 +1124,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EasyGet Douyin sidecar prototype")
     parser.add_argument("--url", required=True, help="Douyin URL to download")
     parser.add_argument("--output-dir", required=True, help="Directory for downloaded files")
-    parser.add_argument("--cookie", default="", help="Cookie header string or JSON object")
+    parser.add_argument("--cookie", default="", help=argparse.SUPPRESS)
     parser.add_argument("--cookie-env", default="", help="Read Cookie header string or JSON object from this environment variable")
     parser.add_argument("--cookie-file", default="", help="Read Cookie header string or JSON object from this file")
     parser.add_argument("--proxy", default="", help="HTTP/HTTPS proxy, for example http://127.0.0.1:7890")
@@ -1169,6 +1166,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     try:
         args = parse_args(argv)
+        if getattr(args, "cookie", ""):
+            resolve_cookie_source(args)
         if explicit_secure_cookie_source_requested(args) and (args.emit_sample or args.self_test_imports):
             resolve_cookie_source(args)
         if args.emit_sample:

@@ -303,18 +303,35 @@ class SidecarCliTests(unittest.TestCase):
             config = events[0]["details"]["config"]
             self.assertTrue(config["comments"]["enabled"])
 
-    def test_invalid_cookie_outputs_failed_event_with_compatible_error_fields(self):
+    def test_raw_cookie_argument_is_rejected_without_leaking_secret(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = self.run_sidecar(["--dry-run", "--cookie", "{not-json"], Path(temp_dir))
+            result = self.run_sidecar(["--dry-run", "--cookie", "sessionid=secret"], Path(temp_dir))
 
-            self.assertEqual(result.returncode, 1)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            self.assertNotIn("sessionid=secret", result.stdout)
+            self.assertNotIn("sessionid=secret", result.stderr)
+            self.assertNotIn("secret", result.stdout)
+            self.assertNotIn("secret", result.stderr)
             events = [json.loads(line) for line in result.stdout.splitlines()]
             self.assertEqual(len(events), 1)
             failure = events[0]
             self.assertEqual(failure["event"], "failed")
-            self.assertIn("cookie JSON is invalid", failure["error"])
+            self.assertIn("Raw Cookie command-line input is not supported", failure["error"])
             self.assertEqual(failure["message"], failure["error"])
             self.assertEqual(failure["reason"], failure["error"])
+            self.assertNotIn("sessionid=secret", json.dumps(failure, ensure_ascii=False))
+            self.assertNotIn("secret", json.dumps(failure, ensure_ascii=False))
+
+    def test_help_hides_raw_cookie_argument_but_keeps_secure_cookie_sources(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(["--help"], Path(temp_dir))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stderr, "")
+            self.assertNotRegex(result.stdout, r"(?m)^\s*--cookie(?:\s|,|$)")
+            self.assertIn("--cookie-env", result.stdout)
+            self.assertIn("--cookie-file", result.stdout)
 
     def test_cookie_env_dry_run_redacts_cookie_and_reports_source(self):
         secret_cookie = "ttwid=env-secret-value; odin_tt=env-other-secret"
