@@ -219,6 +219,75 @@ public class ConfigServiceTests
         AssertAppConfigBool(config, "DouyinDownloadPinned", expected: false);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" \t ")]
+    public void NormalizeRuntimeConfig_DefaultsBlankDouyinTemplates(string? template)
+    {
+        var config = new AppConfig();
+        SetAppConfigString(config, "DouyinFilenameTemplate", template);
+        SetAppConfigString(config, "DouyinFolderTemplate", template);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigString(config, "DouyinFilenameTemplate", "{date}_{title}_{id}");
+        AssertAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}_{id}");
+    }
+
+    [Theory]
+    [InlineData("{date}_{title}")]
+    [InlineData("{date}_{unknown}_{id}")]
+    [InlineData("{date}_{title}_{id}/part")]
+    [InlineData("{date}_{title}_{id}\\part")]
+    [InlineData("{date}_{title}_{id}:part")]
+    [InlineData("{date}_{title}_{id}#part")]
+    [InlineData("{date}_{title}_{id}_{timestamp:yyyy}")]
+    [InlineData("{date}_{title}_{id}_{bad-var}")]
+    [InlineData("{date}_{title}_{id}_{author")]
+    [InlineData("{date}_{title}_{id}_}")]
+    [InlineData(".._{id}")]
+    public void NormalizeRuntimeConfig_DefaultsUnsafeUnknownOrMissingIdDouyinTemplates(string template)
+    {
+        var config = new AppConfig();
+        SetAppConfigString(config, "DouyinFilenameTemplate", template);
+        SetAppConfigString(config, "DouyinFolderTemplate", template);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigString(config, "DouyinFilenameTemplate", "{date}_{title}_{id}");
+        AssertAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}_{id}");
+    }
+
+    [Fact]
+    public void NormalizeRuntimeConfig_DefaultsOverlongDouyinTemplates()
+    {
+        var config = new AppConfig();
+        var template = "{id}_" + new string('x', 201);
+        SetAppConfigString(config, "DouyinFilenameTemplate", template);
+        SetAppConfigString(config, "DouyinFolderTemplate", template);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigString(config, "DouyinFilenameTemplate", "{date}_{title}_{id}");
+        AssertAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}_{id}");
+    }
+
+    [Fact]
+    public void NormalizeRuntimeConfig_AllowsKnownDouyinTemplateVariables()
+    {
+        var template = " {year}-{month}-{day}_{time}_{hour}{minute}{second}_{author}_{author_id}_{type}_{mode}_{timestamp}_{id} ";
+        var expected = "{year}-{month}-{day}_{time}_{hour}{minute}{second}_{author}_{author_id}_{type}_{mode}_{timestamp}_{id}";
+        var config = new AppConfig();
+        SetAppConfigString(config, "DouyinFilenameTemplate", template);
+        SetAppConfigString(config, "DouyinFolderTemplate", template);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigString(config, "DouyinFilenameTemplate", expected);
+        AssertAppConfigString(config, "DouyinFolderTemplate", expected);
+    }
+
     private static void AssertAppConfigBool(AppConfig config, string propertyName, bool expected)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);

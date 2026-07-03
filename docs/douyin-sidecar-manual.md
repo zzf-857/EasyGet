@@ -42,6 +42,8 @@ python -m venv .venv
 --include-cover   下载封面；默认 false
 --include-music   下载音乐/音频副产物；默认 false
 --include-json    保存原始 JSON；默认 false
+--filename-template 第三方 filename_template；默认 {date}_{title}_{id}
+--folder-template   第三方 folder_template；默认 {date}_{title}_{id}
 --format          C# runner 兼容参数，当前 sidecar 接受但不传给第三方配置
 --quality         映射到第三方 video_quality；best/2160 为 highest，1080/720/480 映射到对应 p 档
 --title           C# runner 兼容参数，当前 sidecar 接受但不传给第三方配置
@@ -53,6 +55,27 @@ python -m venv .venv
 --self-test-imports 检查当前 runtime 是否能定位并导入阶段一第三方模块
 --output-format   jsonl 或 json，默认 jsonl
 ```
+
+## 命名模板
+
+EasyGet 和 sidecar 对 `filename_template` / `folder_template` 都使用更保守的校验。默认模板是 `{date}_{title}_{id}`，空白模板会回退到默认值，模板必须包含 `{id}`。
+
+允许变量：
+
+```text
+id,title,author,author_id,date,year,month,day,time,hour,minute,second,timestamp,type,mode
+```
+
+安全规则：
+
+- 长度不能超过 200 个字符。
+- 只支持 `{变量名}` 占位符，不支持 `{var:format}` 或 malformed placeholder。
+- 拒绝未知变量、未闭合或多余的 `{` / `}`。
+- 拒绝 `/`、`\`、`:`、`*`、`?`、`"`、`<`、`>`、`|`、`#` 和控制字符。
+- 拒绝 `..` 路径穿越语义。
+- 不支持多级目录模板，`folder_template` 只控制每个作品的单层子文件夹名。
+
+Python sidecar 对 CLI 模板独立校验；非法值会直接输出 JSON `failed` 事件并以非 0 退出，不依赖第三方 loader 或第三方 `validate_template`。
 
 ## 示例
 
@@ -73,6 +96,8 @@ python .\tools\douyin-sidecar\sidecar.py `
   --output-dir ".\Downloaded\Douyin" `
   --mode post `
   --limit 3 `
+  --filename-template "{author}_{title}_{id}" `
+  --folder-template "{date}_{id}" `
   --include-cover `
   --include-json `
   --dry-run
@@ -181,7 +206,7 @@ Cookie 输出规则：
 真实调用：
 
 - 调用第三方 `douyin-downloader-promax/run.py`
-- 通过临时 config 传入 `url`、`output_dir`、`cookie`、`proxy`、`mode`、`limit`、`include-cover`、`include-music`、`include-json`
+- 通过临时 config 传入 `url`、`output_dir`、`cookie`、`proxy`、`mode`、`limit`、`filename_template`、`folder_template`、`include-cover`、`include-music`、`include-json`
 - 支持第三方已有能力：单视频 `/video`、图文 `/note`/`/gallery`、用户主页 `post`/`like`/`mix`/`music` 批量、本人收藏 `collect`/`collectmix`、合集/混剪/音乐单链接 `/collection`/`/mix`/`/music`
 - 读取 `download_manifest.jsonl` 汇总 `output_files`
 - C# runner 默认从 `AppContext.BaseDirectory` 向上优先寻找 `tools\douyin-sidecar\sidecar.py`，便于开发联调；发布包仍可放置 `sidecars\douyin\EasyGet.DouyinSidecar.exe` 或 `sidecars\douyin_sidecar.py`

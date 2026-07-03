@@ -12,6 +12,7 @@ public class AppConfig
     public const int MaxConcurrentFragments = 32;
     public const int MinConcurrentDownloadLimit = 1;
     public const int MaxConcurrentDownloadLimit = 8;
+    public const string DefaultDouyinTemplate = "{date}_{title}_{id}";
 
     /// <summary>默认下载目录</summary>
     public string DefaultDownloadPath { get; set; } = 
@@ -55,6 +56,12 @@ public class AppConfig
 
     /// <summary>抖音用户作品下载数量上限；0 表示不限制</summary>
     public int DouyinLimit { get; set; } = 0;
+
+    /// <summary>抖音媒体文件命名模板；必须包含 {id}</summary>
+    public string DouyinFilenameTemplate { get; set; } = DefaultDouyinTemplate;
+
+    /// <summary>抖音单作品子文件夹命名模板；必须包含 {id}</summary>
+    public string DouyinFolderTemplate { get; set; } = DefaultDouyinTemplate;
 
     /// <summary>抖音作品筛选开始时间；空字符串表示不限制</summary>
     public string DouyinStartTime { get; set; } = "";

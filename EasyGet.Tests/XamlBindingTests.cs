@@ -898,6 +898,10 @@ public class XamlBindingTests
         Assert.Contains("启用专项引擎", texts);
         Assert.Contains("用户作品模式", texts);
         Assert.Contains("下载数量上限", texts);
+        Assert.Contains("文件名模板", texts);
+        Assert.Contains("作品文件夹模板", texts);
+        Assert.Contains("控制媒体文件名，必须包含 {id}", texts);
+        Assert.Contains("控制每个作品子文件夹，必须包含 {id}", texts);
         Assert.Contains("下载封面", texts);
         Assert.Contains("下载音乐", texts);
         Assert.Contains("下载评论", texts);
@@ -913,6 +917,8 @@ public class XamlBindingTests
         Assert.Contains("DouyinModeOptions", source);
         Assert.Contains("DouyinMode", source);
         Assert.Contains("DouyinLimit", source);
+        Assert.Contains("DouyinFilenameTemplate", source);
+        Assert.Contains("DouyinFolderTemplate", source);
         Assert.Contains("DouyinDownloadCover", source);
         Assert.Contains("DouyinDownloadMusic", source);
         Assert.Contains("DouyinDownloadComments", source);
@@ -920,6 +926,28 @@ public class XamlBindingTests
         Assert.Contains("DouyinDownloadJson", source);
         Assert.Contains("DouyinEnableDatabase", source);
         Assert.Contains("DouyinIncrementalDownload", source);
+
+        var filenameTemplateTextBox = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBox"
+                && (element.Attribute("Text")?.Value ?? "").Contains("DouyinFilenameTemplate", StringComparison.Ordinal));
+        Assert.NotNull(filenameTemplateTextBox);
+        Assert.Contains(
+            "EnableDouyinSpecialEngine",
+            filenameTemplateTextBox!.ToString(SaveOptions.DisableFormatting),
+            StringComparison.Ordinal);
+
+        var folderTemplateTextBox = document
+            .Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "TextBox"
+                && (element.Attribute("Text")?.Value ?? "").Contains("DouyinFolderTemplate", StringComparison.Ordinal));
+        Assert.NotNull(folderTemplateTextBox);
+        Assert.Contains(
+            "EnableDouyinSpecialEngine",
+            folderTemplateTextBox!.ToString(SaveOptions.DisableFormatting),
+            StringComparison.Ordinal);
 
         var databaseToggle = document
             .Descendants()

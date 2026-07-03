@@ -65,6 +65,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _enableDouyinSpecialEngine;
     [ObservableProperty] private string _douyinMode = "post";
     [ObservableProperty] private int _douyinLimit;
+    [ObservableProperty] private string _douyinFilenameTemplate = AppConfig.DefaultDouyinTemplate;
+    [ObservableProperty] private string _douyinFolderTemplate = AppConfig.DefaultDouyinTemplate;
     [ObservableProperty] private string _douyinStartTime = "";
     [ObservableProperty] private string _douyinEndTime = "";
     [ObservableProperty] private bool _douyinDownloadPinned;
@@ -176,6 +178,8 @@ public partial class SettingsViewModel : ObservableObject
             EnableDouyinSpecialEngine = c.EnableDouyinSpecialEngine;
             DouyinMode = c.DouyinMode;
             DouyinLimit = c.DouyinLimit;
+            DouyinFilenameTemplate = c.DouyinFilenameTemplate;
+            DouyinFolderTemplate = c.DouyinFolderTemplate;
             DouyinStartTime = c.DouyinStartTime;
             DouyinEndTime = c.DouyinEndTime;
             DouyinDownloadPinned = c.DouyinDownloadPinned;
@@ -294,6 +298,8 @@ public partial class SettingsViewModel : ObservableObject
         c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
         c.DouyinMode = DouyinMode;
         c.DouyinLimit = DouyinLimit;
+        c.DouyinFilenameTemplate = DouyinFilenameTemplate;
+        c.DouyinFolderTemplate = DouyinFolderTemplate;
         c.DouyinStartTime = DouyinStartTime;
         c.DouyinEndTime = DouyinEndTime;
         c.DouyinDownloadPinned = DouyinDownloadPinned;
@@ -331,6 +337,8 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnEnableDouyinSpecialEngineChanged(bool value) => AutoSave();
     partial void OnDouyinModeChanged(string value) => AutoSave();
     partial void OnDouyinLimitChanged(int value) => AutoSave();
+    partial void OnDouyinFilenameTemplateChanged(string value) => AutoSave();
+    partial void OnDouyinFolderTemplateChanged(string value) => AutoSave();
     partial void OnDouyinStartTimeChanged(string value) => AutoSave();
     partial void OnDouyinEndTimeChanged(string value) => AutoSave();
     partial void OnDouyinDownloadPinnedChanged(bool value) => AutoSave();
@@ -397,6 +405,8 @@ public partial class SettingsViewModel : ObservableObject
     {
         if (DouyinMode == config.DouyinMode
             && DouyinLimit == config.DouyinLimit
+            && DouyinFilenameTemplate == config.DouyinFilenameTemplate
+            && DouyinFolderTemplate == config.DouyinFolderTemplate
             && DouyinStartTime == config.DouyinStartTime
             && DouyinEndTime == config.DouyinEndTime)
         {
@@ -408,6 +418,8 @@ public partial class SettingsViewModel : ObservableObject
         {
             DouyinMode = config.DouyinMode;
             DouyinLimit = config.DouyinLimit;
+            DouyinFilenameTemplate = config.DouyinFilenameTemplate;
+            DouyinFolderTemplate = config.DouyinFolderTemplate;
             DouyinStartTime = config.DouyinStartTime;
             DouyinEndTime = config.DouyinEndTime;
         }

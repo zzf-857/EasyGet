@@ -14,6 +14,37 @@ public class ConfigService
     private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
     private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
     private static readonly string[] SupportedDouyinModes = ["post", "like", "mix", "music", "collect", "collectmix"];
+    private static readonly HashSet<string> SupportedDouyinTemplateVariables = new(StringComparer.Ordinal)
+    {
+        "id",
+        "title",
+        "author",
+        "author_id",
+        "date",
+        "year",
+        "month",
+        "day",
+        "time",
+        "hour",
+        "minute",
+        "second",
+        "timestamp",
+        "type",
+        "mode"
+    };
+    private static readonly char[] UnsafeDouyinTemplateCharacters =
+    [
+        '/',
+        '\\',
+        ':',
+        '*',
+        '?',
+        '"',
+        '<',
+        '>',
+        '|',
+        '#'
+    ];
 
     private static readonly string DefaultConfigDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
@@ -146,6 +177,8 @@ public class ConfigService
         config.CookieContent ??= "";
         config.DouyinMode = NormalizeOption(config.DouyinMode, SupportedDouyinModes, defaults.DouyinMode);
         config.DouyinLimit = Math.Max(0, config.DouyinLimit);
+        config.DouyinFilenameTemplate = NormalizeDouyinTemplate(config.DouyinFilenameTemplate);
+        config.DouyinFolderTemplate = NormalizeDouyinTemplate(config.DouyinFolderTemplate);
         config.DouyinStartTime = config.DouyinStartTime?.Trim() ?? "";
         config.DouyinEndTime = config.DouyinEndTime?.Trim() ?? "";
 
@@ -172,6 +205,53 @@ public class ConfigService
         }
 
         return defaultValue;
+    }
+
+    internal static string NormalizeDouyinTemplate(string? value)
+    {
+        var candidate = value?.Trim();
+        if (string.IsNullOrWhiteSpace(candidate))
+            return AppConfig.DefaultDouyinTemplate;
+
+        if (candidate.Length > 200
+            || candidate.IndexOfAny(UnsafeDouyinTemplateCharacters) >= 0
+            || candidate.Any(char.IsControl)
+            || candidate.Contains("..", StringComparison.Ordinal))
+        {
+            return AppConfig.DefaultDouyinTemplate;
+        }
+
+        var hasId = false;
+        for (var index = 0; index < candidate.Length;)
+        {
+            var current = candidate[index];
+            if (current == '}')
+                return AppConfig.DefaultDouyinTemplate;
+
+            if (current != '{')
+            {
+                index++;
+                continue;
+            }
+
+            var closeIndex = candidate.IndexOf('}', index + 1);
+            if (closeIndex < 0)
+                return AppConfig.DefaultDouyinTemplate;
+
+            var variable = candidate.Substring(index + 1, closeIndex - index - 1);
+            if (variable.Length == 0
+                || variable.Contains('{', StringComparison.Ordinal)
+                || variable.Contains('}', StringComparison.Ordinal)
+                || !SupportedDouyinTemplateVariables.Contains(variable))
+            {
+                return AppConfig.DefaultDouyinTemplate;
+            }
+
+            hasId |= string.Equals(variable, "id", StringComparison.Ordinal);
+            index = closeIndex + 1;
+        }
+
+        return hasId ? candidate : AppConfig.DefaultDouyinTemplate;
     }
 
     private static void NormalizeWindowState(AppConfig config)

@@ -71,6 +71,104 @@ class SidecarCliTests(unittest.TestCase):
             self.assertIn("planned_command", summary["details"])
             self.assertEqual(summary["details"]["config"]["number"]["post"], 3)
 
+    def test_dry_run_uses_custom_filename_and_folder_templates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--filename-template",
+                    "{author}_{title}_{id}",
+                    "--folder-template",
+                    "{date}_{id}",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["filename_template"], "{author}_{title}_{id}")
+            self.assertEqual(config["folder_template"], "{date}_{id}")
+
+    def test_dry_run_defaults_blank_templates(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--filename-template",
+                    " \t ",
+                    "--folder-template",
+                    "",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(config["filename_template"], "{date}_{title}_{id}")
+            self.assertEqual(config["folder_template"], "{date}_{title}_{id}")
+
+    def test_dry_run_rejects_unknown_template_variable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--filename-template", "{date}_{nickname}_{id}"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            failure = json.loads(result.stdout)
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--filename-template", failure["error"])
+            self.assertIn("unknown variable", failure["error"])
+            self.assertNotIn("{date}_{nickname}_{id}", result.stdout)
+
+    def test_dry_run_rejects_template_path_separators(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--folder-template", "{author}/{id}"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            failure = json.loads(result.stdout)
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--folder-template", failure["error"])
+            self.assertIn("unsafe character", failure["error"])
+            self.assertNotIn("{author}/{id}", result.stdout)
+
+    def test_dry_run_rejects_template_missing_id(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--filename-template", "{date}_{title}"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            failure = json.loads(result.stdout)
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--filename-template", failure["error"])
+            self.assertIn("{id}", failure["error"])
+            self.assertNotIn("{date}_{title}", result.stdout)
+
+    def test_dry_run_rejects_overlong_template(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--filename-template", f"{{id}}_{'x' * 201}"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            failure = json.loads(result.stdout)
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--filename-template", failure["error"])
+            self.assertIn("200", failure["error"])
+            self.assertNotIn("x" * 201, result.stdout)
+
     def test_dry_run_maps_multiple_user_modes_to_third_party_number_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(

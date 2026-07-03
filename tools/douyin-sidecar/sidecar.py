@@ -38,6 +38,25 @@ COUNT_RE = re.compile(
 COOKIE_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
 DATE_FILTER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RAW_COOKIE_CLI_ERROR = "Raw Cookie command-line input is not supported; use --cookie-env or --cookie-file."
+DEFAULT_DOUYIN_TEMPLATE = "{date}_{title}_{id}"
+ALLOWED_TEMPLATE_VARIABLES = {
+    "id",
+    "title",
+    "author",
+    "author_id",
+    "date",
+    "year",
+    "month",
+    "day",
+    "time",
+    "hour",
+    "minute",
+    "second",
+    "timestamp",
+    "type",
+    "mode",
+}
+UNSAFE_TEMPLATE_CHARACTERS = set('/\\:*?"<>|#')
 PHASE_ONE_IMPORT_MODULES = (
     "config",
     "auth.cookie_manager",
@@ -51,6 +70,10 @@ SIDECAR_STATE_DIR_NAME = ".easyget-douyin-sidecar"
 
 class CookieSourceError(ValueError):
     """Raised for CLI cookie source errors that should be returned as JSONL."""
+
+
+class TemplateValidationError(ValueError):
+    """Raised for unsafe CLI naming templates that should be returned as JSONL."""
 
 
 def parse_cookie(cookie: str) -> Dict[str, str]:
@@ -137,6 +160,64 @@ def normalize_date_filter(value: str, option_name: str) -> str:
     return normalized
 
 
+def normalize_template(value: str, field_name: str, strict: bool = True) -> str:
+    normalized = (value or "").strip()
+    if not normalized:
+        return DEFAULT_DOUYIN_TEMPLATE
+
+    error = validate_template(normalized)
+    if error:
+        if strict:
+            raise TemplateValidationError(f"{field_name} {error}")
+        return DEFAULT_DOUYIN_TEMPLATE
+
+    return normalized
+
+
+def validate_template(template: str) -> str:
+    if len(template) > 200:
+        return "must be 200 characters or fewer."
+
+    if any(character in UNSAFE_TEMPLATE_CHARACTERS for character in template):
+        return "contains an unsafe character."
+
+    if any(ord(character) < 32 or ord(character) == 127 for character in template):
+        return "contains a control character."
+
+    if ".." in template:
+        return "contains path traversal syntax."
+
+    has_id = False
+    index = 0
+    while index < len(template):
+        character = template[index]
+        if character == "}":
+            return "contains a malformed placeholder."
+
+        if character != "{":
+            index += 1
+            continue
+
+        close_index = template.find("}", index + 1)
+        if close_index < 0:
+            return "contains a malformed placeholder."
+
+        variable = template[index + 1:close_index]
+        if not variable or "{" in variable or "}" in variable:
+            return "contains a malformed placeholder."
+
+        if variable not in ALLOWED_TEMPLATE_VARIABLES:
+            return "contains an unknown variable."
+
+        has_id = has_id or variable == "id"
+        index = close_index + 1
+
+    if not has_id:
+        return "must contain {id}."
+
+    return ""
+
+
 def build_config(
     *,
     url: str,
@@ -156,6 +237,8 @@ def build_config(
     start_time: str = "",
     end_time: str = "",
     download_pinned: bool = False,
+    filename_template: str = "",
+    folder_template: str = "",
 ) -> Dict[str, Any]:
     modes = normalize_modes(mode)
     numbers = {name: 0 for name in KNOWN_NUMBER_MODES}
@@ -179,6 +262,8 @@ def build_config(
     database_path = output_dir.expanduser().resolve() / SIDECAR_STATE_DIR_NAME / "dy_downloader.db"
     normalized_start_time = normalize_date_filter(start_time, "--start-time")
     normalized_end_time = normalize_date_filter(end_time, "--end-time")
+    normalized_filename_template = normalize_template(filename_template, "--filename-template")
+    normalized_folder_template = normalize_template(folder_template, "--folder-template")
 
     config = {
         "link": [url],
@@ -189,8 +274,8 @@ def build_config(
         "json": bool(include_json),
         "video_quality": normalize_video_quality(quality),
         "folderstyle": True,
-        "filename_template": "{date}_{title}_{id}",
-        "folder_template": "{date}_{title}_{id}",
+        "filename_template": normalized_filename_template,
+        "folder_template": normalized_folder_template,
         "author_dir": "nickname",
         "group_by_mode": True,
         "mode": modes,
@@ -263,6 +348,8 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         start_time=args.start_time,
         end_time=args.end_time,
         download_pinned=args.download_pinned,
+        filename_template=args.filename_template,
+        folder_template=args.folder_template,
     )
     return config, cookie_source, cookie_redaction_secrets(cookie_text, config)
 
@@ -1141,6 +1228,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--start-time", default="", help="Pass through third-party start_time filter value")
     parser.add_argument("--end-time", default="", help="Pass through third-party end_time filter value")
     parser.add_argument("--download-pinned", action="store_true", help="Include pinned posts in third-party downloads")
+    parser.add_argument("--filename-template", default="", help="Third-party filename_template; must contain {id}")
+    parser.add_argument("--folder-template", default="", help="Third-party folder_template; must contain {id}")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
@@ -1211,6 +1300,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if "args" in locals():
             output_format = args.output_format
         write_events([make_failed_event(str(exc), details={"step": "resolve_cookie_source"})], output_format)
+        return 2
+    except TemplateValidationError as exc:
+        output_format = "jsonl"
+        if "args" in locals():
+            output_format = args.output_format
+        write_events([make_failed_event(str(exc), details={"step": "parse_arguments"})], output_format)
         return 2
     except Exception as exc:
         fallback = make_failed_event(str(exc), details={"step": "sidecar_exception"})

@@ -332,6 +332,8 @@ public class DouyinSpecialDownloadServiceTests
         SetAppConfigBool(config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
         SetAppConfigBool(config, "DouyinDownloadPinned", value: true);
+        SetAppConfigString(config, "DouyinFilenameTemplate", " {author}_{title}_{id} ");
+        SetAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}");
 
         await InvokeConfigDownloadAsync(service, task, config);
 
@@ -355,6 +357,8 @@ public class DouyinSpecialDownloadServiceTests
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeDatabase"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncrementalDownload"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "DownloadPinned"));
+        Assert.Equal("{author}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FilenameTemplate"));
+        Assert.Equal("{date}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FolderTemplate"));
     }
 
     [Fact]
@@ -395,7 +399,9 @@ public class DouyinSpecialDownloadServiceTests
             ["IncrementalDownload"] = true,
             ["StartTime"] = "2024-01-01",
             ["EndTime"] = "2024-01-31",
-            ["DownloadPinned"] = true
+            ["DownloadPinned"] = true,
+            ["FilenameTemplate"] = "{author}_{title}_{id}",
+            ["FolderTemplate"] = "{date}_{id}"
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -418,6 +424,8 @@ public class DouyinSpecialDownloadServiceTests
         AssertArgument(args, "--limit", "12");
         AssertArgument(args, "--start-time", "2024-01-01");
         AssertArgument(args, "--end-time", "2024-01-31");
+        AssertArgument(args, "--filename-template", "{author}_{title}_{id}");
+        AssertArgument(args, "--folder-template", "{date}_{id}");
         Assert.Contains("--include-cover", args);
         Assert.DoesNotContain("--include-music", args);
         Assert.Contains("--include-json", args);
@@ -453,7 +461,9 @@ public class DouyinSpecialDownloadServiceTests
             ["IncrementalDownload"] = false,
             ["StartTime"] = "",
             ["EndTime"] = "",
-            ["DownloadPinned"] = false
+            ["DownloadPinned"] = false,
+            ["FilenameTemplate"] = "{date}_{title}_{id}",
+            ["FolderTemplate"] = "{date}_{title}_{id}"
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -675,7 +685,16 @@ public class DouyinSpecialDownloadServiceTests
         Assert.NotNull(constructor);
         var arguments = constructor
             .GetParameters()
-            .Select(parameter => values[parameter.Name!])
+            .Select(parameter =>
+            {
+                if (values.TryGetValue(parameter.Name!, out var value))
+                    return value;
+
+                if (parameter.HasDefaultValue)
+                    return parameter.DefaultValue;
+
+                throw new KeyNotFoundException($"Missing constructor test value for {parameter.Name}.");
+            })
             .ToArray();
         return Assert.IsType<DouyinSidecarRequest>(constructor.Invoke(arguments));
     }

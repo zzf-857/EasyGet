@@ -112,6 +112,20 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void Initialize_LoadsDouyinTemplateSettingsFromConfig()
+    {
+        var config = CreateTempConfigService();
+        SetAppConfigString(config.Config, "DouyinFilenameTemplate", "{author}_{title}_{id}");
+        SetAppConfigString(config.Config, "DouyinFolderTemplate", "{date}_{id}");
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+
+        viewModel.Initialize();
+
+        AssertViewModelString(viewModel, "DouyinFilenameTemplate", "{author}_{title}_{id}");
+        AssertViewModelString(viewModel, "DouyinFolderTemplate", "{date}_{id}");
+    }
+
+    [Fact]
     public async Task SaveSettingsCommand_PersistsDouyinSpecialSettings()
     {
         var config = CreateTempConfigService();
@@ -145,6 +159,22 @@ public class SettingsViewModelTests
         AssertAppConfigBool(config.Config, "DouyinEnableDatabase", expected: true);
         AssertAppConfigBool(config.Config, "DouyinIncrementalDownload", expected: true);
         AssertAppConfigBool(config.Config, "DouyinDownloadPinned", expected: true);
+    }
+
+    [Fact]
+    public async Task SaveSettingsCommand_PersistsDouyinTemplatesAndSyncsNormalizedValues()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        SetViewModelString(viewModel, "DouyinFilenameTemplate", " {author}_{title}_{id} ");
+        SetViewModelString(viewModel, "DouyinFolderTemplate", "{date}_{title}");
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        AssertAppConfigString(config.Config, "DouyinFilenameTemplate", "{author}_{title}_{id}");
+        AssertAppConfigString(config.Config, "DouyinFolderTemplate", "{date}_{title}_{id}");
+        AssertViewModelString(viewModel, "DouyinFilenameTemplate", "{author}_{title}_{id}");
+        AssertViewModelString(viewModel, "DouyinFolderTemplate", "{date}_{title}_{id}");
     }
 
     [Fact]
