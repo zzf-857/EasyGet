@@ -1144,6 +1144,62 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public async Task DouyinViewModelAddsSelectedDownloadableDiscoveryResultsToQueue()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.BatchContext.Config.Config.EnableDouyinSpecialEngine = true;
+        context.BatchContext.Config.Config.DefaultDownloadPath = @"D:\Videos";
+        var selectedByUrl = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "猫咪晒太阳",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var selectedByAwemeId = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "小狗散步");
+        var unselected = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574540",
+            Description: "不应入队");
+        context.Douyin.DouyinDiscoveryItems.Add(selectedByUrl);
+        context.Douyin.DouyinDiscoveryItems.Add(selectedByAwemeId);
+        context.Douyin.DouyinDiscoveryItems.Add(unselected);
+
+        selectedByUrl.IsSelected = true;
+        selectedByAwemeId.IsSelected = true;
+
+        Assert.Equal(2, context.Douyin.SelectedDouyinDiscoveryItemCount);
+        Assert.True(context.Douyin.HasSelectedDouyinDiscoveryItems);
+
+        await context.Douyin.AddSelectedDouyinDiscoveryItemsToQueueCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, context.BatchContext.Manager.Tasks.Count);
+        Assert.Contains(context.BatchContext.Manager.Tasks, task => task.Url == "https://www.douyin.com/video/7604129988555574538");
+        Assert.Contains(context.BatchContext.Manager.Tasks, task => task.Url == "https://www.douyin.com/video/7604129988555574539");
+        Assert.DoesNotContain(context.BatchContext.Manager.Tasks, task => task.Url == "https://www.douyin.com/video/7604129988555574540");
+        Assert.Contains("选中入队完成", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("已加入 2", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.False(context.Douyin.HasDouyinDiscoveryError);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelRejectsSelectedDiscoveryQueueWhenNothingIsSelected()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "未勾选作品"));
+
+        await context.Douyin.AddSelectedDouyinDiscoveryItemsToQueueCommand.ExecuteAsync(null);
+
+        Assert.Empty(context.BatchContext.Manager.Tasks);
+        Assert.Equal(0, context.Douyin.SelectedDouyinDiscoveryItemCount);
+        Assert.False(context.Douyin.HasSelectedDouyinDiscoveryItems);
+        Assert.True(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("请先选择", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DouyinViewModelRejectsAddingAllDiscoveryResultsWhenListIsEmpty()
     {
         var discovery = new FakeDouyinDiscoveryService();

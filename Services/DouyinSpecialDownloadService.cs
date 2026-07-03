@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
@@ -55,7 +56,25 @@ public sealed record DouyinDiscoveryItem(
     string Description = "",
     string AuthorNickname = "",
     string SecUid = "",
-    string Url = "");
+    string Url = "") : INotifyPropertyChanged
+{
+    private bool _isSelected;
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set
+        {
+            if (_isSelected == value)
+                return;
+
+            _isSelected = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsSelected)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}
 
 public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 {

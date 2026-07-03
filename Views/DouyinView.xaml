@@ -296,6 +296,66 @@
                                        VerticalAlignment="Center"/>
                         </Grid>
 
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       VerticalAlignment="Center">
+                                <Run Text="已选择 "/>
+                                <Run Text="{Binding SelectedDouyinDiscoveryItemCount, Mode=OneWay, FallbackValue=0}"/>
+                                <Run Text=" 条"/>
+                            </TextBlock>
+
+                            <Button Grid.Column="1"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,0"
+                                    ToolTip="把选中的发现结果加入队列"
+                                    AutomationProperties.Name="选中入队"
+                                    IsEnabled="{Binding HasSelectedDouyinDiscoveryItems}"
+                                    Command="{Binding AddSelectedDouyinDiscoveryItemsToQueueCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="选中入队" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,0"
+                                    ToolTip="选择全部发现结果"
+                                    AutomationProperties.Name="全选发现结果"
+                                    Command="{Binding SelectAllDouyinDiscoveryItemsCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE73A;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="全选" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Grid.Column="3"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    ToolTip="清除发现结果选择"
+                                    AutomationProperties.Name="清除发现结果选择"
+                                    Command="{Binding ClearDouyinDiscoverySelectionCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="清除选择" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+                        </Grid>
+
                         <TextBlock Text="{Binding DouyinDiscoveryErrorMessage, Mode=OneWay}"
                                    Style="{StaticResource TextBodyStrong}"
                                    Foreground="{StaticResource ErrorBrush}"
@@ -350,11 +410,19 @@
                                         <Border Style="{StaticResource ToolPanelBorder}" Padding="12">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
 
-                                                <StackPanel Grid.Column="0">
+                                                <CheckBox Grid.Column="0"
+                                                          IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                          ToolTip="选择发现结果"
+                                                          AutomationProperties.Name="选择发现结果"
+                                                          VerticalAlignment="Top"
+                                                          Margin="0,4,12,0"/>
+
+                                                <StackPanel Grid.Column="1">
                                                     <TextBlock Style="{StaticResource TextBodyStrong}"
                                                                TextTrimming="CharacterEllipsis">
                                                         <Run Text="{Binding Word, Mode=OneWay}"/>
@@ -375,7 +443,7 @@
                                                                Margin="0,5,0,0"/>
                                                 </StackPanel>
 
-                                                <StackPanel Grid.Column="1"
+                                                <StackPanel Grid.Column="2"
                                                             Margin="16,0,0,0"
                                                             VerticalAlignment="Center"
                                                             MinWidth="88">

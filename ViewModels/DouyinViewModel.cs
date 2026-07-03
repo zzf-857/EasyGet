@@ -18,6 +18,7 @@ public partial class DouyinViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly IDouyinSpecialDownloadService _douyinSpecialDownloadService;
     private readonly HashSet<DownloadTask> _subscribedTasks = [];
+    private readonly List<DouyinDiscoveryItem> _subscribedDiscoveryItems = [];
 
     public DownloadViewModel Download { get; }
     public BatchDownloadViewModel Batch { get; }
@@ -96,6 +97,10 @@ public partial class DouyinViewModel : ObservableObject
 
     public bool HasDouyinDiscoveryItems => DouyinDiscoveryItems.Count > 0;
 
+    public int SelectedDouyinDiscoveryItemCount => DouyinDiscoveryItems.Count(item => item.IsSelected);
+
+    public bool HasSelectedDouyinDiscoveryItems => SelectedDouyinDiscoveryItemCount > 0;
+
     public bool HasDouyinDiscoveryError => !string.IsNullOrWhiteSpace(DouyinDiscoveryErrorMessage);
 
     public string DouyinQuickDownloadEngineStatusText => Settings.EnableDouyinSpecialEngine
@@ -142,6 +147,7 @@ public partial class DouyinViewModel : ObservableObject
 
         History.HistoryItems.CollectionChanged += OnHistoryItemsCollectionChanged;
         Settings.PropertyChanged += OnSettingsPropertyChanged;
+        DouyinDiscoveryItems.CollectionChanged += OnDouyinDiscoveryItemsCollectionChanged;
         SyncDouyinHistoryItems();
     }
 
@@ -234,6 +240,74 @@ public partial class DouyinViewModel : ObservableObject
         }
 
         _subscribedTasks.Clear();
+    }
+
+    private void OnDouyinDiscoveryItemsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            ClearDouyinDiscoveryItemSubscriptions();
+            foreach (var item in DouyinDiscoveryItems)
+            {
+                SubscribeDouyinDiscoveryItem(item);
+            }
+        }
+        else
+        {
+            if (e.OldItems is not null)
+            {
+                foreach (DouyinDiscoveryItem item in e.OldItems)
+                {
+                    UnsubscribeDouyinDiscoveryItem(item);
+                }
+            }
+
+            if (e.NewItems is not null)
+            {
+                foreach (DouyinDiscoveryItem item in e.NewItems)
+                {
+                    SubscribeDouyinDiscoveryItem(item);
+                }
+            }
+        }
+
+        NotifyDouyinDiscoveryStateChanged();
+        NotifyDouyinDiscoverySelectionChanged();
+    }
+
+    private void OnDouyinDiscoveryItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DouyinDiscoveryItem.IsSelected))
+            NotifyDouyinDiscoverySelectionChanged();
+    }
+
+    private void SubscribeDouyinDiscoveryItem(DouyinDiscoveryItem item)
+    {
+        if (_subscribedDiscoveryItems.Any(existing => ReferenceEquals(existing, item)))
+            return;
+
+        _subscribedDiscoveryItems.Add(item);
+        item.PropertyChanged += OnDouyinDiscoveryItemPropertyChanged;
+    }
+
+    private void UnsubscribeDouyinDiscoveryItem(DouyinDiscoveryItem item)
+    {
+        var existing = _subscribedDiscoveryItems.FirstOrDefault(candidate => ReferenceEquals(candidate, item));
+        if (existing is null)
+            return;
+
+        existing.PropertyChanged -= OnDouyinDiscoveryItemPropertyChanged;
+        _subscribedDiscoveryItems.Remove(existing);
+    }
+
+    private void ClearDouyinDiscoveryItemSubscriptions()
+    {
+        foreach (var item in _subscribedDiscoveryItems)
+        {
+            item.PropertyChanged -= OnDouyinDiscoveryItemPropertyChanged;
+        }
+
+        _subscribedDiscoveryItems.Clear();
     }
 
     private void NotifyDouyinTaskStateChanged()
@@ -464,6 +538,24 @@ public partial class DouyinViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task AddSelectedDouyinDiscoveryItemsToQueue()
+    {
+        var selectedItems = DouyinDiscoveryItems
+            .Where(item => item.IsSelected)
+            .ToList();
+
+        if (selectedItems.Count == 0)
+        {
+            DouyinDiscoveryErrorMessage = "请先选择要加入下载队列的发现结果";
+            DouyinDiscoveryStatusText = "尚未选择发现结果";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        await AddDouyinDiscoveryItemsToQueueAsync(selectedItems, "选中入队完成");
+    }
+
+    [RelayCommand]
     private async Task AddAllDouyinDiscoveryItemsToQueue()
     {
         if (DouyinDiscoveryItems.Count == 0)
@@ -474,11 +566,40 @@ public partial class DouyinViewModel : ObservableObject
             return;
         }
 
+        await AddDouyinDiscoveryItemsToQueueAsync(DouyinDiscoveryItems.ToList(), "批量入队完成");
+    }
+
+    [RelayCommand]
+    private void SelectAllDouyinDiscoveryItems()
+    {
+        foreach (var item in DouyinDiscoveryItems)
+        {
+            item.IsSelected = true;
+        }
+
+        NotifyDouyinDiscoverySelectionChanged();
+    }
+
+    [RelayCommand]
+    private void ClearDouyinDiscoverySelection()
+    {
+        foreach (var item in DouyinDiscoveryItems)
+        {
+            item.IsSelected = false;
+        }
+
+        NotifyDouyinDiscoverySelectionChanged();
+    }
+
+    private async Task AddDouyinDiscoveryItemsToQueueAsync(
+        IReadOnlyCollection<DouyinDiscoveryItem> items,
+        string statusPrefix)
+    {
         var added = 0;
         var skipped = 0;
         var failed = 0;
 
-        foreach (var item in DouyinDiscoveryItems.ToList())
+        foreach (var item in items)
         {
             var url = BuildDouyinDiscoveryDownloadUrl(item);
             if (string.IsNullOrWhiteSpace(url))
@@ -511,7 +632,7 @@ public partial class DouyinViewModel : ObservableObject
             added++;
         }
 
-        DouyinDiscoveryStatusText = $"批量入队完成：已加入 {added}，跳过 {skipped}，失败 {failed}";
+        DouyinDiscoveryStatusText = $"{statusPrefix}：已加入 {added}，跳过 {skipped}，失败 {failed}";
         DouyinDiscoveryErrorMessage = failed > 0
             ? $"{failed} 条发现结果缺少可下载链接"
             : "";
@@ -581,6 +702,13 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(DouyinDiscoveryResultCount));
         OnPropertyChanged(nameof(HasDouyinDiscoveryItems));
         OnPropertyChanged(nameof(HasDouyinDiscoveryError));
+        NotifyDouyinDiscoverySelectionChanged();
+    }
+
+    private void NotifyDouyinDiscoverySelectionChanged()
+    {
+        OnPropertyChanged(nameof(SelectedDouyinDiscoveryItemCount));
+        OnPropertyChanged(nameof(HasSelectedDouyinDiscoveryItems));
     }
 
     private static string BuildDouyinDiscoveryDownloadUrl(DouyinDiscoveryItem item)
