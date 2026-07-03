@@ -728,6 +728,9 @@ public class XamlBindingTests
 
         Assert.Contains("抖音工作台", texts);
         Assert.Contains("快速下载", texts);
+        Assert.Contains("抖音发现", texts);
+        Assert.Contains("热榜", texts);
+        Assert.Contains("关键词搜索", texts);
         Assert.Contains("任务中心", texts);
         Assert.Contains("专项任务队列", texts);
         Assert.Contains("下载成果摘要", texts);
@@ -757,6 +760,17 @@ public class XamlBindingTests
         Assert.Contains("Download.Url", source);
         Assert.Contains("Download.ParseCommand", source);
         Assert.Contains("Download.StartDownloadCommand", source);
+        Assert.Contains("DouyinDiscoveryKeyword", source);
+        Assert.Contains("DouyinDiscoverySearchMax", source);
+        Assert.Contains("LoadDouyinHotBoardCommand", source);
+        Assert.Contains("SearchDouyinDiscoveryCommand", source);
+        Assert.Contains("DouyinDiscoveryItems", source);
+        Assert.Contains("DouyinDiscoveryStatusText", source);
+        Assert.Contains("DouyinDiscoveryErrorMessage", source);
+        Assert.Contains("DouyinDiscoveryResultCount", source);
+        Assert.Contains("HasDouyinDiscoveryItems", source);
+        Assert.Contains("HasDouyinDiscoveryError", source);
+        Assert.Contains("IsDouyinDiscoveryLoading", source);
         Assert.Contains("Settings.EnableDouyinSpecialEngine", source);
         Assert.Contains("Settings.DouyinMode", source);
         Assert.Contains("Text=\"{Binding Settings.DouyinMode, UpdateSourceTrigger=LostFocus}\"", source);

@@ -137,6 +137,208 @@
 
             <StackPanel Margin="0,0,0,26">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                    <TextBlock Text="&#xE721;"
+                               Style="{StaticResource IconGlyph}"
+                               FontSize="{StaticResource IconSizeLarge}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               Margin="0,0,8,0"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="抖音发现" Style="{StaticResource TextSection}"/>
+                </StackPanel>
+
+                <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="96"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <Button Grid.Column="0"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="16,8"
+                                    Margin="0,0,10,0"
+                                    ToolTip="加载抖音热榜"
+                                    AutomationProperties.Name="加载抖音热榜"
+                                    Command="{Binding LoadDouyinHotBoardCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="热榜" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     Text="{Binding DouyinDiscoveryKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="关键词搜索"
+                                     AutomationProperties.Name="关键词搜索"
+                                     Padding="10,8"
+                                     Margin="0,0,10,0"/>
+
+                            <TextBox Grid.Column="2"
+                                     Style="{StaticResource DarkTextBox}"
+                                     Text="{Binding DouyinDiscoverySearchMax, UpdateSourceTrigger=LostFocus}"
+                                     TextAlignment="Center"
+                                     ToolTip="搜索结果数量"
+                                     AutomationProperties.Name="搜索结果数量"
+                                     Padding="10,8"
+                                     Margin="0,0,10,0"/>
+
+                            <Button Grid.Column="3"
+                                    Style="{StaticResource AccentButton}"
+                                    Padding="16,8"
+                                    Margin="0,0,10,0"
+                                    ToolTip="关键词搜索"
+                                    AutomationProperties.Name="关键词搜索"
+                                    Command="{Binding SearchDouyinDiscoveryCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE721;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="关键词搜索" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <StackPanel Grid.Column="4"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding DouyinDiscoveryResultCount, Mode=OneWay, FallbackValue=0}"
+                                           Style="{StaticResource TextBodyStrong}"
+                                           Foreground="{DynamicResource AccentBrush}"
+                                           FontFamily="{StaticResource FontFamilyMono}"
+                                           VerticalAlignment="Center"/>
+                                <TextBlock Text=" 条"
+                                           Style="{StaticResource TextCaption}"
+                                           Margin="4,0,0,0"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="{Binding DouyinDiscoveryStatusText, Mode=OneWay}"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1"
+                                       Text="正在加载"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{DynamicResource AccentBrush}"
+                                       Visibility="{Binding IsDouyinDiscoveryLoading, Converter={StaticResource BoolToVisibility}}"
+                                       VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <TextBlock Text="{Binding DouyinDiscoveryErrorMessage, Mode=OneWay}"
+                                   Style="{StaticResource TextBodyStrong}"
+                                   Foreground="{StaticResource ErrorBrush}"
+                                   TextWrapping="Wrap"
+                                   Visibility="{Binding HasDouyinDiscoveryError, Converter={StaticResource BoolToVisibility}}"
+                                   Margin="0,0,0,12"/>
+
+                        <Grid MinHeight="150">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Margin="0,24">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasDouyinDiscoveryItems}" Value="False">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <TextBlock Text="&#xE721;"
+                                           Style="{StaticResource IconGlyph}"
+                                           FontSize="{StaticResource IconSizeEmptyState}"
+                                           Foreground="{StaticResource BorderPrimaryBrush}"
+                                           HorizontalAlignment="Center"/>
+                                <TextBlock Text="暂无发现结果"
+                                           Style="{StaticResource TextBodyStrong}"
+                                           HorizontalAlignment="Center"
+                                           Margin="0,12,0,0"/>
+                            </StackPanel>
+
+                            <ListBox ItemsSource="{Binding DouyinDiscoveryItems}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="Margin" Value="0,0,0,8"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Style="{StaticResource ToolPanelBorder}" Padding="12">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Style="{StaticResource TextBodyStrong}"
+                                                               TextTrimming="CharacterEllipsis">
+                                                        <Run Text="{Binding Word, Mode=OneWay}"/>
+                                                        <Run Text="{Binding Description, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Style="{StaticResource TextCaption}"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Margin="0,5,0,0">
+                                                        <Run Text="{Binding AuthorNickname, Mode=OneWay}"/>
+                                                        <Run Text=" "/>
+                                                        <Run Text="{Binding AwemeId, Mode=OneWay}"/>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding Url, Mode=OneWay}"
+                                                               Style="{StaticResource TextCaption}"
+                                                               Foreground="{DynamicResource AccentBrush}"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               Margin="0,5,0,0"/>
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1"
+                                                            Margin="16,0,0,0"
+                                                            VerticalAlignment="Center"
+                                                            MinWidth="88">
+                                                    <TextBlock Text="{Binding Position, Mode=OneWay, StringFormat=第 {0} 位}"
+                                                               Style="{StaticResource TextCaption}"
+                                                               HorizontalAlignment="Right"/>
+                                                    <TextBlock Text="{Binding HotValue, Mode=OneWay, StringFormat=热度 {0:N0}}"
+                                                               Style="{StaticResource TextCaption}"
+                                                               Foreground="{DynamicResource AccentBrush}"
+                                                               HorizontalAlignment="Right"
+                                                               Margin="0,4,0,0"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Margin="0,0,0,26">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
                     <TextBlock Text="&#xE8FD;"
                                Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"

@@ -11,8 +11,12 @@ namespace EasyGet.ViewModels;
 public partial class DouyinViewModel : ObservableObject
 {
     private const int MaxRecentAuthorItems = 8;
+    private const int DefaultDouyinHotBoardLimit = 30;
+    private const int DefaultDouyinSearchMax = 50;
 
+    private readonly ConfigService _configService;
     private readonly DownloadManager _downloadManager;
+    private readonly IDouyinSpecialDownloadService _douyinSpecialDownloadService;
     private readonly HashSet<DownloadTask> _subscribedTasks = [];
 
     public DownloadViewModel Download { get; }
@@ -37,11 +41,28 @@ public partial class DouyinViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsDouyinArchiveFilterActive))]
     private string _douyinArchiveSearchKeyword = "";
 
+    [ObservableProperty]
+    private string _douyinDiscoveryKeyword = "";
+
+    [ObservableProperty]
+    private int _douyinDiscoverySearchMax = DefaultDouyinSearchMax;
+
+    [ObservableProperty]
+    private string _douyinDiscoveryStatusText = "尚未加载发现结果";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasDouyinDiscoveryError))]
+    private string _douyinDiscoveryErrorMessage = "";
+
+    [ObservableProperty]
+    private bool _isDouyinDiscoveryLoading;
+
     public IEnumerable<DownloadTask> DouyinTasks => DouyinTaskItems;
     public ObservableCollection<DownloadTask> DouyinTaskItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinHistoryItems { get; } = [];
     public ObservableCollection<DownloadHistory> DouyinManifestSummaryItems { get; } = [];
     public ObservableCollection<DouyinRecentAuthorItem> DouyinRecentAuthorItems { get; } = [];
+    public ObservableCollection<DouyinDiscoveryItem> DouyinDiscoveryItems { get; } = [];
 
     public int DouyinTaskCount => CountDouyinTasks();
 
@@ -71,6 +92,12 @@ public partial class DouyinViewModel : ObservableObject
 
     public bool HasDouyinRecentAuthorItems => DouyinRecentAuthorItems.Count > 0;
 
+    public int DouyinDiscoveryResultCount => DouyinDiscoveryItems.Count;
+
+    public bool HasDouyinDiscoveryItems => DouyinDiscoveryItems.Count > 0;
+
+    public bool HasDouyinDiscoveryError => !string.IsNullOrWhiteSpace(DouyinDiscoveryErrorMessage);
+
     public bool IsDouyinArchiveFilterActive
         => !string.IsNullOrWhiteSpace(DouyinArchiveSearchKeyword)
            || SelectedDouyinArchiveTypeFilter != "全部";
@@ -81,11 +108,14 @@ public partial class DouyinViewModel : ObservableObject
         DownloadViewModel download,
         BatchDownloadViewModel batch,
         HistoryViewModel history,
-        SettingsViewModel settings)
+        SettingsViewModel settings,
+        IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
         ArgumentNullException.ThrowIfNull(configService);
 
+        _configService = configService;
         _downloadManager = downloadManager;
+        _douyinSpecialDownloadService = douyinSpecialDownloadService ?? new DouyinSpecialDownloadService();
         Download = download;
         Batch = batch;
         History = history;
@@ -315,6 +345,101 @@ public partial class DouyinViewModel : ObservableObject
     {
         await History.LoadAllHistoryForWorkspace();
         SyncDouyinHistoryItems();
+    }
+
+    [RelayCommand]
+    private async Task LoadDouyinHotBoard()
+    {
+        await RunDouyinDiscoveryAsync(
+            new DouyinDiscoveryRequest(
+                DouyinDiscoveryType.HotBoard,
+                GetDiscoveryOutputDirectory(),
+                Limit: DefaultDouyinHotBoardLimit));
+    }
+
+    [RelayCommand]
+    private async Task SearchDouyinDiscovery()
+    {
+        var keyword = DouyinDiscoveryKeyword.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            ClearDouyinDiscoveryResults();
+            DouyinDiscoveryErrorMessage = "请输入搜索关键词";
+            DouyinDiscoveryStatusText = "等待关键词";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        await RunDouyinDiscoveryAsync(
+            new DouyinDiscoveryRequest(
+                DouyinDiscoveryType.Search,
+                GetDiscoveryOutputDirectory(),
+                Keyword: keyword,
+                SearchMax: Math.Max(1, DouyinDiscoverySearchMax)));
+    }
+
+    private async Task RunDouyinDiscoveryAsync(DouyinDiscoveryRequest request)
+    {
+        IsDouyinDiscoveryLoading = true;
+        DouyinDiscoveryErrorMessage = "";
+        DouyinDiscoveryStatusText = "正在加载发现结果";
+        ClearDouyinDiscoveryResults();
+
+        try
+        {
+            var result = await _douyinSpecialDownloadService.DiscoverAsync(
+                request,
+                _configService.Config);
+
+            foreach (var item in result.Items)
+            {
+                DouyinDiscoveryItems.Add(item);
+            }
+
+            DouyinDiscoveryStatusText = FormatDouyinDiscoveryStatus(result);
+        }
+        catch (OperationCanceledException)
+        {
+            DouyinDiscoveryErrorMessage = "抖音发现任务已取消";
+            DouyinDiscoveryStatusText = "发现任务已取消";
+        }
+        catch (Exception ex)
+        {
+            DouyinDiscoveryErrorMessage = ex.Message;
+            DouyinDiscoveryStatusText = "发现结果加载失败";
+        }
+        finally
+        {
+            IsDouyinDiscoveryLoading = false;
+            NotifyDouyinDiscoveryStateChanged();
+        }
+    }
+
+    private string GetDiscoveryOutputDirectory()
+        => string.IsNullOrWhiteSpace(_configService.Config.DefaultDownloadPath)
+            ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+            : _configService.Config.DefaultDownloadPath.Trim();
+
+    private static string FormatDouyinDiscoveryStatus(DouyinDiscoveryResult result)
+    {
+        var count = Math.Max(0, result.ItemCount);
+        return result.DiscoveryType.Equals("search", StringComparison.OrdinalIgnoreCase)
+            ? $"已加载 {count} 条搜索结果"
+            : $"已加载 {count} 条热榜结果";
+    }
+
+    private void ClearDouyinDiscoveryResults()
+    {
+        DouyinDiscoveryItems.Clear();
+        NotifyDouyinDiscoveryStateChanged();
+    }
+
+    private void NotifyDouyinDiscoveryStateChanged()
+    {
+        OnPropertyChanged(nameof(DouyinDiscoveryItems));
+        OnPropertyChanged(nameof(DouyinDiscoveryResultCount));
+        OnPropertyChanged(nameof(HasDouyinDiscoveryItems));
+        OnPropertyChanged(nameof(HasDouyinDiscoveryError));
     }
 
     private bool MatchesTaskCenterFilter(DownloadTask task)

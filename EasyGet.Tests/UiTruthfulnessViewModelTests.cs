@@ -916,6 +916,83 @@ public class UiTruthfulnessViewModelTests
         Assert.Equal(2, notificationCount);
     }
 
+    [Fact]
+    public async Task DouyinViewModelLoadsHotBoardDiscoveryResults()
+    {
+        var discovery = new FakeDouyinDiscoveryService(
+            new DouyinDiscoveryResult(
+                "hot_board",
+                @"D:\Videos\hot_board\20260704_120000.jsonl",
+                1,
+                [
+                    new DouyinDiscoveryItem(Word: "猫咪", HotValue: 123)
+                ],
+                Limit: 30));
+        using var context = CreateViewModelContext(discovery);
+        context.BatchContext.Config.Config.DefaultDownloadPath = @"D:\Videos";
+
+        await context.Douyin.LoadDouyinHotBoardCommand.ExecuteAsync(null);
+
+        Assert.NotNull(discovery.LastRequest);
+        Assert.Equal(DouyinDiscoveryType.HotBoard, discovery.LastRequest.Type);
+        Assert.Equal(@"D:\Videos", discovery.LastRequest.OutputDirectory);
+        Assert.Equal(30, discovery.LastRequest.Limit);
+        Assert.Equal(1, context.Douyin.DouyinDiscoveryResultCount);
+        Assert.True(context.Douyin.HasDouyinDiscoveryItems);
+        Assert.False(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("1", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        var item = Assert.Single(context.Douyin.DouyinDiscoveryItems);
+        Assert.Equal("猫咪", item.Word);
+        Assert.Equal(123, item.HotValue);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelSearchesDiscoveryKeyword()
+    {
+        var discovery = new FakeDouyinDiscoveryService(
+            new DouyinDiscoveryResult(
+                "search",
+                @"D:\Videos\search\cat.jsonl",
+                1,
+                [
+                    new DouyinDiscoveryItem(
+                        AwemeId: "aweme-1",
+                        Description: "猫咪晒太阳",
+                        AuthorNickname: "Alice",
+                        SecUid: "sec-a",
+                        Url: "https://www.douyin.com/video/aweme-1")
+                ],
+                Keyword: "猫咪",
+                SearchMax: 50));
+        using var context = CreateViewModelContext(discovery);
+        context.Douyin.DouyinDiscoveryKeyword = " 猫咪 ";
+        context.Douyin.DouyinDiscoverySearchMax = 50;
+
+        await context.Douyin.SearchDouyinDiscoveryCommand.ExecuteAsync(null);
+
+        Assert.NotNull(discovery.LastRequest);
+        Assert.Equal(DouyinDiscoveryType.Search, discovery.LastRequest.Type);
+        Assert.Equal("猫咪", discovery.LastRequest.Keyword);
+        Assert.Equal(50, discovery.LastRequest.SearchMax);
+        var item = Assert.Single(context.Douyin.DouyinDiscoveryItems);
+        Assert.Equal("aweme-1", item.AwemeId);
+        Assert.Equal("猫咪晒太阳", item.Description);
+        Assert.Equal("Alice", item.AuthorNickname);
+    }
+
+    [Fact]
+    public async Task DouyinViewModelReportsDiscoveryErrors()
+    {
+        var discovery = new FakeDouyinDiscoveryService(null, new InvalidOperationException("请先登录"));
+        using var context = CreateViewModelContext(discovery);
+
+        await context.Douyin.LoadDouyinHotBoardCommand.ExecuteAsync(null);
+
+        Assert.Empty(context.Douyin.DouyinDiscoveryItems);
+        Assert.True(context.Douyin.HasDouyinDiscoveryError);
+        Assert.Contains("请先登录", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData(1024L, "1 KB 可用")]
     [InlineData(1024L * 1024L * 1536L, "1.5 GB 可用")]
@@ -924,7 +1001,7 @@ public class UiTruthfulnessViewModelTests
         Assert.Equal(expected, HistoryViewModel.FormatAvailableSpace(bytes));
     }
 
-    private static ViewModelContext CreateViewModelContext()
+    private static ViewModelContext CreateViewModelContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
         var batchContext = CreateBatchContext();
         var settings = new SettingsViewModel(
@@ -943,7 +1020,8 @@ public class UiTruthfulnessViewModelTests
             download,
             batchContext.Batch,
             history,
-            settings);
+            settings,
+            douyinSpecialDownloadService);
         var main = new MainViewModel(
             batchContext.Config,
             batchContext.Environment,
@@ -955,6 +1033,34 @@ public class UiTruthfulnessViewModelTests
             settings);
 
         return new ViewModelContext(batchContext, download, history, douyin, settings, main);
+    }
+
+    private sealed class FakeDouyinDiscoveryService(
+        DouyinDiscoveryResult? result,
+        Exception? exception = null) : IDouyinSpecialDownloadService
+    {
+        public DouyinDiscoveryRequest? LastRequest { get; private set; }
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            AppConfig config,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<DouyinDiscoveryResult> DiscoverAsync(
+            DouyinDiscoveryRequest request,
+            AppConfig config,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            LastRequest = request;
+            if (exception is not null)
+                throw exception;
+
+            return Task.FromResult(result!);
+        }
     }
 
     private static BatchContext CreateBatchContext()
