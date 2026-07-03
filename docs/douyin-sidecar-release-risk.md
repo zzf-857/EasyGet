@@ -86,7 +86,7 @@ EasyGet 当前发布链路是：
 
 - 普通 Windows venv 不是可靠的可重定位发布格式。本机 `pyvenv.cfg` 指向 `C:\Python314`，不能代表无 Python 环境的用户机器。
 - 文件数量多、升级清理复杂，安装包和便携 zip 都会明显变大。
-- 当前 wrapper 会在输出目录下创建临时 `.easyget-douyin-sidecar-*` 配置目录；如果进程被强杀，临时配置可能残留，且可能包含 Cookie。
+- 当前 wrapper 默认使用系统临时目录创建 `.easyget-douyin-sidecar-*` 配置目录，不再把包含 Cookie 的临时配置写入用户输出目录；如果进程被强杀，系统临时目录中仍可能残留，需要后续增加过期清理。
 - 若把 venv 放在 `{app}`，安装覆盖升级时可能留下旧依赖；若放在 `%LocalAppData%`，又需要首次安装/修复逻辑。
 
 体积估算：
@@ -175,7 +175,7 @@ EasyGet 当前发布链路是：
 - 将 C# runner 的目标从 `python + .py` 改为可配置的 sidecar exe，或增加明确的发布模式。
 - 对齐 wrapper CLI，至少处理 C# 当前可能传入的 `--url`、`--output-dir`、`--format`、`--quality`、`--title`、`--cookie`、`--proxy`、`--mode`、`--limit`。
 - 确保 stdout 只输出 JSONL，终态必须是 `success`、`failed` 或 `cancelled`。
-- 将临时配置从用户输出目录移到 `%LocalAppData%\EasyGet\tools\douyin-sidecar\tmp\`，或保证强杀后下次启动清理。
+- 默认临时配置已从用户输出目录移到系统临时目录；后续可继续收敛到 `%LocalAppData%\EasyGet\tools\douyin-sidecar\tmp\` 并增加过期清理。
 
 阶段 2：PyInstaller onefile 发布。
 
@@ -237,7 +237,7 @@ EasyGet 当前发布链路是：
 
 - stdout 输出 JSONL，由 C# 读取并映射到任务进度或日志。
 - stderr 被 C# 收集，sidecar 非 0 退出时作为异常原因。
-- 默认临时 config 在 `output-dir` 下的 `.easyget-douyin-sidecar-*`，正常退出会删除；如果被 `Kill(entireProcessTree: true)` 强杀，可能残留。
+- 默认临时 config 在系统临时目录下的 `.easyget-douyin-sidecar-*`，正常退出会删除；如果被 `Kill(entireProcessTree: true)` 强杀，可能在系统临时目录残留，但不会混入用户下载输出目录。
 - `--keep-temp-config` 会保留 `output-dir\.easyget-douyin-sidecar\last-config.json`，其中可能包含 Cookie，只能用于开发调试，正式包应禁用。
 
 ## 取消、杀进程与清理
@@ -246,7 +246,7 @@ EasyGet 当前发布链路是：
 
 - 源码 + venv 模式下，父进程是 Python wrapper，子进程是第三方 `run.py`，必须杀整棵进程树，否则真实下载可能继续。
 - PyInstaller 模式如果仍然调用外部 `run.py`，说明打包没有闭环；正式模式应尽量避免再次依赖外部 Python。
-- 强杀不会给 Python `TemporaryDirectory` 机会清理，Cookie 临时 config 可能残留。必须改为受控 tmp 目录，并在 EasyGet 启动或 sidecar 启动时清理过期目录。
+- 强杀不会给 Python `TemporaryDirectory` 机会清理，Cookie 临时 config 可能在系统临时目录残留。后续仍建议改为受控 tmp 目录，并在 EasyGet 启动或 sidecar 启动时清理过期目录。
 - 下载中的 `.tmp`、`.part`、空目录、未完成 manifest 行要么清理，要么在失败/取消日志中标记。
 - 取消后 EasyGet 任务状态应为 `Cancelled`，不应因为进程退出码非 0 覆盖成 `Failed`。
 - 取消后 5 秒内不应存在 `EasyGet.DouyinSidecar.exe`、`python.exe`、第三方 `run.py` 相关残留进程。

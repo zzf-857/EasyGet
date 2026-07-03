@@ -860,7 +860,7 @@ def run_real(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], int]:
             args, downloader_root, config_path, output_dir, start_manifest_line, start_timestamp, redaction_secrets
         )
     else:
-        with tempfile.TemporaryDirectory(prefix=".easyget-douyin-sidecar-", dir=str(output_dir)) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix=".easyget-douyin-sidecar-") as temp_dir:
             config_path = Path(temp_dir) / "config.json"
             write_json_config(config, config_path)
             completed, exit_code = _invoke_downloader(
@@ -1098,7 +1098,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--dry-run", action="store_true", help="Emit planned config/command without downloading")
     parser.add_argument("--emit-sample", action="store_true", help="Emit deterministic sample JSONL and create a sample file")
     parser.add_argument("--self-test-imports", action="store_true", help="Verify phase-one downloader imports in the current runtime")
-    parser.add_argument("--keep-temp-config", action="store_true", help="Keep last config under output-dir for debugging")
+    parser.add_argument("--keep-temp-config", action="store_true", help="Keep last config under output-dir state folder for debugging")
     parser.add_argument(
         "--runner-mode",
         choices=("auto", "subprocess", "in-process"),

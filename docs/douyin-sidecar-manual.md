@@ -173,7 +173,7 @@ Cookie 输出规则：
 - 推荐用 `--cookie-env ENV_NAME` 或 `--cookie-file PATH` 传入真实 Cookie，避免 Cookie 原文出现在进程命令行。
 - `--cookie-env` 和 `--cookie-file` 只能选一个；环境变量缺失/为空、文件不存在/为空都会返回 JSONL `failed` 事件。
 - dry-run 的 `details.cookie_source` 只显示来源类型、环境变量名或文件路径，以及 `redacted=true`；不会输出 Cookie 原文。
-- sidecar 会把 Cookie 写入自己管理的临时 config 目录再交给第三方 runner；默认运行结束后删除。该目录不会被 manifest 或输出扫描当成下载文件。
+- sidecar 会把 Cookie 写入自己管理的系统临时 config 目录再交给第三方 runner；默认运行结束后删除，不会创建在用户下载输出目录下。该目录不会被 manifest 或输出扫描当成下载文件。
 - sidecar 捕获第三方 stdout/stderr 后会再次按 Cookie 值脱敏，再写入 JSONL 失败事件。
 
 ## 当前能力边界
@@ -236,7 +236,7 @@ Task C 新增 `scripts\build-douyin-sidecar.ps1` 和 `tools\douyin-sidecar\EasyG
 - 抖音接口和风控会变化；无 Cookie 或 Cookie 过期时真实下载可能失败。
 - 第三方依赖包含 `gmssl`、`aiohttp`、`httpx`、`imageio-ffmpeg` 等，打包时需要确认目标机器可安装 wheel。
 - `--python` 可显式指向第三方仓库 venv；不传时 sidecar 会自动优先选择第三方仓库 `.venv` / `venv`。
-- 默认不保留临时 config，避免 Cookie 落盘。只有调试时才使用 `--keep-temp-config`，它会把 Cookie 写入 `output-dir\.easyget-douyin-sidecar\last-config.json`。
+- 默认不保留临时 config，避免 Cookie 留在用户输出目录。只有调试时才使用 `--keep-temp-config`，它会把 Cookie 写入 `output-dir\.easyget-douyin-sidecar\last-config.json`。
 - 当前 wrapper 不解析第三方 Rich 进度条，只解析最终计数字符串；若第三方输出格式变化，仍可通过 manifest 推断成功文件。
 
 ## License Attribution

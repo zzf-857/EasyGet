@@ -494,6 +494,29 @@ class SidecarRunnerTests(unittest.TestCase):
             self.assertEqual(events[-1]["title"], "fake in-process video")
             self.assertTrue((output_dir / "runtime-probe.json").exists())
 
+    def test_run_real_default_temp_config_stays_outside_output_directory(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_fake_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            probe = json.loads((output_dir / "runtime-probe.json").read_text(encoding="utf-8"))
+            config_index = probe["argv"].index("-c")
+            config_path = Path(probe["argv"][config_index + 1]).resolve()
+            with self.assertRaises(ValueError):
+                config_path.relative_to(output_dir.resolve())
+            self.assertFalse(
+                any(path.name.startswith(".easyget-douyin-sidecar-") for path in output_dir.iterdir()),
+                "Default runtime config directories should not be created inside the user's output directory.",
+            )
+
     def test_in_process_runner_converts_nonzero_system_exit_to_failed_event(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "fake-downloader"
