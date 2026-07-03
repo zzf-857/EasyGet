@@ -13,6 +13,7 @@ public class AppConfig
     public const int MinConcurrentDownloadLimit = 1;
     public const int MaxConcurrentDownloadLimit = 8;
     public const string DefaultDouyinTemplate = "{date}_{title}_{id}";
+    public const int MaxDouyinCommentPageSize = 20;
 
     /// <summary>默认下载目录</summary>
     public string DefaultDownloadPath { get; set; } = 
@@ -89,6 +90,15 @@ public class AppConfig
 
     /// <summary>抖音专项下载是否包含评论；复用 CookieContent，不新增登录流程</summary>
     public bool DouyinDownloadComments { get; set; } = false;
+
+    /// <summary>抖音评论采集是否包含二级回复；会增加额外请求量</summary>
+    public bool DouyinCommentIncludeReplies { get; set; } = false;
+
+    /// <summary>抖音评论采集数量上限；0 表示不限制</summary>
+    public int DouyinMaxComments { get; set; } = 0;
+
+    /// <summary>抖音评论采集分页大小；抖音通常上限为 20</summary>
+    public int DouyinCommentPageSize { get; set; } = MaxDouyinCommentPageSize;
 
     /// <summary>抖音专项下载是否保存原始 JSON；复用 CookieContent，不新增登录流程</summary>
     public bool DouyinDownloadJson { get; set; } = false;

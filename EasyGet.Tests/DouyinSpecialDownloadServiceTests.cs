@@ -612,6 +612,9 @@ public class DouyinSpecialDownloadServiceTests
         SetAppConfigBool(config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
         SetAppConfigBool(config, "DouyinDownloadPinned", value: true);
+        SetAppConfigBool(config, "DouyinCommentIncludeReplies", value: true);
+        SetAppConfigInt(config, "DouyinMaxComments", 500);
+        SetAppConfigInt(config, "DouyinCommentPageSize", 12);
         SetAppConfigString(config, "DouyinFilenameTemplate", " {author}_{title}_{id} ");
         SetAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}");
         SetAppConfigString(config, "DouyinAuthorDirectoryMode", " sec_uid ");
@@ -644,6 +647,9 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Equal("sec_uid", GetRequestValue<string>(runner.LastRequest, "AuthorDirectoryMode"));
         Assert.False(GetRequestValue<bool>(runner.LastRequest, "GroupByMode"));
         Assert.Equal(7, GetRequestValue<int>(runner.LastRequest, "ThreadCount"));
+        Assert.True(GetRequestValue<bool>(runner.LastRequest, "CommentIncludeReplies"));
+        Assert.Equal(500, GetRequestValue<int>(runner.LastRequest, "MaxComments"));
+        Assert.Equal(12, GetRequestValue<int>(runner.LastRequest, "CommentPageSize"));
     }
 
     [Theory]
@@ -714,7 +720,10 @@ public class DouyinSpecialDownloadServiceTests
             ["FolderTemplate"] = "{date}_{id}",
             ["AuthorDirectoryMode"] = "sec_uid",
             ["GroupByMode"] = false,
-            ["ThreadCount"] = 7
+            ["ThreadCount"] = 7,
+            ["CommentIncludeReplies"] = true,
+            ["MaxComments"] = 500,
+            ["CommentPageSize"] = 12
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -741,6 +750,9 @@ public class DouyinSpecialDownloadServiceTests
         AssertArgument(args, "--folder-template", "{date}_{id}");
         AssertArgument(args, "--author-dir", "sec_uid");
         AssertArgument(args, "--thread", "7");
+        Assert.Contains("--comment-include-replies", args);
+        AssertArgument(args, "--max-comments", "500");
+        AssertArgument(args, "--comment-page-size", "12");
         Assert.Contains("--include-cover", args);
         Assert.DoesNotContain("--include-music", args);
         Assert.Contains("--include-json", args);
@@ -1066,6 +1078,13 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void SetAppConfigInt(AppConfig config, string propertyName, int value)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);

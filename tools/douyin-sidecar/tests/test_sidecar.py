@@ -398,6 +398,9 @@ class SidecarCliTests(unittest.TestCase):
             events = [json.loads(line) for line in result.stdout.splitlines()]
             config = events[0]["details"]["config"]
             self.assertFalse(config["comments"]["enabled"])
+            self.assertFalse(config["comments"]["include_replies"])
+            self.assertEqual(config["comments"]["max_comments"], 0)
+            self.assertEqual(config["comments"]["page_size"], 20)
 
     def test_dry_run_defaults_database_to_disabled_with_state_database_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -460,12 +463,36 @@ class SidecarCliTests(unittest.TestCase):
 
     def test_dry_run_include_comments_enables_comment_collection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            result = self.run_sidecar(["--dry-run", "--include-comments"], Path(temp_dir))
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--include-comments",
+                    "--comment-include-replies",
+                    "--max-comments",
+                    "500",
+                    "--comment-page-size",
+                    "12",
+                ],
+                Path(temp_dir),
+            )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             events = [json.loads(line) for line in result.stdout.splitlines()]
             config = events[0]["details"]["config"]
             self.assertTrue(config["comments"]["enabled"])
+            self.assertTrue(config["comments"]["include_replies"])
+            self.assertEqual(config["comments"]["max_comments"], 500)
+            self.assertEqual(config["comments"]["page_size"], 12)
+
+    def test_dry_run_rejects_invalid_comment_limits(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(["--dry-run", "--max-comments", "-1"], Path(temp_dir))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--max-comments must be >= 0", result.stderr)
+
+            result = self.run_sidecar(["--dry-run", "--comment-page-size", "21"], Path(temp_dir))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--comment-page-size must be between 1 and 20", result.stderr)
 
     def test_raw_cookie_argument_is_rejected_without_leaking_secret(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -749,6 +749,9 @@ public class XamlBindingTests
         Assert.Contains("下载封面", texts);
         Assert.Contains("下载作者头像", texts);
         Assert.Contains("下载音乐", texts);
+        Assert.Contains("包含二级回复", texts);
+        Assert.Contains("评论数量上限", texts);
+        Assert.Contains("评论分页大小", texts);
         Assert.Contains("保存原始 JSON", texts);
 
         Assert.Contains("Download.Url", source);
@@ -759,6 +762,9 @@ public class XamlBindingTests
         Assert.Contains("Text=\"{Binding Settings.DouyinMode, UpdateSourceTrigger=LostFocus}\"", source);
         Assert.Contains("IsEditable=\"True\"", source);
         Assert.Contains("Settings.DouyinDownloadComments", source);
+        Assert.Contains("Settings.DouyinCommentIncludeReplies", source);
+        Assert.Contains("Settings.DouyinMaxComments", source);
+        Assert.Contains("Settings.DouyinCommentPageSize", source);
         Assert.Contains("Settings.DouyinFolderTemplate", source);
         Assert.Contains("Settings.DouyinAuthorDirectoryMode", source);
         Assert.Contains("Settings.DouyinAuthorDirectoryModeOptions", source);
@@ -1048,6 +1054,9 @@ public class XamlBindingTests
         Assert.Contains("下载封面", texts);
         Assert.Contains("下载音乐", texts);
         Assert.Contains("下载评论", texts);
+        Assert.Contains("包含二级回复", texts);
+        Assert.Contains("评论数量上限", texts);
+        Assert.Contains("评论分页大小", texts);
         Assert.Contains("下载作者头像", texts);
         Assert.Contains("保存原始 JSON", texts);
         Assert.Contains("启用本地去重数据库", texts);
@@ -1070,6 +1079,9 @@ public class XamlBindingTests
         Assert.Contains("DouyinDownloadCover", source);
         Assert.Contains("DouyinDownloadMusic", source);
         Assert.Contains("DouyinDownloadComments", source);
+        Assert.Contains("DouyinCommentIncludeReplies", source);
+        Assert.Contains("DouyinMaxComments", source);
+        Assert.Contains("DouyinCommentPageSize", source);
         Assert.Contains("DouyinDownloadAvatar", source);
         Assert.Contains("DouyinDownloadJson", source);
         Assert.Contains("DouyinEnableDatabase", source);

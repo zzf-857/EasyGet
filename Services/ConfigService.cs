@@ -179,6 +179,11 @@ public class ConfigService
         config.CookieContent ??= "";
         config.DouyinMode = NormalizeDouyinMode(config.DouyinMode, defaults.DouyinMode);
         config.DouyinLimit = Math.Max(0, config.DouyinLimit);
+        config.DouyinMaxComments = Math.Max(0, config.DouyinMaxComments);
+        config.DouyinCommentPageSize = Math.Clamp(
+            config.DouyinCommentPageSize,
+            1,
+            AppConfig.MaxDouyinCommentPageSize);
         config.DouyinFilenameTemplate = NormalizeDouyinTemplate(config.DouyinFilenameTemplate);
         config.DouyinFolderTemplate = NormalizeDouyinTemplate(config.DouyinFolderTemplate);
         config.DouyinAuthorDirectoryMode = NormalizeDouyinAuthorDirectoryMode(

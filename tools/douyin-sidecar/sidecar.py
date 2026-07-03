@@ -246,6 +246,9 @@ def build_config(
     include_music: bool = False,
     include_json: bool = False,
     include_comments: bool = False,
+    comment_include_replies: bool = False,
+    max_comments: int = 0,
+    comment_page_size: int = 20,
     enable_database: bool = False,
     incremental: bool = False,
     start_time: str = "",
@@ -324,9 +327,9 @@ def build_config(
         },
         "comments": {
             "enabled": bool(include_comments),
-            "include_replies": False,
-            "max_comments": 0,
-            "page_size": 20,
+            "include_replies": bool(comment_include_replies),
+            "max_comments": max(0, int(max_comments or 0)),
+            "page_size": min(20, max(1, int(comment_page_size or 20))),
         },
         "notifications": {
             "enabled": False,
@@ -360,6 +363,9 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         include_music=args.include_music,
         include_json=args.include_json,
         include_comments=args.include_comments,
+        comment_include_replies=args.comment_include_replies,
+        max_comments=args.max_comments,
+        comment_page_size=args.comment_page_size,
         enable_database=args.enable_database,
         incremental=args.incremental,
         start_time=args.start_time,
@@ -1356,6 +1362,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--include-music", action="store_true", help="Download music/audio side outputs when supported")
     parser.add_argument("--include-json", action="store_true", help="Save raw JSON metadata when supported")
     parser.add_argument("--include-comments", action="store_true", help="Collect comments when supported")
+    parser.add_argument("--comment-include-replies", action="store_true", help="Collect second-level replies for comments")
+    parser.add_argument("--max-comments", type=int, default=0, help="Maximum comments per work; 0 means unlimited")
+    parser.add_argument("--comment-page-size", type=int, default=20, help="Comment API page size, from 1 to 20")
     parser.add_argument("--enable-database", action="store_true", help="Enable local SQLite deduplication/history database")
     parser.add_argument("--incremental", action="store_true", help="Enable incremental download for supported batch modes")
     parser.add_argument("--start-time", default="", help="Pass through third-party start_time filter value")
@@ -1389,6 +1398,10 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         parser.error("--limit must be >= 0")
     if args.thread < 1:
         parser.error("--thread must be >= 1")
+    if args.max_comments < 0:
+        parser.error("--max-comments must be >= 0")
+    if args.comment_page_size < 1 or args.comment_page_size > 20:
+        parser.error("--comment-page-size must be between 1 and 20")
     return args
 
 

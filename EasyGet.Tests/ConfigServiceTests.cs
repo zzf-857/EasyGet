@@ -227,6 +227,8 @@ public class ConfigServiceTests
         SetAppConfigBool(config, "DouyinDownloadAvatar", value: true);
         SetAppConfigBool(config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
+        SetAppConfigInt(config, "DouyinMaxComments", -5);
+        SetAppConfigInt(config, "DouyinCommentPageSize", 99);
 
         ConfigService.NormalizeRuntimeConfig(config);
 
@@ -239,6 +241,19 @@ public class ConfigServiceTests
         AssertAppConfigBool(config, "DouyinDownloadAvatar", expected: true);
         AssertAppConfigBool(config, "DouyinEnableDatabase", expected: true);
         AssertAppConfigBool(config, "DouyinIncrementalDownload", expected: true);
+        AssertAppConfigInt(config, "DouyinMaxComments", 0);
+        AssertAppConfigInt(config, "DouyinCommentPageSize", 20);
+    }
+
+    [Fact]
+    public void NormalizeRuntimeConfig_ClampsDouyinCommentPageSizeToLowerBound()
+    {
+        var config = new AppConfig();
+        SetAppConfigInt(config, "DouyinCommentPageSize", 0);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigInt(config, "DouyinCommentPageSize", 1);
     }
 
     [Theory]
@@ -357,7 +372,21 @@ public class ConfigServiceTests
         Assert.Equal(expected, Assert.IsType<string>(property!.GetValue(config)));
     }
 
+    private static void AssertAppConfigInt(AppConfig config, string propertyName, int expected)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<int>(property!.GetValue(config)));
+    }
+
     private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void SetAppConfigInt(AppConfig config, string propertyName, int value)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);

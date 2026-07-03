@@ -76,6 +76,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _douyinDownloadAvatar;
     [ObservableProperty] private bool _douyinDownloadMusic;
     [ObservableProperty] private bool _douyinDownloadComments;
+    [ObservableProperty] private bool _douyinCommentIncludeReplies;
+    [ObservableProperty] private int _douyinMaxComments;
+    [ObservableProperty] private int _douyinCommentPageSize = AppConfig.MaxDouyinCommentPageSize;
     [ObservableProperty] private bool _douyinDownloadJson;
     [ObservableProperty] private bool _douyinEnableDatabase;
     [ObservableProperty] private bool _douyinIncrementalDownload;
@@ -202,6 +205,9 @@ public partial class SettingsViewModel : ObservableObject
             DouyinDownloadAvatar = c.DouyinDownloadAvatar;
             DouyinDownloadMusic = c.DouyinDownloadMusic;
             DouyinDownloadComments = c.DouyinDownloadComments;
+            DouyinCommentIncludeReplies = c.DouyinCommentIncludeReplies;
+            DouyinMaxComments = c.DouyinMaxComments;
+            DouyinCommentPageSize = c.DouyinCommentPageSize;
             DouyinDownloadJson = c.DouyinDownloadJson;
             DouyinEnableDatabase = c.DouyinEnableDatabase;
             DouyinIncrementalDownload = c.DouyinIncrementalDownload;
@@ -324,6 +330,9 @@ public partial class SettingsViewModel : ObservableObject
         c.DouyinDownloadAvatar = DouyinDownloadAvatar;
         c.DouyinDownloadMusic = DouyinDownloadMusic;
         c.DouyinDownloadComments = DouyinDownloadComments;
+        c.DouyinCommentIncludeReplies = DouyinCommentIncludeReplies;
+        c.DouyinMaxComments = DouyinMaxComments;
+        c.DouyinCommentPageSize = DouyinCommentPageSize;
         c.DouyinDownloadJson = DouyinDownloadJson;
         c.DouyinEnableDatabase = DouyinEnableDatabase;
         c.DouyinIncrementalDownload = DouyinIncrementalDownload;
@@ -365,6 +374,9 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinDownloadAvatarChanged(bool value) => AutoSave();
     partial void OnDouyinDownloadMusicChanged(bool value) => AutoSave();
     partial void OnDouyinDownloadCommentsChanged(bool value) => AutoSave();
+    partial void OnDouyinCommentIncludeRepliesChanged(bool value) => AutoSave();
+    partial void OnDouyinMaxCommentsChanged(int value) => AutoSave();
+    partial void OnDouyinCommentPageSizeChanged(int value) => AutoSave();
     partial void OnDouyinDownloadJsonChanged(bool value) => AutoSave();
     partial void OnDouyinEnableDatabaseChanged(bool value) => AutoSave();
     partial void OnDouyinIncrementalDownloadChanged(bool value) => AutoSave();
@@ -428,6 +440,8 @@ public partial class SettingsViewModel : ObservableObject
             && DouyinFolderTemplate == config.DouyinFolderTemplate
             && DouyinAuthorDirectoryMode == config.DouyinAuthorDirectoryMode
             && DouyinGroupByMode == config.DouyinGroupByMode
+            && DouyinMaxComments == config.DouyinMaxComments
+            && DouyinCommentPageSize == config.DouyinCommentPageSize
             && DouyinStartTime == config.DouyinStartTime
             && DouyinEndTime == config.DouyinEndTime)
         {
@@ -443,6 +457,8 @@ public partial class SettingsViewModel : ObservableObject
             DouyinFolderTemplate = config.DouyinFolderTemplate;
             DouyinAuthorDirectoryMode = config.DouyinAuthorDirectoryMode;
             DouyinGroupByMode = config.DouyinGroupByMode;
+            DouyinMaxComments = config.DouyinMaxComments;
+            DouyinCommentPageSize = config.DouyinCommentPageSize;
             DouyinStartTime = config.DouyinStartTime;
             DouyinEndTime = config.DouyinEndTime;
         }

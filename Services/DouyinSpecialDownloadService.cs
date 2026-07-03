@@ -858,6 +858,9 @@ internal sealed record DouyinSidecarRequest(
     bool IncludeAvatar = false,
     bool IncludeMusic = false,
     bool IncludeComments = false,
+    bool CommentIncludeReplies = false,
+    int MaxComments = 0,
+    int CommentPageSize = AppConfig.MaxDouyinCommentPageSize,
     bool IncludeJson = false,
     bool IncludeDatabase = false,
     bool IncrementalDownload = false,
@@ -876,6 +879,10 @@ internal sealed record DouyinSidecarRequest(
             config?.ConcurrentFragments ?? 3,
             AppConfig.MinConcurrentFragments,
             AppConfig.MaxConcurrentFragments);
+        var commentPageSize = Math.Clamp(
+            config?.DouyinCommentPageSize ?? AppConfig.MaxDouyinCommentPageSize,
+            1,
+            AppConfig.MaxDouyinCommentPageSize);
 
         return new DouyinSidecarRequest(
             Url: NormalizeText(task.Url),
@@ -894,6 +901,9 @@ internal sealed record DouyinSidecarRequest(
             IncludeAvatar: config?.DouyinDownloadAvatar ?? false,
             IncludeMusic: config?.DouyinDownloadMusic ?? false,
             IncludeComments: config?.DouyinDownloadComments ?? false,
+            CommentIncludeReplies: config?.DouyinCommentIncludeReplies ?? false,
+            MaxComments: Math.Max(0, config?.DouyinMaxComments ?? 0),
+            CommentPageSize: commentPageSize,
             IncludeJson: config?.DouyinDownloadJson ?? false,
             IncludeDatabase: config?.DouyinEnableDatabase ?? false,
             IncrementalDownload: config?.DouyinIncrementalDownload ?? false,
@@ -1005,6 +1015,9 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddSwitch(psi, "--include-avatar", request.IncludeAvatar);
         AddSwitch(psi, "--include-music", request.IncludeMusic);
         AddSwitch(psi, "--include-comments", request.IncludeComments);
+        AddSwitch(psi, "--comment-include-replies", request.CommentIncludeReplies);
+        AddArgument(psi, "--max-comments", request.MaxComments.ToString(CultureInfo.InvariantCulture));
+        AddArgument(psi, "--comment-page-size", request.CommentPageSize.ToString(CultureInfo.InvariantCulture));
         AddSwitch(psi, "--include-json", request.IncludeJson);
         AddSwitch(psi, "--enable-database", request.IncludeDatabase);
         AddSwitch(psi, "--incremental", request.IncrementalDownload);

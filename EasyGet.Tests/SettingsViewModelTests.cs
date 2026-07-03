@@ -93,6 +93,9 @@ public class SettingsViewModelTests
         SetAppConfigBool(config.Config, "DouyinDownloadPinned", value: true);
         SetAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "sec_uid");
         SetAppConfigBool(config.Config, "DouyinGroupByMode", value: false);
+        SetAppConfigBool(config.Config, "DouyinCommentIncludeReplies", value: true);
+        SetAppConfigInt(config.Config, "DouyinMaxComments", 500);
+        SetAppConfigInt(config.Config, "DouyinCommentPageSize", 12);
         var viewModel = CreateViewModel(config, new FakeAppUpdateService());
 
         viewModel.Initialize();
@@ -112,6 +115,9 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinDownloadPinned", expected: true);
         AssertViewModelString(viewModel, "DouyinAuthorDirectoryMode", "sec_uid");
         AssertViewModelBool(viewModel, "DouyinGroupByMode", expected: false);
+        AssertViewModelBool(viewModel, "DouyinCommentIncludeReplies", expected: true);
+        AssertViewModelInt(viewModel, "DouyinMaxComments", 500);
+        AssertViewModelInt(viewModel, "DouyinCommentPageSize", 12);
         Assert.Equal(
             ["post", "like", "mix", "music", "post,like,mix,music", "collect", "collectmix"],
             viewModel.DouyinModeOptions);
@@ -154,6 +160,9 @@ public class SettingsViewModelTests
         SetViewModelBool(viewModel, "DouyinDownloadPinned", value: true);
         SetViewModelString(viewModel, "DouyinAuthorDirectoryMode", " SEC_UID ");
         SetViewModelBool(viewModel, "DouyinGroupByMode", value: false);
+        SetViewModelBool(viewModel, "DouyinCommentIncludeReplies", value: true);
+        SetViewModelInt(viewModel, "DouyinMaxComments", 500);
+        SetViewModelInt(viewModel, "DouyinCommentPageSize", 99);
 
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
 
@@ -174,6 +183,12 @@ public class SettingsViewModelTests
         AssertAppConfigBool(config.Config, "DouyinGroupByMode", expected: false);
         AssertViewModelString(viewModel, "DouyinAuthorDirectoryMode", "sec_uid");
         AssertViewModelBool(viewModel, "DouyinGroupByMode", expected: false);
+        AssertAppConfigBool(config.Config, "DouyinCommentIncludeReplies", expected: true);
+        AssertAppConfigInt(config.Config, "DouyinMaxComments", 500);
+        AssertAppConfigInt(config.Config, "DouyinCommentPageSize", 20);
+        AssertViewModelBool(viewModel, "DouyinCommentIncludeReplies", expected: true);
+        AssertViewModelInt(viewModel, "DouyinMaxComments", 500);
+        AssertViewModelInt(viewModel, "DouyinCommentPageSize", 20);
     }
 
     [Fact]
@@ -235,6 +250,51 @@ public class SettingsViewModelTests
         var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
         Assert.Same(saved.Task, completed);
         AssertAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "nickname_uid");
+    }
+
+    [Fact]
+    public async Task DouyinCommentOptionsChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelInt(viewModel, "DouyinMaxComments", 250);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigInt(config.Config, "DouyinMaxComments", 250);
+    }
+
+    [Fact]
+    public async Task DouyinCommentIncludeRepliesChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelBool(viewModel, "DouyinCommentIncludeReplies", value: true);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigBool(config.Config, "DouyinCommentIncludeReplies", expected: true);
+    }
+
+    [Fact]
+    public async Task DouyinCommentPageSizeChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelInt(viewModel, "DouyinCommentPageSize", 12);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigInt(config.Config, "DouyinCommentPageSize", 12);
     }
 
     [Theory]
@@ -311,6 +371,13 @@ public class SettingsViewModelTests
         Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(config)));
     }
 
+    private static void AssertAppConfigInt(AppConfig config, string propertyName, int expected)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<int>(property!.GetValue(config)));
+    }
+
     private static void AssertAppConfigString(AppConfig config, string propertyName, string expected)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
@@ -319,6 +386,13 @@ public class SettingsViewModelTests
     }
 
     private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void SetAppConfigInt(AppConfig config, string propertyName, int value)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);
@@ -339,6 +413,13 @@ public class SettingsViewModelTests
         Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(viewModel)));
     }
 
+    private static void AssertViewModelInt(SettingsViewModel viewModel, string propertyName, int expected)
+    {
+        var property = typeof(SettingsViewModel).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<int>(property!.GetValue(viewModel)));
+    }
+
     private static void AssertViewModelString(SettingsViewModel viewModel, string propertyName, string expected)
     {
         var property = typeof(SettingsViewModel).GetProperty(propertyName);
@@ -347,6 +428,13 @@ public class SettingsViewModelTests
     }
 
     private static void SetViewModelBool(SettingsViewModel viewModel, string propertyName, bool value)
+    {
+        var property = typeof(SettingsViewModel).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(viewModel, value);
+    }
+
+    private static void SetViewModelInt(SettingsViewModel viewModel, string propertyName, int value)
     {
         var property = typeof(SettingsViewModel).GetProperty(propertyName);
         Assert.NotNull(property);

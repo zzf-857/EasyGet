@@ -1191,6 +1191,99 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel>
+                                <TextBlock Text="包含二级回复" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="会增加额外请求量，仅在下载评论开启时生效。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          IsChecked="{Binding Settings.DouyinCommentIncludeReplies}"
+                                          VerticalAlignment="Center">
+                                <ToggleButton.Style>
+                                    <Style TargetType="ToggleButton" BasedOn="{StaticResource ToggleSwitch}">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Settings.EnableDouyinSpecialEngine}" Value="True"/>
+                                                    <Condition Binding="{Binding Settings.DouyinDownloadComments}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="IsEnabled" Value="True"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ToggleButton.Style>
+                            </ToggleButton>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="120"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="评论数量上限" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="0 表示不限制。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     TextAlignment="Center"
+                                     Text="{Binding Settings.DouyinMaxComments, UpdateSourceTrigger=LostFocus}">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox" BasedOn="{StaticResource DarkTextBox}">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Settings.EnableDouyinSpecialEngine}" Value="True"/>
+                                                    <Condition Binding="{Binding Settings.DouyinDownloadComments}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="IsEnabled" Value="True"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="120"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="评论分页大小" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="1-20，默认 20。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     TextAlignment="Center"
+                                     Text="{Binding Settings.DouyinCommentPageSize, UpdateSourceTrigger=LostFocus}">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox" BasedOn="{StaticResource DarkTextBox}">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Style.Triggers>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Settings.EnableDouyinSpecialEngine}" Value="True"/>
+                                                    <Condition Binding="{Binding Settings.DouyinDownloadComments}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="IsEnabled" Value="True"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
                                 <TextBlock Text="下载音乐" Style="{StaticResource TextBodyStrong}"/>
                                 <TextBlock Text="作为附加资源保存到作品目录。"
                                            Style="{StaticResource TextBody}"
