@@ -62,7 +62,7 @@ public class AppConfig
     /// <summary>抖音作品筛选结束时间；空字符串表示不限制</summary>
     public string DouyinEndTime { get; set; } = "";
 
-    /// <summary>抖音专项下载是否下载置顶作品</summary>
+    /// <summary>抖音专项下载是否包含置顶作品</summary>
     public bool DouyinDownloadPinned { get; set; } = false;
 
     /// <summary>抖音专项下载是否包含封面；复用 CookieContent，不新增登录流程</summary>

@@ -21,6 +21,7 @@ import sys
 import tempfile
 import time
 import traceback
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -35,6 +36,7 @@ COUNT_RE = re.compile(
     re.IGNORECASE,
 )
 COOKIE_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$")
+DATE_FILTER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 PHASE_ONE_IMPORT_MODULES = (
     "config",
     "auth.cookie_manager",
@@ -121,6 +123,19 @@ def normalize_video_quality(quality: str) -> str:
     return "highest"
 
 
+def normalize_date_filter(value: str, option_name: str) -> str:
+    normalized = (value or "").strip()
+    if not normalized:
+        return ""
+    if not DATE_FILTER_RE.match(normalized):
+        raise ValueError(f"{option_name} must use YYYY-MM-DD format.")
+    try:
+        date.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError(f"{option_name} must be a real date in YYYY-MM-DD format.") from exc
+    return normalized
+
+
 def build_config(
     *,
     url: str,
@@ -161,8 +176,8 @@ def build_config(
         increase["allmix"] = increase["mix"]
 
     database_path = output_dir.expanduser().resolve() / SIDECAR_STATE_DIR_NAME / "dy_downloader.db"
-    normalized_start_time = (start_time or "").strip()
-    normalized_end_time = (end_time or "").strip()
+    normalized_start_time = normalize_date_filter(start_time, "--start-time")
+    normalized_end_time = normalize_date_filter(end_time, "--end-time")
 
     config = {
         "link": [url],
@@ -1127,7 +1142,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--incremental", action="store_true", help="Enable incremental download for supported batch modes")
     parser.add_argument("--start-time", default="", help="Pass through third-party start_time filter value")
     parser.add_argument("--end-time", default="", help="Pass through third-party end_time filter value")
-    parser.add_argument("--download-pinned", action="store_true", help="Enable third-party pinned-video downloads")
+    parser.add_argument("--download-pinned", action="store_true", help="Include pinned posts in third-party downloads")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")

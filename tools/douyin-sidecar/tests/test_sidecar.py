@@ -109,9 +109,9 @@ class SidecarCliTests(unittest.TestCase):
                 [
                     "--dry-run",
                     "--start-time",
-                    " 2026-06-01 ",
+                    " 2024-02-29 ",
                     "--end-time",
-                    "2026-06-30",
+                    "2024-03-01",
                     "--download-pinned",
                 ],
                 Path(temp_dir),
@@ -120,9 +120,39 @@ class SidecarCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             events = [json.loads(line) for line in result.stdout.splitlines()]
             config = events[0]["details"]["config"]
-            self.assertEqual(config["start_time"], "2026-06-01")
-            self.assertEqual(config["end_time"], "2026-06-30")
+            self.assertEqual(config["start_time"], "2024-02-29")
+            self.assertEqual(config["end_time"], "2024-03-01")
             self.assertTrue(config["download_pinned"])
+
+    def test_dry_run_rejects_nonexistent_start_date(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--start-time", "2024-02-30"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            failure = events[0]
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--start-time", failure["error"])
+            self.assertIn("YYYY-MM-DD", failure["error"])
+
+    def test_dry_run_rejects_end_date_with_slashes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                ["--dry-run", "--end-time", "2024/03/01"],
+                Path(temp_dir),
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stderr, "")
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            failure = events[0]
+            self.assertEqual(failure["event"], "failed")
+            self.assertIn("--end-time", failure["error"])
+            self.assertIn("YYYY-MM-DD", failure["error"])
 
     def test_dry_run_omits_blank_filter_arguments_from_third_party_config(self):
         with tempfile.TemporaryDirectory() as temp_dir:
