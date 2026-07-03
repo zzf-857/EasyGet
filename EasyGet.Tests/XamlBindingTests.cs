@@ -199,7 +199,7 @@ public class XamlBindingTests
             .Where(element => element.Attribute("CommandParameter") is not null)
             .ToList();
 
-        Assert.Equal(4, navItems.Count);
+        Assert.Equal(5, navItems.Count);
         Assert.All(navItems, item =>
         {
             var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
@@ -666,6 +666,7 @@ public class XamlBindingTests
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]
+    [InlineData("douyin")]
     [InlineData("history")]
     [InlineData("settings")]
     public void MainWindowNavigationItemsExposeTooltipAndAutomationName(string commandParameter)
@@ -684,6 +685,66 @@ public class XamlBindingTests
             .Attributes()
             .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
             ?.Value));
+    }
+
+    [Fact]
+    public void MainWindowNavigationOrderMatchesSelectedIndexAndShortcutOrder()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var navItems = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => element.Attribute("CommandParameter") is not null)
+            .Select(element => new
+            {
+                Page = element.Attribute("CommandParameter")?.Value ?? "",
+                Binding = element.Attribute("IsChecked")?.Value ?? ""
+            })
+            .ToList();
+
+        var expected = new[]
+        {
+            ("download", "ConverterParameter=0"),
+            ("batch", "ConverterParameter=1"),
+            ("douyin", "ConverterParameter=2"),
+            ("history", "ConverterParameter=3"),
+            ("settings", "ConverterParameter=4")
+        };
+
+        Assert.Equal(expected.Length, navItems.Count);
+        for (var i = 0; i < expected.Length; i++)
+        {
+            Assert.Equal(expected[i].Item1, navItems[i].Page);
+            Assert.Contains(expected[i].Item2, navItems[i].Binding);
+        }
+    }
+
+    [Fact]
+    public void DouyinViewExposesDedicatedWorkspaceSections()
+    {
+        var document = XDocument.Load(GetViewPath("DouyinView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+
+        Assert.Contains("抖音工作台", texts);
+        Assert.Contains("快速下载", texts);
+        Assert.Contains("任务中心", texts);
+        Assert.Contains("作品档案", texts);
+        Assert.Contains("专项设置", texts);
+        Assert.Contains("启用专项引擎", texts);
+        Assert.Contains("用户作品模式", texts);
+        Assert.Contains("下载数量上限", texts);
+        Assert.Contains("文件名模板", texts);
+        Assert.Contains("保存原始 JSON", texts);
+
+        Assert.Contains("Download.Url", source);
+        Assert.Contains("Download.ParseCommand", source);
+        Assert.Contains("Download.StartDownloadCommand", source);
+        Assert.Contains("Settings.EnableDouyinSpecialEngine", source);
+        Assert.Contains("Settings.DouyinMode", source);
+        Assert.Contains("Settings.DouyinDownloadComments", source);
+        Assert.Contains("DouyinHistoryItems", source);
+        Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
 
     [Theory]

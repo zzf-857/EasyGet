@@ -26,6 +26,7 @@ public class TaskbarProgressTests
         var settings = new SettingsViewModel(config, environment, manager, new TelegramDownloadService(config));
         var download = new DownloadViewModel(manager, config, new YtDlpVideoInfoProvider(ytDlp));
         var historyVm = new HistoryViewModel(history, config);
+        var douyin = new DouyinViewModel(config, manager, download, batch, historyVm, settings);
 
         var main = new MainViewModel(
             config,
@@ -34,6 +35,7 @@ public class TaskbarProgressTests
             download,
             batch,
             historyVm,
+            douyin,
             settings
         );
 

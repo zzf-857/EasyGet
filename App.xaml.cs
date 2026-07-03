@@ -50,6 +50,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<DownloadViewModel>();
             services.AddSingleton<BatchDownloadViewModel>();
             services.AddSingleton<HistoryViewModel>();
+            services.AddSingleton<DouyinViewModel>();
             services.AddSingleton<SettingsViewModel>();
 
             // 主窗口

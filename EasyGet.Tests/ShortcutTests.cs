@@ -19,7 +19,7 @@ public class ShortcutTests
             .Select(e => e.Attribute("Text")?.Value ?? "")
             .ToList();
 
-        var containsShortcutsText = textBlocks.Any(t => t.Contains("键盘快捷键") && t.Contains("Ctrl+1~4"));
+        var containsShortcutsText = textBlocks.Any(t => t.Contains("键盘快捷键") && t.Contains("Ctrl+1~5"));
         Assert.True(containsShortcutsText, "SettingsView should contain keyboard shortcuts help text.");
     }
 

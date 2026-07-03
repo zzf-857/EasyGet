@@ -920,7 +920,7 @@
                            Style="{StaticResource TextMono}"
                            FontSize="{StaticResource FontSizeCaption}"
                            TextAlignment="Center"/>
-                <TextBlock Text="键盘快捷键: Ctrl+1~4 切换页面 | Esc 取消解析/关闭通知 | Ctrl+V 快速粘贴解析 (输入框未聚焦时)"
+                <TextBlock Text="键盘快捷键: Ctrl+1~5 切换页面 | Esc 取消解析/关闭通知 | Ctrl+V 快速粘贴解析 (输入框未聚焦时)"
                            Style="{StaticResource TextCaption}"
                            Opacity="0.8"
                            HorizontalAlignment="Center"

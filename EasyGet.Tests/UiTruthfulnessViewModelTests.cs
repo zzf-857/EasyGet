@@ -19,6 +19,18 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void MainViewModelNavigatesToDouyinWorkspace()
+    {
+        using var context = CreateViewModelContext();
+
+        context.Main.NavigateCommand.Execute("douyin");
+
+        Assert.Equal(2, context.Main.SelectedNavIndex);
+        Assert.Equal("抖音工作台", context.Main.CurrentPageTitle);
+        Assert.Same(context.Douyin, context.Main.CurrentPage);
+    }
+
+    [Fact]
     public void DownloadViewModelSummariesComeFromRuntimeConfig()
     {
         var configService = new ConfigService();
@@ -55,6 +67,72 @@ public class UiTruthfulnessViewModelTests
         Assert.Equal(2, context.Batch.ActiveDownloadCount);
     }
 
+    [Fact]
+    public void DouyinViewModelCountsOnlyDouyinTasks()
+    {
+        using var context = CreateViewModelContext();
+
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/123",
+            Platform = "",
+            Status = DownloadStatus.Downloading
+        });
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://example.com/video",
+            Platform = "Douyin",
+            Status = DownloadStatus.Completed
+        });
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://example.com/video",
+            Platform = "YouTube",
+            Status = DownloadStatus.Failed
+        });
+
+        Assert.Equal(2, context.Douyin.DouyinTaskCount);
+        Assert.Equal(1, context.Douyin.ActiveDouyinTaskCount);
+        Assert.Equal(1, context.Douyin.CompletedDouyinTaskCount);
+        Assert.Equal(0, context.Douyin.FailedDouyinTaskCount);
+    }
+
+    [Fact]
+    public void DouyinViewModelFiltersArchiveHistoryToDouyinItems()
+    {
+        using var context = CreateViewModelContext();
+
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "douyin by platform",
+            Platform = "Douyin",
+            Url = "https://example.com/video"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "douyin by url",
+            Platform = "",
+            Url = "https://v.douyin.com/abc123"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "not douyin",
+            Platform = "YouTube",
+            Url = "https://youtube.com/watch?v=abc"
+        });
+        context.History.HistoryItems.Add(new DownloadHistory
+        {
+            Title = "lookalike domain",
+            Platform = "",
+            Url = "https://notdouyin.com/video/123"
+        });
+
+        Assert.Collection(
+            context.Douyin.DouyinHistoryItems,
+            item => Assert.Equal("douyin by platform", item.Title),
+            item => Assert.Equal("douyin by url", item.Title));
+    }
+
     [Theory]
     [InlineData(1024L, "1 KB 可用")]
     [InlineData(1024L * 1024L * 1536L, "1.5 GB 可用")]
@@ -76,6 +154,13 @@ public class UiTruthfulnessViewModelTests
             batchContext.Config,
             new YtDlpVideoInfoProvider(batchContext.YtDlp));
         var history = new HistoryViewModel(batchContext.History, batchContext.Config);
+        var douyin = new DouyinViewModel(
+            batchContext.Config,
+            batchContext.Manager,
+            download,
+            batchContext.Batch,
+            history,
+            settings);
         var main = new MainViewModel(
             batchContext.Config,
             batchContext.Environment,
@@ -83,9 +168,10 @@ public class UiTruthfulnessViewModelTests
             download,
             batchContext.Batch,
             history,
+            douyin,
             settings);
 
-        return new ViewModelContext(batchContext, download, history, settings, main);
+        return new ViewModelContext(batchContext, download, history, douyin, settings, main);
     }
 
     private static BatchContext CreateBatchContext()
@@ -120,6 +206,7 @@ public class UiTruthfulnessViewModelTests
         BatchContext BatchContext,
         DownloadViewModel Download,
         HistoryViewModel History,
+        DouyinViewModel Douyin,
         SettingsViewModel Settings,
         MainViewModel Main) : IDisposable
     {

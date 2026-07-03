@@ -42,16 +42,17 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        // 1. Ctrl + 1~4
-        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is >= Key.D1 and <= Key.D4)
+        // 1. Ctrl + 1~5
+        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is >= Key.D1 and <= Key.D5)
         {
             int index = e.Key - Key.D1;
             string page = index switch
             {
                 0 => "download",
                 1 => "batch",
-                2 => "history",
-                3 => "settings",
+                2 => "douyin",
+                3 => "history",
+                4 => "settings",
                 _ => "download"
             };
             if (_viewModel.NavigateCommand.CanExecute(page))
