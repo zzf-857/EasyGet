@@ -290,9 +290,9 @@
                                                         Padding="0"
                                                         ToolTip="打开文件夹"
                                                         AutomationProperties.Name="打开文件夹"
-                                                        IsEnabled="{Binding FileExists}"
-                                                        Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding FilePath}">
+                                                         IsEnabled="{Binding FileExists}"
+                                                         Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                         CommandParameter="{Binding AvailableFilePath}">
                                                     <TextBlock Text="&#xE838;"
                                                                Style="{StaticResource IconGlyph}"
                                                                FontSize="{StaticResource IconSizeBody}"
@@ -305,9 +305,9 @@
                                                         Margin="10,0"
                                                         ToolTip="预览文件"
                                                         AutomationProperties.Name="预览文件"
-                                                        IsEnabled="{Binding FileExists}"
-                                                        Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding FilePath}">
+                                                         IsEnabled="{Binding FileExists}"
+                                                         Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                         CommandParameter="{Binding AvailableFilePath}">
                                                     <TextBlock Text="&#xE768;"
                                                                Style="{StaticResource IconGlyph}"
                                                                FontSize="{StaticResource IconSizeLarge}"

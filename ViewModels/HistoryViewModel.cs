@@ -156,14 +156,15 @@ public partial class HistoryViewModel : ObservableObject
             .Select(item => new
             {
                 Item = item,
-                FileExists = HasExistingHistoryFile(item)
+                AvailableFilePath = ResolveExistingHistoryPath(item)
             })
             .ToList());
 
         HistoryItems.Clear();
         foreach (var result in fileExistsResults)
         {
-            result.Item.FileExists = result.FileExists;
+            result.Item.AvailableFilePath = result.AvailableFilePath;
+            result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
             HistoryItems.Add(result.Item);
         }
     }
@@ -360,8 +361,13 @@ public partial class HistoryViewModel : ObservableObject
         };
     }
 
-    private static bool HasExistingHistoryFile(DownloadHistory item)
-        => PathExists(item.FilePath) || item.AttachmentFilePaths.Any(PathExists);
+    private static string ResolveExistingHistoryPath(DownloadHistory item)
+    {
+        if (PathExists(item.FilePath))
+            return item.FilePath;
+
+        return item.AttachmentFilePaths.FirstOrDefault(PathExists) ?? "";
+    }
 
     private static bool PathExists(string path)
         => !string.IsNullOrWhiteSpace(path)

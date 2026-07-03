@@ -134,7 +134,9 @@ public class HistoryViewModelTests
             var attachedItem = Assert.Single(viewModel.HistoryItems, item => item.Title == "attached item");
             var missingItem = Assert.Single(viewModel.HistoryItems, item => item.Title == "missing item");
             Assert.True(attachedItem.FileExists);
+            Assert.Equal(attachmentPath, attachedItem.AvailableFilePath);
             Assert.False(missingItem.FileExists);
+            Assert.Equal("", missingItem.AvailableFilePath);
         }
         finally
         {
@@ -155,6 +157,64 @@ public class HistoryViewModelTests
         Assert.Contains("PreviewFileCommand", commandProperties);
         Assert.Contains("OpenSourceUrlCommand", commandProperties);
         Assert.Contains("DeleteItemCommand", commandProperties);
+    }
+
+    [Fact]
+    public async Task OpenFolderCommand_UsesAttachmentPathWhenPrimaryFileIsMissing()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-open-attachment-{Guid.NewGuid():N}");
+        var missingPrimaryPath = Path.Combine(outputDir, "missing.mp4");
+        var attachmentPath = Path.Combine(outputDir, "comments.json");
+        var startedProcesses = new List<ProcessStartInfo>();
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(attachmentPath, "{}");
+            using var service = new HistoryService(dbPath);
+            var viewModel = new HistoryViewModel(service, startedProcesses.Add);
+
+            await viewModel.OpenFolderCommand.ExecuteAsync(attachmentPath);
+
+            var processStartInfo = Assert.Single(startedProcesses);
+            Assert.Equal("explorer.exe", processStartInfo.FileName);
+            Assert.Equal($"/select,\"{attachmentPath}\"", processStartInfo.Arguments);
+            Assert.DoesNotContain(missingPrimaryPath, processStartInfo.Arguments, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
+    public async Task PreviewFileCommand_UsesAttachmentPathWhenPrimaryFileIsMissing()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-preview-attachment-{Guid.NewGuid():N}");
+        var attachmentPath = Path.Combine(outputDir, "cover.jpg");
+        var startedProcesses = new List<ProcessStartInfo>();
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(attachmentPath, "preview attachment");
+            using var service = new HistoryService(dbPath);
+            var viewModel = new HistoryViewModel(service, startedProcesses.Add);
+
+            await viewModel.PreviewFileCommand.ExecuteAsync(attachmentPath);
+
+            var processStartInfo = Assert.Single(startedProcesses);
+            Assert.Equal(attachmentPath, processStartInfo.FileName);
+            Assert.True(processStartInfo.UseShellExecute);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
     }
 
     [Fact]

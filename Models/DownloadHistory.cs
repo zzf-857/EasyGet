@@ -58,6 +58,10 @@ public partial class DownloadHistory : ObservableObject
     [ObservableProperty]
     private bool _fileExists = true;
 
+    /// <summary>当前可打开的主文件或附属文件路径（非持久化，由 ViewModel 刷新）</summary>
+    [ObservableProperty]
+    private string _availableFilePath = "";
+
     /// <summary>
     /// 格式化的文件大小
     /// </summary>

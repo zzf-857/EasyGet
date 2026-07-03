@@ -74,6 +74,28 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewQuickActionsUseAvailableFilePath()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+
+        var quickActionButtons = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Button")
+            .Where(element =>
+            {
+                var automationName = element.Attributes()
+                    .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
+                    ?.Value;
+                return automationName is "打开文件夹" or "预览文件";
+            })
+            .ToList();
+
+        Assert.Equal(2, quickActionButtons.Count);
+        Assert.All(quickActionButtons, button =>
+            Assert.Equal("{Binding AvailableFilePath}", button.Attribute("CommandParameter")?.Value));
+    }
+
+    [Fact]
     public void MainWindowSidebarUsesSubtleContentDivider()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
