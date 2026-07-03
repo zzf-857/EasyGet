@@ -205,6 +205,20 @@ public class ConfigServiceTests
         AssertAppConfigBool(config, "DouyinIncrementalDownload", expected: true);
     }
 
+    [Fact]
+    public void NormalizeRuntimeConfig_SanitizesDouyinTimeRangeOptions()
+    {
+        var config = new AppConfig();
+        SetAppConfigString(config, "DouyinStartTime", " 2024-01-01 ");
+        SetAppConfigString(config, "DouyinEndTime", null);
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        AssertAppConfigString(config, "DouyinStartTime", "2024-01-01");
+        AssertAppConfigString(config, "DouyinEndTime", "");
+        AssertAppConfigBool(config, "DouyinDownloadPinned", expected: false);
+    }
+
     private static void AssertAppConfigBool(AppConfig config, string propertyName, bool expected)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
@@ -212,7 +226,21 @@ public class ConfigServiceTests
         Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(config)));
     }
 
+    private static void AssertAppConfigString(AppConfig config, string propertyName, string expected)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<string>(property!.GetValue(config)));
+    }
+
     private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void SetAppConfigString(AppConfig config, string propertyName, string? value)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);

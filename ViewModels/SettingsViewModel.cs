@@ -65,6 +65,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _enableDouyinSpecialEngine;
     [ObservableProperty] private string _douyinMode = "post";
     [ObservableProperty] private int _douyinLimit;
+    [ObservableProperty] private string _douyinStartTime = "";
+    [ObservableProperty] private string _douyinEndTime = "";
+    [ObservableProperty] private bool _douyinDownloadPinned;
     [ObservableProperty] private bool _douyinDownloadCover;
     [ObservableProperty] private bool _douyinDownloadAvatar;
     [ObservableProperty] private bool _douyinDownloadMusic;
@@ -173,6 +176,9 @@ public partial class SettingsViewModel : ObservableObject
             EnableDouyinSpecialEngine = c.EnableDouyinSpecialEngine;
             DouyinMode = c.DouyinMode;
             DouyinLimit = c.DouyinLimit;
+            DouyinStartTime = c.DouyinStartTime;
+            DouyinEndTime = c.DouyinEndTime;
+            DouyinDownloadPinned = c.DouyinDownloadPinned;
             DouyinDownloadCover = c.DouyinDownloadCover;
             DouyinDownloadAvatar = c.DouyinDownloadAvatar;
             DouyinDownloadMusic = c.DouyinDownloadMusic;
@@ -288,6 +294,9 @@ public partial class SettingsViewModel : ObservableObject
         c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
         c.DouyinMode = DouyinMode;
         c.DouyinLimit = DouyinLimit;
+        c.DouyinStartTime = DouyinStartTime;
+        c.DouyinEndTime = DouyinEndTime;
+        c.DouyinDownloadPinned = DouyinDownloadPinned;
         c.DouyinDownloadCover = DouyinDownloadCover;
         c.DouyinDownloadAvatar = DouyinDownloadAvatar;
         c.DouyinDownloadMusic = DouyinDownloadMusic;
@@ -322,6 +331,9 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnEnableDouyinSpecialEngineChanged(bool value) => AutoSave();
     partial void OnDouyinModeChanged(string value) => AutoSave();
     partial void OnDouyinLimitChanged(int value) => AutoSave();
+    partial void OnDouyinStartTimeChanged(string value) => AutoSave();
+    partial void OnDouyinEndTimeChanged(string value) => AutoSave();
+    partial void OnDouyinDownloadPinnedChanged(bool value) => AutoSave();
     partial void OnDouyinDownloadCoverChanged(bool value) => AutoSave();
     partial void OnDouyinDownloadAvatarChanged(bool value) => AutoSave();
     partial void OnDouyinDownloadMusicChanged(bool value) => AutoSave();
@@ -384,7 +396,9 @@ public partial class SettingsViewModel : ObservableObject
     private void SyncNormalizedDouyinValues(EasyGet.Models.AppConfig config)
     {
         if (DouyinMode == config.DouyinMode
-            && DouyinLimit == config.DouyinLimit)
+            && DouyinLimit == config.DouyinLimit
+            && DouyinStartTime == config.DouyinStartTime
+            && DouyinEndTime == config.DouyinEndTime)
         {
             return;
         }
@@ -394,6 +408,8 @@ public partial class SettingsViewModel : ObservableObject
         {
             DouyinMode = config.DouyinMode;
             DouyinLimit = config.DouyinLimit;
+            DouyinStartTime = config.DouyinStartTime;
+            DouyinEndTime = config.DouyinEndTime;
         }
         finally
         {

@@ -455,6 +455,50 @@
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="140"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="开始时间"
+                                       Style="{StaticResource TextBodyStrong}"
+                                       VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextAlignment="Center"
+                                     Text="{Binding DouyinStartTime, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="140"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="结束时间"
+                                       Style="{StaticResource TextBodyStrong}"
+                                       VerticalAlignment="Center"/>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextAlignment="Center"
+                                     Text="{Binding DouyinEndTime, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="下载置顶作品"
+                                       Style="{StaticResource TextBodyStrong}"
+                                       VerticalAlignment="Center"/>
+                            <CheckBox Grid.Column="1"
+                                      IsChecked="{Binding DouyinDownloadPinned}"
+                                      IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                      VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel>

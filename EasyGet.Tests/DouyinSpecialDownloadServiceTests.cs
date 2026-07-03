@@ -325,10 +325,13 @@ public class DouyinSpecialDownloadServiceTests
             DouyinDownloadMusic = false,
             DouyinDownloadJson = true
         };
+        SetAppConfigString(config, "DouyinStartTime", " 2024-01-01 ");
+        SetAppConfigString(config, "DouyinEndTime", " 2024-01-31 ");
         SetAppConfigBool(config, "DouyinDownloadComments", value: true);
         SetAppConfigBool(config, "DouyinDownloadAvatar", value: true);
         SetAppConfigBool(config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
+        SetAppConfigBool(config, "DouyinDownloadPinned", value: true);
 
         await InvokeConfigDownloadAsync(service, task, config);
 
@@ -342,6 +345,8 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Equal("http://127.0.0.1:7890", GetRequestValue<string>(runner.LastRequest, "Proxy"));
         Assert.Equal("post", GetRequestValue<string>(runner.LastRequest, "Mode"));
         Assert.Equal(12, GetRequestValue<int>(runner.LastRequest, "Limit"));
+        Assert.Equal("2024-01-01", GetRequestValue<string>(runner.LastRequest, "StartTime"));
+        Assert.Equal("2024-01-31", GetRequestValue<string>(runner.LastRequest, "EndTime"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeCover"));
         Assert.False(GetRequestValue<bool>(runner.LastRequest, "IncludeMusic"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeJson"));
@@ -349,6 +354,7 @@ public class DouyinSpecialDownloadServiceTests
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeAvatar"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeDatabase"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncrementalDownload"));
+        Assert.True(GetRequestValue<bool>(runner.LastRequest, "DownloadPinned"));
     }
 
     [Fact]
@@ -386,7 +392,10 @@ public class DouyinSpecialDownloadServiceTests
             ["IncludeComments"] = true,
             ["IncludeAvatar"] = true,
             ["IncludeDatabase"] = true,
-            ["IncrementalDownload"] = true
+            ["IncrementalDownload"] = true,
+            ["StartTime"] = "2024-01-01",
+            ["EndTime"] = "2024-01-31",
+            ["DownloadPinned"] = true
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -407,6 +416,8 @@ public class DouyinSpecialDownloadServiceTests
         AssertArgument(args, "--proxy", "http://127.0.0.1:7890");
         AssertArgument(args, "--mode", "post");
         AssertArgument(args, "--limit", "12");
+        AssertArgument(args, "--start-time", "2024-01-01");
+        AssertArgument(args, "--end-time", "2024-01-31");
         Assert.Contains("--include-cover", args);
         Assert.DoesNotContain("--include-music", args);
         Assert.Contains("--include-json", args);
@@ -414,6 +425,7 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Contains("--include-avatar", args);
         Assert.Contains("--enable-database", args);
         Assert.Contains("--incremental", args);
+        Assert.Contains("--download-pinned", args);
     }
 
     [Fact]
@@ -438,7 +450,10 @@ public class DouyinSpecialDownloadServiceTests
             ["IncludeComments"] = false,
             ["IncludeAvatar"] = false,
             ["IncludeDatabase"] = false,
-            ["IncrementalDownload"] = false
+            ["IncrementalDownload"] = false,
+            ["StartTime"] = "",
+            ["EndTime"] = "",
+            ["DownloadPinned"] = false
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -450,6 +465,9 @@ public class DouyinSpecialDownloadServiceTests
         Assert.DoesNotContain("--include-avatar", args);
         Assert.DoesNotContain("--enable-database", args);
         Assert.DoesNotContain("--incremental", args);
+        Assert.DoesNotContain("--start-time", args);
+        Assert.DoesNotContain("--end-time", args);
+        Assert.DoesNotContain("--download-pinned", args);
         Assert.False(psi.Environment.ContainsKey("EASYGET_DOUYIN_COOKIE"));
     }
 
@@ -683,6 +701,13 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void SetAppConfigString(AppConfig config, string propertyName, string value)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);

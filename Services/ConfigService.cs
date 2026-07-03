@@ -146,6 +146,8 @@ public class ConfigService
         config.CookieContent ??= "";
         config.DouyinMode = NormalizeOption(config.DouyinMode, SupportedDouyinModes, defaults.DouyinMode);
         config.DouyinLimit = Math.Max(0, config.DouyinLimit);
+        config.DouyinStartTime = config.DouyinStartTime?.Trim() ?? "";
+        config.DouyinEndTime = config.DouyinEndTime?.Trim() ?? "";
 
         config.ThemeColor = string.IsNullOrWhiteSpace(config.ThemeColor)
             ? "Indigo"

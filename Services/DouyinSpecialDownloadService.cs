@@ -656,6 +656,9 @@ internal sealed record DouyinSidecarRequest(
     string Proxy = "",
     string Mode = "post",
     int Limit = 1,
+    string StartTime = "",
+    string EndTime = "",
+    bool DownloadPinned = false,
     bool IncludeCover = false,
     bool IncludeAvatar = false,
     bool IncludeMusic = false,
@@ -680,6 +683,9 @@ internal sealed record DouyinSidecarRequest(
             Proxy: proxy,
             Mode: NormalizeText(config?.DouyinMode, "post"),
             Limit: Math.Max(0, config?.DouyinLimit ?? 1),
+            StartTime: NormalizeText(config?.DouyinStartTime),
+            EndTime: NormalizeText(config?.DouyinEndTime),
+            DownloadPinned: config?.DouyinDownloadPinned ?? false,
             IncludeCover: config?.DouyinDownloadCover ?? false,
             IncludeAvatar: config?.DouyinDownloadAvatar ?? false,
             IncludeMusic: config?.DouyinDownloadMusic ?? false,
@@ -778,6 +784,9 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddArgument(psi, "--proxy", request.Proxy);
         AddArgument(psi, "--mode", request.Mode);
         AddArgument(psi, "--limit", request.Limit.ToString(CultureInfo.InvariantCulture));
+        AddArgument(psi, "--start-time", request.StartTime);
+        AddArgument(psi, "--end-time", request.EndTime);
+        AddSwitch(psi, "--download-pinned", request.DownloadPinned);
         AddSwitch(psi, "--include-cover", request.IncludeCover);
         AddSwitch(psi, "--include-avatar", request.IncludeAvatar);
         AddSwitch(psi, "--include-music", request.IncludeMusic);

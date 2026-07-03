@@ -84,10 +84,13 @@ public class SettingsViewModelTests
         config.Config.DouyinDownloadCover = true;
         config.Config.DouyinDownloadMusic = true;
         config.Config.DouyinDownloadJson = true;
+        SetAppConfigString(config.Config, "DouyinStartTime", "2024-01-01");
+        SetAppConfigString(config.Config, "DouyinEndTime", "2024-01-31");
         SetAppConfigBool(config.Config, "DouyinDownloadComments", value: true);
         SetAppConfigBool(config.Config, "DouyinDownloadAvatar", value: true);
         SetAppConfigBool(config.Config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config.Config, "DouyinIncrementalDownload", value: true);
+        SetAppConfigBool(config.Config, "DouyinDownloadPinned", value: true);
         var viewModel = CreateViewModel(config, new FakeAppUpdateService());
 
         viewModel.Initialize();
@@ -98,10 +101,13 @@ public class SettingsViewModelTests
         Assert.True(viewModel.DouyinDownloadCover);
         Assert.True(viewModel.DouyinDownloadMusic);
         Assert.True(viewModel.DouyinDownloadJson);
+        AssertViewModelString(viewModel, "DouyinStartTime", "2024-01-01");
+        AssertViewModelString(viewModel, "DouyinEndTime", "2024-01-31");
         AssertViewModelBool(viewModel, "DouyinDownloadComments", expected: true);
         AssertViewModelBool(viewModel, "DouyinDownloadAvatar", expected: true);
         AssertViewModelBool(viewModel, "DouyinEnableDatabase", expected: true);
         AssertViewModelBool(viewModel, "DouyinIncrementalDownload", expected: true);
+        AssertViewModelBool(viewModel, "DouyinDownloadPinned", expected: true);
         Assert.Equal(new[] { "post", "like", "mix", "music", "collect", "collectmix" }, viewModel.DouyinModeOptions);
     }
 
@@ -116,10 +122,13 @@ public class SettingsViewModelTests
         viewModel.DouyinDownloadCover = true;
         viewModel.DouyinDownloadMusic = true;
         viewModel.DouyinDownloadJson = true;
+        SetViewModelString(viewModel, "DouyinStartTime", " 2024-01-01 ");
+        SetViewModelString(viewModel, "DouyinEndTime", " 2024-01-31 ");
         SetViewModelBool(viewModel, "DouyinDownloadComments", value: true);
         SetViewModelBool(viewModel, "DouyinDownloadAvatar", value: true);
         SetViewModelBool(viewModel, "DouyinEnableDatabase", value: true);
         SetViewModelBool(viewModel, "DouyinIncrementalDownload", value: true);
+        SetViewModelBool(viewModel, "DouyinDownloadPinned", value: true);
 
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
 
@@ -129,10 +138,28 @@ public class SettingsViewModelTests
         Assert.True(config.Config.DouyinDownloadCover);
         Assert.True(config.Config.DouyinDownloadMusic);
         Assert.True(config.Config.DouyinDownloadJson);
+        AssertAppConfigString(config.Config, "DouyinStartTime", "2024-01-01");
+        AssertAppConfigString(config.Config, "DouyinEndTime", "2024-01-31");
         AssertAppConfigBool(config.Config, "DouyinDownloadComments", expected: true);
         AssertAppConfigBool(config.Config, "DouyinDownloadAvatar", expected: true);
         AssertAppConfigBool(config.Config, "DouyinEnableDatabase", expected: true);
         AssertAppConfigBool(config.Config, "DouyinIncrementalDownload", expected: true);
+        AssertAppConfigBool(config.Config, "DouyinDownloadPinned", expected: true);
+    }
+
+    [Fact]
+    public async Task DouyinDownloadPinnedChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelBool(viewModel, "DouyinDownloadPinned", value: true);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigBool(config.Config, "DouyinDownloadPinned", expected: true);
     }
 
     [Theory]
@@ -193,7 +220,21 @@ public class SettingsViewModelTests
         Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(config)));
     }
 
+    private static void AssertAppConfigString(AppConfig config, string propertyName, string expected)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<string>(property!.GetValue(config)));
+    }
+
     private static void SetAppConfigBool(AppConfig config, string propertyName, bool value)
+    {
+        var property = typeof(AppConfig).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(config, value);
+    }
+
+    private static void SetAppConfigString(AppConfig config, string propertyName, string value)
     {
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);
@@ -207,7 +248,21 @@ public class SettingsViewModelTests
         Assert.Equal(expected, Assert.IsType<bool>(property!.GetValue(viewModel)));
     }
 
+    private static void AssertViewModelString(SettingsViewModel viewModel, string propertyName, string expected)
+    {
+        var property = typeof(SettingsViewModel).GetProperty(propertyName);
+        Assert.NotNull(property);
+        Assert.Equal(expected, Assert.IsType<string>(property!.GetValue(viewModel)));
+    }
+
     private static void SetViewModelBool(SettingsViewModel viewModel, string propertyName, bool value)
+    {
+        var property = typeof(SettingsViewModel).GetProperty(propertyName);
+        Assert.NotNull(property);
+        property!.SetValue(viewModel, value);
+    }
+
+    private static void SetViewModelString(SettingsViewModel viewModel, string propertyName, string value)
     {
         var property = typeof(SettingsViewModel).GetProperty(propertyName);
         Assert.NotNull(property);
