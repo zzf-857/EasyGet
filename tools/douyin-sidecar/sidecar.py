@@ -100,6 +100,27 @@ def normalize_modes(mode: str) -> List[str]:
     return modes
 
 
+def normalize_video_quality(quality: str) -> str:
+    normalized = (quality or "").strip().lower()
+    if normalized in ("", "best", "highest"):
+        return "highest"
+    if normalized == "lowest":
+        return "lowest"
+    if normalized in ("1080", "1080p"):
+        return "1080p"
+    if normalized in ("720", "720p"):
+        return "720p"
+    if normalized in ("480", "480p"):
+        return "480p"
+    if normalized in ("1440", "1440p"):
+        return "1440p"
+    if normalized in ("540", "540p"):
+        return "540p"
+    if normalized in ("360", "360p"):
+        return "360p"
+    return "highest"
+
+
 def build_config(
     *,
     url: str,
@@ -108,6 +129,7 @@ def build_config(
     proxy: str = "",
     mode: str = "post",
     limit: int = 1,
+    quality: str = "best",
     include_cover: bool = False,
     include_avatar: bool = False,
     include_music: bool = False,
@@ -144,6 +166,7 @@ def build_config(
         "cover": bool(include_cover),
         "avatar": bool(include_avatar),
         "json": bool(include_json),
+        "video_quality": normalize_video_quality(quality),
         "start_time": "",
         "end_time": "",
         "folderstyle": True,
@@ -204,6 +227,7 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         proxy=args.proxy,
         mode=args.mode,
         limit=args.limit,
+        quality=args.quality,
         include_cover=args.include_cover,
         include_avatar=args.include_avatar,
         include_music=args.include_music,
@@ -1090,7 +1114,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--enable-database", action="store_true", help="Enable local SQLite deduplication/history database")
     parser.add_argument("--incremental", action="store_true", help="Enable incremental download for supported batch modes")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
-    parser.add_argument("--quality", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
+    parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--downloader-root", default="", help="Path to douyin-downloader-promax")
     parser.add_argument("--python", default="", help="Python executable used for the third-party runner; defaults to the downloader venv when present")

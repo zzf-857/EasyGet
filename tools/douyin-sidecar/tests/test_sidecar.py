@@ -133,6 +133,27 @@ class SidecarCliTests(unittest.TestCase):
             self.assertTrue(config["music"])
             self.assertTrue(config["json"])
             self.assertTrue(config["avatar"])
+            self.assertEqual("1080p", config["video_quality"])
+
+    def test_dry_run_maps_easyget_quality_to_third_party_video_quality(self):
+        cases = [
+            ("best", "highest"),
+            ("2160", "highest"),
+            ("1080", "1080p"),
+            ("720", "720p"),
+            ("480", "480p"),
+            ("1080p", "1080p"),
+            ("unknown", "highest"),
+        ]
+
+        for quality, expected in cases:
+            with self.subTest(quality=quality), tempfile.TemporaryDirectory() as temp_dir:
+                result = self.run_sidecar(["--dry-run", "--quality", quality], Path(temp_dir))
+
+                self.assertEqual(result.returncode, 0, result.stderr)
+                events = [json.loads(line) for line in result.stdout.splitlines()]
+                config = events[0]["details"]["config"]
+                self.assertEqual(expected, config["video_quality"])
 
     def test_dry_run_defaults_comment_collection_to_disabled(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -803,6 +824,7 @@ class SidecarConfigTests(unittest.TestCase):
             proxy="http://127.0.0.1:7890",
             mode="post",
             limit=12,
+            quality="720",
         )
 
         self.assertEqual(config["link"], ["https://www.douyin.com/user/MS4wLjABAAAA_test"])
@@ -813,6 +835,7 @@ class SidecarConfigTests(unittest.TestCase):
         self.assertEqual(config["cookies"]["ttwid"], "abc")
         self.assertEqual(config["cookies"]["odin_tt"], "def")
         self.assertEqual(config["cookies"]["passport_csrf_token"], "ghi")
+        self.assertEqual(config["video_quality"], "720p")
         self.assertFalse(config["database"])
         self.assertFalse(config["browser_fallback"]["enabled"])
 

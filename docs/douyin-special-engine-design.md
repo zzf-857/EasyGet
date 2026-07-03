@@ -316,7 +316,7 @@ REST 基础约定：
 字段说明：
 
 - `kind` 可取 `auto`、`single_video`、`gallery`、`user_post`。若 C# 侧已经通过 `DouyinUrlParser` 分类，可把 `Video` 映射为 `single_video`，`Note` / `Gallery` / `Slides` 映射为 `gallery`，`User` 映射为 `user_post`；`ShortLink` 可传 `auto`，由 Python sidecar 展开后再判定。
-- `quality` 从 EasyGet `DefaultQuality` 映射：`best -> highest`、`1080 -> 1080p`、`720 -> 720p`、`480 -> 480p`。
+- `quality` 从 EasyGet `DefaultQuality` 映射：`best -> highest`、`2160 -> highest`、`1080 -> 1080p`、`720 -> 720p`、`480 -> 480p`。
 - `mode` 支持 `post`、`like`、`mix`、`music`，仅用户 URL 生效。
 - `maxItems = 0` 表示不限；用户 post 建议 UI 以后提供显式上限，避免误下全量。
 - `cookieRef` 表示 sidecar 读取 C# 写入的 sidecar 配置或 cookie 文件，不通过 HTTP 明文传输 Cookie。

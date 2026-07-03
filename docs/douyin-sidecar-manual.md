@@ -44,7 +44,7 @@ python -m venv .venv
 --include-music   下载音乐/音频副产物；默认 false
 --include-json    保存原始 JSON；默认 false
 --format          C# runner 兼容参数，当前 sidecar 接受但不传给第三方配置
---quality         C# runner 兼容参数，当前 sidecar 接受但不传给第三方配置
+--quality         映射到第三方 video_quality；best/2160 为 highest，1080/720/480 映射到对应 p 档
 --title           C# runner 兼容参数，当前 sidecar 接受但不传给第三方配置
 --downloader-root 第三方仓库路径；也可用 DOUYIN_DOWNLOADER_PROMAX_ROOT
 --python          运行第三方 run.py 的 Python；不传时优先使用第三方仓库 .venv/venv
@@ -185,7 +185,7 @@ Cookie 输出规则：
 - 支持第三方已有能力：单视频 `/video`、图文 `/note`/`/gallery`、用户主页 `post`/`like`/`mix`/`music` 批量、本人收藏 `collect`/`collectmix`、合集/混剪/音乐单链接 `/collection`/`/mix`/`/music`
 - 读取 `download_manifest.jsonl` 汇总 `output_files`
 - C# runner 默认从 `AppContext.BaseDirectory` 向上优先寻找 `tools\douyin-sidecar\sidecar.py`，便于开发联调；发布包仍可放置 `sidecars\douyin\EasyGet.DouyinSidecar.exe` 或 `sidecars\douyin_sidecar.py`
-- C# runner 仍会传 `--format`、`--quality`、`--title`；Python sidecar 接受这些兼容参数并在 `--dry-run` 的 `details.runner_options` 中记录非空值，但当前不改变第三方下载配置
+- C# runner 仍会传 `--format`、`--quality`、`--title`；Python sidecar 会把 `--quality` 映射到第三方 `video_quality`，并在 `--dry-run` 的 `details.runner_options` 中记录非空兼容参数
 
 占位或测试路径：
 
