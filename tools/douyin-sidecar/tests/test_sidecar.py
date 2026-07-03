@@ -35,6 +35,16 @@ class SidecarCliTests(unittest.TestCase):
         ]
         return subprocess.run(command, text=True, capture_output=True, check=False, env=env)
 
+    def run_sidecar_without_url(self, args, output_dir, env=None):
+        command = [
+            sys.executable,
+            str(SIDECAR_PATH),
+            "--output-dir",
+            str(output_dir),
+            *args,
+        ]
+        return subprocess.run(command, text=True, capture_output=True, check=False, env=env)
+
     def test_emit_sample_outputs_parseable_json_lines(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(["--emit-sample"], Path(temp_dir))
@@ -75,6 +85,79 @@ class SidecarCliTests(unittest.TestCase):
             self.assertEqual(config["thread"], 3)
             self.assertEqual(config["author_dir"], "nickname")
             self.assertIs(config["group_by_mode"], True)
+
+    def test_dry_run_hot_board_outputs_discovery_plan_without_url(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar_without_url(["--dry-run", "--hot-board", "30"], Path(temp_dir))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual(len(events), 1)
+            summary = events[0]
+            self.assertEqual(summary["event"], "log")
+            self.assertEqual(summary["message"], "dry_run")
+            discovery = summary["details"]["discovery"]
+            self.assertEqual(discovery["type"], "hot_board")
+            self.assertEqual(discovery["limit"], 30)
+            self.assertIn("--hot-board", summary["details"]["planned_command"])
+            self.assertNotIn("--url", summary["details"]["planned_command"])
+
+    def test_dry_run_search_outputs_discovery_plan_without_url(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar_without_url(
+                ["--dry-run", "--search", "猫咪", "--search-max", "2"],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            summary = events[0]
+            discovery = summary["details"]["discovery"]
+            self.assertEqual(discovery["type"], "search")
+            self.assertEqual(discovery["keyword"], "猫咪")
+            self.assertEqual(discovery["search_max"], 2)
+            self.assertIn("--search", summary["details"]["planned_command"])
+            self.assertIn("--search-max", summary["details"]["planned_command"])
+
+    def test_dry_run_hot_board_without_limit_plans_unlimited_flag_value(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar_without_url(["--dry-run", "--hot-board"], Path(temp_dir))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            summary = events[0]
+            discovery = summary["details"]["discovery"]
+            self.assertEqual(discovery["type"], "hot_board")
+            self.assertEqual(discovery["limit"], 0)
+            planned_command = summary["details"]["planned_command"]
+            hot_board_index = planned_command.index("--hot-board")
+            self.assertEqual(planned_command[hot_board_index + 1], "0")
+
+    def test_url_is_required_for_non_discovery_commands(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar_without_url(["--dry-run"], Path(temp_dir))
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--url is required unless --hot-board or --search is used", result.stderr)
+
+    def test_discovery_arguments_are_validated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            cases = [
+                (["--dry-run", "--hot-board", "-1"], "--hot-board must be >= 0"),
+                (["--dry-run", "--search", ""], "--search keyword cannot be empty"),
+                (["--dry-run", "--search", "猫咪", "--search-max", "0"], "--search-max must be >= 1"),
+                (
+                    ["--dry-run", "--hot-board", "10", "--search", "猫咪"],
+                    "--hot-board and --search cannot be used together",
+                ),
+            ]
+
+            for args, expected_error in cases:
+                with self.subTest(args=args):
+                    result = self.run_sidecar_without_url(args, output_dir)
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertIn(expected_error, result.stderr)
 
     def test_dry_run_uses_thread_count(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -953,6 +1036,111 @@ def make_file_only_downloader(root: Path, *, produce_outputs: bool = True, count
     return run_py
 
 
+def make_discovery_downloader(root: Path) -> Path:
+    run_py = root / "run.py"
+    run_py.write_text(
+        textwrap.dedent(
+            """
+            import json
+            import sys
+            from pathlib import Path
+
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            (output_dir / "discovery-probe.json").write_text(
+                json.dumps({"argv": sys.argv}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            if "--hot-board" in sys.argv:
+                output_path = output_dir / "hot_board" / "20260703_120000.jsonl"
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(
+                    "\\n".join(
+                        [
+                            json.dumps({"word": "猫咪", "hot_value": 123}, ensure_ascii=False),
+                            json.dumps({"word": "旅行", "hot_value": 45}, ensure_ascii=False),
+                        ]
+                    )
+                    + "\\n",
+                    encoding="utf-8",
+                )
+                print("hot board exported")
+                raise SystemExit(0)
+
+            if "--search" in sys.argv:
+                output_path = output_dir / "search" / "猫咪_20260703_120000.jsonl"
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                output_path.write_text(
+                    "\\n".join(
+                        [
+                            json.dumps(
+                                {
+                                    "aweme_id": "aweme-1",
+                                    "desc": "猫咪晒太阳",
+                                    "author": {"nickname": "Alice", "sec_uid": "sec-a"},
+                                },
+                                ensure_ascii=False,
+                            ),
+                            json.dumps(
+                                {
+                                    "aweme_id": "aweme-2",
+                                    "desc": "猫咪打盹",
+                                    "author_user_info": {"nickname": "Bob", "sec_uid": "sec-b"},
+                                },
+                                ensure_ascii=False,
+                            ),
+                        ]
+                    )
+                    + "\\n",
+                    encoding="utf-8",
+                )
+                print("search exported")
+                raise SystemExit(0)
+
+            print("missing discovery command", file=sys.stderr)
+            raise SystemExit(2)
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
+def make_broken_discovery_downloader(root: Path, *, behavior: str) -> Path:
+    run_py = root / "run.py"
+    if behavior == "exit":
+        body = """
+            import sys
+            print("discovery failed intentionally", file=sys.stderr)
+            raise SystemExit(7)
+        """
+    elif behavior == "no_output":
+        body = """
+            import sys
+            from pathlib import Path
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+            print("no discovery output")
+            raise SystemExit(0)
+        """
+    elif behavior == "bad_jsonl":
+        body = """
+            import sys
+            from pathlib import Path
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_path = output_dir / "hot_board" / "bad.jsonl"
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text("{bad json\\n", encoding="utf-8")
+            raise SystemExit(0)
+        """
+    else:
+        raise ValueError(behavior)
+
+    run_py.write_text(textwrap.dedent(body).lstrip(), encoding="utf-8")
+    return run_py
+
+
 def read_jsonl(path: Path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
@@ -1000,6 +1188,16 @@ class SidecarRunnerTests(unittest.TestCase):
         ]
         return subprocess.run(command, text=True, capture_output=True, check=False, env=env)
 
+    def run_sidecar_without_url(self, args, output_dir, env=None):
+        command = [
+            sys.executable,
+            str(SIDECAR_PATH),
+            "--output-dir",
+            str(output_dir),
+            *args,
+        ]
+        return subprocess.run(command, text=True, capture_output=True, check=False, env=env)
+
     def test_in_process_runner_executes_fake_downloader_and_keeps_stdout_jsonl(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "fake-downloader"
@@ -1019,6 +1217,103 @@ class SidecarRunnerTests(unittest.TestCase):
             self.assertEqual([event["event"] for event in events], ["progress", "success"])
             self.assertEqual(events[-1]["title"], "fake in-process video")
             self.assertTrue((output_dir / "runtime-probe.json").exists())
+
+    def test_hot_board_invokes_downloader_and_emits_discovery_event(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_discovery_downloader(root)
+
+            result = self.run_sidecar_without_url(
+                ["--downloader-root", str(root), "--runner-mode", "in-process", "--hot-board", "2"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual([event["event"] for event in events], ["progress", "success"])
+            summary = events[-1]
+            details = summary["details"]
+            self.assertEqual(summary["title"], "EasyGet Douyin hot board discovery")
+            self.assertEqual(details["kind"], "discovery")
+            self.assertEqual(details["discovery_type"], "hot_board")
+            self.assertEqual(details["limit"], 2)
+            self.assertEqual(details["item_count"], 2)
+            self.assertEqual(details["items"][0]["word"], "猫咪")
+            self.assertNotIn("raw", details["items"][0])
+            self.assertTrue(Path(details["output_file_path"]).exists())
+            probe = json.loads((output_dir / "discovery-probe.json").read_text(encoding="utf-8"))
+            self.assertIn("--hot-board", probe["argv"])
+            self.assertIn("2", probe["argv"])
+
+    def test_search_invokes_downloader_and_emits_discovery_event_as_json(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_discovery_downloader(root)
+
+            result = self.run_sidecar_without_url(
+                [
+                    "--downloader-root",
+                    str(root),
+                    "--runner-mode",
+                    "in-process",
+                    "--search",
+                    "猫咪",
+                    "--search-max",
+                    "2",
+                    "--output-format",
+                    "json",
+                ],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(len(result.stdout.splitlines()), 1)
+            summary = json.loads(result.stdout)
+            details = summary["details"]
+            self.assertEqual(summary["event"], "success")
+            self.assertEqual(summary["title"], "EasyGet Douyin search discovery")
+            self.assertEqual(details["discovery_type"], "search")
+            self.assertEqual(details["kind"], "discovery")
+            self.assertEqual(details["keyword"], "猫咪")
+            self.assertEqual(details["search_max"], 2)
+            self.assertEqual(details["item_count"], 2)
+            self.assertEqual(details["items"][0]["aweme_id"], "aweme-1")
+            self.assertEqual(details["items"][0]["author_nickname"], "Alice")
+            self.assertEqual(details["items"][1]["sec_uid"], "sec-b")
+            self.assertNotIn("raw", details["items"][0])
+            self.assertTrue(Path(details["output_file_path"]).exists())
+            probe = json.loads((output_dir / "discovery-probe.json").read_text(encoding="utf-8"))
+            self.assertIn("--search", probe["argv"])
+            self.assertIn("--search-max", probe["argv"])
+
+    def test_discovery_failure_paths_emit_failed_event(self):
+        cases = [
+            ("exit", "discovery_failed"),
+            ("no_output", "discovery_no_output"),
+            ("bad_jsonl", "discovery_read_output"),
+        ]
+        for behavior, expected_step in cases:
+            with self.subTest(behavior=behavior), tempfile.TemporaryDirectory() as temp_dir:
+                root = Path(temp_dir) / "fake-downloader"
+                output_dir = Path(temp_dir) / "downloads"
+                root.mkdir()
+                make_broken_discovery_downloader(root, behavior=behavior)
+
+                result = self.run_sidecar_without_url(
+                    ["--downloader-root", str(root), "--runner-mode", "in-process", "--hot-board", "2"],
+                    output_dir,
+                )
+
+                self.assertNotEqual(result.returncode, 0)
+                events = [json.loads(line) for line in result.stdout.splitlines()]
+                failure = events[-1]
+                self.assertEqual(failure["event"], "failed")
+                self.assertEqual(failure["details"]["step"], expected_step)
+                self.assertEqual(failure["details"]["discovery"]["type"], "hot_board")
 
     def test_run_real_success_details_include_manifest_summary(self):
         with tempfile.TemporaryDirectory() as temp_dir:

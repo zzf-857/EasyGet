@@ -73,6 +73,8 @@ PHASE_ONE_IMPORT_MODULES = (
     "storage.database",
 )
 SIDECAR_STATE_DIR_NAME = ".easyget-douyin-sidecar"
+DISCOVERY_PLACEHOLDER_URL = "https://www.douyin.com"
+MAX_DISCOVERY_EVENT_ITEMS = 20
 
 
 class CookieSourceError(ValueError):
@@ -351,7 +353,7 @@ def build_config(
 def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[Dict[str, Any], Dict[str, Any], List[str]]:
     cookie_text, cookie_source = resolve_cookie_source(args)
     config = build_config(
-        url=args.url,
+        url=args.url or DISCOVERY_PLACEHOLDER_URL,
         output_dir=output_dir,
         cookie=cookie_text,
         proxy=args.proxy,
@@ -573,6 +575,19 @@ def _candidate_roots_from(start: Path) -> Iterable[Path]:
 def planned_command(python_exe: str, downloader_root: Optional[Path], config_path: Path, output_dir: Path) -> List[str]:
     run_py = (downloader_root / "run.py") if downloader_root else Path("<douyin-downloader-promax>") / "run.py"
     return [python_exe, str(run_py), "-c", str(config_path), "-p", str(output_dir)]
+
+
+def planned_discovery_command(
+    python_exe: str,
+    downloader_root: Optional[Path],
+    config_path: Path,
+    output_dir: Path,
+    args: argparse.Namespace,
+) -> List[str]:
+    command = planned_command(python_exe, downloader_root, config_path, output_dir)
+    if getattr(args, "hot_board", None) is not None:
+        return [*command, "--hot-board", str(args.hot_board)]
+    return [*command, "--search", args.search, "--search-max", str(args.search_max)]
 
 
 def resolve_downloader_python(python_exe: str, downloader_root: Optional[Path]) -> str:
@@ -980,7 +995,31 @@ def emit_sample(args: argparse.Namespace) -> List[Dict[str, Any]]:
     ]
 
 
+def is_discovery_request(args: argparse.Namespace) -> bool:
+    return getattr(args, "hot_board", None) is not None or getattr(args, "search", None) is not None
+
+
+def discovery_type(args: argparse.Namespace) -> str:
+    return "hot_board" if getattr(args, "hot_board", None) is not None else "search"
+
+
+def discovery_plan(args: argparse.Namespace) -> Dict[str, Any]:
+    if discovery_type(args) == "hot_board":
+        return {
+            "type": "hot_board",
+            "limit": int(args.hot_board),
+        }
+    return {
+        "type": "search",
+        "keyword": args.search,
+        "search_max": int(args.search_max),
+    }
+
+
 def dry_run(args: argparse.Namespace) -> List[Dict[str, Any]]:
+    if is_discovery_request(args):
+        return dry_run_discovery(args)
+
     output_dir = Path(args.output_dir).expanduser().resolve()
     config, cookie_source, _ = build_config_from_args(args, output_dir)
     downloader_root = find_downloader_root(args.downloader_root)
@@ -995,6 +1034,31 @@ def dry_run(args: argparse.Namespace) -> List[Dict[str, Any]]:
             details={
                 "downloader_root": str(downloader_root) if downloader_root else None,
                 "planned_command": command,
+                "config": redact_config(config),
+                "cookie_source": cookie_source,
+                "runner_options": compatibility_options(args),
+                "runner_mode": selected_runner_mode,
+            },
+        )
+    ]
+
+
+def dry_run_discovery(args: argparse.Namespace) -> List[Dict[str, Any]]:
+    output_dir = Path(args.output_dir).expanduser().resolve()
+    config, cookie_source, _ = build_config_from_args(args, output_dir)
+    downloader_root = find_downloader_root(args.downloader_root)
+    config_path = output_dir / SIDECAR_STATE_DIR_NAME / "config.json"
+    downloader_python = resolve_downloader_python(args.python, downloader_root)
+    command = planned_discovery_command(downloader_python, downloader_root, config_path, output_dir, args)
+    selected_runner_mode = select_runner_mode(args)
+
+    return [
+        make_log_event(
+            "dry_run",
+            details={
+                "downloader_root": str(downloader_root) if downloader_root else None,
+                "planned_command": command,
+                "discovery": discovery_plan(args),
                 "config": redact_config(config),
                 "cookie_source": cookie_source,
                 "runner_options": compatibility_options(args),
@@ -1089,6 +1153,279 @@ def import_phase_one_modules(downloader_root: Path) -> Tuple[Dict[str, str], str
 def _is_third_party_downloader_module(module_name: str) -> bool:
     roots = ("auth", "cli", "config", "control", "core", "storage", "tools", "utils")
     return any(module_name == root or module_name.startswith(f"{root}.") for root in roots)
+
+
+def run_discovery(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], int]:
+    output_dir = Path(args.output_dir).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        config, _, redaction_secrets = build_config_from_args(args, output_dir)
+    except ValueError as exc:
+        return [
+            make_failed_event(str(exc), details={"step": "parse_arguments"})
+        ], 2
+
+    downloader_root = find_downloader_root(args.downloader_root)
+    if downloader_root is None:
+        return [
+            make_failed_event(
+                (
+                    "douyin-downloader-promax root not found. Pass --downloader-root "
+                    "or set DOUYIN_DOWNLOADER_PROMAX_ROOT."
+                ),
+                details={"step": "locate_downloader", "discovery": discovery_plan(args)},
+            )
+        ], 2
+
+    start_timestamp = time.time()
+    events = [
+        make_progress_event(
+            percent=5,
+            message="starting_discovery",
+            details={"downloader_root": str(downloader_root), "discovery": discovery_plan(args)},
+        )
+    ]
+
+    if args.keep_temp_config:
+        state_dir = output_dir / SIDECAR_STATE_DIR_NAME
+        state_dir.mkdir(parents=True, exist_ok=True)
+        config_path = state_dir / "last-discovery-config.json"
+        write_json_config(config, config_path)
+        completed, exit_code = _invoke_discovery(
+            args, downloader_root, config_path, output_dir, start_timestamp, redaction_secrets
+        )
+    else:
+        with tempfile.TemporaryDirectory(prefix=".easyget-douyin-sidecar-") as temp_dir:
+            config_path = Path(temp_dir) / "config.json"
+            write_json_config(config, config_path)
+            completed, exit_code = _invoke_discovery(
+                args, downloader_root, config_path, output_dir, start_timestamp, redaction_secrets
+            )
+
+    events.append(completed)
+    return events, exit_code
+
+
+def _invoke_discovery(
+    args: argparse.Namespace,
+    downloader_root: Path,
+    config_path: Path,
+    output_dir: Path,
+    start_timestamp: float,
+    redaction_secrets: Sequence[str],
+) -> Tuple[Dict[str, Any], int]:
+    runner_mode = select_runner_mode(args)
+    downloader_python = resolve_downloader_python(args.python, downloader_root)
+    command = planned_discovery_command(downloader_python, downloader_root, config_path, output_dir, args)
+    timeout = args.timeout if args.timeout and args.timeout > 0 else None
+
+    if runner_mode == "in-process":
+        completed = run_downloader_in_process_args(downloader_root, command[2:])
+        command = list(completed.args)
+    else:
+        try:
+            completed = subprocess.run(
+                command,
+                cwd=str(downloader_root),
+                text=True,
+                capture_output=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
+            error = redact_text(tail_text(str(exc)), redaction_secrets)
+            return (
+                make_failed_event(
+                    f"Discovery timed out after {timeout} seconds. {error}",
+                    details={
+                        "step": "discovery_timeout",
+                        "planned_command": command,
+                        "runner_mode": runner_mode,
+                        "discovery": discovery_plan(args),
+                    },
+                ),
+                1,
+            )
+
+    combined_output = redact_text(
+        "\n".join(part for part in (completed.stdout, completed.stderr) if part),
+        redaction_secrets,
+    )
+    if completed.returncode != 0:
+        error = tail_text(combined_output) or f"Discovery exited with code {completed.returncode}"
+        return (
+            make_failed_event(
+                error,
+                details={
+                    "step": "discovery_failed",
+                    "return_code": completed.returncode,
+                    "planned_command": command,
+                    "runner_mode": runner_mode,
+                    "discovery": discovery_plan(args),
+                },
+            ),
+            completed.returncode or 1,
+        )
+
+    output_path = find_discovery_output_path(output_dir, discovery_type(args), start_timestamp)
+    if output_path is None:
+        details = {
+            "step": "discovery_no_output",
+            "return_code": completed.returncode,
+            "planned_command": command,
+            "runner_mode": runner_mode,
+            "discovery": discovery_plan(args),
+        }
+        output_tail = tail_text(combined_output)
+        if output_tail:
+            details["captured_output_tail"] = output_tail
+        return (
+            make_failed_event("Discovery completed with no JSONL output.", details=details),
+            1,
+        )
+
+    try:
+        items = read_jsonl_items(output_path)
+    except ValueError as exc:
+        return (
+            make_failed_event(
+                str(exc),
+                details={
+                    "step": "discovery_read_output",
+                    "output_file_path": str(output_path),
+                    "planned_command": command,
+                    "runner_mode": runner_mode,
+                    "discovery": discovery_plan(args),
+                },
+            ),
+            1,
+        )
+
+    return (
+        make_discovery_result_event(args, output_path, items, command, runner_mode, completed.returncode),
+        0,
+    )
+
+
+def find_discovery_output_path(output_dir: Path, mode: str, start_timestamp: float) -> Optional[Path]:
+    subdir_name = "hot_board" if mode == "hot_board" else "search"
+    subdir = output_dir / subdir_name
+    if not subdir.is_dir():
+        return None
+
+    candidates: List[Path] = []
+    for path in subdir.glob("*.jsonl"):
+        if not path.is_file():
+            continue
+        try:
+            modified_at = path.stat().st_mtime
+        except OSError:
+            continue
+        if modified_at >= start_timestamp - 1:
+            candidates.append(path)
+
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda item: (item.stat().st_mtime, item.name), reverse=True)[0]
+
+
+def read_jsonl_items(path: Path) -> List[Any]:
+    items: List[Any] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise ValueError(f"Discovery output could not be read: {path}") from exc
+
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            items.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Discovery output contains invalid JSON at line {line_number}: {path}") from exc
+    return items
+
+
+def make_discovery_result_event(
+    args: argparse.Namespace,
+    output_path: Path,
+    items: Sequence[Any],
+    command: Sequence[str],
+    runner_mode: str,
+    return_code: int,
+) -> Dict[str, Any]:
+    mode = discovery_type(args)
+    preview_items = [normalize_discovery_item(item, mode) for item in items[:MAX_DISCOVERY_EVENT_ITEMS]]
+    output_file_path = str(output_path.resolve())
+    details: Dict[str, Any] = {
+        "kind": "discovery",
+        "discovery_type": mode,
+        "output_file_path": output_file_path,
+        "item_count": len(items),
+        "items": preview_items,
+        "items_truncated": len(items) > len(preview_items),
+        "planned_command": list(command),
+        "runner_mode": runner_mode,
+        "return_code": return_code,
+    }
+    if mode == "hot_board":
+        details["limit"] = int(args.hot_board)
+        title = "EasyGet Douyin hot board discovery"
+    else:
+        details["keyword"] = args.search
+        details["search_max"] = int(args.search_max)
+        title = "EasyGet Douyin search discovery"
+
+    return make_success_event(
+        title=title,
+        output_file_path=output_file_path,
+        file_size_bytes=file_size(output_file_path),
+        details=details,
+    )
+
+
+def normalize_discovery_item(item: Any, mode: str) -> Dict[str, Any]:
+    if not isinstance(item, dict):
+        return {"value": item}
+
+    if mode == "hot_board":
+        normalized = {
+            key: item[key]
+            for key in ("word", "hot_value", "position", "sentence_id", "event_time")
+            if key in item
+        }
+        return normalized
+
+    author = item.get("author")
+    if not isinstance(author, dict):
+        author = item.get("author_user_info")
+    if not isinstance(author, dict):
+        author = {}
+
+    aweme_id = string_or_empty(item.get("aweme_id") or item.get("id"))
+    desc = string_or_empty(item.get("desc") or item.get("description"))
+    sec_uid = string_or_empty(item.get("sec_uid") or author.get("sec_uid"))
+    author_nickname = string_or_empty(author.get("nickname") or author.get("unique_id"))
+    share_info = item.get("share_info") if isinstance(item.get("share_info"), dict) else {}
+    url = string_or_empty(item.get("url") or item.get("share_url") or share_info.get("share_url"))
+    if not url and aweme_id:
+        url = f"https://www.douyin.com/video/{aweme_id}"
+
+    normalized = {
+        "aweme_id": aweme_id,
+        "sec_uid": sec_uid,
+        "desc": desc,
+        "author_nickname": author_nickname,
+        "url": url,
+    }
+    return normalized
+
+
+def string_or_empty(value: Any) -> str:
+    return "" if value is None else str(value)
 
 
 def run_real(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], int]:
@@ -1283,8 +1620,15 @@ def run_downloader_in_process(
     config_path: Path,
     output_dir: Path,
 ) -> subprocess.CompletedProcess:
+    return run_downloader_in_process_args(downloader_root, ["-c", str(config_path), "-p", str(output_dir)])
+
+
+def run_downloader_in_process_args(
+    downloader_root: Path,
+    command_args: Sequence[str],
+) -> subprocess.CompletedProcess:
     run_py = downloader_root / "run.py"
-    command = [sys.executable, str(run_py), "-c", str(config_path), "-p", str(output_dir)]
+    command = [sys.executable, str(run_py), *command_args]
     stdout_buffer = io.StringIO()
     stderr_buffer = io.StringIO()
     original_cwd = Path.cwd()
@@ -1294,7 +1638,7 @@ def run_downloader_in_process(
 
     try:
         os.chdir(downloader_root)
-        sys.argv = [str(run_py), "-c", str(config_path), "-p", str(output_dir)]
+        sys.argv = [str(run_py), *command_args]
         root_text = str(downloader_root)
         sys.path[:] = [root_text, *[entry for entry in sys.path if entry != root_text]]
         with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
@@ -1349,7 +1693,7 @@ def write_events(events: List[Dict[str, Any]], output_format: str) -> None:
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="EasyGet Douyin sidecar prototype")
-    parser.add_argument("--url", required=True, help="Douyin URL to download")
+    parser.add_argument("--url", default="", help="Douyin URL to download")
     parser.add_argument("--output-dir", required=True, help="Directory for downloaded files")
     parser.add_argument("--cookie", default="", help=argparse.SUPPRESS)
     parser.add_argument("--cookie-env", default="", help="Read Cookie header string or JSON object from this environment variable")
@@ -1375,6 +1719,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--author-dir", default="nickname", help="Author directory style: nickname, sec_uid, nickname_uid, user_sec_uid")
     parser.add_argument("--no-group-by-mode", dest="group_by_mode", action="store_false", help="Do not create post/like/mix/music mode subdirectories")
     parser.add_argument("--thread", type=int, default=3, help="Third-party downloader concurrency thread count")
+    parser.add_argument("--hot-board", type=int, nargs="?", const=0, default=None, help="Export Douyin hot board items; optional value limits item count, 0 means unlimited")
+    parser.add_argument("--search", default=None, help="Export Douyin search results for this keyword")
+    parser.add_argument("--search-max", type=int, default=50, help="Maximum search results; 0 means unlimited")
     parser.add_argument("--format", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
     parser.add_argument("--quality", default="", help="Map EasyGet quality to third-party video_quality")
     parser.add_argument("--title", default="", help="Accepted for EasyGet C# runner compatibility; currently ignored")
@@ -1394,6 +1741,20 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--output-format", choices=("jsonl", "json"), default="jsonl")
     parser.set_defaults(group_by_mode=True)
     args = parser.parse_args(argv)
+    args.url = (args.url or "").strip()
+    if args.search is not None:
+        args.search = args.search.strip()
+    if args.hot_board is not None and args.search is not None:
+        parser.error("--hot-board and --search cannot be used together")
+    if args.hot_board is not None and args.hot_board < 0:
+        parser.error("--hot-board must be >= 0")
+    if args.search is not None and not args.search:
+        parser.error("--search keyword cannot be empty")
+    if args.search_max < 1:
+        parser.error("--search-max must be >= 1")
+    url_optional = args.hot_board is not None or args.search is not None or args.self_test_imports
+    if not args.url and not url_optional:
+        parser.error("--url is required unless --hot-board or --search is used")
     if args.limit < 0:
         parser.error("--limit must be >= 0")
     if args.thread < 1:
@@ -1443,6 +1804,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.dry_run:
             write_events(dry_run(args), args.output_format)
             return 0
+        if is_discovery_request(args):
+            events, exit_code = run_discovery(args)
+            write_events(events, args.output_format)
+            return exit_code
 
         events, exit_code = run_real(args)
         write_events(events, args.output_format)
