@@ -302,6 +302,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0"
@@ -343,6 +344,20 @@
                             </Button>
 
                             <Button Grid.Column="3"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,0"
+                                    ToolTip="只选择有 URL 或作品 ID 的发现结果"
+                                    AutomationProperties.Name="选择可下载发现结果"
+                                    Command="{Binding SelectDownloadableDouyinDiscoveryItemsCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="选择可下载" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Grid.Column="4"
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     ToolTip="清除发现结果选择"

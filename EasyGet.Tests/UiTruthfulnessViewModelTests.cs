@@ -1200,6 +1200,37 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSelectsOnlyDownloadableDiscoveryResults()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var withUrl = new DouyinDiscoveryItem(
+            AwemeId: "not-numeric-but-url-is-usable",
+            Description: "有链接作品",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var withNumericAwemeId = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "只有数字作品 ID");
+        var hotWord = new DouyinDiscoveryItem(Word: "热榜词", HotValue: 123);
+        var nonNumericAwemeId = new DouyinDiscoveryItem(
+            AwemeId: "not-a-video-id",
+            Description: "不可构造链接");
+        context.Douyin.DouyinDiscoveryItems.Add(withUrl);
+        context.Douyin.DouyinDiscoveryItems.Add(withNumericAwemeId);
+        context.Douyin.DouyinDiscoveryItems.Add(hotWord);
+        context.Douyin.DouyinDiscoveryItems.Add(nonNumericAwemeId);
+
+        context.Douyin.SelectDownloadableDouyinDiscoveryItemsCommand.Execute(null);
+
+        Assert.True(withUrl.IsSelected);
+        Assert.True(withNumericAwemeId.IsSelected);
+        Assert.False(hotWord.IsSelected);
+        Assert.False(nonNumericAwemeId.IsSelected);
+        Assert.Equal(2, context.Douyin.SelectedDouyinDiscoveryItemCount);
+        Assert.Contains("已选择 2", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DouyinViewModelRejectsAddingAllDiscoveryResultsWhenListIsEmpty()
     {
         var discovery = new FakeDouyinDiscoveryService();

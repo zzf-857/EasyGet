@@ -581,6 +581,28 @@ public partial class DouyinViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void SelectDownloadableDouyinDiscoveryItems()
+    {
+        var selected = 0;
+        foreach (var item in DouyinDiscoveryItems)
+        {
+            var isDownloadable = !string.IsNullOrWhiteSpace(BuildDouyinDiscoveryDownloadUrl(item));
+            item.IsSelected = isDownloadable;
+            if (isDownloadable)
+                selected++;
+        }
+
+        DouyinDiscoveryErrorMessage = "";
+        DouyinDiscoveryStatusText = selected > 0
+            ? $"已选择 {selected} 条可下载发现结果"
+            : "当前发现结果没有可下载链接";
+        if (selected == 0)
+            DouyinDiscoveryErrorMessage = "当前发现结果没有可下载链接";
+
+        NotifyDouyinDiscoveryStateChanged();
+    }
+
+    [RelayCommand]
     private void ClearDouyinDiscoverySelection()
     {
         foreach (var item in DouyinDiscoveryItems)
