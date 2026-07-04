@@ -8,6 +8,26 @@ namespace EasyGet.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
+    private static readonly IReadOnlyDictionary<string, string> DouyinTemplatePreviewValues =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["id"] = "7412345678901234567",
+            ["title"] = "今天去爬山啦",
+            ["author"] = "示例作者",
+            ["author_id"] = "MS4wLjABAAAAexample",
+            ["date"] = "2026-04-10",
+            ["year"] = "2026",
+            ["month"] = "04",
+            ["day"] = "10",
+            ["time"] = "221530",
+            ["hour"] = "22",
+            ["minute"] = "15",
+            ["second"] = "30",
+            ["timestamp"] = "1775830530",
+            ["type"] = "video",
+            ["mode"] = "post"
+        };
+
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
     private readonly DownloadManager _downloadManager;
@@ -65,8 +85,14 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _enableDouyinSpecialEngine;
     [ObservableProperty] private string _douyinMode = "post";
     [ObservableProperty] private int _douyinLimit;
-    [ObservableProperty] private string _douyinFilenameTemplate = AppConfig.DefaultDouyinTemplate;
-    [ObservableProperty] private string _douyinFolderTemplate = AppConfig.DefaultDouyinTemplate;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DouyinFilenameTemplatePreviewText))]
+    private string _douyinFilenameTemplate = AppConfig.DefaultDouyinTemplate;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DouyinFolderTemplatePreviewText))]
+    private string _douyinFolderTemplate = AppConfig.DefaultDouyinTemplate;
+
     [ObservableProperty] private string _douyinAuthorDirectoryMode = "nickname";
     [ObservableProperty] private bool _douyinGroupByMode = true;
     [ObservableProperty] private string _douyinStartTime = "";
@@ -135,6 +161,11 @@ public partial class SettingsViewModel : ObservableObject
     ];
     public string[] DouyinAuthorDirectoryModeOptions { get; } =
         ["nickname", "sec_uid", "nickname_uid", "user_sec_uid"];
+    public string DouyinFilenameTemplatePreviewText => BuildDouyinTemplatePreview(DouyinFilenameTemplate);
+    public string DouyinFolderTemplatePreviewText => BuildDouyinTemplatePreview(DouyinFolderTemplate);
+    public string DouyinTemplateVariablesText { get; } = string.Join(
+        "  ",
+        ConfigService.SupportedDouyinTemplateVariableNames.Select(variable => $"{{{variable}}}"));
 
     public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
@@ -510,6 +541,17 @@ public partial class SettingsViewModel : ObservableObject
             return "准备安装";
 
         return isInstalling ? "处理中" : "";
+    }
+
+    internal static string BuildDouyinTemplatePreview(string? template)
+    {
+        var preview = ConfigService.NormalizeDouyinTemplate(template);
+        foreach (var (variable, value) in DouyinTemplatePreviewValues)
+        {
+            preview = preview.Replace($"{{{variable}}}", value, StringComparison.Ordinal);
+        }
+
+        return $"示例：{preview}";
     }
 
     [RelayCommand]

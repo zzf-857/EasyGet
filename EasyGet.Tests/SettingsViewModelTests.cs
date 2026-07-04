@@ -141,6 +141,25 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void DouyinTemplatePreviewReflectsCurrentTemplatesAndVariables()
+    {
+        var viewModel = CreateViewModel(new FakeAppUpdateService());
+
+        SetViewModelString(viewModel, "DouyinFilenameTemplate", "{author}_{title}_{id}");
+        SetViewModelString(viewModel, "DouyinFolderTemplate", "{date}_{mode}_{id}");
+
+        Assert.Equal("示例：示例作者_今天去爬山啦_7412345678901234567", viewModel.DouyinFilenameTemplatePreviewText);
+        Assert.Equal("示例：2026-04-10_post_7412345678901234567", viewModel.DouyinFolderTemplatePreviewText);
+        Assert.Contains("{id}", viewModel.DouyinTemplateVariablesText, StringComparison.Ordinal);
+        Assert.Contains("{title}", viewModel.DouyinTemplateVariablesText, StringComparison.Ordinal);
+        Assert.Contains("{mode}", viewModel.DouyinTemplateVariablesText, StringComparison.Ordinal);
+
+        SetViewModelString(viewModel, "DouyinFilenameTemplate", "{title}");
+
+        Assert.Equal("示例：2026-04-10_今天去爬山啦_7412345678901234567", viewModel.DouyinFilenameTemplatePreviewText);
+    }
+
+    [Fact]
     public async Task SaveSettingsCommand_PersistsDouyinSpecialSettings()
     {
         var config = CreateTempConfigService();

@@ -801,7 +801,11 @@ public class XamlBindingTests
         Assert.Contains("Settings.DouyinCommentIncludeReplies", source);
         Assert.Contains("Settings.DouyinMaxComments", source);
         Assert.Contains("Settings.DouyinCommentPageSize", source);
+        Assert.Contains("Settings.DouyinFilenameTemplate", source);
         Assert.Contains("Settings.DouyinFolderTemplate", source);
+        Assert.Contains("Settings.DouyinFilenameTemplatePreviewText", source);
+        Assert.Contains("Settings.DouyinFolderTemplatePreviewText", source);
+        Assert.Contains("Settings.DouyinTemplateVariablesText", source);
         Assert.Contains("Settings.DouyinAuthorDirectoryMode", source);
         Assert.Contains("Settings.DouyinAuthorDirectoryModeOptions", source);
         Assert.Contains("Settings.DouyinGroupByMode", source);
@@ -1109,6 +1113,9 @@ public class XamlBindingTests
         Assert.Contains("DouyinLimit", source);
         Assert.Contains("DouyinFilenameTemplate", source);
         Assert.Contains("DouyinFolderTemplate", source);
+        Assert.Contains("DouyinFilenameTemplatePreviewText", source);
+        Assert.Contains("DouyinFolderTemplatePreviewText", source);
+        Assert.Contains("DouyinTemplateVariablesText", source);
         Assert.Contains("DouyinAuthorDirectoryMode", source);
         Assert.Contains("DouyinAuthorDirectoryModeOptions", source);
         Assert.Contains("DouyinGroupByMode", source);

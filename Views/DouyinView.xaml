@@ -1349,10 +1349,16 @@
                                            Style="{StaticResource TextBody}"
                                            Margin="0,4,0,0"/>
                             </StackPanel>
-                            <TextBox Grid.Column="1"
-                                     Style="{StaticResource DarkTextBox}"
-                                     Text="{Binding Settings.DouyinFilenameTemplate, UpdateSourceTrigger=LostFocus}"
-                                     IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBox Style="{StaticResource DarkTextBox}"
+                                         Text="{Binding Settings.DouyinFilenameTemplate, UpdateSourceTrigger=LostFocus}"
+                                         IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                                <TextBlock Text="{Binding Settings.DouyinFilenameTemplatePreviewText, Mode=OneWay}"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,6,0,0"/>
+                            </StackPanel>
                         </Grid>
 
                         <Grid Margin="0,0,0,16">
@@ -1366,11 +1372,23 @@
                                            Style="{StaticResource TextBody}"
                                            Margin="0,4,0,0"/>
                             </StackPanel>
-                            <TextBox Grid.Column="1"
-                                     Style="{StaticResource DarkTextBox}"
-                                     Text="{Binding Settings.DouyinFolderTemplate, UpdateSourceTrigger=LostFocus}"
-                                     IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBox Style="{StaticResource DarkTextBox}"
+                                         Text="{Binding Settings.DouyinFolderTemplate, UpdateSourceTrigger=LostFocus}"
+                                         IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                                <TextBlock Text="{Binding Settings.DouyinFolderTemplatePreviewText, Mode=OneWay}"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,6,0,0"/>
+                            </StackPanel>
                         </Grid>
+
+                        <TextBlock Text="{Binding Settings.DouyinTemplateVariablesText, Mode=OneWay}"
+                                   Style="{StaticResource TextCaption}"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,16"/>
 
                         <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>

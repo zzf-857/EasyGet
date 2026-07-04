@@ -16,8 +16,8 @@ public class ConfigService
     private static readonly string[] SupportedDouyinModes = ["post", "like", "mix", "music", "collect", "collectmix"];
     private static readonly string[] SupportedDouyinAuthorDirectoryModes =
         ["nickname", "sec_uid", "nickname_uid", "user_sec_uid"];
-    private static readonly HashSet<string> SupportedDouyinTemplateVariables = new(StringComparer.Ordinal)
-    {
+    internal static readonly string[] SupportedDouyinTemplateVariableNames =
+    [
         "id",
         "title",
         "author",
@@ -33,7 +33,10 @@ public class ConfigService
         "timestamp",
         "type",
         "mode"
-    };
+    ];
+    private static readonly HashSet<string> SupportedDouyinTemplateVariables = new(
+        SupportedDouyinTemplateVariableNames,
+        StringComparer.Ordinal);
     private static readonly char[] UnsafeDouyinTemplateCharacters =
     [
         '/',

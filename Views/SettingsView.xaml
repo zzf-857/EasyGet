@@ -462,10 +462,16 @@
                                 <TextBlock Text="文件名模板" Style="{StaticResource TextBodyStrong}"/>
                                 <TextBlock Text="控制媒体文件名，必须包含 {id}" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
                             </StackPanel>
-                            <TextBox Grid.Column="1"
-                                     Style="{StaticResource DarkTextBox}"
-                                     Text="{Binding DouyinFilenameTemplate, UpdateSourceTrigger=LostFocus}"
-                                     IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBox Style="{StaticResource DarkTextBox}"
+                                         Text="{Binding DouyinFilenameTemplate, UpdateSourceTrigger=LostFocus}"
+                                         IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                                <TextBlock Text="{Binding DouyinFilenameTemplatePreviewText, Mode=OneWay}"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,6,0,0"/>
+                            </StackPanel>
                         </Grid>
 
                         <Grid Margin="0,0,0,14">
@@ -477,11 +483,23 @@
                                 <TextBlock Text="作品文件夹模板" Style="{StaticResource TextBodyStrong}"/>
                                 <TextBlock Text="控制每个作品子文件夹，必须包含 {id}" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
                             </StackPanel>
-                            <TextBox Grid.Column="1"
-                                     Style="{StaticResource DarkTextBox}"
-                                     Text="{Binding DouyinFolderTemplate, UpdateSourceTrigger=LostFocus}"
-                                     IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                            <StackPanel Grid.Column="1">
+                                <TextBox Style="{StaticResource DarkTextBox}"
+                                         Text="{Binding DouyinFolderTemplate, UpdateSourceTrigger=LostFocus}"
+                                         IsEnabled="{Binding EnableDouyinSpecialEngine}"/>
+                                <TextBlock Text="{Binding DouyinFolderTemplatePreviewText, Mode=OneWay}"
+                                           Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,6,0,0"/>
+                            </StackPanel>
                         </Grid>
+
+                        <TextBlock Text="{Binding DouyinTemplateVariablesText, Mode=OneWay}"
+                                   Style="{StaticResource TextCaption}"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,14"/>
 
                         <Grid Margin="0,0,0,14">
                             <Grid.ColumnDefinitions>
