@@ -1420,6 +1420,8 @@
                                                     <TextBlock Text="{Binding AuthorName}" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
                                                     <TextBlock Text=" · " Style="{StaticResource TextCaption}" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
                                                     <TextBlock Text="{Binding WorkCountText}" Style="{StaticResource TextCaption}" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text=" · " Style="{StaticResource TextCaption}" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="{Binding LatestDownloadTimeText}" Style="{StaticResource TextCaption}" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
                                         </DataTemplate>

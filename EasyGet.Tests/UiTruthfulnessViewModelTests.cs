@@ -681,17 +681,20 @@ public class UiTruthfulnessViewModelTests
                 Assert.Equal("作者 B", item.AuthorName);
                 Assert.Equal(2, item.WorkCount);
                 Assert.Equal("2 个作品", item.WorkCountText);
+                Assert.Equal("最近 2026-07-03 10:00", item.LatestDownloadTimeText);
             },
             item =>
             {
                 Assert.Equal("作者 A", item.AuthorName);
                 Assert.Equal(2, item.WorkCount);
+                Assert.Equal("最近 2026-07-01 10:00", item.LatestDownloadTimeText);
             },
             item =>
             {
                 Assert.Equal("作者 C", item.AuthorName);
                 Assert.Equal(1, item.WorkCount);
                 Assert.Equal("1 个作品", item.WorkCountText);
+                Assert.Equal("最近 2026-07-03 10:00", item.LatestDownloadTimeText);
             });
     }
 
