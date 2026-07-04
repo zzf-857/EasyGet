@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import importlib
 import io
 import json
 import os
@@ -1102,6 +1101,38 @@ def tail_text(text: str, limit: int = 2400) -> str:
     return normalized[-limit:]
 
 
+def format_failure_output(text: str, limit: int = 2400) -> str:
+    normalized = (text or "").strip()
+    lowered = normalized.lower()
+    if any(token in lowered for token in ("loginrequired", "login required", "请先登录", "登录态")):
+        detail = ""
+        for line in normalized.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if "请先登录" in stripped:
+                detail = stripped
+                break
+        if not detail:
+            for line in normalized.splitlines():
+                stripped = line.strip()
+                if "login required" in stripped.lower():
+                    detail = stripped
+                    break
+        suffix = f" 原始信息：{detail}" if detail else ""
+        return f"抖音 Cookie 或登录态可能失效，请在设置中更新 Cookie 后重试。{suffix}"
+
+    if "playwright is not installed" in lowered:
+        return "抖音登录浏览器依赖 Playwright 未安装；请先使用手动 Cookie，或安装浏览器依赖后重试。"
+
+    if "modulenotfounderror" in lowered:
+        match = re.search(r"No module named ['\"]([^'\"]+)['\"]", normalized)
+        module = f"：{match.group(1)}" if match else ""
+        return f"抖音专项引擎 Python 依赖缺失{module}，请运行 sidecar 自检或重新安装依赖。"
+
+    return tail_text(normalized, limit=limit)
+
+
 def classify_no_output_failure(output: str) -> Optional[str]:
     normalized = output or ""
     if "Cookies may be invalid or incomplete" in normalized:
@@ -1228,11 +1259,13 @@ def self_test_imports(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], i
             )
         ], 2
 
-    results, captured_output = import_phase_one_modules(downloader_root)
+    downloader_python = resolve_downloader_python(args.python, downloader_root)
+    results, captured_output = import_phase_one_modules(downloader_root, downloader_python)
     failed = {name: error for name, error in results.items() if error}
     details = {
         "step": "self_test_imports",
         "downloader_root": str(downloader_root),
+        "python_executable": downloader_python,
         "imports_ok": not failed,
         "checked_modules": list(results.keys()),
         "failed_modules": list(failed.keys()),
@@ -1259,42 +1292,81 @@ def self_test_imports(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], i
     ], 0
 
 
-def import_phase_one_modules(downloader_root: Path) -> Tuple[Dict[str, str], str]:
+def import_phase_one_modules(downloader_root: Path, python_exe: str) -> Tuple[Dict[str, str], str]:
     root = downloader_root.resolve()
-    original_cwd = Path.cwd()
-    original_path = sys.path[:]
-    original_modules = set(sys.modules)
-    stdout_buffer = io.StringIO()
-    stderr_buffer = io.StringIO()
-    results: Dict[str, str] = {}
+    modules_json = json.dumps(list(PHASE_ONE_IMPORT_MODULES))
+    script = r"""
+import contextlib
+import importlib
+import io
+import json
+import os
+import sys
+
+root = sys.argv[1]
+modules = json.loads(sys.argv[2])
+results = {}
+stdout_buffer = io.StringIO()
+stderr_buffer = io.StringIO()
+
+os.chdir(root)
+sys.path.insert(0, root)
+with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
+    for module_name in modules:
+        try:
+            importlib.import_module(module_name)
+            results[module_name] = ""
+        except Exception as exc:
+            results[module_name] = f"{type(exc).__name__}: {exc}"
+
+print(json.dumps({
+    "results": results,
+    "captured_output": "\n".join(
+        part for part in (stdout_buffer.getvalue(), stderr_buffer.getvalue()) if part
+    ).strip(),
+}, ensure_ascii=True))
+"""
 
     try:
-        os.chdir(root)
-        root_text = str(root)
-        sys.path[:] = [root_text, *[entry for entry in sys.path if entry != root_text]]
-        with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
-            for module_name in PHASE_ONE_IMPORT_MODULES:
-                try:
-                    importlib.import_module(module_name)
-                    results[module_name] = ""
-                except Exception as exc:
-                    results[module_name] = f"{type(exc).__name__}: {exc}"
-    finally:
-        os.chdir(original_cwd)
-        sys.path[:] = original_path
-        for module_name in list(sys.modules):
-            if module_name not in original_modules and _is_third_party_downloader_module(module_name):
-                sys.modules.pop(module_name, None)
+        completed = subprocess.run(
+            [python_exe, "-c", script, str(root), modules_json],
+            cwd=str(root),
+            env=downloader_subprocess_env(),
+            text=True,
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+    except Exception as exc:
+        return (
+            {module_name: f"{type(exc).__name__}: {exc}" for module_name in PHASE_ONE_IMPORT_MODULES},
+            "",
+        )
 
-    captured_output = "\n".join(
-        part for part in (stdout_buffer.getvalue(), stderr_buffer.getvalue()) if part
-    ).strip()
-    return results, captured_output
+    if completed.returncode != 0:
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+        error = format_failure_output(output) or f"self-test import subprocess exited with code {completed.returncode}"
+        return ({module_name: error for module_name in PHASE_ONE_IMPORT_MODULES}, output)
 
+    try:
+        payload = json.loads(completed.stdout.strip())
+    except json.JSONDecodeError:
+        output = "\n".join(part for part in (completed.stdout, completed.stderr) if part).strip()
+        error = format_failure_output(output) or "self-test import subprocess returned invalid JSON."
+        return ({module_name: error for module_name in PHASE_ONE_IMPORT_MODULES}, output)
 
-def _is_third_party_downloader_module(module_name: str) -> bool:
-    roots = ("auth", "cli", "config", "control", "core", "storage", "tools", "utils")
-    return any(module_name == root or module_name.startswith(f"{root}.") for root in roots)
+    raw_results = payload.get("results")
+    if not isinstance(raw_results, dict):
+        error = "self-test import subprocess returned invalid results."
+        return ({module_name: error for module_name in PHASE_ONE_IMPORT_MODULES}, "")
+
+    results = {
+        module_name: str(raw_results.get(module_name) or "")
+        for module_name in PHASE_ONE_IMPORT_MODULES
+    }
+    return results, str(payload.get("captured_output") or "")
 
 
 def run_discovery(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], int]:
@@ -1370,6 +1442,7 @@ def _invoke_discovery(
             completed = subprocess.run(
                 command,
                 cwd=str(downloader_root),
+                env=downloader_subprocess_env(),
                 text=True,
                 capture_output=True,
                 encoding="utf-8",
@@ -1397,7 +1470,7 @@ def _invoke_discovery(
         redaction_secrets,
     )
     if completed.returncode != 0:
-        error = tail_text(combined_output) or f"Discovery exited with code {completed.returncode}"
+        error = format_failure_output(combined_output) or f"Discovery exited with code {completed.returncode}"
         return (
             make_failed_event(
                 error,
@@ -1661,6 +1734,7 @@ def _invoke_downloader(
             completed = subprocess.run(
                 command,
                 cwd=str(downloader_root),
+                env=downloader_subprocess_env(),
                 text=True,
                 capture_output=True,
                 encoding="utf-8",
@@ -1702,7 +1776,7 @@ def _invoke_downloader(
         }
 
     if completed.returncode != 0:
-        error = tail_text(combined_output) or f"Downloader exited with code {completed.returncode}"
+        error = format_failure_output(combined_output) or f"Downloader exited with code {completed.returncode}"
         return (
             make_failed_event(
                 error,
@@ -1766,11 +1840,15 @@ def select_runner_mode(args: argparse.Namespace) -> str:
     requested = getattr(args, "runner_mode", "auto")
     if requested != "auto":
         return requested
-    if (getattr(args, "python", "") or "").strip():
-        return "subprocess"
-    if getattr(args, "timeout", 0) and args.timeout > 0:
-        return "subprocess"
-    return "in-process"
+    return "subprocess"
+
+
+def downloader_subprocess_env() -> Dict[str, str]:
+    env = os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+    env["PYTHONUTF8"] = "1"
+    env.setdefault("PYTHONUNBUFFERED", "1")
+    return env
 
 
 def run_downloader_in_process(
@@ -1898,7 +1976,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
         "--runner-mode",
         choices=("auto", "subprocess", "in-process"),
         default="auto",
-        help="Downloader invocation mode; auto prefers in-process unless subprocess-only options are used",
+        help="Downloader invocation mode; auto uses the downloader Python environment for dependency isolation",
     )
     parser.add_argument("--output-format", choices=("jsonl", "json"), default="jsonl")
     parser.set_defaults(group_by_mode=True)

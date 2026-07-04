@@ -819,6 +819,7 @@ class SidecarCliTests(unittest.TestCase):
             summary = events[0]
             self.assertEqual(summary["event"], "success")
             self.assertEqual(summary["details"]["downloader_root"], str(root.resolve()))
+            self.assertTrue(summary["details"]["python_executable"])
             self.assertTrue(summary["details"]["imports_ok"])
             self.assertIn("core.api_client", summary["details"]["checked_modules"])
 
@@ -840,6 +841,25 @@ class SidecarCliTests(unittest.TestCase):
             self.assertIn("import self-test failed", events[-1]["error"])
             self.assertFalse(events[-1]["details"]["imports_ok"])
             self.assertIn("config", events[-1]["details"]["failed_modules"])
+
+    def test_format_failure_output_summarizes_login_required_traceback(self):
+        sidecar = load_sidecar_module()
+
+        message = sidecar.format_failure_output(
+            """
+            Traceback (most recent call last):
+              File "cli/main.py", line 438, in main
+                asyncio.run(main_async(args))
+            core.api_client.LoginRequiredError: login required (status_code=2483)
+            at /aweme/v1/web/general/search/single/: 请先登录，再继续搜索吧
+            [ERROR] Playwright is not installed.
+            """
+        )
+
+        self.assertIn("Cookie", message)
+        self.assertIn("登录态", message)
+        self.assertIn("请先登录", message)
+        self.assertNotIn("Traceback", message)
 
 
 def make_fake_downloader(
@@ -878,6 +898,8 @@ def make_fake_downloader(
                     "cwd": os.getcwd(),
                     "argv": sys.argv,
                     "path0": sys.path[0],
+                    "pythonioencoding": os.environ.get("PYTHONIOENCODING"),
+                    "pythonutf8": os.environ.get("PYTHONUTF8"),
                 }),
                 encoding="utf-8",
             )
@@ -1367,6 +1389,35 @@ def make_fake_importable_downloader(root: Path) -> None:
 
 
 class SidecarRunnerTests(unittest.TestCase):
+    def test_auto_runner_mode_defaults_to_subprocess_for_dependency_isolation(self):
+        sidecar = load_sidecar_module()
+        args = type("Args", (), {"runner_mode": "auto", "python": "", "timeout": 0})()
+
+        self.assertEqual(sidecar.select_runner_mode(args), "subprocess")
+
+    def test_explicit_in_process_runner_mode_is_preserved(self):
+        sidecar = load_sidecar_module()
+        args = type("Args", (), {"runner_mode": "in-process", "python": "", "timeout": 0})()
+
+        self.assertEqual(sidecar.select_runner_mode(args), "in-process")
+
+    def test_auto_subprocess_runner_sets_utf8_environment(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_fake_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root)],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            probe = json.loads((output_dir / "runtime-probe.json").read_text(encoding="utf-8"))
+            self.assertEqual(probe["pythonioencoding"], "utf-8")
+            self.assertEqual(probe["pythonutf8"], "1")
+
     def run_sidecar(self, args, output_dir, env=None):
         command = [
             sys.executable,
