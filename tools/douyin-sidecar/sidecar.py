@@ -936,18 +936,36 @@ def build_success_summary(
 
 
 def load_first_metadata_file(output_files: Sequence[str]) -> Dict[str, Any]:
+    live_room_metadata: Dict[str, Any] = {}
     for raw_path in output_files:
         path = Path(raw_path)
         name = path.name.lower()
-        if path.suffix.lower() != ".json" or not name.endswith("_data.json"):
+        if path.suffix.lower() != ".json":
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
-        if isinstance(data, dict):
+        if not isinstance(data, dict):
+            continue
+        if name.endswith("_data.json"):
             return data
-    return {}
+        if name.endswith("_room.json") and not live_room_metadata:
+            live_room_metadata = normalize_live_room_metadata(data)
+    return live_room_metadata
+
+
+def normalize_live_room_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
+    room = data.get("room") if isinstance(data.get("room"), dict) else {}
+    user = data.get("user") if isinstance(data.get("user"), dict) else {}
+    normalized: Dict[str, Any] = {"live_room": data}
+    title = room.get("title")
+    if isinstance(title, str) and title.strip():
+        normalized["desc"] = title.strip()
+    nickname = user.get("nickname")
+    if isinstance(nickname, str) and nickname.strip():
+        normalized["author_name"] = nickname.strip()
+    return normalized
 
 
 def extract_duration_seconds(metadata: Dict[str, Any]) -> float:

@@ -1075,6 +1075,44 @@ def make_file_only_downloader(root: Path, *, produce_outputs: bool = True, count
     return run_py
 
 
+def make_live_room_metadata_downloader(root: Path) -> Path:
+    run_py = root / "run.py"
+    run_py.write_text(
+        textwrap.dedent(
+            """
+            import json
+            import sys
+            from pathlib import Path
+
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            media_path = output_dir / "live_recording.flv"
+            room_path = output_dir / "live_recording_room.json"
+            media_path.write_bytes(b"live media")
+            room_path.write_text(
+                json.dumps(
+                    {
+                        "room": {
+                            "title": "测试直播间标题",
+                            "status": 2,
+                        },
+                        "user": {
+                            "nickname": "主播甲",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            print("Total: 1, Success: 1, Failed: 0, Skipped: 0")
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
 def make_discovery_downloader(root: Path) -> Path:
     run_py = root / "run.py"
     run_py.write_text(
@@ -1256,6 +1294,28 @@ class SidecarRunnerTests(unittest.TestCase):
             self.assertEqual([event["event"] for event in events], ["progress", "success"])
             self.assertEqual(events[-1]["title"], "fake in-process video")
             self.assertTrue((output_dir / "runtime-probe.json").exists())
+
+    def test_live_room_metadata_sets_success_title(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_live_room_metadata_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            success = events[-1]
+            room_path = output_dir / "live_recording_room.json"
+
+            self.assertEqual(success["event"], "success")
+            self.assertEqual(success["title"], "测试直播间标题")
+            self.assertEqual(success["output_file_path"], str((output_dir / "live_recording.flv").resolve()))
+            self.assertIn(str(room_path.resolve()), success["details"]["output_files"])
 
     def test_hot_board_invokes_downloader_and_emits_discovery_event(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -2088,6 +2148,25 @@ class SidecarConfigTests(unittest.TestCase):
             )
             self.assertNotIn(str(probe_file.resolve()), output_files)
             self.assertNotIn(str(notes_file.resolve()), output_files)
+
+    def test_load_first_metadata_file_prefers_aweme_data_over_live_room_snapshot(self):
+        sidecar = load_sidecar_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            room_file = output_dir / "live_room.json"
+            data_file = output_dir / "video_data.json"
+            room_file.write_text(
+                json.dumps({"room": {"title": "直播标题"}, "user": {"nickname": "主播甲"}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            data_file.write_text(
+                json.dumps({"desc": "作品标题"}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            metadata = sidecar.load_first_metadata_file([str(room_file), str(data_file)])
+
+            self.assertEqual(metadata["desc"], "作品标题")
 
 
 if __name__ == "__main__":
