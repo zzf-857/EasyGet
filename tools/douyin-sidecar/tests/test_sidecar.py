@@ -1052,6 +1052,46 @@ def make_append_manifest_downloader(root: Path) -> Path:
     return run_py
 
 
+def make_author_summary_downloader(root: Path) -> Path:
+    run_py = root / "run.py"
+    run_py.write_text(
+        textwrap.dedent(
+            """
+            import json
+            import sys
+            from pathlib import Path
+
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            manifest_entries = []
+            for index, author_name in enumerate(("Alice", "Bob", "Alice"), start=1):
+                media_path = output_dir / f"author-video-{index}.mp4"
+                media_path.write_bytes(b"media")
+                manifest_entries.append(
+                    {
+                        "aweme_id": f"author-video-{index}",
+                        "media_type": "video",
+                        "author_name": author_name,
+                        "desc": f"{author_name} video {index}",
+                        "file_paths": [str(media_path)],
+                        "file_names": [media_path.name],
+                    }
+                )
+
+            manifest = output_dir / "download_manifest.jsonl"
+            manifest.write_text(
+                "".join(json.dumps(entry, ensure_ascii=False) + "\\n" for entry in manifest_entries),
+                encoding="utf-8",
+            )
+            print("Total: 3, Success: 3, Failed: 0, Skipped: 0")
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
 def make_file_only_downloader(root: Path, *, produce_outputs: bool = True, count_success: int = 1) -> Path:
     run_py = root / "run.py"
     output_block = """
@@ -1629,6 +1669,32 @@ class SidecarRunnerTests(unittest.TestCase):
             events = [json.loads(line) for line in result.stdout.splitlines()]
 
             assert_no_file_paths_field(self, events[-1]["details"])
+
+    def test_run_real_success_details_include_author_summaries(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_author_summary_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            details = events[-1]["details"]
+
+            self.assertEqual(events[-1]["event"], "success")
+            self.assertEqual(
+                details["author_summaries"],
+                [
+                    {"author_name": "Alice", "work_count": 2},
+                    {"author_name": "Bob", "work_count": 1},
+                ],
+            )
+            assert_no_file_paths_field(self, details)
 
     def test_run_real_success_details_count_transcript_outputs(self):
         with tempfile.TemporaryDirectory() as temp_dir:

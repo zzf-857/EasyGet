@@ -33,6 +33,7 @@ KNOWN_AUTHOR_DIRECTORY_MODES = ("nickname", "sec_uid", "nickname_uid", "user_sec
 MANIFEST_FILE_NAME = "download_manifest.jsonl"
 MANIFEST_SNAPSHOT_PREFIX = "download_manifest.easyget-"
 MAX_MANIFEST_SUMMARY_ITEMS = 5
+MAX_AUTHOR_SUMMARY_ITEMS = 5
 MAX_MANIFEST_TEXT_LENGTH = 300
 PRIMARY_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".flv", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".m4a")
 SECONDARY_NAME_MARKERS = ("_cover", "_avatar", "_music", "_data", "_comments", "_room", ".transcript")
@@ -711,7 +712,29 @@ def build_manifest_summary_details(output_dir: Path, entries: Sequence[Dict[str,
         "manifest_item_count": len(entries),
         "media_type_counts": media_type_counts,
         "manifest_items": manifest_items,
+        "author_summaries": build_author_summaries(entries),
     }
+
+
+def build_author_summaries(entries: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    authors: Dict[str, Dict[str, Any]] = {}
+    for entry in entries:
+        author_name = str(entry.get("author_name") or "").strip()
+        if not author_name:
+            continue
+
+        key = author_name.casefold()
+        if key not in authors:
+            authors[key] = {
+                "author_name": truncate_manifest_text(author_name),
+                "work_count": 0,
+            }
+        authors[key]["work_count"] += 1
+
+    return sorted(
+        authors.values(),
+        key=lambda author: (-int(author["work_count"]), str(author["author_name"])),
+    )[:MAX_AUTHOR_SUMMARY_ITEMS]
 
 
 def write_manifest_snapshot(output_dir: Path, entries: Sequence[Dict[str, Any]]) -> str:

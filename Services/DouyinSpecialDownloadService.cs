@@ -107,7 +107,7 @@ public sealed record DouyinDiscoveryItem(
 public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 {
     internal const string DouyinCookieEnvironmentVariableName = "EASYGET_DOUYIN_COOKIE";
-    private const int MaxTaskEventLogLines = 5;
+    private const int MaxTaskEventLogLines = 6;
     private const string DouyinManifestFileName = "download_manifest.jsonl";
     private const string DouyinManifestSnapshotPrefix = "download_manifest.easyget-";
     private const string DouyinManifestExtension = ".jsonl";
@@ -260,6 +260,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                                     request.Cookie));
                             AppendTaskEvent(task, FormatTranscriptSummary(message));
                             AppendTaskEvent(task, FormatDatabaseSummary(message));
+                            AppendTaskEvent(task, FormatAuthorSummary(message));
                             sawTerminalSummary = true;
                         }
                         break;
@@ -395,6 +396,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 message.DiscoverySearchMax = GetOptionalInt32(details.Value, "search_max");
                 message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
                 message.DiscoveryItems = GetDiscoveryItems(details.Value);
+                message.AuthorSummaries = GetAuthorSummaries(details.Value);
                 message.TranscriptFileCount = GetOptionalInt32(details.Value, "transcript_file_count");
                 if (GetOptionalObject(details.Value, "database") is { } database)
                 {
@@ -619,6 +621,24 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             : "数据库: 已启用";
     }
 
+    private static string FormatAuthorSummary(DouyinSidecarMessage message)
+    {
+        if (message.AuthorSummaries.Count == 0)
+            return "";
+
+        var parts = message.AuthorSummaries
+            .Take(3)
+            .Select(author => $"{author.AuthorName} {FormatWorkCount(author.WorkCount)}")
+            .ToList();
+        if (message.AuthorSummaries.Count > parts.Count)
+            parts.Add($"等 {message.AuthorSummaries.Count} 位作者");
+
+        return $"作者: {string.Join("、", parts)}";
+    }
+
+    private static string FormatWorkCount(int count)
+        => count == 1 ? "1 个作品" : $"{count} 个作品";
+
     private static DouyinSidecarEventKind ParseEventKind(string value)
     {
         return value.Trim().ToLowerInvariant() switch
@@ -727,6 +747,32 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 AuthorNickname: GetOptionalString(item, "author_nickname"),
                 SecUid: GetOptionalString(item, "sec_uid"),
                 Url: GetOptionalString(item, "url")));
+        }
+
+        return results;
+    }
+
+    private static IReadOnlyList<DouyinManifestAuthorSummary> GetAuthorSummaries(JsonElement details)
+    {
+        if (details.ValueKind != JsonValueKind.Object
+            || !details.TryGetProperty("author_summaries", out var authors)
+            || authors.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var results = new List<DouyinManifestAuthorSummary>();
+        foreach (var author in authors.EnumerateArray())
+        {
+            if (author.ValueKind != JsonValueKind.Object)
+                continue;
+
+            var authorName = GetOptionalString(author, "author_name").Trim();
+            var workCount = GetOptionalInt32(author, "work_count") ?? 0;
+            if (string.IsNullOrWhiteSpace(authorName) || workCount <= 0)
+                continue;
+
+            results.Add(new DouyinManifestAuthorSummary(authorName, workCount));
         }
 
         return results;
@@ -1174,6 +1220,7 @@ internal sealed class DouyinSidecarMessage
     public int? FailedCount { get; set; }
     public int? SkippedCount { get; set; }
     public int? TranscriptFileCount { get; set; }
+    public IReadOnlyList<DouyinManifestAuthorSummary> AuthorSummaries { get; set; } = [];
     public bool? DatabaseEnabled { get; set; }
     public string DatabasePath { get; set; } = "";
     public bool? DatabaseExists { get; set; }

@@ -1276,6 +1276,40 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_AppendsAuthorSummaryToTaskEventLog()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-authors-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDirectory, "demo.mp4");
+        var runner = new FakeSidecarRunner(
+            $$"""
+            {
+              "event": "success",
+              "message": "download saved",
+              "title": "作者批量下载",
+              "output_file_path": "{{JsonEscaped(mediaPath)}}",
+              "details": {
+                "output_files": ["{{JsonEscaped(mediaPath)}}"],
+                "author_summaries": [
+                  {"author_name": "Alice", "work_count": 2},
+                  {"author_name": "Bob", "work_count": 1}
+                ]
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/user/MS4wLjABAAAAexample",
+            OutputDirectory = outputDirectory
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Contains("作者: Alice 2 个作品、Bob 1 个作品", task.DouyinTaskEventLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DownloadAsync_MarksTaskCancelledWhenRunnerObservesCancellation()
     {
         var runner = new CancellingSidecarRunner();
