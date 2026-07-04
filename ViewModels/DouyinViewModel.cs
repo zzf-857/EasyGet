@@ -596,6 +596,20 @@ public partial class DouyinViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task AddFilteredDouyinDiscoveryItemsToQueue()
+    {
+        if (FilteredDouyinDiscoveryItems.Count == 0)
+        {
+            DouyinDiscoveryErrorMessage = "当前筛选没有发现结果可加入下载队列";
+            DouyinDiscoveryStatusText = "当前筛选无发现结果";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        await AddDouyinDiscoveryItemsToQueueAsync(FilteredDouyinDiscoveryItems.ToList(), "筛选入队完成");
+    }
+
+    [RelayCommand]
     private void SelectAllDouyinDiscoveryItems()
     {
         foreach (var item in DouyinDiscoveryItems)

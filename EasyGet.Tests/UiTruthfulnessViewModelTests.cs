@@ -1171,6 +1171,34 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public async Task DouyinViewModelAddsFilteredDiscoveryResultsToQueue()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.BatchContext.Config.Config.EnableDouyinSpecialEngine = true;
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "猫咪晒太阳"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "小狗散步",
+            Url: "https://www.douyin.com/video/7604129988555574539"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(Word: "猫咪热词", HotValue: 123));
+
+        context.Douyin.DouyinDiscoveryFilterKeyword = "猫咪";
+
+        await context.Douyin.AddFilteredDouyinDiscoveryItemsToQueueCommand.ExecuteAsync(null);
+
+        var task = Assert.Single(context.BatchContext.Manager.Tasks);
+        Assert.Equal("https://www.douyin.com/video/7604129988555574538", task.Url);
+        Assert.DoesNotContain(context.BatchContext.Manager.Tasks, task => task.Url == "https://www.douyin.com/video/7604129988555574539");
+        Assert.Contains("筛选入队完成", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("已加入 1", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("失败 1", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.Contains("缺少可下载链接", context.Douyin.DouyinDiscoveryErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DouyinViewModelAddsSelectedDownloadableDiscoveryResultsToQueue()
     {
         var discovery = new FakeDouyinDiscoveryService();

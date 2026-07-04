@@ -358,6 +358,7 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Grid.Column="0"
@@ -388,6 +389,21 @@
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     Margin="0,0,8,0"
+                                    ToolTip="把当前筛选出的发现结果加入队列"
+                                    AutomationProperties.Name="筛选入队"
+                                    IsEnabled="{Binding HasFilteredDouyinDiscoveryItems}"
+                                    Command="{Binding AddFilteredDouyinDiscoveryItemsToQueueCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="筛选入队" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Grid.Column="3"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,0"
                                     ToolTip="选择全部发现结果"
                                     AutomationProperties.Name="全选发现结果"
                                     Command="{Binding SelectAllDouyinDiscoveryItemsCommand}">
@@ -398,7 +414,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Grid.Column="3"
+                            <Button Grid.Column="4"
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     Margin="0,0,8,0"
@@ -412,7 +428,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <Button Grid.Column="4"
+                            <Button Grid.Column="5"
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     ToolTip="清除发现结果选择"
