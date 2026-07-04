@@ -17,7 +17,7 @@
                         <StackPanel Margin="0,0,0,20">
                             <TextBlock Text="粘贴视频链接"
                                        Style="{StaticResource TextPageTitle}"/>
-                            <TextBlock Text="支持 YouTube, Bilibili, Twitter, TikTok 等平台"
+                            <TextBlock Text="支持抖音、YouTube、Bilibili、Twitter、TikTok 等平台"
                                        Style="{StaticResource TextBodyStrong}"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        Margin="0,6,0,0"/>

@@ -11,7 +11,6 @@ public class DownloadManager
     private readonly IYtDlpDownloadService _ytDlpService;
     private readonly M3u8DownloadService _m3u8DownloadService;
     private readonly TelegramDownloadService _telegramDownloadService;
-    private readonly IDouyinSpecialDownloadService _douyinSpecialDownloadService;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly SemaphoreSlim _semaphore;
@@ -55,7 +54,6 @@ public class DownloadManager
         _ytDlpService = ytDlpService;
         _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());
         _telegramDownloadService = telegramDownloadService ?? new TelegramDownloadService(configService);
-        _douyinSpecialDownloadService = douyinSpecialDownloadService ?? new DouyinSpecialDownloadService();
         _historyService = historyService;
         _configService = configService;
         _currentConcurrencyLimit = NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads);
@@ -115,24 +113,10 @@ public class DownloadManager
         task.Status = DownloadStatus.Resolving;
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 正在解析: {task.Url}");
 
-        if (TryGetEnabledDouyinSpecialInfo(task.Url, out var douyinInfo))
+        var info = await _ytDlpService.GetVideoInfoAsync(task.Url, task.Cts.Token);
+        if (info != null)
         {
-            if (!IsSupportedDouyinSpecialKind(douyinInfo.Kind))
-            {
-                FailUnsupportedDouyinSpecialTask(task, douyinInfo);
-                TaskFinished?.Invoke(task);
-                return;
-            }
-
-            ApplyDouyinSpecialMetadata(task, douyinInfo);
-        }
-        else
-        {
-            var info = await _ytDlpService.GetVideoInfoAsync(task.Url, task.Cts.Token);
-            if (info != null)
-            {
-                ApplyVideoInfoMetadata(task, info);
-            }
+            ApplyVideoInfoMetadata(task, info);
         }
 
         // 等待并发位
@@ -384,43 +368,6 @@ public class DownloadManager
             return;
         }
 
-        if (TryGetEnabledDouyinSpecialInfo(task.Url, out var douyinInfo))
-        {
-            if (!IsSupportedDouyinSpecialKind(douyinInfo.Kind))
-            {
-                FailUnsupportedDouyinSpecialTask(task, douyinInfo);
-                return;
-            }
-
-            var attemptedInfrastructureFallback = false;
-            try
-            {
-                await _douyinSpecialDownloadService.DownloadAsync(
-                    task,
-                    _configService.Config,
-                    progress,
-                    log,
-                    token);
-            }
-            catch (InvalidOperationException ex) when (CanFallbackDouyinSpecialToYtDlp(douyinInfo.Kind)
-                                                       && IsDouyinSidecarInfrastructureFailure(ex.Message))
-            {
-                attemptedInfrastructureFallback = true;
-                await FallbackDouyinSpecialToYtDlpAsync(task, progress, log, token, ex.Message);
-            }
-
-            if (task.Status == DownloadStatus.Failed
-                && !attemptedInfrastructureFallback
-                && CanFallbackDouyinSpecialToYtDlp(douyinInfo.Kind)
-                && IsDouyinSidecarInfrastructureFailure(task.ErrorMessage))
-            {
-                attemptedInfrastructureFallback = true;
-                await FallbackDouyinSpecialToYtDlpAsync(task, progress, log, token, task.ErrorMessage);
-            }
-
-            return;
-        }
-
         await _ytDlpService.DownloadAsync(task, progress, log, token);
     }
 
@@ -509,16 +456,6 @@ public class DownloadManager
         }
     }
 
-    private bool TryGetEnabledDouyinSpecialInfo(string url, out DouyinUrlInfo info)
-    {
-        info = default;
-        if (!_configService.Config.EnableDouyinSpecialEngine)
-            return false;
-
-        info = DouyinUrlParser.Parse(url);
-        return info.IsRecognized;
-    }
-
     private void ApplyVideoInfoMetadata(DownloadTask task, VideoInfo info)
     {
         task.Title = info.Title;
@@ -529,18 +466,6 @@ public class DownloadManager
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {info.Title}");
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 平台: {info.Platform} | 时长: {task.DurationText}");
         ApplyAutoCategorization(task, info.Platform);
-    }
-
-    private void ApplyDouyinSpecialMetadata(DownloadTask task, DouyinUrlInfo info)
-    {
-        task.Title = BuildDouyinSpecialFallbackTitle(info);
-        task.Platform = "Douyin";
-        task.Duration = 0;
-        task.ThumbnailUrl = "";
-        task.FileSize = 0;
-        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {task.Title}");
-        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 平台: {task.Platform} | 时长: {task.DurationText}");
-        ApplyAutoCategorization(task, task.Platform);
     }
 
     private void ApplyAutoCategorization(DownloadTask task, string platform)
@@ -554,79 +479,12 @@ public class DownloadManager
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 自动归类到: {folderName}/");
     }
 
-    private void FailUnsupportedDouyinSpecialTask(DownloadTask task, DouyinUrlInfo info)
-    {
-        task.Platform = "Douyin";
-        task.Title = BuildDouyinSpecialFallbackTitle(info);
-        task.Status = DownloadStatus.Failed;
-        task.ErrorMessage = $"抖音专项引擎当前暂不支持 {info.Kind} 链接。";
-        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 失败: {task.ErrorMessage}");
-    }
-
-    private async Task FallbackDouyinSpecialToYtDlpAsync(
-        DownloadTask task,
-        IProgress<DownloadProgress> progress,
-        Action<string> log,
-        CancellationToken token,
-        string reason)
-    {
-        log($"[douyin-sidecar] unavailable; falling back to yt-dlp: {reason}");
-        task.ErrorMessage = "";
-        ClearDouyinTaskAttemptState(task);
-        task.Status = DownloadStatus.Waiting;
-        await _ytDlpService.DownloadAsync(task, progress, log, token);
-    }
-
     private static void ClearDouyinTaskAttemptState(DownloadTask task)
     {
         task.DouyinSuccessCount = 0;
         task.DouyinFailedCount = 0;
         task.DouyinSkippedCount = 0;
         task.DouyinTaskEventLog = "";
-    }
-
-    private static bool IsSupportedDouyinSpecialKind(DouyinUrlKind kind)
-        => kind is DouyinUrlKind.ShortLink
-            or DouyinUrlKind.Video
-            or DouyinUrlKind.Note
-            or DouyinUrlKind.Gallery
-            or DouyinUrlKind.Slides
-            or DouyinUrlKind.User
-            or DouyinUrlKind.Collection
-            or DouyinUrlKind.Mix
-            or DouyinUrlKind.Music
-            or DouyinUrlKind.Live;
-
-    private static bool CanFallbackDouyinSpecialToYtDlp(DouyinUrlKind kind)
-        => kind is DouyinUrlKind.ShortLink or DouyinUrlKind.Video;
-
-    private static bool IsDouyinSidecarInfrastructureFailure(string? message)
-    {
-        if (string.IsNullOrWhiteSpace(message))
-            return false;
-
-        return message.Contains("sidecar was not found", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("Failed to start Douyin sidecar", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("sidecar executable missing", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("python executable missing", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("bundled runtime missing", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("import self-test failed", StringComparison.OrdinalIgnoreCase)
-               || IsDouyinDownloaderRuntimeMissing(message);
-    }
-
-    private static bool IsDouyinDownloaderRuntimeMissing(string message)
-        => (message.Contains("douyin-downloader-promax", StringComparison.OrdinalIgnoreCase)
-            || message.Contains("downloader", StringComparison.OrdinalIgnoreCase))
-           && (message.Contains("root not found", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("root missing", StringComparison.OrdinalIgnoreCase)
-               || message.Contains("Pass --downloader-root", StringComparison.OrdinalIgnoreCase));
-
-    private static string BuildDouyinSpecialFallbackTitle(DouyinUrlInfo info)
-    {
-        var kindName = info.Kind == DouyinUrlKind.Unknown ? "Item" : info.Kind.ToString();
-        return string.IsNullOrWhiteSpace(info.Id)
-            ? $"Douyin_{kindName}"
-            : $"Douyin_{kindName}_{SanitizeTitleToken(info.Id)}";
     }
 
     private static string SanitizeTitleToken(string value)

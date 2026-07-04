@@ -75,14 +75,6 @@ public class NotificationTests
             var batchDownloadVM = new BatchDownloadViewModel(manager, configService, ytDlp);
             var historyVM = new HistoryViewModel(history);
             var settingsVM = new SettingsViewModel(configService, env, manager, new TelegramDownloadService(configService));
-            var douyinVM = new DouyinViewModel(
-                configService,
-                manager,
-                downloadVM,
-                batchDownloadVM,
-                historyVM,
-                settingsVM);
-
             var mainVM = new MainViewModel(
                 configService,
                 env,
@@ -90,7 +82,6 @@ public class NotificationTests
                 downloadVM,
                 batchDownloadVM,
                 historyVM,
-                douyinVM,
                 settingsVM
             );
 

@@ -7,7 +7,7 @@ namespace EasyGet.Tests;
 
 public class DownloadManagerTests
 {
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinNoteWithSpecialEngineEnabled_SkipsYtDlpInfoAndRunsSidecar()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -57,8 +57,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinSidecarCompleted_SavesAttachmentHistoryExcludingPrimaryFile()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -109,8 +108,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinSidecarCompleted_DropsUnsafeAttachmentHistoryPaths()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -156,8 +154,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinUserWithSpecialEngineEnabled_PassesConfigIntoSidecarRequest()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -204,8 +201,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinGallerySidecarUnavailable_FailsWithoutYtDlpFallback()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -242,13 +238,13 @@ public class DownloadManagerTests
     }
 
     [Fact]
-    public async Task EnqueueAsync_DouyinSpecialEngineDisabled_UsesLegacyYtDlpFlow()
+    public async Task EnqueueAsync_DouyinLinkAlwaysUsesYtDlpFlow()
     {
         var outputDir = CreateTempOutputDirectory();
         var dbPath = TestTempPaths.CreateSqliteDatabasePath("easyget-douyin-disabled-route");
         try
         {
-            var configService = CreateConfigService(outputDir, enableDouyinSpecialEngine: false);
+            var configService = CreateConfigService(outputDir, enableDouyinSpecialEngine: true);
             using var historyService = new HistoryService(dbPath);
             var ytDlp = new FakeYtDlpDownloadService
             {
@@ -283,8 +279,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinVideoSidecarStartupFailure_FallsBackToYtDlp()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -320,8 +315,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinVideoDownloaderRootMissing_FallsBackToYtDlp()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -370,8 +364,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinVideoTerminalFailedDoesNotFallbackToYtDlp()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -410,8 +403,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinVideoPromaxCookieFailureDoesNotFallbackToYtDlp()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -451,8 +443,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinShortLinkApiClientRateLimitFailureDoesNotFallbackToYtDlp()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -492,8 +483,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinShortLinkDownloaderRootMissing_FallsBackToYtDlp()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -532,8 +522,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Theory]
+    [Theory(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     [InlineData("https://www.douyin.com/collection/7621772413184822582", "Douyin_Collection_7621772413184822582")]
     [InlineData("https://www.douyin.com/mix/7621772413184822582", "Douyin_Mix_7621772413184822582")]
     [InlineData("https://www.douyin.com/music/7621772413184822582", "Douyin_Music_7621772413184822582")]
@@ -571,8 +560,7 @@ public class DownloadManagerTests
             TestTempPaths.TryDeleteSqliteDatabase(dbPath);
         }
     }
-
-    [Fact]
+    [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinLiveWithSpecialEngineEnabled_UsesSidecar()
     {
         var outputDir = CreateTempOutputDirectory();

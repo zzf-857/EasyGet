@@ -40,7 +40,6 @@ public partial class App : System.Windows.Application
             services.AddSingleton<YtDlpService>();
             services.AddSingleton<M3u8DownloadService>();
             services.AddSingleton<TelegramDownloadService>();
-            services.AddSingleton<IDouyinSpecialDownloadService, DouyinSpecialDownloadService>();
             services.AddSingleton<IAppUpdateService, AppUpdateService>();
             services.AddSingleton<IVideoInfoProvider, YtDlpVideoInfoProvider>();
             services.AddSingleton<DownloadManager>();
@@ -50,7 +49,6 @@ public partial class App : System.Windows.Application
             services.AddSingleton<DownloadViewModel>();
             services.AddSingleton<BatchDownloadViewModel>();
             services.AddSingleton<HistoryViewModel>();
-            services.AddSingleton<DouyinViewModel>();
             services.AddSingleton<SettingsViewModel>();
 
             // 主窗口

@@ -19,15 +19,15 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
-    public void MainViewModelNavigatesToDouyinWorkspace()
+    public void MainViewModelIgnoresRemovedDouyinWorkspaceNavigation()
     {
         using var context = CreateViewModelContext();
 
         context.Main.NavigateCommand.Execute("douyin");
 
-        Assert.Equal(2, context.Main.SelectedNavIndex);
-        Assert.Equal("抖音工作台", context.Main.CurrentPageTitle);
-        Assert.Same(context.Douyin, context.Main.CurrentPage);
+        Assert.Equal(0, context.Main.SelectedNavIndex);
+        Assert.Equal("单个视频下载", context.Main.CurrentPageTitle);
+        Assert.Same(context.Download, context.Main.CurrentPage);
     }
 
     [Fact]
@@ -1770,7 +1770,6 @@ public class UiTruthfulnessViewModelTests
             download,
             batchContext.Batch,
             history,
-            douyin,
             settings);
 
         return new ViewModelContext(batchContext, download, history, douyin, settings, main);

@@ -74,12 +74,6 @@
 
         </DataTemplate>
 
-        <DataTemplate DataType="{x:Type vm:DouyinViewModel}">
-
-            <views:DouyinView/>
-
-        </DataTemplate>
-
         <DataTemplate DataType="{x:Type vm:HistoryViewModel}">
 
             <views:HistoryView/>
@@ -210,39 +204,13 @@
 
                                      Command="{Binding NavigateCommand}"
 
-                                     CommandParameter="douyin"
-
-                                     ToolTip="抖音"
-
-                                     AutomationProperties.Name="抖音"
-
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
-
-                                     Margin="0,8,0,0">
-
-                            <StackPanel Orientation="Horizontal">
-
-                                <TextBlock Text="&#xE714;" Style="{StaticResource IconGlyph}"
-
-                                           FontSize="{StaticResource IconSizeLarge}" Width="24" VerticalAlignment="Center"/>
-
-                                <TextBlock Text="抖音" Margin="12,0,0,0" VerticalAlignment="Center"/>
-
-                            </StackPanel>
-
-                        </RadioButton>
-
-                        <RadioButton Style="{StaticResource NavRadioButton}"
-
-                                     Command="{Binding NavigateCommand}"
-
                                      CommandParameter="history"
 
                                      ToolTip="下载历史"
 
                                      AutomationProperties.Name="下载历史"
 
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
+                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
 
                                      Margin="0,8,0,0">
 
@@ -268,7 +236,7 @@
 
                                      AutomationProperties.Name="设置"
 
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=4, Mode=OneWay}"
+                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
 
                                      Margin="0,8,0,0">
 

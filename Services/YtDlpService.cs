@@ -465,14 +465,6 @@ public partial class YtDlpService
             break;
         }
 
-        if (IsDouyinUrl(task.Url) && task.Format.Equals("mp4", StringComparison.OrdinalIgnoreCase))
-        {
-            logCallback?.Invoke("[yt-dlp] Douyin extractor failed; trying browser fallback...");
-            var fallback = new DouyinBrowserDownloadService();
-            if (await fallback.TryDownloadAsync(task, progress, logCallback, ct))
-                return;
-        }
-
         if (IsXiaohongshuUrl(task.Url))
         {
             logCallback?.Invoke("[yt-dlp] Xiaohongshu extractor failed; trying image fallback...");

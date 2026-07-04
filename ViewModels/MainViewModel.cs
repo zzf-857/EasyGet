@@ -26,7 +26,6 @@ public partial class MainViewModel : ObservableObject
     public DownloadViewModel DownloadVM { get; }
     public BatchDownloadViewModel BatchDownloadVM { get; }
     public HistoryViewModel HistoryVM { get; }
-    public DouyinViewModel DouyinVM { get; }
     public SettingsViewModel SettingsVM { get; }
 
     public string AppVersion { get; } = $"v{GetAssemblyVersion()}";
@@ -35,9 +34,8 @@ public partial class MainViewModel : ObservableObject
     {
         0 => "单个视频下载",
         1 => "批量下载",
-        2 => "抖音工作台",
-        3 => "下载历史",
-        4 => "设置中心",
+        2 => "下载历史",
+        3 => "设置中心",
         _ => "EasyGet"
     };
 
@@ -52,7 +50,6 @@ public partial class MainViewModel : ObservableObject
         DownloadViewModel downloadVm,
         BatchDownloadViewModel batchDownloadVm,
         HistoryViewModel historyVm,
-        DouyinViewModel douyinVm,
         SettingsViewModel settingsVm)
     {
         _configService = configService;
@@ -62,7 +59,6 @@ public partial class MainViewModel : ObservableObject
         DownloadVM = downloadVm;
         BatchDownloadVM = batchDownloadVm;
         HistoryVM = historyVm;
-        DouyinVM = douyinVm;
         SettingsVM = settingsVm;
 
         CurrentPage = DownloadVM;
@@ -220,9 +216,8 @@ public partial class MainViewModel : ObservableObject
         {
             "download" => ((ObservableObject)DownloadVM, 0),
             "batch" => (BatchDownloadVM, 1),
-            "douyin" => (DouyinVM, 2),
-            "history" => (HistoryVM, 3),
-            "settings" => (SettingsVM, 4),
+            "history" => (HistoryVM, 2),
+            "settings" => (SettingsVM, 3),
             _ => (DownloadVM, 0)
         };
     }

@@ -199,7 +199,7 @@ public class XamlBindingTests
             .Where(element => element.Attribute("CommandParameter") is not null)
             .ToList();
 
-        Assert.Equal(5, navItems.Count);
+        Assert.Equal(4, navItems.Count);
         Assert.All(navItems, item =>
         {
             var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
@@ -613,7 +613,7 @@ public class XamlBindingTests
     }
 
     [Theory]
-    [InlineData("DownloadView.xaml", "粘贴视频链接", "支持 YouTube")]
+    [InlineData("DownloadView.xaml", "粘贴视频链接", "支持抖音、YouTube、Bilibili、Twitter、TikTok 等平台")]
     [InlineData("BatchDownloadView.xaml", "批量下载", "输入多个视频链接")]
     [InlineData("HistoryView.xaml", "下载历史", "共计")]
     [InlineData("SettingsView.xaml", "系统设置", "管理下载环境")]
@@ -662,13 +662,11 @@ public class XamlBindingTests
         Assert.Contains("启用网络代理", texts);
         Assert.Contains("启用 aria2c 外部下载器", texts);
         Assert.Contains("保存配置", texts);
-        Assert.Contains("DouyinCookieHealthText", source);
     }
 
     [Theory]
     [InlineData("download")]
     [InlineData("batch")]
-    [InlineData("douyin")]
     [InlineData("history")]
     [InlineData("settings")]
     public void MainWindowNavigationItemsExposeTooltipAndAutomationName(string commandParameter)
@@ -708,9 +706,8 @@ public class XamlBindingTests
         {
             ("download", "ConverterParameter=0"),
             ("batch", "ConverterParameter=1"),
-            ("douyin", "ConverterParameter=2"),
-            ("history", "ConverterParameter=3"),
-            ("settings", "ConverterParameter=4")
+            ("history", "ConverterParameter=2"),
+            ("settings", "ConverterParameter=3")
         };
 
         Assert.Equal(expected.Length, navItems.Count);
@@ -720,202 +717,6 @@ public class XamlBindingTests
             Assert.Contains(expected[i].Item2, navItems[i].Binding);
         }
     }
-
-    [Fact]
-    public void DouyinViewExposesDedicatedWorkspaceSections()
-    {
-        var document = XDocument.Load(GetViewPath("DouyinView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains("抖音工作台", texts);
-        Assert.Contains("快速下载", texts);
-        Assert.Contains("抖音发现", texts);
-        Assert.Contains("热榜", texts);
-        Assert.Contains("关键词搜索", texts);
-        Assert.Contains("搜同词", texts);
-        Assert.Contains("选中入队", texts);
-        Assert.Contains("全选", texts);
-        Assert.Contains("选择筛选", texts);
-        Assert.Contains("选择可下载", texts);
-        Assert.Contains("清除选择", texts);
-        Assert.Contains("全部入队", texts);
-        Assert.Contains("排序", texts);
-        Assert.Contains("任务中心", texts);
-        Assert.Contains("专项任务队列", texts);
-        Assert.Contains("下载成果摘要", texts);
-        Assert.Contains("作品档案", texts);
-        Assert.Contains("专项设置", texts);
-        Assert.Contains("启用专项引擎", texts);
-        Assert.Contains("用户作品模式", texts);
-        Assert.Contains(texts, text => text.Contains("逗号组合", StringComparison.Ordinal));
-        Assert.Contains("下载数量上限", texts);
-        Assert.Contains("文件名模板", texts);
-        Assert.Contains("作品文件夹模板", texts);
-        Assert.Contains("作者目录命名", texts);
-        Assert.Contains("按模式分层目录", texts);
-        Assert.Contains("开始时间", texts);
-        Assert.Contains("结束时间", texts);
-        Assert.Contains("包含置顶作品", texts);
-        Assert.Contains("启用本地去重数据库", texts);
-        Assert.Contains("增量下载", texts);
-        Assert.Contains("下载封面", texts);
-        Assert.Contains("下载作者头像", texts);
-        Assert.Contains("下载音乐", texts);
-        Assert.Contains("包含二级回复", texts);
-        Assert.Contains("评论数量上限", texts);
-        Assert.Contains("评论分页大小", texts);
-        Assert.Contains("保存原始 JSON", texts);
-
-        Assert.Contains("Download.Url", source);
-        Assert.Contains("Download.SelectedFormat", source);
-        Assert.Contains("Download.SelectedQuality", source);
-        Assert.Contains("Download.DownloadDirectory", source);
-        Assert.Contains("Download.ParseCommand", source);
-        Assert.Contains("Download.StartDownloadCommand", source);
-        Assert.Contains("SetDouyinQuickDownloadModeCommand", source);
-        Assert.Contains("DouyinQuickDownloadModeLabelText", source);
-        Assert.Contains("DouyinQuickDownloadEngineStatusText", source);
-        Assert.Contains("DouyinQuickDownloadCookieStatusText", source);
-        Assert.Contains("DouyinQuickDownloadProxyStatusText", source);
-        Assert.Contains("DouyinQuickDownloadLinkInsightText", source);
-        Assert.Contains("DouyinDiscoveryKeyword", source);
-        Assert.Contains("DouyinDiscoverySearchMax", source);
-        Assert.Contains("LoadDouyinHotBoardCommand", source);
-        Assert.Contains("SearchDouyinDiscoveryCommand", source);
-        Assert.Contains("SearchDouyinDiscoveryItemWordCommand", source);
-        Assert.Contains("AddDouyinDiscoveryItemToQueueCommand", source);
-        Assert.Contains("AddSelectedDouyinDiscoveryItemsToQueueCommand", source);
-        Assert.Contains("SelectAllDouyinDiscoveryItemsCommand", source);
-        Assert.Contains("SelectFilteredDouyinDiscoveryItemsCommand", source);
-        Assert.Contains("SelectDownloadableDouyinDiscoveryItemsCommand", source);
-        Assert.Contains("只选择当前筛选中有 URL 或作品 ID 的发现结果", source);
-        Assert.Contains("ClearDouyinDiscoverySelectionCommand", source);
-        Assert.Contains("AddAllDouyinDiscoveryItemsToQueueCommand", source);
-        Assert.Contains("AddFilteredDouyinDiscoveryItemsToQueueCommand", source);
-        Assert.Contains("DouyinDiscoveryItems", source);
-        Assert.Contains("FilteredDouyinDiscoveryItems", source);
-        Assert.Contains("DouyinDiscoveryFilterKeyword", source);
-        Assert.Contains("DouyinDiscoveryQueueFilterOptions", source);
-        Assert.Contains("SelectedDouyinDiscoveryQueueFilter", source);
-        Assert.Contains("DouyinDiscoverySortOptions", source);
-        Assert.Contains("SelectedDouyinDiscoverySortOption", source);
-        Assert.Contains("ClearDouyinDiscoveryFilterCommand", source);
-        Assert.Contains("FilteredDouyinDiscoveryResultCount", source);
-        Assert.Contains("HasFilteredDouyinDiscoveryItems", source);
-        Assert.Contains("IsSelected", source);
-        Assert.Contains("QueueStateText", source);
-        Assert.Contains("CanAddToQueue", source);
-        Assert.Contains("SelectedDouyinDiscoveryItemCount", source);
-        Assert.Contains("HasSelectedDouyinDiscoveryItems", source);
-        Assert.Contains("DouyinDiscoveryStatusText", source);
-        Assert.Contains("DouyinDiscoveryErrorMessage", source);
-        Assert.Contains("DouyinDiscoveryResultCount", source);
-        Assert.Contains("HasDouyinDiscoveryItems", source);
-        Assert.Contains("HasDouyinDiscoveryError", source);
-        Assert.Contains("IsDouyinDiscoveryLoading", source);
-        Assert.Contains("Settings.EnableDouyinSpecialEngine", source);
-        Assert.Contains("Settings.DouyinMode", source);
-        Assert.Contains("Text=\"{Binding Settings.DouyinMode, UpdateSourceTrigger=LostFocus}\"", source);
-        Assert.Contains("IsEditable=\"True\"", source);
-        Assert.Contains("Settings.DouyinDownloadComments", source);
-        Assert.Contains("Settings.DouyinCommentIncludeReplies", source);
-        Assert.Contains("Settings.DouyinMaxComments", source);
-        Assert.Contains("Settings.DouyinCommentPageSize", source);
-        Assert.Contains("Settings.DouyinFilenameTemplate", source);
-        Assert.Contains("Settings.DouyinFolderTemplate", source);
-        Assert.Contains("Settings.DouyinFilenameTemplatePreviewText", source);
-        Assert.Contains("Settings.DouyinFolderTemplatePreviewText", source);
-        Assert.Contains("Settings.DouyinTemplateVariablesText", source);
-        Assert.Contains("Settings.DouyinAuthorDirectoryMode", source);
-        Assert.Contains("Settings.DouyinAuthorDirectoryModeOptions", source);
-        Assert.Contains("Settings.DouyinGroupByMode", source);
-        Assert.Contains("Settings.DouyinStartTime", source);
-        Assert.Contains("Settings.DouyinEndTime", source);
-        Assert.Contains("Settings.DouyinDownloadPinned", source);
-        Assert.Contains("Settings.DouyinEnableDatabase", source);
-        Assert.Contains("Settings.DouyinIncrementalDownload", source);
-        Assert.Contains("Settings.DouyinEnableBrowserFallback", source);
-        Assert.Contains("Settings.DouyinLiveMaxDurationSeconds", source);
-        Assert.Contains("Settings.DouyinLiveChunkSize", source);
-        Assert.Contains("Settings.DouyinLiveIdleTimeoutSeconds", source);
-        Assert.Contains("Settings.DouyinDownloadCover", source);
-        Assert.Contains("Settings.DouyinDownloadAvatar", source);
-        Assert.Contains("Settings.DouyinDownloadMusic", source);
-        Assert.Contains("Settings.DouyinDownloadJson", source);
-        Assert.Contains("DouyinTaskItems", source);
-        Assert.Contains("DouyinTaskFilterOptions", source);
-        Assert.Contains("SelectedDouyinTaskFilter", source);
-        Assert.Contains("DouyinTaskSearchKeyword", source);
-        Assert.Contains("FilteredDouyinTaskCount", source);
-        Assert.Contains("SuccessfulDouyinWorkCount", source);
-        Assert.Contains("FailedDouyinWorkCount", source);
-        Assert.Contains("SkippedDouyinWorkCount", source);
-        Assert.Contains("Batch.PauseTaskCommand", source);
-        Assert.Contains("Batch.ResumeTaskCommand", source);
-        Assert.Contains("Batch.RetryTaskCommand", source);
-        Assert.Contains("Batch.OpenTaskFolderCommand", source);
-        Assert.Contains("Batch.CancelTaskCommand", source);
-        Assert.Contains("Progress", source);
-        Assert.Contains("ErrorMessage", source);
-        Assert.Contains("DouyinTaskOutcomeSummaryText", source);
-        Assert.Contains("DouyinTaskEventLog", source);
-        Assert.Contains("HasDouyinTaskOutcome", source);
-        Assert.Contains("HasDouyinTaskEventLog", source);
-        Assert.Contains("DouyinManifestSummaryItems", source);
-        Assert.Contains("DouyinManifestSummaryCount", source);
-        Assert.Contains("DouyinManifestSummaryText", source);
-        Assert.Contains("DouyinManifestItems", source);
-        Assert.Contains("HasDouyinManifestDetails", source);
-        Assert.Contains("MediaTypeText", source);
-        Assert.Contains("Description", source);
-        Assert.Contains("AuthorName", source);
-        Assert.Contains("DateText", source);
-        Assert.Contains("FileCountText", source);
-        Assert.Contains("TagsText", source);
-        Assert.Contains("FileNamesText", source);
-        Assert.Contains("FileRoleSummaryText", source);
-        Assert.Contains("Text=\"{Binding FileRoleSummaryText, Mode=OneWay}\"", source);
-        Assert.Contains("Visibility=\"{Binding FileRoleSummaryText, Converter={StaticResource StringToVisibility}}\"", source);
-        Assert.Contains("ToolTip=\"{Binding FileNamesText, Mode=OneWay}\"", source);
-        Assert.Contains("DouyinHistoryItems", source);
-        Assert.Contains("DouyinArchiveTypeFilterOptions", source);
-        Assert.Contains("SelectedDouyinArchiveTypeFilter", source);
-        Assert.Contains("DouyinArchiveSearchKeyword", source);
-        Assert.Contains("FilteredDouyinArchiveCount", source);
-        Assert.Contains("DouyinArchiveCount", source);
-        Assert.Contains("HasDouyinArchiveItems", source);
-        Assert.Contains("HasFilteredDouyinArchiveItems", source);
-        Assert.Contains("IsDouyinArchiveFilterActive", source);
-        Assert.Contains("ClearDouyinArchiveFiltersCommand", source);
-        Assert.Contains("DouyinRecentAuthorItems", source);
-        Assert.Contains("HasDouyinRecentAuthorItems", source);
-        Assert.Contains("SetDouyinArchiveAuthorFilterCommand", source);
-        Assert.Contains("LoadDouyinWorkspaceCommand", File.ReadAllText(GetRootPath(Path.Combine("Views", "DouyinView.xaml.cs"))));
-        Assert.Contains("Loaded=\"DouyinView_Loaded\"", source);
-        Assert.Contains("最近下载作者", source);
-        Assert.Contains("WorkCountText", source);
-        Assert.Contains("LatestDownloadTimeText", source);
-        Assert.Contains("搜索作者、标题、作品 ID 或标签", source);
-        Assert.Contains("未找到匹配作品", source);
-        Assert.Contains("换个关键词或清除筛选再试", source);
-        Assert.Contains("清除筛选", source);
-        Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
-    }
-
-    [Fact]
-    public void DouyinViewExposesCollectionQuickDownloadModes()
-    {
-        var source = File.ReadAllText(GetViewPath("DouyinView.xaml"));
-
-        Assert.Contains("CommandParameter=\"collect\"", source);
-        Assert.Contains("CommandParameter=\"collectmix\"", source);
-        Assert.Contains("Text=\"收藏\"", source);
-        Assert.Contains("Text=\"收藏合集\"", source);
-        Assert.Contains("下载本人收藏作品", source);
-        Assert.Contains("下载本人收藏合集", source);
-    }
-
     [Theory]
     [InlineData("PasteUrlCommand")]
     [InlineData("StartDownloadCommand")]
@@ -1027,7 +828,6 @@ public class XamlBindingTests
     [InlineData("CheckEnvironmentCommand", "CanCheckEnvironment")]
     [InlineData("InstallMissingToolsCommand", "CanInstallMissingTools")]
     [InlineData("UpdateYtDlpCommand", "CanUpdateYtDlp")]
-    [InlineData("CheckDouyinSidecarHealthCommand", "CanCheckDouyinSidecarHealth")]
     public void SettingsEnvironmentButtonsBindExpectedEnabledState(string commandName, string enabledProperty)
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
@@ -1043,16 +843,6 @@ public class XamlBindingTests
         var isEnabled = button!.Attribute("IsEnabled")?.Value ?? "";
         Assert.Contains(enabledProperty, isEnabled);
     }
-
-    [Fact]
-    public void SettingsShowsDouyinSidecarHealthStatus()
-    {
-        var source = File.ReadAllText(GetViewPath("SettingsView.xaml"));
-
-        Assert.Contains("CheckDouyinSidecarHealthCommand", source, StringComparison.Ordinal);
-        Assert.Contains("DouyinSidecarHealthText", source, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void SettingsUpdateStatusMessageVisibilityUsesMessageContent()
     {
@@ -1126,113 +916,6 @@ public class XamlBindingTests
         Assert.Contains("AppUpdateProgress", source);
         Assert.Contains("AccentProgressBar", source);
     }
-
-    [Fact]
-    public void SettingsViewExposesDouyinSpecialDownloadSettings()
-    {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains("抖音专项下载", texts);
-        Assert.Contains("启用专项引擎", texts);
-        Assert.Contains("用户作品模式", texts);
-        Assert.Contains("下载数量上限", texts);
-        Assert.Contains("文件名模板", texts);
-        Assert.Contains("作品文件夹模板", texts);
-        Assert.Contains("作者目录命名", texts);
-        Assert.Contains("按模式分层目录", texts);
-        Assert.Contains("控制媒体文件名，必须包含 {id}", texts);
-        Assert.Contains("控制每个作品子文件夹，必须包含 {id}", texts);
-        Assert.Contains("下载封面", texts);
-        Assert.Contains("下载音乐", texts);
-        Assert.Contains("下载评论", texts);
-        Assert.Contains("包含二级回复", texts);
-        Assert.Contains("评论数量上限", texts);
-        Assert.Contains("评论分页大小", texts);
-        Assert.Contains("下载作者头像", texts);
-        Assert.Contains("保存原始 JSON", texts);
-        Assert.Contains("启用本地去重数据库", texts);
-        Assert.Contains("增量下载", texts);
-        Assert.Contains("浏览器兜底", texts);
-        Assert.Contains("直播最大录制时长", texts);
-        Assert.Contains("直播分块大小", texts);
-        Assert.Contains("直播空闲超时", texts);
-        Assert.Contains(texts, text => text.Contains("在下载目录下维护本地记录", StringComparison.Ordinal));
-        Assert.Contains(texts, text => text.Contains("依赖本地去重数据库", StringComparison.Ordinal));
-        Assert.Contains(texts, text => text.Contains("翻页受限或遇到验证时", StringComparison.Ordinal));
-        Assert.Contains(texts, text => text.Contains("复用上方全局 Cookie", StringComparison.Ordinal));
-
-        Assert.Contains("EnableDouyinSpecialEngine", source);
-        Assert.Contains("DouyinModeOptions", source);
-        Assert.Contains("DouyinMode", source);
-        Assert.Contains("Text=\"{Binding DouyinMode, UpdateSourceTrigger=LostFocus}\"", source);
-        Assert.Contains("IsEditable=\"True\"", source);
-        Assert.Contains("DouyinLimit", source);
-        Assert.Contains("DouyinFilenameTemplate", source);
-        Assert.Contains("DouyinFolderTemplate", source);
-        Assert.Contains("DouyinFilenameTemplatePreviewText", source);
-        Assert.Contains("DouyinFolderTemplatePreviewText", source);
-        Assert.Contains("DouyinTemplateVariablesText", source);
-        Assert.Contains("DouyinAuthorDirectoryMode", source);
-        Assert.Contains("DouyinAuthorDirectoryModeOptions", source);
-        Assert.Contains("DouyinGroupByMode", source);
-        Assert.Contains("DouyinDownloadCover", source);
-        Assert.Contains("DouyinDownloadMusic", source);
-        Assert.Contains("DouyinDownloadComments", source);
-        Assert.Contains("DouyinCommentIncludeReplies", source);
-        Assert.Contains("DouyinMaxComments", source);
-        Assert.Contains("DouyinCommentPageSize", source);
-        Assert.Contains("DouyinDownloadAvatar", source);
-        Assert.Contains("DouyinDownloadJson", source);
-        Assert.Contains("DouyinEnableDatabase", source);
-        Assert.Contains("DouyinIncrementalDownload", source);
-        Assert.Contains("DouyinEnableBrowserFallback", source);
-        Assert.Contains("DouyinLiveMaxDurationSeconds", source);
-        Assert.Contains("DouyinLiveChunkSize", source);
-        Assert.Contains("DouyinLiveIdleTimeoutSeconds", source);
-
-        var filenameTemplateTextBox = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBox"
-                && (element.Attribute("Text")?.Value ?? "").Contains("DouyinFilenameTemplate", StringComparison.Ordinal));
-        Assert.NotNull(filenameTemplateTextBox);
-        Assert.Contains(
-            "EnableDouyinSpecialEngine",
-            filenameTemplateTextBox!.ToString(SaveOptions.DisableFormatting),
-            StringComparison.Ordinal);
-
-        var folderTemplateTextBox = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBox"
-                && (element.Attribute("Text")?.Value ?? "").Contains("DouyinFolderTemplate", StringComparison.Ordinal));
-        Assert.NotNull(folderTemplateTextBox);
-        Assert.Contains(
-            "EnableDouyinSpecialEngine",
-            folderTemplateTextBox!.ToString(SaveOptions.DisableFormatting),
-            StringComparison.Ordinal);
-
-        var databaseToggle = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "ToggleButton"
-                && (element.Attribute("IsChecked")?.Value ?? "").Contains("DouyinEnableDatabase", StringComparison.Ordinal));
-        Assert.NotNull(databaseToggle);
-        Assert.Contains("EnableDouyinSpecialEngine", databaseToggle!.ToString(SaveOptions.DisableFormatting), StringComparison.Ordinal);
-
-        var incrementalToggle = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "ToggleButton"
-                && (element.Attribute("IsChecked")?.Value ?? "").Contains("DouyinIncrementalDownload", StringComparison.Ordinal));
-        Assert.NotNull(incrementalToggle);
-        var incrementalToggleSource = incrementalToggle!.ToString(SaveOptions.DisableFormatting);
-        Assert.Contains("EnableDouyinSpecialEngine", incrementalToggleSource, StringComparison.Ordinal);
-        Assert.Contains("DouyinEnableDatabase", incrementalToggleSource, StringComparison.Ordinal);
-    }
-
     [Fact]
     public void BatchDownloadViewUsesStatefulQueueCards()
     {
