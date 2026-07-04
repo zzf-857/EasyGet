@@ -80,7 +80,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool _useAria2c;
 
-    [ObservableProperty] private string _cookieContent = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DouyinCookieHealthText))]
+    private string _cookieContent = "";
 
     [ObservableProperty] private bool _enableDouyinSpecialEngine;
     [ObservableProperty] private string _douyinMode = "post";
@@ -163,6 +165,7 @@ public partial class SettingsViewModel : ObservableObject
         ["nickname", "sec_uid", "nickname_uid", "user_sec_uid"];
     public string DouyinFilenameTemplatePreviewText => BuildDouyinTemplatePreview(DouyinFilenameTemplate);
     public string DouyinFolderTemplatePreviewText => BuildDouyinTemplatePreview(DouyinFolderTemplate);
+    public string DouyinCookieHealthText => DouyinCookieHealthReporter.Describe(CookieContent);
     public string DouyinTemplateVariablesText { get; } = string.Join(
         "  ",
         ConfigService.SupportedDouyinTemplateVariableNames.Select(variable => $"{{{variable}}}"));

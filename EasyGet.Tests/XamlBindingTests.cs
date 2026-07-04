@@ -646,6 +646,7 @@ public class XamlBindingTests
     public void SettingsViewUsesStitchSettingsCenterInformationArchitecture()
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
         var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
 
         Assert.Contains("系统设置", texts);
@@ -661,6 +662,7 @@ public class XamlBindingTests
         Assert.Contains("启用网络代理", texts);
         Assert.Contains("启用 aria2c 外部下载器", texts);
         Assert.Contains("保存配置", texts);
+        Assert.Contains("DouyinCookieHealthText", source);
     }
 
     [Theory]

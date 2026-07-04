@@ -160,6 +160,29 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public void DouyinCookieHealthReflectsCookieContent()
+    {
+        var viewModel = CreateViewModel(new FakeAppUpdateService());
+        var changedProperties = new List<string>();
+        viewModel.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName is not null)
+                changedProperties.Add(args.PropertyName);
+        };
+
+        Assert.Equal("Cookie 未配置", viewModel.DouyinCookieHealthText);
+
+        viewModel.CookieContent = "ttwid=abc";
+
+        Assert.Equal("Cookie 缺少 odin_tt、passport_csrf_token", viewModel.DouyinCookieHealthText);
+        Assert.Contains(nameof(SettingsViewModel.DouyinCookieHealthText), changedProperties);
+
+        viewModel.CookieContent = "ttwid=abc; odin_tt=def; passport_csrf_token=ghi";
+
+        Assert.Equal("Cookie 关键项完整 · msToken 可自动生成", viewModel.DouyinCookieHealthText);
+    }
+
+    [Fact]
     public async Task SaveSettingsCommand_PersistsDouyinSpecialSettings()
     {
         var config = CreateTempConfigService();

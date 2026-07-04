@@ -386,6 +386,11 @@
                                        VerticalAlignment="Center"
                                        Text="{Binding CookieContent, Converter={StaticResource CookieStatusConverter}}"/>
                         </DockPanel>
+                        <TextBlock Text="{Binding DouyinCookieHealthText, Mode=OneWay}"
+                                   Style="{StaticResource TextCaption}"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   TextWrapping="Wrap"
+                                   Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
             </StackPanel>
