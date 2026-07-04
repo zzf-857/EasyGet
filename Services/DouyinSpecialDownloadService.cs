@@ -26,6 +26,18 @@ public interface IDouyinSpecialDownloadService
         => throw new NotSupportedException("Douyin discovery is not supported by this service implementation.");
 }
 
+public interface IDouyinSidecarHealthService
+{
+    Task<DouyinSidecarHealthResult> CheckHealthAsync(CancellationToken ct = default);
+}
+
+public sealed record DouyinSidecarHealthResult(
+    bool IsAvailable,
+    string StatusText,
+    IReadOnlyList<string> CheckedModules,
+    IReadOnlyList<string> FailedModules,
+    string ErrorMessage = "");
+
 public enum DouyinDiscoveryType
 {
     HotBoard,
@@ -104,7 +116,7 @@ public sealed record DouyinDiscoveryItem(
     public event PropertyChangedEventHandler? PropertyChanged;
 }
 
-public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
+public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService, IDouyinSidecarHealthService
 {
     internal const string DouyinCookieEnvironmentVariableName = "EASYGET_DOUYIN_COOKIE";
     private const int MaxTaskEventLogLines = 6;
@@ -125,6 +137,42 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     internal DouyinSpecialDownloadService(IDouyinSidecarProcessRunner runner)
     {
         _runner = runner;
+    }
+
+    public async Task<DouyinSidecarHealthResult> CheckHealthAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await foreach (var line in _runner.RunSelfTestAsync(ct))
+            {
+                if (!TryParseStdoutLine(line, out var message))
+                    continue;
+
+                if (message.Kind is DouyinSidecarEventKind.Success or DouyinSidecarEventKind.Failed)
+                    return BuildHealthResult(message);
+            }
+
+            return new DouyinSidecarHealthResult(
+                false,
+                "抖音 sidecar 异常 · 未返回自检结果",
+                [],
+                [],
+                "Douyin sidecar did not return a health summary.");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            var message = FormatUserFacingError(RedactSensitiveText(ex.Message, ""));
+            return new DouyinSidecarHealthResult(
+                false,
+                $"抖音 sidecar 异常 · {message}",
+                [],
+                [],
+                message);
+        }
     }
 
     public async Task DownloadAsync(
@@ -396,6 +444,9 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 message.DiscoverySearchMax = GetOptionalInt32(details.Value, "search_max");
                 message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
                 message.DiscoveryItems = GetDiscoveryItems(details.Value);
+                message.SelfTestImportsOk = GetOptionalBool(details.Value, "imports_ok");
+                message.SelfTestCheckedModules = GetOptionalStringList(details.Value, "checked_modules");
+                message.SelfTestFailedModules = GetOptionalStringList(details.Value, "failed_modules");
                 message.AuthorSummaries = GetAuthorSummaries(details.Value);
                 message.TranscriptFileCount = GetOptionalInt32(details.Value, "transcript_file_count");
                 if (GetOptionalObject(details.Value, "database") is { } database)
@@ -458,6 +509,28 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             Keyword: message.DiscoveryKeyword,
             Limit: message.DiscoveryLimit,
             SearchMax: message.DiscoverySearchMax);
+    }
+
+    private static DouyinSidecarHealthResult BuildHealthResult(DouyinSidecarMessage message)
+    {
+        var checkedModules = message.SelfTestCheckedModules;
+        var failedModules = message.SelfTestFailedModules;
+        var isAvailable = message.Kind == DouyinSidecarEventKind.Success
+                          && message.SelfTestImportsOk != false
+                          && failedModules.Count == 0;
+        if (isAvailable)
+        {
+            var status = checkedModules.Count > 0
+                ? $"抖音 sidecar 可用 · 已检查 {checkedModules.Count} 个模块"
+                : "抖音 sidecar 可用";
+            return new DouyinSidecarHealthResult(true, status, checkedModules, failedModules);
+        }
+
+        var error = SelectFirstNonEmpty(message.Error, message.Message, "Douyin sidecar self-test failed.");
+        var statusText = failedModules.Count > 0
+            ? $"抖音 sidecar 异常 · 失败模块 {string.Join("、", failedModules)}"
+            : $"抖音 sidecar 异常 · {error}";
+        return new DouyinSidecarHealthResult(false, statusText, checkedModules, failedModules, error);
     }
 
     internal static void ApplySuccessSummary(DownloadTask task, DouyinSidecarMessage message)
@@ -1235,6 +1308,9 @@ internal sealed class DouyinSidecarMessage
     public int? DiscoverySearchMax { get; set; }
     public int? DiscoveryItemCount { get; set; }
     public IReadOnlyList<DouyinDiscoveryItem> DiscoveryItems { get; set; } = [];
+    public bool? SelfTestImportsOk { get; set; }
+    public IReadOnlyList<string> SelfTestCheckedModules { get; set; } = [];
+    public IReadOnlyList<string> SelfTestFailedModules { get; set; } = [];
 }
 
 internal sealed record DouyinSidecarRequest(
@@ -1381,6 +1457,9 @@ internal interface IDouyinSidecarProcessRunner
         DouyinSidecarDiscoveryRequest request,
         CancellationToken cancellationToken)
         => throw new NotSupportedException("Douyin sidecar runner does not support discovery requests.");
+
+    IAsyncEnumerable<string> RunSelfTestAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException("Douyin sidecar runner does not support self-test requests.");
 }
 
 internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
@@ -1409,6 +1488,13 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await foreach (var line in RunProcessAsync(CreateDiscoveryProcessStartInfo(request), request.Cookie, cancellationToken))
+            yield return line;
+    }
+
+    public async IAsyncEnumerable<string> RunSelfTestAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await foreach (var line in RunProcessAsync(CreateSelfTestProcessStartInfo(), cookie: "", cancellationToken))
             yield return line;
     }
 
@@ -1500,6 +1586,13 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
             AddArgument(psi, "--search-max", Math.Max(1, request.SearchMax).ToString(CultureInfo.InvariantCulture));
         }
 
+        return psi;
+    }
+
+    private ProcessStartInfo CreateSelfTestProcessStartInfo()
+    {
+        var psi = CreateBaseProcessStartInfo();
+        psi.ArgumentList.Add("--self-test-imports");
         return psi;
     }
 

@@ -188,6 +188,25 @@
                                VerticalAlignment="Center"
                                Visibility="{Binding UpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
                 </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <Button Style="{StaticResource SurfaceButton}"
+                            Command="{Binding CheckDouyinSidecarHealthCommand}"
+                            IsEnabled="{Binding CanCheckDouyinSidecarHealth}"
+                            ToolTip="检测抖音 sidecar 依赖"
+                            AutomationProperties.Name="检测抖音 sidecar">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9D9;" Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="检测抖音 sidecar"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="{Binding DouyinSidecarHealthText, Mode=OneWay}"
+                               Style="{StaticResource TextBody}"
+                               Margin="14,0,0,0"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
             </StackPanel>
 
             <StackPanel Margin="0,0,0,26">

@@ -436,10 +436,54 @@ public class SettingsViewModelTests
         AssertAppConfigInt(config.Config, "DouyinLiveIdleTimeoutSeconds", 45);
     }
 
+    [Fact]
+    public async Task CheckDouyinSidecarHealthCommand_ShowsAvailableStatus()
+    {
+        var health = new FakeDouyinSidecarHealthService(
+            new DouyinSidecarHealthResult(
+                true,
+                "抖音 sidecar 可用 · 已检查 3 个模块",
+                ["config", "auth.cookie_manager", "core.api_client"],
+                []));
+        var viewModel = CreateViewModel(new ConfigService(), new FakeAppUpdateService(), health);
+
+        await viewModel.CheckDouyinSidecarHealthCommand.ExecuteAsync(null);
+
+        Assert.True(health.WasChecked);
+        Assert.True(viewModel.IsDouyinSidecarAvailable);
+        Assert.False(viewModel.IsCheckingDouyinSidecar);
+        Assert.Contains("可用", viewModel.DouyinSidecarHealthText, StringComparison.Ordinal);
+        Assert.Contains("3", viewModel.DouyinSidecarHealthText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CheckDouyinSidecarHealthCommand_ShowsFailureStatus()
+    {
+        var health = new FakeDouyinSidecarHealthService(
+            new DouyinSidecarHealthResult(
+                false,
+                "抖音 sidecar 异常 · 失败模块 config",
+                ["config", "core.api_client"],
+                ["config"],
+                "import self-test failed"));
+        var viewModel = CreateViewModel(new ConfigService(), new FakeAppUpdateService(), health);
+
+        await viewModel.CheckDouyinSidecarHealthCommand.ExecuteAsync(null);
+
+        Assert.True(health.WasChecked);
+        Assert.False(viewModel.IsDouyinSidecarAvailable);
+        Assert.False(viewModel.IsCheckingDouyinSidecar);
+        Assert.Contains("异常", viewModel.DouyinSidecarHealthText, StringComparison.Ordinal);
+        Assert.Contains("config", viewModel.DouyinSidecarHealthText, StringComparison.Ordinal);
+    }
+
     private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)
         => CreateViewModel(new ConfigService(), appUpdateService);
 
-    private static SettingsViewModel CreateViewModel(ConfigService config, IAppUpdateService appUpdateService)
+    private static SettingsViewModel CreateViewModel(
+        ConfigService config,
+        IAppUpdateService appUpdateService,
+        IDouyinSidecarHealthService? douyinSidecarHealthService = null)
     {
         var environment = new EnvironmentService();
         var historyPath = Path.Combine(
@@ -456,7 +500,8 @@ public class SettingsViewModelTests
             environment,
             manager,
             new TelegramDownloadService(config),
-            appUpdateService);
+            appUpdateService,
+            douyinSidecarHealthService);
     }
 
     private static ConfigService CreateTempConfigService()
@@ -573,5 +618,17 @@ public class SettingsViewModelTests
         }
 
         public bool LaunchInstaller(string installerPath) => true;
+    }
+
+    private sealed class FakeDouyinSidecarHealthService(DouyinSidecarHealthResult result)
+        : IDouyinSidecarHealthService
+    {
+        public bool WasChecked { get; private set; }
+
+        public Task<DouyinSidecarHealthResult> CheckHealthAsync(CancellationToken ct = default)
+        {
+            WasChecked = true;
+            return Task.FromResult(result);
+        }
     }
 }

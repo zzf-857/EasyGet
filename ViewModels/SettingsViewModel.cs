@@ -33,6 +33,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly TelegramDownloadService _telegramDownloadService;
     private readonly IAppUpdateService _appUpdateService;
+    private readonly IDouyinSidecarHealthService _douyinSidecarHealthService;
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
     private bool _isInitializing;
@@ -68,6 +69,12 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _ffmpegFound;
     [ObservableProperty] private string _ffmpegVersion = "";
     [ObservableProperty] private bool _isCheckingEnv;
+    [ObservableProperty] private string _douyinSidecarHealthText = "抖音 sidecar 未检测";
+    [ObservableProperty] private bool _isDouyinSidecarAvailable;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanCheckDouyinSidecarHealth))]
+    private bool _isCheckingDouyinSidecar;
 
     [ObservableProperty] private string _defaultDownloadPath = "";
     [ObservableProperty] private string _defaultFormat = "mp4";
@@ -177,6 +184,7 @@ public partial class SettingsViewModel : ObservableObject
     public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
     public bool CanUpdateYtDlp => CanCheckEnvironment && YtDlpFound;
+    public bool CanCheckDouyinSidecarHealth => !IsCheckingDouyinSidecar;
     public bool CanCheckAppUpdate => !IsCheckingAppUpdate && !IsDownloadingAppUpdate;
     public bool CanDownloadAppUpdate => CanCheckAppUpdate
         && IsAppUpdateAvailable
@@ -194,13 +202,15 @@ public partial class SettingsViewModel : ObservableObject
         EnvironmentService envService,
         DownloadManager downloadManager,
         TelegramDownloadService telegramDownloadService,
-        IAppUpdateService? appUpdateService = null)
+        IAppUpdateService? appUpdateService = null,
+        IDouyinSidecarHealthService? douyinSidecarHealthService = null)
     {
         _configService = configService;
         _envService = envService;
         _downloadManager = downloadManager;
         _telegramDownloadService = telegramDownloadService;
         _appUpdateService = appUpdateService ?? new AppUpdateService();
+        _douyinSidecarHealthService = douyinSidecarHealthService ?? new DouyinSpecialDownloadService();
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
     }
@@ -291,6 +301,28 @@ public partial class SettingsViewModel : ObservableObject
         finally
         {
             IsCheckingEnv = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CheckDouyinSidecarHealth()
+    {
+        IsCheckingDouyinSidecar = true;
+        DouyinSidecarHealthText = "正在检测抖音 sidecar...";
+        try
+        {
+            var result = await _douyinSidecarHealthService.CheckHealthAsync();
+            IsDouyinSidecarAvailable = result.IsAvailable;
+            DouyinSidecarHealthText = result.StatusText;
+        }
+        catch (Exception ex)
+        {
+            IsDouyinSidecarAvailable = false;
+            DouyinSidecarHealthText = $"抖音 sidecar 异常 · {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingDouyinSidecar = false;
         }
     }
 

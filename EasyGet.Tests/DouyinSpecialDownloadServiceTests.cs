@@ -889,6 +889,62 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task CheckHealthAsync_ReturnsAvailableWhenImportSelfTestSucceeds()
+    {
+        var runner = new CapturingHealthSidecarRunner(
+            """
+            {
+              "event": "success",
+              "title": "EasyGet Douyin sidecar import self-test",
+              "details": {
+                "step": "self_test_imports",
+                "imports_ok": true,
+                "checked_modules": ["config", "auth.cookie_manager", "core.api_client"],
+                "failed_modules": []
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+
+        var result = await service.CheckHealthAsync();
+
+        Assert.True(runner.SelfTestWasRun);
+        Assert.True(result.IsAvailable);
+        Assert.Equal(3, result.CheckedModules.Count);
+        Assert.Empty(result.FailedModules);
+        Assert.Contains("可用", result.StatusText, StringComparison.Ordinal);
+        Assert.Contains("3", result.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CheckHealthAsync_ReturnsFailedModulesWhenImportSelfTestFails()
+    {
+        var runner = new CapturingHealthSidecarRunner(
+            """
+            {
+              "event": "failed",
+              "error": "douyin-downloader-promax import self-test failed.",
+              "details": {
+                "step": "self_test_imports",
+                "imports_ok": false,
+                "checked_modules": ["config", "core.api_client"],
+                "failed_modules": ["config"]
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+
+        var result = await service.CheckHealthAsync();
+
+        Assert.True(runner.SelfTestWasRun);
+        Assert.False(result.IsAvailable);
+        Assert.Equal(["config"], result.FailedModules);
+        Assert.Contains("异常", result.StatusText, StringComparison.Ordinal);
+        Assert.Contains("config", result.StatusText, StringComparison.Ordinal);
+        Assert.Contains("import self-test failed", result.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DouyinSidecarProcessRunner_DefaultScriptPath_PrefersWorkspaceToolingSidecar()
     {
         var runner = new DouyinSidecarProcessRunner();
@@ -1026,6 +1082,23 @@ public class DouyinSpecialDownloadServiceTests
         AssertArgument(args, "--search-max", "50");
         Assert.DoesNotContain("--url", args);
         Assert.DoesNotContain("--hot-board", args);
+    }
+
+    [Fact]
+    public void DouyinSidecarProcessRunner_CreateSelfTestProcessStartInfo_EmitsImportSelfTestArgument()
+    {
+        var sidecarPath = TestRepositoryPaths.GetRootPath(Path.Combine("tools", "douyin-sidecar", "sidecar.py"));
+        var runner = new DouyinSidecarProcessRunner("python", sidecarPath);
+
+        var psi = CreateSelfTestProcessStartInfo(runner);
+        var args = psi.ArgumentList.ToArray();
+
+        Assert.Equal("python", psi.FileName);
+        Assert.Equal(sidecarPath, args[0]);
+        Assert.Contains("--self-test-imports", args);
+        Assert.DoesNotContain("--url", args);
+        Assert.DoesNotContain("--cookie-env", args);
+        Assert.DoesNotContain(DouyinSpecialDownloadService.DouyinCookieEnvironmentVariableName, psi.Environment.Keys);
     }
 
     [Fact]
@@ -1413,6 +1486,34 @@ public class DouyinSpecialDownloadServiceTests
         }
     }
 
+    private sealed class CapturingHealthSidecarRunner(params string[] lines) : IDouyinSidecarProcessRunner
+    {
+        public bool SelfTestWasRun { get; private set; }
+
+        public async IAsyncEnumerable<string> RunAsync(
+            DouyinSidecarRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var line in Array.Empty<string>())
+                yield return line;
+
+            await Task.Yield();
+            throw new InvalidOperationException("Download runner should not be used for health tests.");
+        }
+
+        public async IAsyncEnumerable<string> RunSelfTestAsync(
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            SelfTestWasRun = true;
+            foreach (var line in lines)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Yield();
+                yield return line;
+            }
+        }
+    }
+
     private sealed class CancellingSidecarRunner : IDouyinSidecarProcessRunner
     {
         public async IAsyncEnumerable<string> RunAsync(
@@ -1591,6 +1692,16 @@ public class DouyinSpecialDownloadServiceTests
 
         Assert.NotNull(method);
         return Assert.IsType<ProcessStartInfo>(method.Invoke(runner, [request]));
+    }
+
+    private static ProcessStartInfo CreateSelfTestProcessStartInfo(DouyinSidecarProcessRunner runner)
+    {
+        var method = typeof(DouyinSidecarProcessRunner).GetMethod(
+            "CreateSelfTestProcessStartInfo",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+
+        Assert.NotNull(method);
+        return Assert.IsType<ProcessStartInfo>(method.Invoke(runner, []));
     }
 
     private static T GetRequestValue<T>(DouyinSidecarRequest? request, string propertyName)

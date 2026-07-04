@@ -1027,6 +1027,7 @@ public class XamlBindingTests
     [InlineData("CheckEnvironmentCommand", "CanCheckEnvironment")]
     [InlineData("InstallMissingToolsCommand", "CanInstallMissingTools")]
     [InlineData("UpdateYtDlpCommand", "CanUpdateYtDlp")]
+    [InlineData("CheckDouyinSidecarHealthCommand", "CanCheckDouyinSidecarHealth")]
     public void SettingsEnvironmentButtonsBindExpectedEnabledState(string commandName, string enabledProperty)
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
@@ -1041,6 +1042,15 @@ public class XamlBindingTests
         Assert.NotNull(button);
         var isEnabled = button!.Attribute("IsEnabled")?.Value ?? "";
         Assert.Contains(enabledProperty, isEnabled);
+    }
+
+    [Fact]
+    public void SettingsShowsDouyinSidecarHealthStatus()
+    {
+        var source = File.ReadAllText(GetViewPath("SettingsView.xaml"));
+
+        Assert.Contains("CheckDouyinSidecarHealthCommand", source, StringComparison.Ordinal);
+        Assert.Contains("DouyinSidecarHealthText", source, StringComparison.Ordinal);
     }
 
     [Fact]
