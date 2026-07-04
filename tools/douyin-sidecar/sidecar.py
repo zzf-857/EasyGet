@@ -253,6 +253,7 @@ def build_config(
     comment_page_size: int = 20,
     enable_database: bool = False,
     incremental: bool = False,
+    browser_fallback: bool = False,
     start_time: str = "",
     end_time: str = "",
     download_pinned: bool = False,
@@ -287,6 +288,7 @@ def build_config(
     normalized_filename_template = normalize_template(filename_template, "--filename-template")
     normalized_folder_template = normalize_template(folder_template, "--folder-template")
 
+    enable_browser_fallback = bool(browser_fallback)
     config = {
         "link": [url],
         "path": str(output_dir),
@@ -321,11 +323,11 @@ def build_config(
             "upload_audio_only": True,
         },
         "browser_fallback": {
-            "enabled": False,
-            "headless": True,
-            "max_scrolls": 60,
-            "idle_rounds": 6,
-            "wait_timeout_seconds": 300,
+            "enabled": enable_browser_fallback,
+            "headless": not enable_browser_fallback,
+            "max_scrolls": 240 if enable_browser_fallback else 60,
+            "idle_rounds": 8 if enable_browser_fallback else 6,
+            "wait_timeout_seconds": 600 if enable_browser_fallback else 300,
         },
         "comments": {
             "enabled": bool(include_comments),
@@ -370,6 +372,7 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         comment_page_size=args.comment_page_size,
         enable_database=args.enable_database,
         incremental=args.incremental,
+        browser_fallback=args.browser_fallback,
         start_time=args.start_time,
         end_time=args.end_time,
         download_pinned=args.download_pinned,
@@ -1711,6 +1714,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--comment-page-size", type=int, default=20, help="Comment API page size, from 1 to 20")
     parser.add_argument("--enable-database", action="store_true", help="Enable local SQLite deduplication/history database")
     parser.add_argument("--incremental", action="store_true", help="Enable incremental download for supported batch modes")
+    parser.add_argument("--browser-fallback", action="store_true", help="Enable visible browser fallback for profile pagination or verification")
     parser.add_argument("--start-time", default="", help="Pass through third-party start_time filter value")
     parser.add_argument("--end-time", default="", help="Pass through third-party end_time filter value")
     parser.add_argument("--download-pinned", action="store_true", help="Include pinned posts in third-party downloads")

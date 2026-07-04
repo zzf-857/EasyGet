@@ -1123,6 +1123,7 @@ internal sealed record DouyinSidecarRequest(
     bool IncludeJson = false,
     bool IncludeDatabase = false,
     bool IncrementalDownload = false,
+    bool EnableBrowserFallback = false,
     string FilenameTemplate = AppConfig.DefaultDouyinTemplate,
     string FolderTemplate = AppConfig.DefaultDouyinTemplate,
     string AuthorDirectoryMode = "nickname",
@@ -1166,6 +1167,7 @@ internal sealed record DouyinSidecarRequest(
             IncludeJson: config?.DouyinDownloadJson ?? false,
             IncludeDatabase: config?.DouyinEnableDatabase ?? false,
             IncrementalDownload: config?.DouyinIncrementalDownload ?? false,
+            EnableBrowserFallback: config?.DouyinEnableBrowserFallback ?? false,
             FilenameTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFilenameTemplate),
             FolderTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFolderTemplate),
             AuthorDirectoryMode: ConfigService.NormalizeDouyinAuthorDirectoryMode(config?.DouyinAuthorDirectoryMode),
@@ -1324,6 +1326,7 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddSwitch(psi, "--include-json", request.IncludeJson);
         AddSwitch(psi, "--enable-database", request.IncludeDatabase);
         AddSwitch(psi, "--incremental", request.IncrementalDownload);
+        AddSwitch(psi, "--browser-fallback", request.EnableBrowserFallback);
 
         return psi;
     }

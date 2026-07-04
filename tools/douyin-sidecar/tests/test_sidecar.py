@@ -243,6 +243,16 @@ class SidecarCliTests(unittest.TestCase):
             config = events[0]["details"]["config"]
             self.assertEqual(config["author_dir"], "nickname")
 
+    def test_dry_run_enables_browser_fallback_for_profile_pagination(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(["--dry-run", "--browser-fallback"], Path(temp_dir))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertTrue(config["browser_fallback"]["enabled"])
+            self.assertFalse(config["browser_fallback"]["headless"])
+
     def test_dry_run_rejects_unknown_template_variable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(

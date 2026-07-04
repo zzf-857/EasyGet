@@ -90,6 +90,7 @@ public class SettingsViewModelTests
         SetAppConfigBool(config.Config, "DouyinDownloadAvatar", value: true);
         SetAppConfigBool(config.Config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config.Config, "DouyinIncrementalDownload", value: true);
+        SetAppConfigBool(config.Config, "DouyinEnableBrowserFallback", value: true);
         SetAppConfigBool(config.Config, "DouyinDownloadPinned", value: true);
         SetAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "sec_uid");
         SetAppConfigBool(config.Config, "DouyinGroupByMode", value: false);
@@ -112,6 +113,7 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinDownloadAvatar", expected: true);
         AssertViewModelBool(viewModel, "DouyinEnableDatabase", expected: true);
         AssertViewModelBool(viewModel, "DouyinIncrementalDownload", expected: true);
+        AssertViewModelBool(viewModel, "DouyinEnableBrowserFallback", expected: true);
         AssertViewModelBool(viewModel, "DouyinDownloadPinned", expected: true);
         AssertViewModelString(viewModel, "DouyinAuthorDirectoryMode", "sec_uid");
         AssertViewModelBool(viewModel, "DouyinGroupByMode", expected: false);
@@ -199,6 +201,7 @@ public class SettingsViewModelTests
         SetViewModelBool(viewModel, "DouyinDownloadAvatar", value: true);
         SetViewModelBool(viewModel, "DouyinEnableDatabase", value: true);
         SetViewModelBool(viewModel, "DouyinIncrementalDownload", value: true);
+        SetViewModelBool(viewModel, "DouyinEnableBrowserFallback", value: true);
         SetViewModelBool(viewModel, "DouyinDownloadPinned", value: true);
         SetViewModelString(viewModel, "DouyinAuthorDirectoryMode", " SEC_UID ");
         SetViewModelBool(viewModel, "DouyinGroupByMode", value: false);
@@ -220,6 +223,7 @@ public class SettingsViewModelTests
         AssertAppConfigBool(config.Config, "DouyinDownloadAvatar", expected: true);
         AssertAppConfigBool(config.Config, "DouyinEnableDatabase", expected: true);
         AssertAppConfigBool(config.Config, "DouyinIncrementalDownload", expected: true);
+        AssertAppConfigBool(config.Config, "DouyinEnableBrowserFallback", expected: true);
         AssertAppConfigBool(config.Config, "DouyinDownloadPinned", expected: true);
         AssertAppConfigString(config.Config, "DouyinAuthorDirectoryMode", "sec_uid");
         AssertAppConfigBool(config.Config, "DouyinGroupByMode", expected: false);
@@ -231,6 +235,7 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinCommentIncludeReplies", expected: true);
         AssertViewModelInt(viewModel, "DouyinMaxComments", 500);
         AssertViewModelInt(viewModel, "DouyinCommentPageSize", 20);
+        AssertViewModelBool(viewModel, "DouyinEnableBrowserFallback", expected: true);
     }
 
     [Fact]
@@ -374,6 +379,21 @@ public class SettingsViewModelTests
         Assert.Equal("like,mix,music", config.Config.DouyinMode);
         Assert.Equal("like,mix,music", viewModel.DouyinMode);
         Assert.Equal(4, config.Config.DouyinLimit);
+    }
+
+    [Fact]
+    public async Task DouyinBrowserFallbackChange_AutoSavesSetting()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        SetViewModelBool(viewModel, "DouyinEnableBrowserFallback", value: true);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigBool(config.Config, "DouyinEnableBrowserFallback", expected: true);
     }
 
     private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)

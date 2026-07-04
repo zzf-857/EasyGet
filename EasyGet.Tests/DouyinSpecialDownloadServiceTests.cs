@@ -680,6 +680,7 @@ public class DouyinSpecialDownloadServiceTests
         SetAppConfigBool(config, "DouyinDownloadAvatar", value: true);
         SetAppConfigBool(config, "DouyinEnableDatabase", value: true);
         SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
+        SetAppConfigBool(config, "DouyinEnableBrowserFallback", value: true);
         SetAppConfigBool(config, "DouyinDownloadPinned", value: true);
         SetAppConfigBool(config, "DouyinCommentIncludeReplies", value: true);
         SetAppConfigInt(config, "DouyinMaxComments", 500);
@@ -710,6 +711,7 @@ public class DouyinSpecialDownloadServiceTests
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeAvatar"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncludeDatabase"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "IncrementalDownload"));
+        Assert.True(GetRequestValue<bool>(runner.LastRequest, "EnableBrowserFallback"));
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "DownloadPinned"));
         Assert.Equal("{author}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FilenameTemplate"));
         Assert.Equal("{date}_{title}_{id}", GetRequestValue<string>(runner.LastRequest, "FolderTemplate"));

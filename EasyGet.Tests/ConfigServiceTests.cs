@@ -95,6 +95,24 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesDouyinBrowserFallbackToggle()
+    {
+        var service = new ConfigService(_tempDir);
+
+        await service.LoadAsync();
+
+        AssertAppConfigBool(service.Config, "DouyinEnableBrowserFallback", expected: false);
+        SetAppConfigBool(service.Config, "DouyinEnableBrowserFallback", value: true);
+
+        await service.SaveAsync();
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        AssertAppConfigBool(reloaded.Config, "DouyinEnableBrowserFallback", expected: true);
+    }
+
+    [Fact]
     public void NormalizeRuntimeConfig_ClampsPerformanceValuesToSafeRange()
     {
         var config = new AppConfig

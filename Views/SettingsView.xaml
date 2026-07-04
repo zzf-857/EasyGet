@@ -641,6 +641,24 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel>
+                                <TextBlock Text="浏览器兜底" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="翻页受限或遇到验证时，启动可见浏览器辅助批量下载"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding DouyinEnableBrowserFallback}"
+                                          IsEnabled="{Binding EnableDouyinSpecialEngine}"
+                                          VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
                                 <TextBlock Text="下载封面" Style="{StaticResource TextBodyStrong}"/>
                                 <TextBlock Text="作为附加资源保存" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
                             </StackPanel>

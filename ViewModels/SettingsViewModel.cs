@@ -110,6 +110,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _douyinDownloadJson;
     [ObservableProperty] private bool _douyinEnableDatabase;
     [ObservableProperty] private bool _douyinIncrementalDownload;
+    [ObservableProperty] private bool _douyinEnableBrowserFallback;
 
     [ObservableProperty] private bool _autoCategorizeByPlatform = true;
 
@@ -245,6 +246,7 @@ public partial class SettingsViewModel : ObservableObject
             DouyinDownloadJson = c.DouyinDownloadJson;
             DouyinEnableDatabase = c.DouyinEnableDatabase;
             DouyinIncrementalDownload = c.DouyinIncrementalDownload;
+            DouyinEnableBrowserFallback = c.DouyinEnableBrowserFallback;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
             SelectedThemeColor = c.ThemeColor;
             TgApiId = c.TgApiId;
@@ -370,6 +372,7 @@ public partial class SettingsViewModel : ObservableObject
         c.DouyinDownloadJson = DouyinDownloadJson;
         c.DouyinEnableDatabase = DouyinEnableDatabase;
         c.DouyinIncrementalDownload = DouyinIncrementalDownload;
+        c.DouyinEnableBrowserFallback = DouyinEnableBrowserFallback;
         c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
         c.ThemeColor = SelectedThemeColor;
         c.TgApiId = TgApiId;
@@ -414,6 +417,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinDownloadJsonChanged(bool value) => AutoSave();
     partial void OnDouyinEnableDatabaseChanged(bool value) => AutoSave();
     partial void OnDouyinIncrementalDownloadChanged(bool value) => AutoSave();
+    partial void OnDouyinEnableBrowserFallbackChanged(bool value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
     partial void OnTgApiIdChanged(string value) => AutoSave();
     partial void OnTgApiHashChanged(string value) => AutoSave();

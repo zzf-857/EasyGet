@@ -835,6 +835,7 @@ public class XamlBindingTests
         Assert.Contains("Settings.DouyinDownloadPinned", source);
         Assert.Contains("Settings.DouyinEnableDatabase", source);
         Assert.Contains("Settings.DouyinIncrementalDownload", source);
+        Assert.Contains("Settings.DouyinEnableBrowserFallback", source);
         Assert.Contains("Settings.DouyinDownloadCover", source);
         Assert.Contains("Settings.DouyinDownloadAvatar", source);
         Assert.Contains("Settings.DouyinDownloadMusic", source);
@@ -1140,8 +1141,10 @@ public class XamlBindingTests
         Assert.Contains("保存原始 JSON", texts);
         Assert.Contains("启用本地去重数据库", texts);
         Assert.Contains("增量下载", texts);
+        Assert.Contains("浏览器兜底", texts);
         Assert.Contains(texts, text => text.Contains("在下载目录下维护本地记录", StringComparison.Ordinal));
         Assert.Contains(texts, text => text.Contains("依赖本地去重数据库", StringComparison.Ordinal));
+        Assert.Contains(texts, text => text.Contains("翻页受限或遇到验证时", StringComparison.Ordinal));
         Assert.Contains(texts, text => text.Contains("复用上方全局 Cookie", StringComparison.Ordinal));
 
         Assert.Contains("EnableDouyinSpecialEngine", source);
@@ -1168,6 +1171,7 @@ public class XamlBindingTests
         Assert.Contains("DouyinDownloadJson", source);
         Assert.Contains("DouyinEnableDatabase", source);
         Assert.Contains("DouyinIncrementalDownload", source);
+        Assert.Contains("DouyinEnableBrowserFallback", source);
 
         var filenameTemplateTextBox = document
             .Descendants()
