@@ -789,6 +789,7 @@ public class XamlBindingTests
         Assert.Contains("SelectAllDouyinDiscoveryItemsCommand", source);
         Assert.Contains("SelectFilteredDouyinDiscoveryItemsCommand", source);
         Assert.Contains("SelectDownloadableDouyinDiscoveryItemsCommand", source);
+        Assert.Contains("只选择当前筛选中有 URL 或作品 ID 的发现结果", source);
         Assert.Contains("ClearDouyinDiscoverySelectionCommand", source);
         Assert.Contains("AddAllDouyinDiscoveryItemsToQueueCommand", source);
         Assert.Contains("AddFilteredDouyinDiscoveryItemsToQueueCommand", source);

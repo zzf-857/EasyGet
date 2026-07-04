@@ -526,8 +526,8 @@
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     Margin="0,0,8,0"
-                                    ToolTip="只选择有 URL 或作品 ID 的发现结果"
-                                    AutomationProperties.Name="选择可下载发现结果"
+                                    ToolTip="只选择当前筛选中有 URL 或作品 ID 的发现结果"
+                                    AutomationProperties.Name="选择当前筛选中可下载发现结果"
                                     Command="{Binding SelectDownloadableDouyinDiscoveryItemsCommand}">
                                 <StackPanel Orientation="Horizontal">
                                     <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"

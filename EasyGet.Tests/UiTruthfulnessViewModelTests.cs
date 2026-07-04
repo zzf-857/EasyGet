@@ -1337,6 +1337,40 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSelectsOnlyDownloadableFilteredDiscoveryResults()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var filteredDownloadable = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "猫咪视频",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var filteredHotWord = new DouyinDiscoveryItem(
+            Word: "猫咪热词",
+            HotValue: 123);
+        var outsideFilter = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "小狗视频",
+            Url: "https://www.douyin.com/video/7604129988555574539")
+        {
+            IsSelected = true
+        };
+        context.Douyin.DouyinDiscoveryItems.Add(filteredDownloadable);
+        context.Douyin.DouyinDiscoveryItems.Add(filteredHotWord);
+        context.Douyin.DouyinDiscoveryItems.Add(outsideFilter);
+        context.Douyin.DouyinDiscoveryFilterKeyword = "猫咪";
+
+        context.Douyin.SelectDownloadableDouyinDiscoveryItemsCommand.Execute(null);
+
+        Assert.True(filteredDownloadable.IsSelected);
+        Assert.False(filteredHotWord.IsSelected);
+        Assert.False(outsideFilter.IsSelected);
+        Assert.Equal(1, context.Douyin.SelectedDouyinDiscoveryItemCount);
+        Assert.Contains("已选择 1", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.False(context.Douyin.HasDouyinDiscoveryError);
+    }
+
+    [Fact]
     public void DouyinViewModelFiltersDiscoveryResultsLocally()
     {
         var discovery = new FakeDouyinDiscoveryService();

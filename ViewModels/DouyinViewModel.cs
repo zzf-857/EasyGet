@@ -674,21 +674,32 @@ public partial class DouyinViewModel : ObservableObject
     [RelayCommand]
     private void SelectDownloadableDouyinDiscoveryItems()
     {
+        var visibleItems = FilteredDouyinDiscoveryItems.ToList();
         var selected = 0;
         foreach (var item in DouyinDiscoveryItems)
         {
-            var isDownloadable = !string.IsNullOrWhiteSpace(BuildDouyinDiscoveryDownloadUrl(item));
+            var isVisible = visibleItems.Any(visible => ReferenceEquals(visible, item));
+            var isDownloadable = isVisible && !string.IsNullOrWhiteSpace(BuildDouyinDiscoveryDownloadUrl(item));
             item.IsSelected = isDownloadable;
             if (isDownloadable)
                 selected++;
         }
 
         DouyinDiscoveryErrorMessage = "";
+        var scopeText = IsDouyinDiscoveryFilterActive
+            ? "当前筛选可下载发现结果"
+            : "可下载发现结果";
         DouyinDiscoveryStatusText = selected > 0
-            ? $"已选择 {selected} 条可下载发现结果"
-            : "当前发现结果没有可下载链接";
+            ? $"已选择 {selected} 条{scopeText}"
+            : IsDouyinDiscoveryFilterActive
+                ? "当前筛选没有可下载链接"
+                : "当前发现结果没有可下载链接";
         if (selected == 0)
-            DouyinDiscoveryErrorMessage = "当前发现结果没有可下载链接";
+        {
+            DouyinDiscoveryErrorMessage = IsDouyinDiscoveryFilterActive
+                ? "当前筛选没有可下载链接"
+                : "当前发现结果没有可下载链接";
+        }
 
         NotifyDouyinDiscoveryStateChanged();
     }
