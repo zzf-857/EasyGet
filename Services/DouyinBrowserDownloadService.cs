@@ -350,12 +350,13 @@ internal partial class DouyinBrowserDownloadService
         var userDataDir = Path.Combine(Path.GetTempPath(), $"easyget-douyin-browser-{Guid.NewGuid():N}");
 
         using var process = StartBrowser(browserPath, port, userDataDir);
+        ClientWebSocket? socket = null;
         try
         {
             await WaitForDevToolsAsync(port, ct);
             var webSocketUrl = await CreatePageAsync(port, ct);
 
-            using var socket = new ClientWebSocket();
+            socket = new ClientWebSocket();
             await socket.ConnectAsync(new Uri(webSocketUrl), ct);
 
             var id = 1;
@@ -422,6 +423,8 @@ internal partial class DouyinBrowserDownloadService
         }
         finally
         {
+            await TryCloseBrowserGracefullyAsync(process, socket);
+            socket?.Dispose();
             TryKill(process);
             TryDeleteDirectory(userDataDir);
         }
@@ -571,9 +574,7 @@ internal partial class DouyinBrowserDownloadService
             FileName = browserPath,
             Arguments = args,
             UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
+            CreateNoWindow = true
         }) ?? throw new InvalidOperationException("Failed to start browser.");
     }
 
@@ -633,6 +634,29 @@ internal partial class DouyinBrowserDownloadService
 
         var bytes = Encoding.UTF8.GetBytes(payload);
         await socket.SendAsync(bytes, WebSocketMessageType.Text, true, ct);
+    }
+
+    private static async Task TryCloseBrowserGracefullyAsync(Process process, ClientWebSocket? socket)
+    {
+        if (socket is null || process.HasExited || socket.State != WebSocketState.Open)
+            return;
+
+        try
+        {
+            using var closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await SendCdpCommandAsync(socket, 999, "Browser.close", null, closeCts.Token);
+
+            using var exitCts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await process.WaitForExitAsync(exitCts.Token);
+        }
+        catch (Exception ex) when (ex is OperationCanceledException
+                                   or WebSocketException
+                                   or IOException
+                                   or ObjectDisposedException
+                                   or InvalidOperationException)
+        {
+            // Best effort; TryKill remains the fallback for stuck browser processes.
+        }
     }
 
     private static async Task<string> ReceiveCdpMessageAsync(ClientWebSocket socket, CancellationToken ct)

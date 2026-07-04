@@ -157,6 +157,30 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public void StartBrowser_DoesNotRedirectBrowserOutputStreams()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
+
+        Assert.DoesNotContain("RedirectStandardOutput = true", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("RedirectStandardError = true", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CaptureVideoAsync_RequestsBrowserCloseBeforeKillFallback()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
+
+        Assert.Contains("\"Browser.close\"", source, StringComparison.Ordinal);
+
+        var closeIndex = source.IndexOf("await TryCloseBrowserGracefullyAsync", StringComparison.Ordinal);
+        var killIndex = source.IndexOf("TryKill(process)", StringComparison.Ordinal);
+        Assert.True(closeIndex >= 0, "CaptureVideoAsync should attempt graceful CDP Browser.close.");
+        Assert.True(killIndex > closeIndex, "Process kill should remain a fallback after Browser.close.");
+    }
+
+    [Fact]
     public void BuildOutputPath_AppendsCounterWhenFileExists()
     {
         Directory.CreateDirectory(_tempDir);
