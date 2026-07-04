@@ -36,7 +36,7 @@ MAX_MANIFEST_SUMMARY_ITEMS = 5
 MAX_MANIFEST_TEXT_LENGTH = 300
 PRIMARY_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".flv", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".m4a")
 SECONDARY_NAME_MARKERS = ("_cover", "_avatar", "_music", "_data", "_comments", "_room", ".transcript")
-SECONDARY_OUTPUT_SUFFIXES = {".json", ".txt"}
+SECONDARY_OUTPUT_SUFFIXES = {".json", ".txt", ".srt"}
 COUNT_RE = re.compile(
     r"Total:\s*(?P<total>\d+),\s*Success:\s*(?P<success>\d+),\s*"
     r"Failed:\s*(?P<failed>\d+),\s*Skipped:\s*(?P<skipped>\d+)",
@@ -947,7 +947,7 @@ def transcript_output_files(output_files: Sequence[str]) -> List[str]:
     return [
         path
         for path in output_files
-        if Path(path).name.lower().endswith((".transcript.txt", ".transcript.json"))
+        if Path(path).name.lower().endswith((".transcript.txt", ".transcript.json", ".transcript.srt"))
     ]
 
 

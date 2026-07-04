@@ -159,6 +159,7 @@ public class DouyinManifestReaderTests
                 {"aweme_id":"m1","media_type":"music","file_paths":["music/m1.m4a","music\\m2.opus"]}
                 {"aweme_id":"u1","media_type":"","file_names":["my_live_demo.mp4","stem_live_1.jpg","stem_comments.txt","stem_data.backup.json"]}
                 {"aweme_id":"f1","media_type":"video","file_names":["f1.flv","f1_live_2.flv"]}
+                {"aweme_id":"s1","media_type":"video","file_names":["s1.transcript.srt"]}
                 """);
 
             var summary = DouyinManifestReader.ReadSummary(manifestPath);
@@ -170,7 +171,8 @@ public class DouyinManifestReaderTests
                 item => Assert.Equal("图片、 实况", item.FileRoleSummaryText),
                 item => Assert.Equal("音乐", item.FileRoleSummaryText),
                 item => Assert.Equal("评论", item.FileRoleSummaryText),
-                item => Assert.Equal("视频、 实况", item.FileRoleSummaryText));
+                item => Assert.Equal("视频、 实况", item.FileRoleSummaryText),
+                item => Assert.Equal("转写", item.FileRoleSummaryText));
         }
         finally
         {

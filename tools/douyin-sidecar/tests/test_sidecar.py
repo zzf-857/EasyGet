@@ -1090,7 +1090,8 @@ def make_transcript_outputs_downloader(root: Path) -> Path:
             video_path = output_dir / "demo.mp4"
             text_path = output_dir / "demo.transcript.txt"
             json_path = output_dir / "demo.transcript.json"
-            for path in (video_path, text_path, json_path):
+            srt_path = output_dir / "demo.transcript.srt"
+            for path in (video_path, text_path, json_path, srt_path):
                 path.write_bytes(b"media")
 
             manifest = output_dir / "download_manifest.jsonl"
@@ -1100,8 +1101,8 @@ def make_transcript_outputs_downloader(root: Path) -> Path:
                         "aweme_id": "demo",
                         "media_type": "video",
                         "desc": "demo with transcript",
-                        "file_paths": [str(video_path), str(text_path), str(json_path)],
-                        "file_names": [video_path.name, text_path.name, json_path.name],
+                        "file_paths": [str(video_path), str(text_path), str(json_path), str(srt_path)],
+                        "file_names": [video_path.name, text_path.name, json_path.name, srt_path.name],
                     },
                     ensure_ascii=False,
                 )
@@ -1614,10 +1615,10 @@ class SidecarRunnerTests(unittest.TestCase):
             details = events[-1]["details"]
 
             self.assertEqual(events[-1]["event"], "success")
-            self.assertEqual(details["transcript_file_count"], 2)
+            self.assertEqual(details["transcript_file_count"], 3)
             self.assertEqual(
                 [Path(path).name for path in details["transcript_files"]],
-                ["demo.transcript.txt", "demo.transcript.json"],
+                ["demo.transcript.txt", "demo.transcript.json", "demo.transcript.srt"],
             )
 
     def test_run_real_success_without_new_manifest_entry_does_not_attach_stale_manifest_path(self):

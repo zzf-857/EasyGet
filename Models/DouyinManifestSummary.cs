@@ -183,6 +183,7 @@ public sealed record DouyinManifestItem(
     private static readonly IReadOnlyList<string> TranscriptExtensions =
     [
         ".transcript.txt",
-        ".transcript.json"
+        ".transcript.json",
+        ".transcript.srt"
     ];
 }
