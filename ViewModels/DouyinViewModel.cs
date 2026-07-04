@@ -27,6 +27,7 @@ public partial class DouyinViewModel : ObservableObject
 
     public string[] DouyinTaskFilterOptions { get; } = ["全部", "进行中", "已完成", "失败", "已暂停", "已取消"];
     public string[] DouyinArchiveTypeFilterOptions { get; } = ["全部", "视频", "图文", "音乐"];
+    public string[] DouyinDiscoverySortOptions { get; } = ["默认", "热度高到低", "作者", "描述"];
 
     [ObservableProperty]
     private string _selectedDouyinTaskFilter = "全部";
@@ -51,6 +52,9 @@ public partial class DouyinViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDouyinDiscoveryFilterActive))]
     private string _douyinDiscoveryFilterKeyword = "";
+
+    [ObservableProperty]
+    private string _selectedDouyinDiscoverySortOption = "默认";
 
     [ObservableProperty]
     private string _douyinDiscoveryStatusText = "尚未加载发现结果";
@@ -433,6 +437,17 @@ public partial class DouyinViewModel : ObservableObject
         SyncDouyinDiscoveryFilteredItems();
     }
 
+    partial void OnSelectedDouyinDiscoverySortOptionChanged(string value)
+    {
+        if (!DouyinDiscoverySortOptions.Contains(value, StringComparer.Ordinal))
+        {
+            SelectedDouyinDiscoverySortOption = "默认";
+            return;
+        }
+
+        SyncDouyinDiscoveryFilteredItems();
+    }
+
     [RelayCommand]
     private void SetDouyinTaskFilter(string filter)
     {
@@ -783,7 +798,7 @@ public partial class DouyinViewModel : ObservableObject
     private void SyncDouyinDiscoveryFilteredItems()
     {
         FilteredDouyinDiscoveryItems.Clear();
-        foreach (var item in DouyinDiscoveryItems.Where(MatchesDiscoveryFilter))
+        foreach (var item in SortDouyinDiscoveryItems(DouyinDiscoveryItems.Where(MatchesDiscoveryFilter)))
         {
             FilteredDouyinDiscoveryItems.Add(item);
         }
@@ -846,6 +861,22 @@ public partial class DouyinViewModel : ObservableObject
                || ContainsKeyword(item.Position?.ToString() ?? "", keyword)
                || ContainsKeyword(item.HotValue?.ToString() ?? "", keyword);
     }
+
+    private IEnumerable<DouyinDiscoveryItem> SortDouyinDiscoveryItems(IEnumerable<DouyinDiscoveryItem> items)
+        => SelectedDouyinDiscoverySortOption switch
+        {
+            "热度高到低" => items
+                .OrderByDescending(item => item.HotValue ?? long.MinValue)
+                .ThenBy(item => item.Position ?? int.MaxValue)
+                .ThenBy(item => SelectFirstNonEmpty(item.Description, item.Word, item.AwemeId), StringComparer.OrdinalIgnoreCase),
+            "作者" => items
+                .OrderBy(item => SelectFirstNonEmpty(item.AuthorNickname, item.SecUid, item.Description, item.Word), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => SelectFirstNonEmpty(item.Description, item.Word, item.AwemeId), StringComparer.OrdinalIgnoreCase),
+            "描述" => items
+                .OrderBy(item => SelectFirstNonEmpty(item.Description, item.Word, item.AwemeId), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(item => SelectFirstNonEmpty(item.AuthorNickname, item.SecUid), StringComparer.OrdinalIgnoreCase),
+            _ => items
+        };
 
     private static bool IsSameUrl(string left, string right)
         => string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);

@@ -1377,6 +1377,58 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSortsFilteredDiscoveryResultsLocally()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var hotItem = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "Beta video",
+            AuthorNickname: "Charlie",
+            HotValue: 300,
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var authorItem = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "Gamma video",
+            AuthorNickname: "Alice",
+            HotValue: 100,
+            Url: "https://www.douyin.com/video/7604129988555574539");
+        var descriptionItem = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574540",
+            Description: "Alpha video",
+            AuthorNickname: "Bob",
+            HotValue: 200,
+            Url: "https://www.douyin.com/video/7604129988555574540");
+        context.Douyin.DouyinDiscoveryItems.Add(authorItem);
+        context.Douyin.DouyinDiscoveryItems.Add(descriptionItem);
+        context.Douyin.DouyinDiscoveryItems.Add(hotItem);
+
+        Assert.Equal(["默认", "热度高到低", "作者", "描述"], context.Douyin.DouyinDiscoverySortOptions);
+
+        context.Douyin.SelectedDouyinDiscoverySortOption = "热度高到低";
+        Assert.Equal(
+            ["Beta video", "Alpha video", "Gamma video"],
+            context.Douyin.FilteredDouyinDiscoveryItems.Select(item => item.Description).ToArray());
+
+        context.Douyin.SelectedDouyinDiscoverySortOption = "作者";
+        Assert.Equal(
+            ["Alice", "Bob", "Charlie"],
+            context.Douyin.FilteredDouyinDiscoveryItems.Select(item => item.AuthorNickname).ToArray());
+
+        context.Douyin.DouyinDiscoveryFilterKeyword = "video";
+        context.Douyin.SelectedDouyinDiscoverySortOption = "描述";
+        Assert.Equal(
+            ["Alpha video", "Beta video", "Gamma video"],
+            context.Douyin.FilteredDouyinDiscoveryItems.Select(item => item.Description).ToArray());
+
+        context.Douyin.SelectedDouyinDiscoverySortOption = "未知排序";
+        Assert.Equal("默认", context.Douyin.SelectedDouyinDiscoverySortOption);
+        Assert.Equal(
+            ["Gamma video", "Alpha video", "Beta video"],
+            context.Douyin.FilteredDouyinDiscoveryItems.Select(item => item.Description).ToArray());
+    }
+
+    [Fact]
     public async Task DouyinViewModelRejectsAddingAllDiscoveryResultsWhenListIsEmpty()
     {
         var discovery = new FakeDouyinDiscoveryService();

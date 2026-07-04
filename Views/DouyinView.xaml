@@ -382,6 +382,8 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
 
@@ -400,7 +402,22 @@
                                      Padding="10,7"
                                      Margin="0,0,8,0"/>
 
-                            <Button Grid.Column="2"
+                            <TextBlock Grid.Column="2"
+                                       Text="排序"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"/>
+
+                            <ComboBox Grid.Column="3"
+                                      Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding DouyinDiscoverySortOptions}"
+                                      SelectedItem="{Binding SelectedDouyinDiscoverySortOption}"
+                                      ToolTip="排序当前发现结果"
+                                      AutomationProperties.Name="排序当前发现结果"
+                                      Margin="0,0,8,0"/>
+
+                            <Button Grid.Column="4"
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     Margin="0,0,12,0"
@@ -414,7 +431,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <TextBlock Grid.Column="3"
+                            <TextBlock Grid.Column="5"
                                        Style="{StaticResource TextCaption}"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        VerticalAlignment="Center">

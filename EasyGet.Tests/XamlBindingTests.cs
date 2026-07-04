@@ -739,6 +739,7 @@ public class XamlBindingTests
         Assert.Contains("选择可下载", texts);
         Assert.Contains("清除选择", texts);
         Assert.Contains("全部入队", texts);
+        Assert.Contains("排序", texts);
         Assert.Contains("任务中心", texts);
         Assert.Contains("专项任务队列", texts);
         Assert.Contains("下载成果摘要", texts);
@@ -792,6 +793,8 @@ public class XamlBindingTests
         Assert.Contains("DouyinDiscoveryItems", source);
         Assert.Contains("FilteredDouyinDiscoveryItems", source);
         Assert.Contains("DouyinDiscoveryFilterKeyword", source);
+        Assert.Contains("DouyinDiscoverySortOptions", source);
+        Assert.Contains("SelectedDouyinDiscoverySortOption", source);
         Assert.Contains("ClearDouyinDiscoveryFilterCommand", source);
         Assert.Contains("FilteredDouyinDiscoveryResultCount", source);
         Assert.Contains("HasFilteredDouyinDiscoveryItems", source);
