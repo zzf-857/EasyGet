@@ -154,7 +154,7 @@ public class DouyinManifestReaderTests
             await File.WriteAllTextAsync(
                 manifestPath,
                 """
-                {"aweme_id":"v1","media_type":"video","file_names":["v1.mp4","v1_cover.jpg","v1_music.mp3","v1_avatar.jpg","v1_comments.json","v1_data.json","v1_live_1.mp4","v1.transcript.txt","v1.transcript.json"]}
+                {"aweme_id":"v1","media_type":"video","file_names":["v1.mp4","v1_cover.jpg","v1_music.mp3","v1_avatar.jpg","v1_comments.json","v1_data.json","v1_room.json","v1_live_1.mp4","v1.transcript.txt","v1.transcript.json"]}
                 {"aweme_id":"g1","media_type":"gallery","file_names":["g1_1.jpg","g1_2.webp","g1_3.gif","g1_live_1.mp4"]}
                 {"aweme_id":"m1","media_type":"music","file_paths":["music/m1.m4a","music\\m2.opus"]}
                 {"aweme_id":"u1","media_type":"","file_names":["my_live_demo.mp4","stem_live_1.jpg","stem_comments.txt","stem_data.backup.json"]}
@@ -166,7 +166,7 @@ public class DouyinManifestReaderTests
             Assert.NotNull(summary);
             Assert.Collection(
                 summary!.Items,
-                item => Assert.Equal("视频、 封面、 音频、 头像、 评论、 数据、 实况、 转写", item.FileRoleSummaryText),
+                item => Assert.Equal("视频、 封面、 音频、 头像、 评论、 数据、 直播元数据、 实况、 转写", item.FileRoleSummaryText),
                 item => Assert.Equal("图片、 实况", item.FileRoleSummaryText),
                 item => Assert.Equal("音乐", item.FileRoleSummaryText),
                 item => Assert.Equal("评论", item.FileRoleSummaryText),

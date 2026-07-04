@@ -81,6 +81,8 @@ public sealed record DouyinManifestItem(
             return "评论";
         if (fileName.EndsWith("_data.json", StringComparison.Ordinal))
             return "数据";
+        if (fileName.EndsWith("_room.json", StringComparison.Ordinal))
+            return "直播元数据";
         if (IsLiveMomentVideo(fileName))
             return "实况";
         if (IsTranscriptFile(fileName))
