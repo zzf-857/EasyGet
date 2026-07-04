@@ -143,6 +143,18 @@ public class UiTruthfulnessViewModelTests
         Assert.Contains("用户主页", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
         Assert.Contains("MS4wLjABAAAAsec_uid-test_123", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
 
+        context.Download.Url = "https://www.douyin.com/collection/7123456789012345678";
+
+        Assert.Contains("收藏夹", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("单收藏夹链接", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("可直接下载", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+
+        context.Download.Url = "https://www.douyin.com/mix/8123456789012345678";
+
+        Assert.Contains("合集", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("单合集链接", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("可直接下载", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+
         context.Settings.DouyinMode = "post";
         context.Download.Url = "https://www.douyin.com/user/self?showTab=favorite_collection";
 

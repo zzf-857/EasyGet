@@ -1047,6 +1047,8 @@ public partial class DouyinViewModel : ObservableObject
             DouyinUrlKind.User when info.IsFavoriteCollectionTab => IsFavoriteCollectionMode(selectedMode)
                 ? " · 收藏页入口 · 已选择收藏模式"
                 : " · 收藏页入口 · 建议切换收藏或收藏合集",
+            DouyinUrlKind.Collection => " · 单收藏夹链接 · 可直接下载",
+            DouyinUrlKind.Mix => " · 单合集链接 · 可直接下载",
             DouyinUrlKind.Live => " · 实验性录制",
             _ => ""
         };
