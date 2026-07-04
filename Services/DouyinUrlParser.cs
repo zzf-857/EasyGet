@@ -18,7 +18,8 @@ internal enum DouyinUrlKind
 internal readonly record struct DouyinUrlInfo(
     DouyinUrlKind Kind,
     string OriginalUrl,
-    string? Id)
+    string? Id,
+    bool IsFavoriteCollectionTab = false)
 {
     public bool IsRecognized => Kind != DouyinUrlKind.Unknown;
 
@@ -78,7 +79,7 @@ internal static class DouyinUrlParser
             "note" => BuildWithNumericId(DouyinUrlKind.Note, originalUrl, GetPathSegment(uri, idSegmentIndex)),
             "gallery" => BuildWithNumericId(DouyinUrlKind.Gallery, originalUrl, GetPathSegment(uri, idSegmentIndex)),
             "slides" => BuildWithNumericId(DouyinUrlKind.Slides, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "user" => BuildWithRequiredId(DouyinUrlKind.User, originalUrl, GetPathSegment(uri, idSegmentIndex)),
+            "user" => BuildUser(originalUrl, uri, GetPathSegment(uri, idSegmentIndex)),
             "collection" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Collection, originalUrl, GetPathSegment(uri, idSegmentIndex)),
             "mix" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Mix, originalUrl, GetPathSegment(uri, idSegmentIndex)),
             "music" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Music, originalUrl, GetPathSegment(uri, idSegmentIndex)),
@@ -100,6 +101,15 @@ internal static class DouyinUrlParser
         => string.IsNullOrWhiteSpace(id)
             ? Unknown(originalUrl)
             : Build(kind, originalUrl, id);
+
+    private static DouyinUrlInfo BuildUser(string originalUrl, Uri uri, string? id)
+        => string.IsNullOrWhiteSpace(id)
+            ? Unknown(originalUrl)
+            : new DouyinUrlInfo(
+                DouyinUrlKind.User,
+                originalUrl,
+                id,
+                IsFavoriteCollectionTab(uri));
 
     private static DouyinUrlInfo BuildWithNumericId(DouyinUrlKind kind, string originalUrl, string? id)
         => !string.IsNullOrWhiteSpace(id) && id.All(char.IsDigit)
@@ -161,4 +171,10 @@ internal static class DouyinUrlParser
 
         return null;
     }
+
+    private static bool IsFavoriteCollectionTab(Uri uri)
+        => string.Equals(
+            GetQueryParameter(uri, "showTab"),
+            "favorite_collection",
+            StringComparison.OrdinalIgnoreCase);
 }

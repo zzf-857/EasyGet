@@ -42,6 +42,17 @@ public class DouyinUrlParserTests
     }
 
     [Fact]
+    public void Parse_FlagsFavoriteCollectionTabUserUrl()
+    {
+        var favoriteTab = DouyinUrlParser.Parse("https://www.douyin.com/user/self?showTab=favorite_collection");
+        var normalUser = DouyinUrlParser.Parse("https://www.douyin.com/user/MS4wLjABAAAAsec_uid-test_123");
+
+        Assert.Equal(DouyinUrlKind.User, favoriteTab.Kind);
+        Assert.True(favoriteTab.IsFavoriteCollectionTab);
+        Assert.False(normalUser.IsFavoriteCollectionTab);
+    }
+
+    [Fact]
     public void Parse_RecognizesDouyinModalIdVideoUrl()
     {
         var info = DouyinUrlParser.Parse("https://www.douyin.com/?modal_id=7621772413184822582");

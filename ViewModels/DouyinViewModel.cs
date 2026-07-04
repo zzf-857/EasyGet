@@ -142,7 +142,7 @@ public partial class DouyinViewModel : ObservableObject
         ? $"代理 {Settings.ProxyAddress.Trim()}"
         : "代理未启用";
 
-    public string DouyinQuickDownloadLinkInsightText => BuildQuickDownloadLinkInsightText(Download.Url);
+    public string DouyinQuickDownloadLinkInsightText => BuildQuickDownloadLinkInsightText(Download.Url, Settings.DouyinMode);
 
     public bool IsDouyinArchiveFilterActive
         => !string.IsNullOrWhiteSpace(DouyinArchiveSearchKeyword)
@@ -193,6 +193,7 @@ public partial class DouyinViewModel : ObservableObject
         {
             OnPropertyChanged(nameof(DouyinQuickDownloadEngineStatusText));
             OnPropertyChanged(nameof(DouyinQuickDownloadModeLabelText));
+            OnPropertyChanged(nameof(DouyinQuickDownloadLinkInsightText));
         }
 
         if (e.PropertyName == nameof(Settings.CookieContent))
@@ -1018,7 +1019,7 @@ public partial class DouyinViewModel : ObservableObject
             var value => value
         };
 
-    private static string BuildQuickDownloadLinkInsightText(string input)
+    private static string BuildQuickDownloadLinkInsightText(string input, string selectedMode)
     {
         if (string.IsNullOrWhiteSpace(input))
             return "等待抖音链接";
@@ -1043,6 +1044,9 @@ public partial class DouyinViewModel : ObservableObject
         var suffix = info.Kind switch
         {
             DouyinUrlKind.ShortLink => " · 需要解析展开",
+            DouyinUrlKind.User when info.IsFavoriteCollectionTab => IsFavoriteCollectionMode(selectedMode)
+                ? " · 收藏页入口 · 已选择收藏模式"
+                : " · 收藏页入口 · 建议切换收藏或收藏合集",
             DouyinUrlKind.Live => " · 实验性录制",
             _ => ""
         };
@@ -1050,6 +1054,12 @@ public partial class DouyinViewModel : ObservableObject
         return string.IsNullOrWhiteSpace(info.Id)
             ? $"已识别：{kindText}{suffix}"
             : $"已识别：{kindText} · {info.Id}{suffix}";
+    }
+
+    private static bool IsFavoriteCollectionMode(string mode)
+    {
+        var normalized = ConfigService.NormalizeDouyinMode(mode, "post");
+        return normalized is "collect" or "collectmix";
     }
 
     private bool MatchesTaskCenterFilter(DownloadTask task)
