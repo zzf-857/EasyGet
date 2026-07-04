@@ -132,6 +132,12 @@
                             </Button>
                         </Grid>
 
+                        <TextBlock Text="{Binding DouyinQuickDownloadLinkInsightText, Mode=OneWay}"
+                                   Style="{StaticResource TextCaption}"
+                                   Foreground="{DynamicResource AccentBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   Margin="0,10,0,0"/>
+
                         <Grid Margin="0,14,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="1.1*"/>

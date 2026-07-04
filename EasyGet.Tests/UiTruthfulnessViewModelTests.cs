@@ -71,6 +71,33 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSummarizesQuickDownloadLinkKind()
+    {
+        using var context = CreateViewModelContext();
+
+        Assert.Equal("等待抖音链接", context.Douyin.DouyinQuickDownloadLinkInsightText);
+
+        context.Download.Url = "https://www.douyin.com/video/7621772413184822582";
+
+        Assert.Contains("单作品", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("7621772413184822582", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+
+        context.Download.Url = "复制这条内容 https://v.douyin.com/iABC123/ 打开抖音";
+
+        Assert.Contains("短链", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("需要解析展开", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+
+        context.Download.Url = "https://www.douyin.com/user/MS4wLjABAAAAsec_uid-test_123";
+
+        Assert.Contains("用户主页", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("MS4wLjABAAAAsec_uid-test_123", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+
+        context.Download.Url = "https://example.com/watch?v=1";
+
+        Assert.Equal("未识别为抖音专项链接", context.Douyin.DouyinQuickDownloadLinkInsightText);
+    }
+
+    [Fact]
     public void BatchDownloadViewModelCountsOnlyActiveDownloads()
     {
         using var context = CreateBatchContext();

@@ -772,6 +772,7 @@ public class XamlBindingTests
         Assert.Contains("DouyinQuickDownloadEngineStatusText", source);
         Assert.Contains("DouyinQuickDownloadCookieStatusText", source);
         Assert.Contains("DouyinQuickDownloadProxyStatusText", source);
+        Assert.Contains("DouyinQuickDownloadLinkInsightText", source);
         Assert.Contains("DouyinDiscoveryKeyword", source);
         Assert.Contains("DouyinDiscoverySearchMax", source);
         Assert.Contains("LoadDouyinHotBoardCommand", source);

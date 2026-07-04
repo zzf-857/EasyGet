@@ -126,6 +126,8 @@ public partial class DouyinViewModel : ObservableObject
         ? $"代理 {Settings.ProxyAddress.Trim()}"
         : "代理未启用";
 
+    public string DouyinQuickDownloadLinkInsightText => BuildQuickDownloadLinkInsightText(Download.Url);
+
     public bool IsDouyinArchiveFilterActive
         => !string.IsNullOrWhiteSpace(DouyinArchiveSearchKeyword)
            || SelectedDouyinArchiveTypeFilter != "全部";
@@ -157,9 +159,16 @@ public partial class DouyinViewModel : ObservableObject
         SyncDouyinTaskItems();
 
         History.HistoryItems.CollectionChanged += OnHistoryItemsCollectionChanged;
+        Download.PropertyChanged += OnDownloadPropertyChanged;
         Settings.PropertyChanged += OnSettingsPropertyChanged;
         DouyinDiscoveryItems.CollectionChanged += OnDouyinDiscoveryItemsCollectionChanged;
         SyncDouyinHistoryItems();
+    }
+
+    private void OnDownloadPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Download.Url))
+            OnPropertyChanged(nameof(DouyinQuickDownloadLinkInsightText));
     }
 
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -815,6 +824,40 @@ public partial class DouyinViewModel : ObservableObject
 
     private static string SelectFirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
+
+    private static string BuildQuickDownloadLinkInsightText(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return "等待抖音链接";
+
+        var candidate = DownloadViewModel.ExtractUrl(input) ?? input.Trim();
+        var info = DouyinUrlParser.Parse(candidate);
+        if (!info.IsRecognized)
+            return "未识别为抖音专项链接";
+
+        var kindText = info.Kind switch
+        {
+            DouyinUrlKind.ShortLink => "短链",
+            DouyinUrlKind.Video or DouyinUrlKind.Note or DouyinUrlKind.Gallery or DouyinUrlKind.Slides => "单作品",
+            DouyinUrlKind.User => "用户主页",
+            DouyinUrlKind.Collection => "收藏夹",
+            DouyinUrlKind.Mix => "合集",
+            DouyinUrlKind.Music => "音乐",
+            DouyinUrlKind.Live => "直播",
+            _ => "抖音链接"
+        };
+
+        var suffix = info.Kind switch
+        {
+            DouyinUrlKind.ShortLink => " · 需要解析展开",
+            DouyinUrlKind.Live => " · 专项引擎暂不支持",
+            _ => ""
+        };
+
+        return string.IsNullOrWhiteSpace(info.Id)
+            ? $"已识别：{kindText}{suffix}"
+            : $"已识别：{kindText} · {info.Id}{suffix}";
+    }
 
     private bool MatchesTaskCenterFilter(DownloadTask task)
         => MatchesSelectedTaskStatus(task) && MatchesTaskSearchKeyword(task);
