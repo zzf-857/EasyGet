@@ -94,6 +94,14 @@ public partial class DouyinViewModel : ObservableObject
     public int FailedDouyinTaskCount => CountDouyinTasks(task =>
         task.Status == DownloadStatus.Failed);
 
+    public int SuccessfulDouyinWorkCount => CountSuccessfulDouyinWorks();
+
+    public int FailedDouyinWorkCount => CountFailedDouyinWorks();
+
+    public int SkippedDouyinWorkCount => _downloadManager.Tasks
+        .Where(IsDouyinTask)
+        .Sum(task => Math.Max(0, task.DouyinSkippedCount));
+
     public int DouyinManifestSummaryCount => DouyinManifestSummaryItems.Count;
 
     public int DouyinArchiveCount => CountDouyinHistoryItems();
@@ -247,6 +255,12 @@ public partial class DouyinViewModel : ObservableObject
         {
             SyncDouyinTaskItems();
         }
+        else if (e.PropertyName is nameof(DownloadTask.DouyinSuccessCount)
+                 or nameof(DownloadTask.DouyinFailedCount)
+                 or nameof(DownloadTask.DouyinSkippedCount))
+        {
+            NotifyDouyinWorkOutcomeStateChanged();
+        }
     }
 
     private void SubscribeTask(DownloadTask task)
@@ -354,6 +368,14 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveDouyinTaskCount));
         OnPropertyChanged(nameof(CompletedDouyinTaskCount));
         OnPropertyChanged(nameof(FailedDouyinTaskCount));
+        NotifyDouyinWorkOutcomeStateChanged();
+    }
+
+    private void NotifyDouyinWorkOutcomeStateChanged()
+    {
+        OnPropertyChanged(nameof(SuccessfulDouyinWorkCount));
+        OnPropertyChanged(nameof(FailedDouyinWorkCount));
+        OnPropertyChanged(nameof(SkippedDouyinWorkCount));
     }
 
     private void SyncDouyinTaskItems()
@@ -406,6 +428,29 @@ public partial class DouyinViewModel : ObservableObject
         return _downloadManager.Tasks.Count(task =>
             IsDouyinTask(task) && (predicate is null || predicate(task)));
     }
+
+    private int CountSuccessfulDouyinWorks()
+        => _downloadManager.Tasks
+            .Where(IsDouyinTask)
+            .Sum(task => HasDouyinOutcomeCounters(task)
+                ? Math.Max(0, task.DouyinSuccessCount)
+                : task.Status == DownloadStatus.Completed
+                    ? 1
+                    : 0);
+
+    private int CountFailedDouyinWorks()
+        => _downloadManager.Tasks
+            .Where(IsDouyinTask)
+            .Sum(task => HasDouyinOutcomeCounters(task)
+                ? Math.Max(0, task.DouyinFailedCount)
+                : task.Status == DownloadStatus.Failed
+                    ? 1
+                    : 0);
+
+    private static bool HasDouyinOutcomeCounters(DownloadTask task)
+        => task.DouyinSuccessCount > 0
+           || task.DouyinFailedCount > 0
+           || task.DouyinSkippedCount > 0;
 
     partial void OnSelectedDouyinTaskFilterChanged(string value)
     {

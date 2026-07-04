@@ -749,10 +749,17 @@
                             <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"
                                        Foreground="{StaticResource SuccessBrush}" FontSize="{StaticResource IconSizeLarge}" Margin="0,0,12,0"/>
                             <StackPanel>
-                                <TextBlock Text="完成作品" Style="{StaticResource TextCaption}"/>
-                                <TextBlock Text="{Binding CompletedDouyinTaskCount, Mode=OneWay, FallbackValue=0}"
-                                           Style="{StaticResource TextBodyStrong}"
-                                           FontFamily="{StaticResource FontFamilyMono}"/>
+                                <TextBlock Text="成功作品" Style="{StaticResource TextCaption}"/>
+                                <TextBlock Style="{StaticResource TextBodyStrong}"
+                                           FontFamily="{StaticResource FontFamilyMono}">
+                                    <Run Text="{Binding SuccessfulDouyinWorkCount, Mode=OneWay, FallbackValue=0}"/>
+                                    <Run Text=" 成功"/>
+                                </TextBlock>
+                                <TextBlock Style="{StaticResource TextCaption}"
+                                           Foreground="{StaticResource TextMutedBrush}">
+                                    <Run Text="{Binding SkippedDouyinWorkCount, Mode=OneWay, FallbackValue=0}"/>
+                                    <Run Text=" 跳过"/>
+                                </TextBlock>
                             </StackPanel>
                         </StackPanel>
                     </Border>
@@ -761,8 +768,8 @@
                             <TextBlock Text="&#xE783;" Style="{StaticResource IconGlyph}"
                                        Foreground="{StaticResource ErrorBrush}" FontSize="{StaticResource IconSizeLarge}" Margin="0,0,12,0"/>
                             <StackPanel>
-                                <TextBlock Text="异常任务" Style="{StaticResource TextCaption}"/>
-                                <TextBlock Text="{Binding FailedDouyinTaskCount, Mode=OneWay, FallbackValue=0}"
+                                <TextBlock Text="失败作品" Style="{StaticResource TextCaption}"/>
+                                <TextBlock Text="{Binding FailedDouyinWorkCount, Mode=OneWay, FallbackValue=0}"
                                            Style="{StaticResource TextBodyStrong}"
                                            FontFamily="{StaticResource FontFamilyMono}"/>
                             </StackPanel>

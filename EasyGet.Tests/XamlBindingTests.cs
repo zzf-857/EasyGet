@@ -844,6 +844,9 @@ public class XamlBindingTests
         Assert.Contains("SelectedDouyinTaskFilter", source);
         Assert.Contains("DouyinTaskSearchKeyword", source);
         Assert.Contains("FilteredDouyinTaskCount", source);
+        Assert.Contains("SuccessfulDouyinWorkCount", source);
+        Assert.Contains("FailedDouyinWorkCount", source);
+        Assert.Contains("SkippedDouyinWorkCount", source);
         Assert.Contains("Batch.PauseTaskCommand", source);
         Assert.Contains("Batch.ResumeTaskCommand", source);
         Assert.Contains("Batch.RetryTaskCommand", source);

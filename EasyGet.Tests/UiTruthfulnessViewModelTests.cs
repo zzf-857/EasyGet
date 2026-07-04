@@ -200,6 +200,57 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelAggregatesDouyinWorkOutcomeCounts()
+    {
+        using var context = CreateViewModelContext();
+        var bulkTask = new DownloadTask
+        {
+            Url = "https://www.douyin.com/user/example",
+            Status = DownloadStatus.Completed,
+            DouyinSuccessCount = 4,
+            DouyinFailedCount = 1,
+            DouyinSkippedCount = 2
+        };
+        var singleCompletedTask = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/123",
+            Status = DownloadStatus.Completed
+        };
+        var failedSingleTask = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/456",
+            Status = DownloadStatus.Failed
+        };
+        var nonDouyinTask = new DownloadTask
+        {
+            Url = "https://example.com/video",
+            Platform = "YouTube",
+            Status = DownloadStatus.Completed,
+            DouyinSuccessCount = 10
+        };
+        context.BatchContext.Manager.Tasks.Add(bulkTask);
+        context.BatchContext.Manager.Tasks.Add(singleCompletedTask);
+        context.BatchContext.Manager.Tasks.Add(failedSingleTask);
+        context.BatchContext.Manager.Tasks.Add(nonDouyinTask);
+
+        Assert.Equal(5, context.Douyin.SuccessfulDouyinWorkCount);
+        Assert.Equal(2, context.Douyin.FailedDouyinWorkCount);
+        Assert.Equal(2, context.Douyin.SkippedDouyinWorkCount);
+
+        var notificationCount = 0;
+        context.Douyin.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == "SuccessfulDouyinWorkCount")
+                notificationCount++;
+        };
+
+        bulkTask.DouyinSuccessCount = 6;
+
+        Assert.Equal(7, context.Douyin.SuccessfulDouyinWorkCount);
+        Assert.True(notificationCount > 0);
+    }
+
+    [Fact]
     public void DouyinViewModelMaintainsFilteredTaskCenterItems()
     {
         using var context = CreateViewModelContext();
