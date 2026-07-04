@@ -1160,6 +1160,43 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_AppendsLiveRoomSummaryToTaskEventLog()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-live-room-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDirectory, "live_recording.flv");
+        var runner = new FakeSidecarRunner(
+            $$"""
+            {
+              "event": "success",
+              "message": "live saved",
+              "title": "测试直播间标题",
+              "output_file_path": "{{JsonEscaped(mediaPath)}}",
+              "details": {
+                "output_files": ["{{JsonEscaped(mediaPath)}}"],
+                "live_room": {
+                  "title": "测试直播间标题",
+                  "author_name": "主播甲",
+                  "status": 2,
+                  "status_text": "直播中"
+                }
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://live.douyin.com/123456789",
+            OutputDirectory = outputDirectory
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Contains("直播间: 主播甲 · 直播中", task.DouyinTaskEventLog, StringComparison.Ordinal);
+        Assert.Contains("测试直播间标题", task.DouyinTaskEventLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DownloadAsync_MarksTaskCancelledWhenRunnerObservesCancellation()
     {
         var runner = new CancellingSidecarRunner();

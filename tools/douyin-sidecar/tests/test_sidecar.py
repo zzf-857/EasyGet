@@ -1316,6 +1316,15 @@ class SidecarRunnerTests(unittest.TestCase):
             self.assertEqual(success["title"], "测试直播间标题")
             self.assertEqual(success["output_file_path"], str((output_dir / "live_recording.flv").resolve()))
             self.assertIn(str(room_path.resolve()), success["details"]["output_files"])
+            self.assertEqual(
+                success["details"]["live_room"],
+                {
+                    "title": "测试直播间标题",
+                    "author_name": "主播甲",
+                    "status": 2,
+                    "status_text": "直播中",
+                },
+            )
 
     def test_hot_board_invokes_downloader_and_emits_discovery_event(self):
         with tempfile.TemporaryDirectory() as temp_dir:

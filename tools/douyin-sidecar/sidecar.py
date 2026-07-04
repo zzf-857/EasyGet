@@ -918,6 +918,16 @@ def build_success_summary(
     )
     duration_seconds = extract_duration_seconds(metadata)
     thumbnail_url = extract_thumbnail_url(metadata)
+    details = {
+        "return_code": return_code,
+        "counts": counts,
+        "output_files": list(output_files),
+        "manifest_entries": len(manifest_entries),
+        **build_manifest_summary_details(output_dir, manifest_entries),
+    }
+    live_room_summary = metadata.get("live_room_summary")
+    if isinstance(live_room_summary, dict) and live_room_summary:
+        details["live_room"] = live_room_summary
 
     return make_success_event(
         title=title,
@@ -925,13 +935,7 @@ def build_success_summary(
         file_size_bytes=file_size(primary_file),
         duration_seconds=duration_seconds,
         thumbnail_url=thumbnail_url,
-        details={
-            "return_code": return_code,
-            "counts": counts,
-            "output_files": list(output_files),
-            "manifest_entries": len(manifest_entries),
-            **build_manifest_summary_details(output_dir, manifest_entries),
-        },
+        details=details,
     )
 
 
@@ -965,7 +969,46 @@ def normalize_live_room_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
     nickname = user.get("nickname")
     if isinstance(nickname, str) and nickname.strip():
         normalized["author_name"] = nickname.strip()
+    live_room_summary = summarize_live_room_metadata(data)
+    if live_room_summary:
+        normalized["live_room_summary"] = live_room_summary
     return normalized
+
+
+def summarize_live_room_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
+    room = data.get("room") if isinstance(data.get("room"), dict) else {}
+    user = data.get("user") if isinstance(data.get("user"), dict) else {}
+    summary: Dict[str, Any] = {}
+
+    title = room.get("title")
+    if isinstance(title, str) and title.strip():
+        summary["title"] = title.strip()
+
+    nickname = user.get("nickname")
+    if isinstance(nickname, str) and nickname.strip():
+        summary["author_name"] = nickname.strip()
+
+    status = parse_live_room_status(room.get("status"))
+    if status is not None:
+        summary["status"] = status
+        summary["status_text"] = format_live_room_status(status)
+
+    return summary
+
+
+def parse_live_room_status(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def format_live_room_status(status: int) -> str:
+    if status == 2:
+        return "直播中"
+    if status == 4:
+        return "未开播"
+    return f"状态 {status}"
 
 
 def extract_duration_seconds(metadata: Dict[str, Any]) -> float:

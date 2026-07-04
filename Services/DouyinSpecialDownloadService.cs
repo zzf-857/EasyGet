@@ -253,6 +253,11 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                                     DouyinOutputHintFormatter.CountLiveHlsPlaylistFiles(
                                         task.Url,
                                         task.OutputFilePaths)));
+                            AppendTaskEvent(
+                                task,
+                                RedactSensitiveText(
+                                    FormatLiveRoomSummary(message),
+                                    request.Cookie));
                             sawTerminalSummary = true;
                         }
                         break;
@@ -388,6 +393,13 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 message.DiscoverySearchMax = GetOptionalInt32(details.Value, "search_max");
                 message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
                 message.DiscoveryItems = GetDiscoveryItems(details.Value);
+                if (GetOptionalObject(details.Value, "live_room") is { } liveRoom)
+                {
+                    message.LiveRoomTitle = GetOptionalString(liveRoom, "title");
+                    message.LiveAuthorName = GetOptionalString(liveRoom, "author_name");
+                    message.LiveRoomStatus = GetOptionalInt32(liveRoom, "status");
+                    message.LiveRoomStatusText = GetOptionalString(liveRoom, "status_text");
+                }
             }
 
             return message.Kind != DouyinSidecarEventKind.Unknown;
@@ -562,6 +574,21 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         return string.IsNullOrWhiteSpace(detail)
             ? statusText
             : $"{statusText}: {detail}";
+    }
+
+    private static string FormatLiveRoomSummary(DouyinSidecarMessage message)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(message.LiveAuthorName))
+            parts.Add(message.LiveAuthorName.Trim());
+        if (!string.IsNullOrWhiteSpace(message.LiveRoomStatusText))
+            parts.Add(message.LiveRoomStatusText.Trim());
+        else if (message.LiveRoomStatus.HasValue)
+            parts.Add($"状态 {message.LiveRoomStatus.Value}");
+        if (!string.IsNullOrWhiteSpace(message.LiveRoomTitle))
+            parts.Add(message.LiveRoomTitle.Trim());
+
+        return parts.Count == 0 ? "" : $"直播间: {string.Join(" · ", parts)}";
     }
 
     private static DouyinSidecarEventKind ParseEventKind(string value)
@@ -1097,6 +1124,10 @@ internal sealed class DouyinSidecarMessage
     public int? SuccessCount { get; set; }
     public int? FailedCount { get; set; }
     public int? SkippedCount { get; set; }
+    public string LiveRoomTitle { get; set; } = "";
+    public string LiveAuthorName { get; set; } = "";
+    public int? LiveRoomStatus { get; set; }
+    public string LiveRoomStatusText { get; set; } = "";
     public bool IsDiscovery { get; set; }
     public string DiscoveryType { get; set; } = "";
     public string DiscoveryKeyword { get; set; } = "";
