@@ -771,6 +771,7 @@ public class XamlBindingTests
         Assert.Contains("Download.DownloadDirectory", source);
         Assert.Contains("Download.ParseCommand", source);
         Assert.Contains("Download.StartDownloadCommand", source);
+        Assert.Contains("SetDouyinQuickDownloadModeCommand", source);
         Assert.Contains("DouyinQuickDownloadEngineStatusText", source);
         Assert.Contains("DouyinQuickDownloadCookieStatusText", source);
         Assert.Contains("DouyinQuickDownloadProxyStatusText", source);

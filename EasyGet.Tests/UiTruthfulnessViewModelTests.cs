@@ -95,6 +95,28 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSwitchesQuickDownloadMode()
+    {
+        using var context = CreateViewModelContext();
+        context.Settings.EnableDouyinSpecialEngine = true;
+        context.Settings.DouyinMode = "post";
+
+        context.Douyin.SetDouyinQuickDownloadModeCommand.Execute("mix");
+
+        Assert.Equal("mix", context.Settings.DouyinMode);
+        Assert.Equal("专项引擎已启用 · mix", context.Douyin.DouyinQuickDownloadEngineStatusText);
+
+        context.Douyin.SetDouyinQuickDownloadModeCommand.Execute(" post,like,mix,music ");
+
+        Assert.Equal("post,like,mix,music", context.Settings.DouyinMode);
+        Assert.Equal("专项引擎已启用 · post,like,mix,music", context.Douyin.DouyinQuickDownloadEngineStatusText);
+
+        context.Douyin.SetDouyinQuickDownloadModeCommand.Execute("unknown");
+
+        Assert.Equal("post,like,mix,music", context.Settings.DouyinMode);
+    }
+
+    [Fact]
     public void DouyinViewModelSummarizesQuickDownloadLinkKind()
     {
         using var context = CreateViewModelContext();

@@ -437,6 +437,16 @@ public partial class DouyinViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void SetDouyinQuickDownloadMode(string mode)
+    {
+        var normalizedMode = mode.Trim();
+        if (!Settings.DouyinModeOptions.Contains(normalizedMode, StringComparer.Ordinal))
+            return;
+
+        Settings.DouyinMode = normalizedMode;
+    }
+
+    [RelayCommand]
     private void SetDouyinArchiveTypeFilter(string filter)
     {
         SelectedDouyinArchiveTypeFilter = DouyinArchiveTypeFilterOptions.Contains(filter, StringComparer.Ordinal)
