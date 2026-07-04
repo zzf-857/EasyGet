@@ -101,15 +101,19 @@ public class UiTruthfulnessViewModelTests
         context.Settings.EnableDouyinSpecialEngine = true;
         context.Settings.DouyinMode = "post";
 
+        Assert.Equal("当前内容：作品", context.Douyin.DouyinQuickDownloadModeLabelText);
+
         context.Douyin.SetDouyinQuickDownloadModeCommand.Execute("mix");
 
         Assert.Equal("mix", context.Settings.DouyinMode);
         Assert.Equal("专项引擎已启用 · mix", context.Douyin.DouyinQuickDownloadEngineStatusText);
+        Assert.Equal("当前内容：合集", context.Douyin.DouyinQuickDownloadModeLabelText);
 
         context.Douyin.SetDouyinQuickDownloadModeCommand.Execute(" post,like,mix,music ");
 
         Assert.Equal("post,like,mix,music", context.Settings.DouyinMode);
         Assert.Equal("专项引擎已启用 · post,like,mix,music", context.Douyin.DouyinQuickDownloadEngineStatusText);
+        Assert.Equal("当前内容：全量", context.Douyin.DouyinQuickDownloadModeLabelText);
 
         context.Douyin.SetDouyinQuickDownloadModeCommand.Execute("unknown");
 

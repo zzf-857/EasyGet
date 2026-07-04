@@ -182,12 +182,17 @@
                             </Button>
                             <Button Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
+                                    Margin="0,0,12,0"
                                     ToolTip="按作品、喜欢、合集和音乐全量尝试"
                                     AutomationProperties.Name="全量下载内容"
                                     Command="{Binding SetDouyinQuickDownloadModeCommand}"
                                     CommandParameter="post,like,mix,music">
                                 <TextBlock Text="全量" Style="{StaticResource TextCaption}"/>
                             </Button>
+                            <TextBlock Text="{Binding DouyinQuickDownloadModeLabelText, Mode=OneWay}"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       VerticalAlignment="Center"/>
                         </StackPanel>
 
                         <Grid Margin="0,14,0,0">

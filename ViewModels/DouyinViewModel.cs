@@ -118,6 +118,8 @@ public partial class DouyinViewModel : ObservableObject
         ? $"专项引擎已启用 · {Settings.DouyinMode.Trim()}"
         : "专项引擎未启用";
 
+    public string DouyinQuickDownloadModeLabelText => $"当前内容：{DescribeDouyinQuickDownloadMode(Settings.DouyinMode)}";
+
     public string DouyinQuickDownloadCookieStatusText => DouyinCookieHealthReporter.Describe(Settings.CookieContent);
 
     public string DouyinQuickDownloadProxyStatusText => Settings.UseProxy
@@ -172,7 +174,10 @@ public partial class DouyinViewModel : ObservableObject
     private void OnSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(Settings.EnableDouyinSpecialEngine) or nameof(Settings.DouyinMode))
+        {
             OnPropertyChanged(nameof(DouyinQuickDownloadEngineStatusText));
+            OnPropertyChanged(nameof(DouyinQuickDownloadModeLabelText));
+        }
 
         if (e.PropertyName == nameof(Settings.CookieContent))
             OnPropertyChanged(nameof(DouyinQuickDownloadCookieStatusText));
@@ -846,6 +851,20 @@ public partial class DouyinViewModel : ObservableObject
 
     private static string SelectFirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";
+
+    private static string DescribeDouyinQuickDownloadMode(string mode)
+        => mode.Trim() switch
+        {
+            "post" => "作品",
+            "like" => "喜欢",
+            "mix" => "合集",
+            "music" => "音乐",
+            "post,like,mix,music" => "全量",
+            "collect" => "收藏",
+            "collectmix" => "收藏合集",
+            var value when string.IsNullOrWhiteSpace(value) => "未选择",
+            var value => value
+        };
 
     private static string BuildQuickDownloadLinkInsightText(string input)
     {
