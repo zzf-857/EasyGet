@@ -610,9 +610,42 @@ public class DouyinSpecialDownloadServiceTests
         await service.DownloadAsync(task);
 
         Assert.Equal(DownloadStatus.Failed, task.Status);
-        Assert.Equal("cookie expired", task.ErrorMessage);
+        Assert.Contains("Cookie", task.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("登录态", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("cookie expired", task.ErrorMessage, StringComparison.Ordinal);
         Assert.Equal("failed title", task.Title);
         Assert.Equal("Douyin", task.Platform);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_RunnerProxyFailureShowsNetworkDiagnostic()
+    {
+        var runner = new ThrowingSidecarRunner("proxy connection timed out");
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/123",
+            OutputDirectory = "D:\\Videos"
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Failed, task.Status);
+        Assert.Contains("网络或代理", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("proxy connection timed out", task.ErrorMessage, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("login required at /aweme/v1/web/aweme/post/", "Cookie", "登录态")]
+    [InlineData("HTTP 429 too many requests", "限流", "稍后重试")]
+    [InlineData("Douyin sidecar was not found: sidecars/douyin.exe", "专项引擎", "不可用")]
+    public void FormatUserFacingError_AddsActionableDiagnostic(string rawMessage, string expectedHint, string expectedAction)
+    {
+        var message = DouyinSpecialDownloadService.FormatUserFacingError(rawMessage);
+
+        Assert.Contains(expectedHint, message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(expectedAction, message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(rawMessage, message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -826,6 +859,8 @@ public class DouyinSpecialDownloadServiceTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => service.DiscoverAsync(request, new AppConfig { CookieContent = "secret-cookie" }));
 
+        Assert.Contains("Cookie", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("登录态", ex.Message, StringComparison.Ordinal);
         Assert.Contains("请先登录", ex.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("secret-cookie", ex.Message, StringComparison.Ordinal);
     }
@@ -1232,6 +1267,20 @@ public class DouyinSpecialDownloadServiceTests
 
             await Task.Yield();
             throw new InvalidOperationException($"sidecar failed with --cookie {cookie}");
+        }
+    }
+
+    private sealed class ThrowingSidecarRunner(string message) : IDouyinSidecarProcessRunner
+    {
+        public async IAsyncEnumerable<string> RunAsync(
+            DouyinSidecarRequest request,
+            [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var line in Array.Empty<string>())
+                yield return line;
+
+            await Task.Yield();
+            throw new InvalidOperationException(message);
         }
     }
 

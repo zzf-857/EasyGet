@@ -142,9 +142,10 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                         throw new InvalidOperationException("Douyin sidecar returned a non-discovery success summary.");
                     case DouyinSidecarEventKind.Failed:
                         throw new InvalidOperationException(
-                            RedactSensitiveText(
-                                SelectFirstNonEmpty(message.Error, message.Message, "Douyin discovery failed."),
-                                sidecarRequest.Cookie));
+                            FormatUserFacingError(
+                                RedactSensitiveText(
+                                    SelectFirstNonEmpty(message.Error, message.Message, "Douyin discovery failed."),
+                                    sidecarRequest.Cookie)));
                     case DouyinSidecarEventKind.Cancelled:
                         throw new OperationCanceledException(
                             SelectFirstNonEmpty(message.Message, "Douyin discovery was cancelled."),
@@ -169,7 +170,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                RedactSensitiveText(ex.Message, sidecarRequest.Cookie),
+                FormatUserFacingError(RedactSensitiveText(ex.Message, sidecarRequest.Cookie)),
                 ex);
         }
     }
@@ -225,7 +226,8 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                         if (!sawTerminalSummary)
                         {
                             ApplyFailureSummary(task, message);
-                            task.ErrorMessage = RedactSensitiveText(task.ErrorMessage, request.Cookie);
+                            task.ErrorMessage = FormatUserFacingError(
+                                RedactSensitiveText(task.ErrorMessage, request.Cookie));
                             AppendTaskEvent(task, FormatTerminalEvent("失败", SelectFirstNonEmpty(task.ErrorMessage, message.Message)));
                             sawTerminalSummary = true;
                         }
@@ -277,7 +279,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             if (task.Status is DownloadStatus.Failed or DownloadStatus.Cancelled)
                 return;
 
-            var message = RedactSensitiveText(ex.Message, request.Cookie);
+            var message = FormatUserFacingError(RedactSensitiveText(ex.Message, request.Cookie));
             task.Status = DownloadStatus.Failed;
             task.ErrorMessage = message;
             AppendTaskEvent(task, message);
@@ -988,6 +990,45 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 
         return redacted;
     }
+
+    internal static string FormatUserFacingError(string? rawMessage)
+    {
+        var message = SelectFirstNonEmpty(rawMessage, "Douyin sidecar failed.");
+        if (IsAlreadyActionableDouyinError(message))
+            return message;
+
+        var normalized = message.ToLowerInvariant();
+        var prefix = "";
+        if (ContainsAny(normalized, "sidecar was not found", "failed to start douyin sidecar", "no such file"))
+        {
+            prefix = "抖音专项引擎不可用，请确认 sidecar 已随 EasyGet 发布或重新运行发布构建。";
+        }
+        else if (ContainsAny(normalized, "cookie", "cookies", "login", "loginrequired", "请先登录", "登录", "permission", "权限", "401", "403"))
+        {
+            prefix = "抖音 Cookie 或登录态可能失效，请在设置中更新 Cookie 后重试。";
+        }
+        else if (ContainsAny(normalized, "429", "rate limit", "ratelimit", "too many requests", "限流", "请求频繁", "anti-bot", "captcha", "验证码"))
+        {
+            prefix = "抖音请求被限流或触发风控，请降低并发、稍后重试，必要时更新 Cookie。";
+        }
+        else if (ContainsAny(normalized, "proxy", "timed out", "timeout", "connection", "connect", "network", "dns", "代理", "网络", "连接"))
+        {
+            prefix = "抖音网络或代理连接失败，请检查网络、代理设置和本机防火墙后重试。";
+        }
+
+        return string.IsNullOrWhiteSpace(prefix)
+            ? message
+            : $"{prefix} 原始信息：{message}";
+    }
+
+    private static bool IsAlreadyActionableDouyinError(string message)
+        => message.StartsWith("抖音 Cookie", StringComparison.Ordinal)
+           || message.StartsWith("抖音请求", StringComparison.Ordinal)
+           || message.StartsWith("抖音网络", StringComparison.Ordinal)
+           || message.StartsWith("抖音专项引擎", StringComparison.Ordinal);
+
+    private static bool ContainsAny(string value, params string[] needles)
+        => needles.Any(needle => value.Contains(needle, StringComparison.Ordinal));
 }
 
 internal enum DouyinSidecarEventKind
