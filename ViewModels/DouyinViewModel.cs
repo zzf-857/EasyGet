@@ -650,6 +650,28 @@ public partial class DouyinViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private void SelectFilteredDouyinDiscoveryItems()
+    {
+        var filteredItems = FilteredDouyinDiscoveryItems.ToList();
+        if (filteredItems.Count == 0)
+        {
+            DouyinDiscoveryErrorMessage = "当前筛选没有发现结果可选择";
+            DouyinDiscoveryStatusText = "当前筛选无发现结果";
+            NotifyDouyinDiscoveryStateChanged();
+            return;
+        }
+
+        foreach (var item in DouyinDiscoveryItems)
+        {
+            item.IsSelected = filteredItems.Any(filtered => ReferenceEquals(filtered, item));
+        }
+
+        DouyinDiscoveryErrorMessage = "";
+        DouyinDiscoveryStatusText = $"已选择 {filteredItems.Count} 条当前筛选发现结果";
+        NotifyDouyinDiscoveryStateChanged();
+    }
+
+    [RelayCommand]
     private void SelectDownloadableDouyinDiscoveryItems()
     {
         var selected = 0;

@@ -1377,6 +1377,45 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelSelectsFilteredDiscoveryResults()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var filteredByDescription = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "猫咪晒太阳",
+            AuthorNickname: "Alice",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var filteredByAuthor = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "午后散步",
+            AuthorNickname: "猫咪观察员",
+            Url: "https://www.douyin.com/video/7604129988555574539");
+        var outsideFilter = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574540",
+            Description: "小狗散步",
+            AuthorNickname: "Bob",
+            Url: "https://www.douyin.com/video/7604129988555574540")
+        {
+            IsSelected = true
+        };
+        context.Douyin.DouyinDiscoveryItems.Add(filteredByDescription);
+        context.Douyin.DouyinDiscoveryItems.Add(outsideFilter);
+        context.Douyin.DouyinDiscoveryItems.Add(filteredByAuthor);
+        context.Douyin.DouyinDiscoveryFilterKeyword = "猫咪";
+
+        context.Douyin.SelectFilteredDouyinDiscoveryItemsCommand.Execute(null);
+
+        Assert.True(filteredByDescription.IsSelected);
+        Assert.True(filteredByAuthor.IsSelected);
+        Assert.False(outsideFilter.IsSelected);
+        Assert.Equal(2, context.Douyin.SelectedDouyinDiscoveryItemCount);
+        Assert.True(context.Douyin.HasSelectedDouyinDiscoveryItems);
+        Assert.Contains("已选择 2", context.Douyin.DouyinDiscoveryStatusText, StringComparison.Ordinal);
+        Assert.False(context.Douyin.HasDouyinDiscoveryError);
+    }
+
+    [Fact]
     public void DouyinViewModelSortsFilteredDiscoveryResultsLocally()
     {
         var discovery = new FakeDouyinDiscoveryService();
