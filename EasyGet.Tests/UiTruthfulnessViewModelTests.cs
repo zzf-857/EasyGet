@@ -143,6 +143,13 @@ public class UiTruthfulnessViewModelTests
         Assert.Contains("用户主页", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
         Assert.Contains("MS4wLjABAAAAsec_uid-test_123", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
 
+        context.Download.Url = "https://live.douyin.com/7621772413184822582";
+
+        Assert.Contains("直播", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("7621772413184822582", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.Contains("实验性录制", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+        Assert.DoesNotContain("暂不支持", context.Douyin.DouyinQuickDownloadLinkInsightText, StringComparison.Ordinal);
+
         context.Download.Url = "https://example.com/watch?v=1";
 
         Assert.Equal("未识别为抖音专项链接", context.Douyin.DouyinQuickDownloadLinkInsightText);

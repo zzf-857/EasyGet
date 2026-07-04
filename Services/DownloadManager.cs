@@ -594,7 +594,8 @@ public class DownloadManager
             or DouyinUrlKind.User
             or DouyinUrlKind.Collection
             or DouyinUrlKind.Mix
-            or DouyinUrlKind.Music;
+            or DouyinUrlKind.Music
+            or DouyinUrlKind.Live;
 
     private static bool CanFallbackDouyinSpecialToYtDlp(DouyinUrlKind kind)
         => kind is DouyinUrlKind.ShortLink or DouyinUrlKind.Video;

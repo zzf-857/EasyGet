@@ -1043,7 +1043,7 @@ public partial class DouyinViewModel : ObservableObject
         var suffix = info.Kind switch
         {
             DouyinUrlKind.ShortLink => " · 需要解析展开",
-            DouyinUrlKind.Live => " · 专项引擎暂不支持",
+            DouyinUrlKind.Live => " · 实验性录制",
             _ => ""
         };
 

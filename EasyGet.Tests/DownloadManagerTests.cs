@@ -573,7 +573,7 @@ public class DownloadManagerTests
     }
 
     [Fact]
-    public async Task EnqueueAsync_DouyinLiveWithSpecialEngineEnabled_FailsAsOutOfCurrentScope()
+    public async Task EnqueueAsync_DouyinLiveWithSpecialEngineEnabled_UsesSidecar()
     {
         var outputDir = CreateTempOutputDirectory();
         var dbPath = TestTempPaths.CreateSqliteDatabasePath("easyget-douyin-live-route");
@@ -594,9 +594,10 @@ public class DownloadManagerTests
 
             Assert.Equal(0, ytDlp.GetVideoInfoCallCount);
             Assert.Equal(0, ytDlp.DownloadCallCount);
-            Assert.Equal(0, sidecar.DownloadCallCount);
-            Assert.Equal(DownloadStatus.Failed, task.Status);
-            Assert.Contains("暂不支持", task.ErrorMessage);
+            Assert.Equal(1, sidecar.DownloadCallCount);
+            Assert.Equal("Douyin_Live_7621772413184822582", sidecar.TitleAtCall);
+            Assert.Equal("Douyin", sidecar.PlatformAtCall);
+            Assert.Equal(DownloadStatus.Completed, task.Status);
         }
         finally
         {
