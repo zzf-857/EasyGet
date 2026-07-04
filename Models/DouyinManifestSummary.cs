@@ -83,6 +83,8 @@ public sealed record DouyinManifestItem(
             return "数据";
         if (IsLiveMomentVideo(fileName))
             return "实况";
+        if (IsTranscriptFile(fileName))
+            return "转写";
         if (MediaType.Equals("gallery", StringComparison.OrdinalIgnoreCase) && IsImageFile(fileName))
             return "图片";
         if (MediaType.Equals("music", StringComparison.OrdinalIgnoreCase) && IsAudioFile(fileName))
@@ -104,6 +106,9 @@ public sealed record DouyinManifestItem(
 
     private static bool IsVideoFile(string fileName)
         => VideoExtensions.Any(extension => fileName.EndsWith(extension, StringComparison.Ordinal));
+
+    private static bool IsTranscriptFile(string fileName)
+        => TranscriptExtensions.Any(extension => fileName.EndsWith(extension, StringComparison.Ordinal));
 
     private static bool IsLiveMomentVideo(string fileName)
     {
@@ -171,5 +176,11 @@ public sealed record DouyinManifestItem(
     [
         ".json",
         ".txt"
+    ];
+
+    private static readonly IReadOnlyList<string> TranscriptExtensions =
+    [
+        ".transcript.txt",
+        ".transcript.json"
     ];
 }
