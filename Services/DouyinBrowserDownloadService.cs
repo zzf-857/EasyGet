@@ -350,8 +350,8 @@ internal partial class DouyinBrowserDownloadService
         var port = GetFreeTcpPort();
         var userDataDir = Path.Combine(Path.GetTempPath(), $"easyget-douyin-browser-{Guid.NewGuid():N}");
 
-        using var process = StartBrowser(browserPath, port, userDataDir);
-        using var browserJob = BrowserProcessJob.TryCreate(process);
+        using var browser = StartBrowser(browserPath, port, userDataDir);
+        var process = browser.Process;
         ClientWebSocket? socket = null;
         try
         {
@@ -428,7 +428,7 @@ internal partial class DouyinBrowserDownloadService
             await TryCloseBrowserGracefullyAsync(process, socket);
             socket?.Dispose();
             TryKill(process);
-            browserJob?.Dispose();
+            browser.Dispose();
             TryDeleteDirectory(userDataDir);
         }
 
@@ -557,7 +557,7 @@ internal partial class DouyinBrowserDownloadService
         return value.GetString() ?? "";
     }
 
-    private static Process StartBrowser(string browserPath, int port, string userDataDir)
+    private static BrowserProcessLease StartBrowser(string browserPath, int port, string userDataDir)
     {
         Directory.CreateDirectory(userDataDir);
         var args = string.Join(" ", [
@@ -569,10 +569,12 @@ internal partial class DouyinBrowserDownloadService
             "--autoplay-policy=no-user-gesture-required",
             $"--remote-debugging-port={port}",
             $"--user-data-dir=\"{userDataDir}\"",
+            "--window-position=-32000,-32000",
+            "--window-size=1280,720",
             "about:blank"
         ]);
 
-        return Process.Start(new ProcessStartInfo
+        return BrowserProcessLease.Start(new ProcessStartInfo
         {
             FileName = browserPath,
             Arguments = args,
@@ -948,6 +950,192 @@ internal partial class DouyinBrowserDownloadService
     }
 }
 
+internal sealed class BrowserProcessLease : IDisposable
+{
+    private const uint CREATE_SUSPENDED = 0x00000004;
+    private const uint CREATE_NO_WINDOW = 0x08000000;
+    private const uint ResumeThreadFailed = 0xFFFFFFFF;
+
+    private Process? _process;
+    private BrowserProcessJob? _job;
+
+    private BrowserProcessLease(Process process, BrowserProcessJob? job)
+    {
+        _process = process;
+        _job = job;
+    }
+
+    public Process Process
+        => _process ?? throw new ObjectDisposedException(nameof(BrowserProcessLease));
+
+    public static BrowserProcessLease Start(ProcessStartInfo startInfo)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException($"Failed to start browser: {startInfo.FileName}");
+            return new BrowserProcessLease(process, null);
+        }
+
+        return StartSuspendedInJob(startInfo);
+    }
+
+    public void Dispose()
+    {
+        var job = Interlocked.Exchange(ref _job, null);
+        job?.Dispose();
+
+        var process = Interlocked.Exchange(ref _process, null);
+        process?.Dispose();
+    }
+
+    private static BrowserProcessLease StartSuspendedInJob(ProcessStartInfo startInfo)
+    {
+        var job = BrowserProcessJob.CreateRequired();
+        Process? process = null;
+        PROCESS_INFORMATION processInformation = default;
+
+        try
+        {
+            var startupInfo = new STARTUPINFO
+            {
+                cb = (uint)Marshal.SizeOf<STARTUPINFO>()
+            };
+            var commandLine = new StringBuilder(BuildCommandLine(startInfo));
+            var creationFlags = CREATE_SUSPENDED | CREATE_NO_WINDOW;
+            var workingDirectory = string.IsNullOrWhiteSpace(startInfo.WorkingDirectory)
+                ? null
+                : startInfo.WorkingDirectory;
+
+            if (!CreateProcess(
+                    startInfo.FileName,
+                    commandLine,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    false,
+                    creationFlags,
+                    IntPtr.Zero,
+                    workingDirectory,
+                    ref startupInfo,
+                    out processInformation))
+            {
+                throw new System.ComponentModel.Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    $"Failed to create browser process: {startInfo.FileName}");
+            }
+
+            if (!job.Assign(processInformation.hProcess))
+            {
+                throw new System.ComponentModel.Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    "Failed to attach browser process to cleanup job.");
+            }
+
+            if (ResumeThread(processInformation.hThread) == ResumeThreadFailed)
+            {
+                throw new System.ComponentModel.Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    "Failed to resume browser process after cleanup job assignment.");
+            }
+
+            process = Process.GetProcessById((int)processInformation.dwProcessId);
+            return new BrowserProcessLease(process, job);
+        }
+        catch
+        {
+            if (processInformation.hProcess != IntPtr.Zero)
+                TerminateProcess(processInformation.hProcess, 1);
+
+            process?.Dispose();
+            job.Dispose();
+            throw;
+        }
+        finally
+        {
+            if (processInformation.hThread != IntPtr.Zero)
+                CloseHandle(processInformation.hThread);
+
+            if (processInformation.hProcess != IntPtr.Zero)
+                CloseHandle(processInformation.hProcess);
+        }
+    }
+
+    private static string BuildCommandLine(ProcessStartInfo startInfo)
+    {
+        var commandLine = QuoteCommandLineArgument(startInfo.FileName);
+        if (!string.IsNullOrWhiteSpace(startInfo.Arguments))
+            commandLine += " " + startInfo.Arguments;
+
+        return commandLine;
+    }
+
+    private static string QuoteCommandLineArgument(string value)
+    {
+        if (!value.Contains(' ', StringComparison.Ordinal)
+            && !value.Contains('\t', StringComparison.Ordinal)
+            && !value.Contains('"', StringComparison.Ordinal))
+        {
+            return value;
+        }
+
+        return $"\"{value.Replace("\"", "\\\"", StringComparison.Ordinal)}\"";
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool CreateProcess(
+        string lpApplicationName,
+        StringBuilder lpCommandLine,
+        IntPtr lpProcessAttributes,
+        IntPtr lpThreadAttributes,
+        bool bInheritHandles,
+        uint dwCreationFlags,
+        IntPtr lpEnvironment,
+        string? lpCurrentDirectory,
+        ref STARTUPINFO lpStartupInfo,
+        out PROCESS_INFORMATION lpProcessInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern uint ResumeThread(IntPtr hThread);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool TerminateProcess(IntPtr hProcess, uint uExitCode);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct STARTUPINFO
+    {
+        public uint cb;
+        public string? lpReserved;
+        public string? lpDesktop;
+        public string? lpTitle;
+        public uint dwX;
+        public uint dwY;
+        public uint dwXSize;
+        public uint dwYSize;
+        public uint dwXCountChars;
+        public uint dwYCountChars;
+        public uint dwFillAttribute;
+        public uint dwFlags;
+        public ushort wShowWindow;
+        public ushort cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_INFORMATION
+    {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public uint dwProcessId;
+        public uint dwThreadId;
+    }
+}
+
 internal sealed class BrowserProcessJob : IDisposable
 {
     private const int JobObjectExtendedLimitInformation = 9;
@@ -960,32 +1148,64 @@ internal sealed class BrowserProcessJob : IDisposable
         _handle = handle;
     }
 
+    public static BrowserProcessJob CreateRequired()
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Browser cleanup jobs are only available on Windows.");
+
+        var handle = CreateJobObject(IntPtr.Zero, null);
+        if (handle == IntPtr.Zero)
+            throw new System.ComponentModel.Win32Exception(
+                Marshal.GetLastWin32Error(),
+                "Failed to create browser cleanup job.");
+
+        try
+        {
+            if (!EnableKillOnJobClose(handle))
+            {
+                throw new System.ComponentModel.Win32Exception(
+                    Marshal.GetLastWin32Error(),
+                    "Failed to enable browser cleanup job limits.");
+            }
+
+            return new BrowserProcessJob(handle);
+        }
+        catch
+        {
+            CloseHandle(handle);
+            throw;
+        }
+    }
+
     public static BrowserProcessJob? TryCreate(Process process)
     {
         if (!OperatingSystem.IsWindows())
             return null;
 
-        var handle = CreateJobObject(IntPtr.Zero, null);
-        if (handle == IntPtr.Zero)
-            return null;
-
         try
         {
-            if (!EnableKillOnJobClose(handle))
-                return CloseAndReturnNull(handle);
+            var job = CreateRequired();
+            if (!job.Assign(process))
+            {
+                job.Dispose();
+                return null;
+            }
 
-            if (!AssignProcessToJobObject(handle, process.Handle))
-                return CloseAndReturnNull(handle);
-
-            return new BrowserProcessJob(handle);
+            return job;
         }
         catch (Exception ex) when (ex is InvalidOperationException
                                    or ObjectDisposedException
                                    or System.ComponentModel.Win32Exception)
         {
-            return CloseAndReturnNull(handle);
+            return null;
         }
     }
+
+    public bool Assign(Process process)
+        => Assign(process.Handle);
+
+    public bool Assign(IntPtr processHandle)
+        => _handle != IntPtr.Zero && AssignProcessToJobObject(_handle, processHandle);
 
     public void Dispose()
     {
@@ -1018,12 +1238,6 @@ internal sealed class BrowserProcessJob : IDisposable
         {
             Marshal.FreeHGlobal(pointer);
         }
-    }
-
-    private static BrowserProcessJob? CloseAndReturnNull(IntPtr handle)
-    {
-        CloseHandle(handle);
-        return null;
     }
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]

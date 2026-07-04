@@ -181,21 +181,46 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
-    public void CaptureVideoAsync_AttachesBrowserToKillOnCloseJob()
+    public void CaptureVideoAsync_UsesBrowserLeaseForKillOnCloseJob()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
             Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
 
-        Assert.Contains("BrowserProcessJob.TryCreate(process)", source, StringComparison.Ordinal);
+        Assert.Contains("BrowserProcessLease", source, StringComparison.Ordinal);
         Assert.Contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", source, StringComparison.Ordinal);
         Assert.Contains("AssignProcessToJobObject", source, StringComparison.Ordinal);
 
-        var startIndex = source.IndexOf("using var process = StartBrowser", StringComparison.Ordinal);
-        var jobIndex = source.IndexOf("BrowserProcessJob.TryCreate(process)", StringComparison.Ordinal);
+        var startIndex = source.IndexOf("using var browser = StartBrowser", StringComparison.Ordinal);
+        var processIndex = source.IndexOf("var process = browser.Process", StringComparison.Ordinal);
         var waitIndex = source.IndexOf("await WaitForDevToolsAsync", StringComparison.Ordinal);
         Assert.True(startIndex >= 0, "CaptureVideoAsync should start the browser explicitly.");
-        Assert.True(jobIndex > startIndex, "The browser process should be placed in the cleanup job immediately after launch.");
-        Assert.True(waitIndex > jobIndex, "DevTools work should not begin until the process is covered by the cleanup job.");
+        Assert.True(processIndex > startIndex, "CaptureVideoAsync should use the process owned by the browser lease.");
+        Assert.True(waitIndex > processIndex, "DevTools work should not begin until the process is covered by the cleanup job.");
+    }
+
+    [Fact]
+    public void StartBrowser_CoversProcessWithJobBeforeBrowserThreadRuns()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
+
+        Assert.Contains("CREATE_SUSPENDED", source, StringComparison.Ordinal);
+        Assert.Contains("ResumeThread", source, StringComparison.Ordinal);
+
+        var startIndex = source.IndexOf("private static BrowserProcessLease StartBrowser", StringComparison.Ordinal);
+        var helperIndex = source.IndexOf("private static BrowserProcessLease StartSuspendedInJob", StringComparison.Ordinal);
+        var buildCommandLineIndex = source.IndexOf("private static string BuildCommandLine", StringComparison.Ordinal);
+        Assert.True(startIndex >= 0, "StartBrowser should return a browser lease that owns the cleanup job.");
+        Assert.True(helperIndex >= 0, "BrowserProcessLease should create Windows browser processes while suspended.");
+        Assert.True(buildCommandLineIndex > helperIndex, "StartSuspendedInJob should appear before BuildCommandLine.");
+
+        var startSuspendedBody = source[helperIndex..buildCommandLineIndex];
+        var createIndex = startSuspendedBody.IndexOf("CREATE_SUSPENDED", StringComparison.Ordinal);
+        var assignIndex = startSuspendedBody.IndexOf("job.Assign", StringComparison.Ordinal);
+        var resumeIndex = startSuspendedBody.IndexOf("ResumeThread", StringComparison.Ordinal);
+        Assert.True(createIndex >= 0, "The browser process should be created suspended.");
+        Assert.True(assignIndex > createIndex, "The suspended browser process should be assigned to the cleanup job before it can spawn children.");
+        Assert.True(resumeIndex > assignIndex, "The browser main thread should resume only after job assignment succeeds.");
     }
 
     [Fact]
