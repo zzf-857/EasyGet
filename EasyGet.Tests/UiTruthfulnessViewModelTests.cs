@@ -66,8 +66,32 @@ public class UiTruthfulnessViewModelTests
         context.Settings.UseProxy = true;
 
         Assert.Equal("专项引擎已启用 · mix", context.Douyin.DouyinQuickDownloadEngineStatusText);
-        Assert.Equal("Cookie 已配置", context.Douyin.DouyinQuickDownloadCookieStatusText);
+        Assert.Equal("Cookie 缺少 odin_tt、passport_csrf_token", context.Douyin.DouyinQuickDownloadCookieStatusText);
         Assert.Equal("代理 socks5://127.0.0.1:7890", context.Douyin.DouyinQuickDownloadProxyStatusText);
+    }
+
+    [Fact]
+    public void DouyinViewModelReportsDouyinCookieHealth()
+    {
+        using var context = CreateViewModelContext();
+
+        context.Settings.CookieContent = "ttwid=abc; odin_tt=def; passport_csrf_token=ghi";
+
+        Assert.Equal("Cookie 关键项完整 · msToken 可自动生成", context.Douyin.DouyinQuickDownloadCookieStatusText);
+
+        context.Settings.CookieContent = "ttwid=abc; odin_tt=def; passport_csrf_token=ghi; msToken=jkl";
+
+        Assert.Equal("Cookie 关键项完整", context.Douyin.DouyinQuickDownloadCookieStatusText);
+
+        context.Settings.CookieContent = """
+        {"ttwid":"abc","odin_tt":"def","passport_csrf_token":"ghi"}
+        """;
+
+        Assert.Equal("Cookie 关键项完整 · msToken 可自动生成", context.Douyin.DouyinQuickDownloadCookieStatusText);
+
+        context.Settings.CookieContent = "not-a-cookie-header";
+
+        Assert.Equal("Cookie 格式未识别", context.Douyin.DouyinQuickDownloadCookieStatusText);
     }
 
     [Fact]
