@@ -802,6 +802,7 @@ public class XamlBindingTests
         Assert.Contains("FilteredDouyinDiscoveryResultCount", source);
         Assert.Contains("HasFilteredDouyinDiscoveryItems", source);
         Assert.Contains("IsSelected", source);
+        Assert.Contains("QueueStateText", source);
         Assert.Contains("SelectedDouyinDiscoveryItemCount", source);
         Assert.Contains("HasSelectedDouyinDiscoveryItems", source);
         Assert.Contains("DouyinDiscoveryStatusText", source);

@@ -650,9 +650,14 @@
                                                             Margin="16,0,0,0"
                                                             VerticalAlignment="Center"
                                                             MinWidth="88">
+                                                    <TextBlock Text="{Binding QueueStateText, Mode=OneWay}"
+                                                               Style="{StaticResource TextCaption}"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               HorizontalAlignment="Right"/>
                                                     <TextBlock Text="{Binding Position, Mode=OneWay, StringFormat=第 {0} 位}"
                                                                Style="{StaticResource TextCaption}"
-                                                               HorizontalAlignment="Right"/>
+                                                               HorizontalAlignment="Right"
+                                                               Margin="0,4,0,0"/>
                                                     <TextBlock Text="{Binding HotValue, Mode=OneWay, StringFormat=热度 {0:N0}}"
                                                                Style="{StaticResource TextCaption}"
                                                                Foreground="{DynamicResource AccentBrush}"

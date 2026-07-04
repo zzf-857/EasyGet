@@ -1371,6 +1371,44 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelMarksDiscoveryItemsQueuedWhenMatchingTasksChange()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var directUrl = new DouyinDiscoveryItem(
+            AwemeId: "not-numeric-but-url-is-usable",
+            Description: "直接链接作品",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var numericAweme = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "数字作品 ID");
+        var hotWord = new DouyinDiscoveryItem(Word: "猫咪热词", HotValue: 123);
+        context.Douyin.DouyinDiscoveryItems.Add(directUrl);
+        context.Douyin.DouyinDiscoveryItems.Add(numericAweme);
+        context.Douyin.DouyinDiscoveryItems.Add(hotWord);
+
+        Assert.Equal("未入队", directUrl.QueueStateText);
+        Assert.Equal("未入队", numericAweme.QueueStateText);
+        Assert.Equal("不可入队", hotWord.QueueStateText);
+
+        var existingTask = new DownloadTask { Url = "https://www.douyin.com/video/7604129988555574538" };
+        context.BatchContext.Manager.Tasks.Add(existingTask);
+
+        Assert.Equal("已在队列", directUrl.QueueStateText);
+        Assert.Equal("未入队", numericAweme.QueueStateText);
+
+        var generatedUrlTask = new DownloadTask { Url = "https://www.douyin.com/video/7604129988555574539" };
+        context.BatchContext.Manager.Tasks.Add(generatedUrlTask);
+
+        Assert.Equal("已在队列", numericAweme.QueueStateText);
+
+        context.BatchContext.Manager.Tasks.Remove(existingTask);
+
+        Assert.Equal("未入队", directUrl.QueueStateText);
+        Assert.Equal("已在队列", numericAweme.QueueStateText);
+    }
+
+    [Fact]
     public void DouyinViewModelFiltersDiscoveryResultsLocally()
     {
         var discovery = new FakeDouyinDiscoveryService();

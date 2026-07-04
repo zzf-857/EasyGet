@@ -201,6 +201,7 @@ public partial class DouyinViewModel : ObservableObject
             }
 
             SyncDouyinTaskItems();
+            SyncDouyinDiscoveryQueueStates();
             NotifyDouyinTaskStateChanged();
             return;
         }
@@ -222,6 +223,7 @@ public partial class DouyinViewModel : ObservableObject
         }
 
         SyncDouyinTaskItems();
+        SyncDouyinDiscoveryQueueStates();
         NotifyDouyinTaskStateChanged();
     }
 
@@ -300,6 +302,7 @@ public partial class DouyinViewModel : ObservableObject
 
         NotifyDouyinDiscoveryStateChanged();
         NotifyDouyinDiscoverySelectionChanged();
+        SyncDouyinDiscoveryQueueStates();
         SyncDouyinDiscoveryFilteredItems();
     }
 
@@ -839,6 +842,19 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(FilteredDouyinDiscoveryItems));
         OnPropertyChanged(nameof(FilteredDouyinDiscoveryResultCount));
         OnPropertyChanged(nameof(HasFilteredDouyinDiscoveryItems));
+    }
+
+    private void SyncDouyinDiscoveryQueueStates()
+    {
+        foreach (var item in DouyinDiscoveryItems)
+        {
+            var url = BuildDouyinDiscoveryDownloadUrl(item);
+            item.QueueStateText = string.IsNullOrWhiteSpace(url)
+                ? "不可入队"
+                : _downloadManager.Tasks.Any(task => IsSameUrl(task.Url, url))
+                    ? "已在队列"
+                    : "未入队";
+        }
     }
 
     private void NotifyDouyinDiscoveryStateChanged()
