@@ -1231,6 +1231,46 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelFiltersDiscoveryResultsLocally()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "猫咪晒太阳",
+            AuthorNickname: "Alice",
+            Url: "https://www.douyin.com/video/7604129988555574538"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "小狗散步",
+            AuthorNickname: "Bob",
+            Url: "https://www.douyin.com/video/7604129988555574539"));
+        context.Douyin.DouyinDiscoveryItems.Add(new DouyinDiscoveryItem(Word: "热榜旅行", HotValue: 123));
+
+        Assert.Equal(3, context.Douyin.DouyinDiscoveryResultCount);
+        Assert.Equal(3, context.Douyin.FilteredDouyinDiscoveryResultCount);
+        Assert.True(context.Douyin.HasFilteredDouyinDiscoveryItems);
+
+        context.Douyin.DouyinDiscoveryFilterKeyword = "bob";
+
+        var item = Assert.Single(context.Douyin.FilteredDouyinDiscoveryItems);
+        Assert.Equal("小狗散步", item.Description);
+        Assert.Equal(1, context.Douyin.FilteredDouyinDiscoveryResultCount);
+        Assert.True(context.Douyin.IsDouyinDiscoveryFilterActive);
+
+        context.Douyin.DouyinDiscoveryFilterKeyword = "旅行";
+
+        var hotWord = Assert.Single(context.Douyin.FilteredDouyinDiscoveryItems);
+        Assert.Equal("热榜旅行", hotWord.Word);
+
+        context.Douyin.ClearDouyinDiscoveryFilterCommand.Execute(null);
+
+        Assert.Equal("", context.Douyin.DouyinDiscoveryFilterKeyword);
+        Assert.False(context.Douyin.IsDouyinDiscoveryFilterActive);
+        Assert.Equal(3, context.Douyin.FilteredDouyinDiscoveryResultCount);
+    }
+
+    [Fact]
     public async Task DouyinViewModelRejectsAddingAllDiscoveryResultsWhenListIsEmpty()
     {
         var discovery = new FakeDouyinDiscoveryService();

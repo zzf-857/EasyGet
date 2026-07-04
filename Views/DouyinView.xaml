@@ -298,6 +298,55 @@
 
                         <Grid Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Grid.Column="0"
+                                       Text="筛选"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"/>
+
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     Text="{Binding DouyinDiscoveryFilterKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="筛选当前发现结果"
+                                     AutomationProperties.Name="筛选当前发现结果"
+                                     Padding="10,7"
+                                     Margin="0,0,8,0"/>
+
+                            <Button Grid.Column="2"
+                                    Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,12,0"
+                                    ToolTip="清除发现结果筛选"
+                                    AutomationProperties.Name="清除发现结果筛选"
+                                    Command="{Binding ClearDouyinDiscoveryFilterCommand}">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
+                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="清除" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
+
+                            <TextBlock Grid.Column="3"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       VerticalAlignment="Center">
+                                <Run Text="显示 "/>
+                                <Run Text="{Binding FilteredDouyinDiscoveryResultCount, Mode=OneWay, FallbackValue=0}"/>
+                                <Run Text=" / "/>
+                                <Run Text="{Binding DouyinDiscoveryResultCount, Mode=OneWay, FallbackValue=0}"/>
+                                <Run Text=" 条"/>
+                            </TextBlock>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -386,7 +435,7 @@
                                     <Style TargetType="StackPanel">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding HasDouyinDiscoveryItems}" Value="False">
+                                            <DataTrigger Binding="{Binding HasFilteredDouyinDiscoveryItems}" Value="False">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </Style.Triggers>
@@ -397,13 +446,22 @@
                                            FontSize="{StaticResource IconSizeEmptyState}"
                                            Foreground="{StaticResource BorderPrimaryBrush}"
                                            HorizontalAlignment="Center"/>
-                                <TextBlock Text="暂无发现结果"
-                                           Style="{StaticResource TextBodyStrong}"
-                                           HorizontalAlignment="Center"
-                                           Margin="0,12,0,0"/>
+                                <TextBlock HorizontalAlignment="Center"
+                                           Margin="0,12,0,0">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBodyStrong}">
+                                            <Setter Property="Text" Value="暂无匹配结果"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasDouyinDiscoveryItems}" Value="False">
+                                                    <Setter Property="Text" Value="暂无发现结果"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
 
-                            <ListBox ItemsSource="{Binding DouyinDiscoveryItems}"
+                            <ListBox ItemsSource="{Binding FilteredDouyinDiscoveryItems}"
                                      Background="Transparent"
                                      BorderThickness="0"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">

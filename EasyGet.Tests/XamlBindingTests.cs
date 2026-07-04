@@ -784,6 +784,11 @@ public class XamlBindingTests
         Assert.Contains("ClearDouyinDiscoverySelectionCommand", source);
         Assert.Contains("AddAllDouyinDiscoveryItemsToQueueCommand", source);
         Assert.Contains("DouyinDiscoveryItems", source);
+        Assert.Contains("FilteredDouyinDiscoveryItems", source);
+        Assert.Contains("DouyinDiscoveryFilterKeyword", source);
+        Assert.Contains("ClearDouyinDiscoveryFilterCommand", source);
+        Assert.Contains("FilteredDouyinDiscoveryResultCount", source);
+        Assert.Contains("HasFilteredDouyinDiscoveryItems", source);
         Assert.Contains("IsSelected", source);
         Assert.Contains("SelectedDouyinDiscoveryItemCount", source);
         Assert.Contains("HasSelectedDouyinDiscoveryItems", source);

@@ -49,6 +49,10 @@ public partial class DouyinViewModel : ObservableObject
     private int _douyinDiscoverySearchMax = DefaultDouyinSearchMax;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsDouyinDiscoveryFilterActive))]
+    private string _douyinDiscoveryFilterKeyword = "";
+
+    [ObservableProperty]
     private string _douyinDiscoveryStatusText = "尚未加载发现结果";
 
     [ObservableProperty]
@@ -64,6 +68,7 @@ public partial class DouyinViewModel : ObservableObject
     public ObservableCollection<DownloadHistory> DouyinManifestSummaryItems { get; } = [];
     public ObservableCollection<DouyinRecentAuthorItem> DouyinRecentAuthorItems { get; } = [];
     public ObservableCollection<DouyinDiscoveryItem> DouyinDiscoveryItems { get; } = [];
+    public ObservableCollection<DouyinDiscoveryItem> FilteredDouyinDiscoveryItems { get; } = [];
 
     public int DouyinTaskCount => CountDouyinTasks();
 
@@ -96,6 +101,12 @@ public partial class DouyinViewModel : ObservableObject
     public int DouyinDiscoveryResultCount => DouyinDiscoveryItems.Count;
 
     public bool HasDouyinDiscoveryItems => DouyinDiscoveryItems.Count > 0;
+
+    public int FilteredDouyinDiscoveryResultCount => FilteredDouyinDiscoveryItems.Count;
+
+    public bool HasFilteredDouyinDiscoveryItems => FilteredDouyinDiscoveryItems.Count > 0;
+
+    public bool IsDouyinDiscoveryFilterActive => !string.IsNullOrWhiteSpace(DouyinDiscoveryFilterKeyword);
 
     public int SelectedDouyinDiscoveryItemCount => DouyinDiscoveryItems.Count(item => item.IsSelected);
 
@@ -273,6 +284,7 @@ public partial class DouyinViewModel : ObservableObject
 
         NotifyDouyinDiscoveryStateChanged();
         NotifyDouyinDiscoverySelectionChanged();
+        SyncDouyinDiscoveryFilteredItems();
     }
 
     private void OnDouyinDiscoveryItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -402,6 +414,11 @@ public partial class DouyinViewModel : ObservableObject
     partial void OnDouyinArchiveSearchKeywordChanged(string value)
     {
         SyncDouyinHistoryItems();
+    }
+
+    partial void OnDouyinDiscoveryFilterKeywordChanged(string value)
+    {
+        SyncDouyinDiscoveryFilteredItems();
     }
 
     [RelayCommand]
@@ -613,6 +630,13 @@ public partial class DouyinViewModel : ObservableObject
         NotifyDouyinDiscoverySelectionChanged();
     }
 
+    [RelayCommand]
+    private void ClearDouyinDiscoveryFilter()
+    {
+        DouyinDiscoveryFilterKeyword = "";
+        SyncDouyinDiscoveryFilteredItems();
+    }
+
     private async Task AddDouyinDiscoveryItemsToQueueAsync(
         IReadOnlyCollection<DouyinDiscoveryItem> items,
         string statusPrefix)
@@ -715,7 +739,21 @@ public partial class DouyinViewModel : ObservableObject
     private void ClearDouyinDiscoveryResults()
     {
         DouyinDiscoveryItems.Clear();
+        FilteredDouyinDiscoveryItems.Clear();
         NotifyDouyinDiscoveryStateChanged();
+    }
+
+    private void SyncDouyinDiscoveryFilteredItems()
+    {
+        FilteredDouyinDiscoveryItems.Clear();
+        foreach (var item in DouyinDiscoveryItems.Where(MatchesDiscoveryFilter))
+        {
+            FilteredDouyinDiscoveryItems.Add(item);
+        }
+
+        OnPropertyChanged(nameof(FilteredDouyinDiscoveryItems));
+        OnPropertyChanged(nameof(FilteredDouyinDiscoveryResultCount));
+        OnPropertyChanged(nameof(HasFilteredDouyinDiscoveryItems));
     }
 
     private void NotifyDouyinDiscoveryStateChanged()
@@ -723,6 +761,10 @@ public partial class DouyinViewModel : ObservableObject
         OnPropertyChanged(nameof(DouyinDiscoveryItems));
         OnPropertyChanged(nameof(DouyinDiscoveryResultCount));
         OnPropertyChanged(nameof(HasDouyinDiscoveryItems));
+        OnPropertyChanged(nameof(FilteredDouyinDiscoveryItems));
+        OnPropertyChanged(nameof(FilteredDouyinDiscoveryResultCount));
+        OnPropertyChanged(nameof(HasFilteredDouyinDiscoveryItems));
+        OnPropertyChanged(nameof(IsDouyinDiscoveryFilterActive));
         OnPropertyChanged(nameof(HasDouyinDiscoveryError));
         NotifyDouyinDiscoverySelectionChanged();
     }
@@ -751,6 +793,22 @@ public partial class DouyinViewModel : ObservableObject
             item.Word,
             item.AwemeId,
             "抖音发现作品");
+
+    private bool MatchesDiscoveryFilter(DouyinDiscoveryItem item)
+    {
+        var keyword = DouyinDiscoveryFilterKeyword?.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+            return true;
+
+        return ContainsKeyword(item.Word, keyword)
+               || ContainsKeyword(item.Description, keyword)
+               || ContainsKeyword(item.AuthorNickname, keyword)
+               || ContainsKeyword(item.SecUid, keyword)
+               || ContainsKeyword(item.AwemeId, keyword)
+               || ContainsKeyword(item.Url, keyword)
+               || ContainsKeyword(item.Position?.ToString() ?? "", keyword)
+               || ContainsKeyword(item.HotValue?.ToString() ?? "", keyword);
+    }
 
     private static bool IsSameUrl(string left, string right)
         => string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
