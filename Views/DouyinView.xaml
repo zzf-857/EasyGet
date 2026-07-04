@@ -382,6 +382,8 @@
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="150"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -403,7 +405,7 @@
                                      Margin="0,0,8,0"/>
 
                             <TextBlock Grid.Column="2"
-                                       Text="排序"
+                                       Text="状态"
                                        Style="{StaticResource TextCaption}"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        Margin="0,0,8,0"
@@ -411,13 +413,28 @@
 
                             <ComboBox Grid.Column="3"
                                       Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding DouyinDiscoveryQueueFilterOptions}"
+                                      SelectedItem="{Binding SelectedDouyinDiscoveryQueueFilter}"
+                                      ToolTip="按队列状态筛选发现结果"
+                                      AutomationProperties.Name="按队列状态筛选发现结果"
+                                      Margin="0,0,8,0"/>
+
+                            <TextBlock Grid.Column="4"
+                                       Text="排序"
+                                       Style="{StaticResource TextCaption}"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       Margin="0,0,8,0"
+                                       VerticalAlignment="Center"/>
+
+                            <ComboBox Grid.Column="5"
+                                      Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding DouyinDiscoverySortOptions}"
                                       SelectedItem="{Binding SelectedDouyinDiscoverySortOption}"
                                       ToolTip="排序当前发现结果"
                                       AutomationProperties.Name="排序当前发现结果"
                                       Margin="0,0,8,0"/>
 
-                            <Button Grid.Column="4"
+                            <Button Grid.Column="6"
                                     Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
                                     Margin="0,0,12,0"
@@ -431,7 +448,7 @@
                                 </StackPanel>
                             </Button>
 
-                            <TextBlock Grid.Column="5"
+                            <TextBlock Grid.Column="7"
                                        Style="{StaticResource TextCaption}"
                                        Foreground="{StaticResource TextMutedBrush}"
                                        VerticalAlignment="Center">

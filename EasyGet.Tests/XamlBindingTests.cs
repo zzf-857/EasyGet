@@ -796,6 +796,8 @@ public class XamlBindingTests
         Assert.Contains("DouyinDiscoveryItems", source);
         Assert.Contains("FilteredDouyinDiscoveryItems", source);
         Assert.Contains("DouyinDiscoveryFilterKeyword", source);
+        Assert.Contains("DouyinDiscoveryQueueFilterOptions", source);
+        Assert.Contains("SelectedDouyinDiscoveryQueueFilter", source);
         Assert.Contains("DouyinDiscoverySortOptions", source);
         Assert.Contains("SelectedDouyinDiscoverySortOption", source);
         Assert.Contains("ClearDouyinDiscoveryFilterCommand", source);

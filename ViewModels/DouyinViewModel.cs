@@ -28,6 +28,7 @@ public partial class DouyinViewModel : ObservableObject
     public string[] DouyinTaskFilterOptions { get; } = ["全部", "进行中", "已完成", "失败", "已暂停", "已取消"];
     public string[] DouyinArchiveTypeFilterOptions { get; } = ["全部", "视频", "图文", "音乐"];
     public string[] DouyinDiscoverySortOptions { get; } = ["默认", "热度高到低", "作者", "描述"];
+    public string[] DouyinDiscoveryQueueFilterOptions { get; } = ["全部", "未入队", "已在队列", "不可入队"];
 
     [ObservableProperty]
     private string _selectedDouyinTaskFilter = "全部";
@@ -55,6 +56,9 @@ public partial class DouyinViewModel : ObservableObject
 
     [ObservableProperty]
     private string _selectedDouyinDiscoverySortOption = "默认";
+
+    [ObservableProperty]
+    private string _selectedDouyinDiscoveryQueueFilter = "全部";
 
     [ObservableProperty]
     private string _douyinDiscoveryStatusText = "尚未加载发现结果";
@@ -445,6 +449,17 @@ public partial class DouyinViewModel : ObservableObject
         if (!DouyinDiscoverySortOptions.Contains(value, StringComparer.Ordinal))
         {
             SelectedDouyinDiscoverySortOption = "默认";
+            return;
+        }
+
+        SyncDouyinDiscoveryFilteredItems();
+    }
+
+    partial void OnSelectedDouyinDiscoveryQueueFilterChanged(string value)
+    {
+        if (!DouyinDiscoveryQueueFilterOptions.Contains(value, StringComparer.Ordinal))
+        {
+            SelectedDouyinDiscoveryQueueFilter = "全部";
             return;
         }
 
@@ -855,6 +870,8 @@ public partial class DouyinViewModel : ObservableObject
                     ? "已在队列"
                     : "未入队";
         }
+
+        SyncDouyinDiscoveryFilteredItems();
     }
 
     private void NotifyDouyinDiscoveryStateChanged()
@@ -897,6 +914,12 @@ public partial class DouyinViewModel : ObservableObject
 
     private bool MatchesDiscoveryFilter(DouyinDiscoveryItem item)
     {
+        if (SelectedDouyinDiscoveryQueueFilter != "全部"
+            && !string.Equals(item.QueueStateText, SelectedDouyinDiscoveryQueueFilter, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
         var keyword = DouyinDiscoveryFilterKeyword?.Trim();
         if (string.IsNullOrWhiteSpace(keyword))
             return true;

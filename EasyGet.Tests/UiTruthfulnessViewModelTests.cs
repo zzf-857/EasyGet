@@ -1409,6 +1409,44 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelFiltersDiscoveryResultsByQueueState()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var queuedItem = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574538",
+            Description: "已入队作品",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var pendingItem = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "未入队作品");
+        var unavailableItem = new DouyinDiscoveryItem(Word: "猫咪热词", HotValue: 123);
+        context.Douyin.DouyinDiscoveryItems.Add(queuedItem);
+        context.Douyin.DouyinDiscoveryItems.Add(pendingItem);
+        context.Douyin.DouyinDiscoveryItems.Add(unavailableItem);
+
+        Assert.Equal(["全部", "未入队", "已在队列", "不可入队"], context.Douyin.DouyinDiscoveryQueueFilterOptions);
+
+        context.BatchContext.Manager.Tasks.Add(new DownloadTask { Url = "https://www.douyin.com/video/7604129988555574538" });
+
+        context.Douyin.SelectedDouyinDiscoveryQueueFilter = "已在队列";
+        var queued = Assert.Single(context.Douyin.FilteredDouyinDiscoveryItems);
+        Assert.Same(queuedItem, queued);
+
+        context.Douyin.SelectedDouyinDiscoveryQueueFilter = "未入队";
+        var pending = Assert.Single(context.Douyin.FilteredDouyinDiscoveryItems);
+        Assert.Same(pendingItem, pending);
+
+        context.Douyin.SelectedDouyinDiscoveryQueueFilter = "不可入队";
+        var unavailable = Assert.Single(context.Douyin.FilteredDouyinDiscoveryItems);
+        Assert.Same(unavailableItem, unavailable);
+
+        context.Douyin.SelectedDouyinDiscoveryQueueFilter = "不存在";
+        Assert.Equal("全部", context.Douyin.SelectedDouyinDiscoveryQueueFilter);
+        Assert.Equal(3, context.Douyin.FilteredDouyinDiscoveryResultCount);
+    }
+
+    [Fact]
     public void DouyinViewModelFiltersDiscoveryResultsLocally()
     {
         var discovery = new FakeDouyinDiscoveryService();
