@@ -1075,6 +1075,38 @@ def make_file_only_downloader(root: Path, *, produce_outputs: bool = True, count
     return run_py
 
 
+def make_database_status_downloader(root: Path) -> Path:
+    run_py = root / "run.py"
+    run_py.write_text(
+        textwrap.dedent(
+            """
+            import json
+            import sys
+            from pathlib import Path
+
+            config_path = Path(sys.argv[sys.argv.index("-c") + 1])
+            config = json.loads(config_path.read_text(encoding="utf-8"))
+            output_dir = Path(sys.argv[sys.argv.index("-p") + 1])
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            database_path = Path(config["database_path"])
+            database_path.parent.mkdir(parents=True, exist_ok=True)
+            database_path.write_bytes(b"sqlite placeholder")
+
+            media_path = output_dir / "database-video.mp4"
+            media_path.write_bytes(b"media")
+            (output_dir / "download_manifest.jsonl").write_text(
+                json.dumps({"file_paths": [str(media_path)], "desc": "database video"}) + "\\n",
+                encoding="utf-8",
+            )
+            print("Total: 1, Success: 1, Failed: 0, Skipped: 0")
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+    return run_py
+
+
 def make_transcript_outputs_downloader(root: Path) -> Path:
     run_py = root / "run.py"
     run_py.write_text(
@@ -1620,6 +1652,34 @@ class SidecarRunnerTests(unittest.TestCase):
                 [Path(path).name for path in details["transcript_files"]],
                 ["demo.transcript.txt", "demo.transcript.json", "demo.transcript.srt"],
             )
+
+    def test_run_real_success_details_include_database_status(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "fake-downloader"
+            output_dir = Path(temp_dir) / "downloads"
+            root.mkdir()
+            make_database_status_downloader(root)
+
+            result = self.run_sidecar(
+                ["--downloader-root", str(root), "--runner-mode", "in-process", "--enable-database"],
+                output_dir,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            details = events[-1]["details"]
+            database_path = output_dir.resolve() / ".easyget-douyin-sidecar" / "dy_downloader.db"
+
+            self.assertEqual(events[-1]["event"], "success")
+            self.assertEqual(
+                details["database"],
+                {
+                    "enabled": True,
+                    "path": str(database_path),
+                    "exists": True,
+                },
+            )
+            self.assertNotIn(str(database_path), details["output_files"])
 
     def test_run_real_success_without_new_manifest_entry_does_not_attach_stale_manifest_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:

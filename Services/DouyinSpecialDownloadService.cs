@@ -259,6 +259,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                                     FormatLiveRoomSummary(message),
                                     request.Cookie));
                             AppendTaskEvent(task, FormatTranscriptSummary(message));
+                            AppendTaskEvent(task, FormatDatabaseSummary(message));
                             sawTerminalSummary = true;
                         }
                         break;
@@ -395,6 +396,13 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
                 message.DiscoveryItems = GetDiscoveryItems(details.Value);
                 message.TranscriptFileCount = GetOptionalInt32(details.Value, "transcript_file_count");
+                if (GetOptionalObject(details.Value, "database") is { } database)
+                {
+                    message.DatabaseEnabled = GetOptionalBool(database, "enabled");
+                    message.DatabasePath = GetOptionalString(database, "path");
+                    message.DatabaseExists = GetOptionalBool(database, "exists");
+                }
+
                 if (GetOptionalObject(details.Value, "live_room") is { } liveRoom)
                 {
                     message.LiveRoomTitle = GetOptionalString(liveRoom, "title");
@@ -601,6 +609,16 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         return $"转写文件: {count} 个";
     }
 
+    private static string FormatDatabaseSummary(DouyinSidecarMessage message)
+    {
+        if (message.DatabaseEnabled is not true)
+            return "";
+
+        return message.DatabaseExists is false
+            ? "数据库: 已启用（文件未生成）"
+            : "数据库: 已启用";
+    }
+
     private static DouyinSidecarEventKind ParseEventKind(string value)
     {
         return value.Trim().ToLowerInvariant() switch
@@ -802,6 +820,27 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         }
 
         return value.GetString() ?? "";
+    }
+
+    private static bool? GetOptionalBool(JsonElement element, string propertyName)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(propertyName, out var value))
+        {
+            return null;
+        }
+
+        if (value.ValueKind == JsonValueKind.True)
+            return true;
+        if (value.ValueKind == JsonValueKind.False)
+            return false;
+        if (value.ValueKind == JsonValueKind.String
+            && bool.TryParse(value.GetString(), out var boolValue))
+        {
+            return boolValue;
+        }
+
+        return null;
     }
 
     private static double? GetOptionalDouble(JsonElement element, string propertyName)
@@ -1135,6 +1174,9 @@ internal sealed class DouyinSidecarMessage
     public int? FailedCount { get; set; }
     public int? SkippedCount { get; set; }
     public int? TranscriptFileCount { get; set; }
+    public bool? DatabaseEnabled { get; set; }
+    public string DatabasePath { get; set; } = "";
+    public bool? DatabaseExists { get; set; }
     public string LiveRoomTitle { get; set; } = "";
     public string LiveAuthorName { get; set; } = "";
     public int? LiveRoomStatus { get; set; }

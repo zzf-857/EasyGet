@@ -1238,6 +1238,44 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_AppendsDatabaseSummaryToTaskEventLog()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-database-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDirectory, "demo.mp4");
+        var databasePath = Path.Combine(outputDirectory, ".easyget-douyin-sidecar", "dy_downloader.db");
+        var runner = new FakeSidecarRunner(
+            $$"""
+            {
+              "event": "success",
+              "message": "download saved",
+              "title": "数据库去重视频",
+              "output_file_path": "{{JsonEscaped(mediaPath)}}",
+              "details": {
+                "output_files": ["{{JsonEscaped(mediaPath)}}"],
+                "database": {
+                  "enabled": true,
+                  "path": "{{JsonEscaped(databasePath)}}",
+                  "exists": true
+                }
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/1234567890",
+            OutputDirectory = outputDirectory
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Contains("数据库: 已启用", task.DouyinTaskEventLog, StringComparison.Ordinal);
+        var outputFiles = GetStringListProperty(task, "OutputFilePaths");
+        Assert.DoesNotContain(databasePath, outputFiles);
+    }
+
+    [Fact]
     public async Task DownloadAsync_MarksTaskCancelledWhenRunnerObservesCancellation()
     {
         var runner = new CancellingSidecarRunner();

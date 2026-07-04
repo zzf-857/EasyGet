@@ -907,6 +907,7 @@ def build_success_summary(
     manifest_entries: Sequence[Dict[str, Any]],
     counts: Dict[str, int],
     return_code: int,
+    config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     primary_file = choose_primary_output_file(output_files)
     manifest_entry = manifest_entries[0] if manifest_entries else {}
@@ -932,6 +933,9 @@ def build_success_summary(
     live_room_summary = metadata.get("live_room_summary")
     if isinstance(live_room_summary, dict) and live_room_summary:
         details["live_room"] = live_room_summary
+    database_summary = build_database_summary(config or {})
+    if database_summary:
+        details["database"] = database_summary
 
     return make_success_event(
         title=title,
@@ -941,6 +945,28 @@ def build_success_summary(
         thumbnail_url=thumbnail_url,
         details=details,
     )
+
+
+def build_database_summary(config: Dict[str, Any]) -> Dict[str, Any]:
+    enabled = bool(config.get("database"))
+    raw_path = str(config.get("database_path") or "").strip()
+    if not enabled and not raw_path:
+        return {}
+
+    summary: Dict[str, Any] = {"enabled": enabled}
+    if raw_path:
+        path = Path(raw_path).expanduser()
+        try:
+            path = path.resolve()
+        except OSError:
+            pass
+        summary["path"] = str(path)
+        summary["exists"] = path.is_file()
+    else:
+        summary["path"] = ""
+        summary["exists"] = False
+
+    return summary
 
 
 def transcript_output_files(output_files: Sequence[str]) -> List[str]:
@@ -1561,14 +1587,28 @@ def run_real(args: argparse.Namespace) -> Tuple[List[Dict[str, Any]], int]:
         config_path = state_dir / "last-config.json"
         write_json_config(config, config_path)
         completed, exit_code = _invoke_downloader(
-            args, downloader_root, config_path, output_dir, start_manifest_line, start_timestamp, redaction_secrets
+            args,
+            downloader_root,
+            config_path,
+            output_dir,
+            start_manifest_line,
+            start_timestamp,
+            redaction_secrets,
+            config,
         )
     else:
         with tempfile.TemporaryDirectory(prefix=".easyget-douyin-sidecar-") as temp_dir:
             config_path = Path(temp_dir) / "config.json"
             write_json_config(config, config_path)
             completed, exit_code = _invoke_downloader(
-                args, downloader_root, config_path, output_dir, start_manifest_line, start_timestamp, redaction_secrets
+                args,
+                downloader_root,
+                config_path,
+                output_dir,
+                start_manifest_line,
+                start_timestamp,
+                redaction_secrets,
+                config,
             )
 
     events.append(completed)
@@ -1583,6 +1623,7 @@ def _invoke_downloader(
     start_manifest_line: int,
     start_timestamp: float,
     redaction_secrets: Sequence[str],
+    config: Dict[str, Any],
 ) -> Tuple[Dict[str, Any], int]:
     runner_mode = select_runner_mode(args)
     downloader_python = resolve_downloader_python(args.python, downloader_root)
@@ -1692,6 +1733,7 @@ def _invoke_downloader(
             manifest_entries=manifest_entries,
             counts=counts,
             return_code=completed.returncode,
+            config=config,
         ),
         0,
     )
