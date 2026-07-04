@@ -120,7 +120,37 @@ public partial class DownloadHistory : ObservableObject
 
     public bool HasAttachmentSummary => !string.IsNullOrWhiteSpace(AttachmentSummaryText);
 
-    public string AttachmentSummaryText => !string.IsNullOrWhiteSpace(DouyinManifestSummaryText)
-        ? DouyinManifestSummaryText
-        : AttachmentCountText;
+    public string AttachmentSummaryText
+    {
+        get
+        {
+            var parts = new List<string>();
+            var attachmentSummary = !string.IsNullOrWhiteSpace(DouyinManifestSummaryText)
+                ? DouyinManifestSummaryText
+                : AttachmentCountText;
+            if (!string.IsNullOrWhiteSpace(attachmentSummary))
+                parts.Add(attachmentSummary);
+
+            var hlsPlaylistSummary = DouyinOutputHintFormatter.FormatLiveHlsPlaylistSummary(
+                DouyinOutputHintFormatter.CountLiveHlsPlaylistFiles(
+                    Url,
+                    EnumerateOutputFilePaths()));
+            if (!string.IsNullOrWhiteSpace(hlsPlaylistSummary))
+                parts.Add(hlsPlaylistSummary);
+
+            return string.Join(" / ", parts);
+        }
+    }
+
+    private IEnumerable<string> EnumerateOutputFilePaths()
+    {
+        if (!string.IsNullOrWhiteSpace(FilePath))
+            yield return FilePath;
+
+        foreach (var path in AttachmentFilePaths)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+                yield return path;
+        }
+    }
 }

@@ -564,6 +564,49 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public async Task LoadHistory_LabelsDouyinLiveHlsPlaylistOutputs()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDir = Path.Combine(Path.GetTempPath(), $"easyget-history-live-hls-{Guid.NewGuid():N}");
+        var playlistPath = Path.Combine(outputDir, "主播甲_live_20260704.m3u8");
+        var roomMetadataPath = Path.Combine(outputDir, "主播甲_live_20260704_room.json");
+
+        try
+        {
+            Directory.CreateDirectory(outputDir);
+            await File.WriteAllTextAsync(playlistPath, "#EXTM3U");
+            await File.WriteAllTextAsync(roomMetadataPath, "{}");
+
+            using var service = new HistoryService(dbPath);
+            var history = new DownloadHistory
+            {
+                Url = "https://live.douyin.com/123456789",
+                Title = "直播标题",
+                Platform = "Douyin",
+                Format = "m3u8",
+                FilePath = playlistPath,
+                DownloadTime = new DateTime(2026, 7, 4, 20, 0, 0)
+            };
+            SetStringListProperty(history, "AttachmentFilePaths", [roomMetadataPath]);
+            await service.AddAsync(history);
+
+            var viewModel = new HistoryViewModel(service);
+
+            await viewModel.LoadHistory();
+
+            var item = Assert.Single(viewModel.HistoryItems);
+            var summary = GetStringProperty(item, "AttachmentSummaryText");
+            Assert.Contains("直播 HLS playlist 1", summary, StringComparison.Ordinal);
+            Assert.Contains("附属 1", summary, StringComparison.Ordinal);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDir);
+        }
+    }
+
+    [Fact]
     public void HistoryViewModelExposesHistoryCardQuickActionCommands()
     {
         var commandProperties = typeof(HistoryViewModel)

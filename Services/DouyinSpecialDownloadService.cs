@@ -247,6 +247,12 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                                 FormatTerminalEvent(
                                     "已完成",
                                     RedactSensitiveText(message.Message, request.Cookie)));
+                            AppendTaskEvent(
+                                task,
+                                DouyinOutputHintFormatter.FormatLiveHlsPlaylistWarning(
+                                    DouyinOutputHintFormatter.CountLiveHlsPlaylistFiles(
+                                        task.Url,
+                                        task.OutputFilePaths)));
                             sawTerminalSummary = true;
                         }
                         break;

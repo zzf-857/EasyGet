@@ -1129,6 +1129,37 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_AnnotatesLiveHlsPlaylistOutputInTaskEventLog()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-live-hls-{Guid.NewGuid():N}");
+        var playlistPath = Path.Combine(outputDirectory, "主播甲_live_20260704.m3u8");
+        var runner = new FakeSidecarRunner(
+            $$"""
+            {
+              "event": "success",
+              "message": "live saved",
+              "title": "直播标题",
+              "output_file_path": "{{JsonEscaped(playlistPath)}}",
+              "details": {
+                "output_files": ["{{JsonEscaped(playlistPath)}}"]
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://live.douyin.com/123456789",
+            OutputDirectory = outputDirectory
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Contains("直播 HLS playlist", task.DouyinTaskEventLog, StringComparison.Ordinal);
+        Assert.Contains("播放列表文本", task.DouyinTaskEventLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DownloadAsync_MarksTaskCancelledWhenRunnerObservesCancellation()
     {
         var runner = new CancellingSidecarRunner();
