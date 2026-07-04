@@ -35,7 +35,7 @@ MANIFEST_SNAPSHOT_PREFIX = "download_manifest.easyget-"
 MAX_MANIFEST_SUMMARY_ITEMS = 5
 MAX_MANIFEST_TEXT_LENGTH = 300
 PRIMARY_MEDIA_SUFFIXES = (".mp4", ".mov", ".m4v", ".flv", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".mp3", ".m4a")
-SECONDARY_NAME_MARKERS = ("_cover", "_avatar", "_music", "_data", "_comments", ".transcript")
+SECONDARY_NAME_MARKERS = ("_cover", "_avatar", "_music", "_data", "_comments", "_room", ".transcript")
 SECONDARY_OUTPUT_SUFFIXES = {".json", ".txt"}
 COUNT_RE = re.compile(
     r"Total:\s*(?P<total>\d+),\s*Success:\s*(?P<success>\d+),\s*"

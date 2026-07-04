@@ -1988,9 +1988,10 @@ class SidecarConfigTests(unittest.TestCase):
             video_file = output_dir / "video.mp4"
             data_file = output_dir / "video_data.json"
             comments_file = output_dir / "video_comments.txt"
+            room_file = output_dir / "live_room.json"
             probe_file = output_dir / "runtime-probe.json"
             notes_file = output_dir / "notes.txt"
-            for path in (video_file, data_file, comments_file, probe_file, notes_file):
+            for path in (video_file, data_file, comments_file, room_file, probe_file, notes_file):
                 path.write_bytes(b"x")
             manifest = output_dir / "download_manifest.jsonl"
             manifest.write_text(
@@ -2000,6 +2001,7 @@ class SidecarConfigTests(unittest.TestCase):
                             str(video_file),
                             str(data_file),
                             str(comments_file),
+                            str(room_file),
                             str(probe_file),
                             str(notes_file),
                         ],
@@ -2017,6 +2019,7 @@ class SidecarConfigTests(unittest.TestCase):
                     str(video_file.resolve()),
                     str(data_file.resolve()),
                     str(comments_file.resolve()),
+                    str(room_file.resolve()),
                 },
             )
             self.assertEqual(len(entries), 1)
@@ -2066,9 +2069,10 @@ class SidecarConfigTests(unittest.TestCase):
             video_file = output_dir / "video.mp4"
             data_file = output_dir / "video_data.json"
             comments_file = output_dir / "video_comments.txt"
+            room_file = output_dir / "live_room.json"
             probe_file = output_dir / "runtime-probe.json"
             notes_file = output_dir / "notes.txt"
-            for path in (video_file, data_file, comments_file, probe_file, notes_file):
+            for path in (video_file, data_file, comments_file, room_file, probe_file, notes_file):
                 path.write_bytes(b"x")
 
             output_files = sidecar.scan_recent_output_files(output_dir, 0)
@@ -2079,6 +2083,7 @@ class SidecarConfigTests(unittest.TestCase):
                     str(video_file.resolve()),
                     str(data_file.resolve()),
                     str(comments_file.resolve()),
+                    str(room_file.resolve()),
                 },
             )
             self.assertNotIn(str(probe_file.resolve()), output_files)
