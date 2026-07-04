@@ -258,6 +258,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                                 RedactSensitiveText(
                                     FormatLiveRoomSummary(message),
                                     request.Cookie));
+                            AppendTaskEvent(task, FormatTranscriptSummary(message));
                             sawTerminalSummary = true;
                         }
                         break;
@@ -393,6 +394,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
                 message.DiscoverySearchMax = GetOptionalInt32(details.Value, "search_max");
                 message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
                 message.DiscoveryItems = GetDiscoveryItems(details.Value);
+                message.TranscriptFileCount = GetOptionalInt32(details.Value, "transcript_file_count");
                 if (GetOptionalObject(details.Value, "live_room") is { } liveRoom)
                 {
                     message.LiveRoomTitle = GetOptionalString(liveRoom, "title");
@@ -589,6 +591,14 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             parts.Add(message.LiveRoomTitle.Trim());
 
         return parts.Count == 0 ? "" : $"直播间: {string.Join(" · ", parts)}";
+    }
+
+    private static string FormatTranscriptSummary(DouyinSidecarMessage message)
+    {
+        if (message.TranscriptFileCount is not { } count || count <= 0)
+            return "";
+
+        return $"转写文件: {count} 个";
     }
 
     private static DouyinSidecarEventKind ParseEventKind(string value)
@@ -1124,6 +1134,7 @@ internal sealed class DouyinSidecarMessage
     public int? SuccessCount { get; set; }
     public int? FailedCount { get; set; }
     public int? SkippedCount { get; set; }
+    public int? TranscriptFileCount { get; set; }
     public string LiveRoomTitle { get; set; } = "";
     public string LiveAuthorName { get; set; } = "";
     public int? LiveRoomStatus { get; set; }

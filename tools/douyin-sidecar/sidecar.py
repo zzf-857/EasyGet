@@ -911,6 +911,7 @@ def build_success_summary(
     primary_file = choose_primary_output_file(output_files)
     manifest_entry = manifest_entries[0] if manifest_entries else {}
     metadata = load_first_metadata_file(output_files)
+    transcript_files = transcript_output_files(output_files)
     title = str(
         metadata.get("desc")
         or manifest_entry.get("desc")
@@ -925,6 +926,9 @@ def build_success_summary(
         "manifest_entries": len(manifest_entries),
         **build_manifest_summary_details(output_dir, manifest_entries),
     }
+    if transcript_files:
+        details["transcript_file_count"] = len(transcript_files)
+        details["transcript_files"] = transcript_files
     live_room_summary = metadata.get("live_room_summary")
     if isinstance(live_room_summary, dict) and live_room_summary:
         details["live_room"] = live_room_summary
@@ -937,6 +941,14 @@ def build_success_summary(
         thumbnail_url=thumbnail_url,
         details=details,
     )
+
+
+def transcript_output_files(output_files: Sequence[str]) -> List[str]:
+    return [
+        path
+        for path in output_files
+        if Path(path).name.lower().endswith((".transcript.txt", ".transcript.json"))
+    ]
 
 
 def load_first_metadata_file(output_files: Sequence[str]) -> Dict[str, Any]:

@@ -1197,6 +1197,47 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_AppendsTranscriptSummaryToTaskEventLog()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), $"easyget-sidecar-transcript-{Guid.NewGuid():N}");
+        var mediaPath = Path.Combine(outputDirectory, "demo.mp4");
+        var textPath = Path.Combine(outputDirectory, "demo.transcript.txt");
+        var jsonPath = Path.Combine(outputDirectory, "demo.transcript.json");
+        var runner = new FakeSidecarRunner(
+            $$"""
+            {
+              "event": "success",
+              "message": "download saved",
+              "title": "带转写视频",
+              "output_file_path": "{{JsonEscaped(mediaPath)}}",
+              "details": {
+                "output_files": [
+                  "{{JsonEscaped(mediaPath)}}",
+                  "{{JsonEscaped(textPath)}}",
+                  "{{JsonEscaped(jsonPath)}}"
+                ],
+                "transcript_file_count": 2,
+                "transcript_files": [
+                  "{{JsonEscaped(textPath)}}",
+                  "{{JsonEscaped(jsonPath)}}"
+                ]
+              }
+            }
+            """);
+        var service = new DouyinSpecialDownloadService(runner);
+        var task = new DownloadTask
+        {
+            Url = "https://www.douyin.com/video/1234567890",
+            OutputDirectory = outputDirectory
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Contains("转写文件: 2 个", task.DouyinTaskEventLog, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task DownloadAsync_MarksTaskCancelledWhenRunnerObservesCancellation()
     {
         var runner = new CancellingSidecarRunner();
