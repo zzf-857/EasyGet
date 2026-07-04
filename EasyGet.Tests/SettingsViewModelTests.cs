@@ -97,6 +97,9 @@ public class SettingsViewModelTests
         SetAppConfigBool(config.Config, "DouyinCommentIncludeReplies", value: true);
         SetAppConfigInt(config.Config, "DouyinMaxComments", 500);
         SetAppConfigInt(config.Config, "DouyinCommentPageSize", 12);
+        SetAppConfigInt(config.Config, "DouyinLiveMaxDurationSeconds", 3600);
+        SetAppConfigInt(config.Config, "DouyinLiveChunkSize", 131072);
+        SetAppConfigInt(config.Config, "DouyinLiveIdleTimeoutSeconds", 45);
         var viewModel = CreateViewModel(config, new FakeAppUpdateService());
 
         viewModel.Initialize();
@@ -120,6 +123,9 @@ public class SettingsViewModelTests
         AssertViewModelBool(viewModel, "DouyinCommentIncludeReplies", expected: true);
         AssertViewModelInt(viewModel, "DouyinMaxComments", 500);
         AssertViewModelInt(viewModel, "DouyinCommentPageSize", 12);
+        AssertViewModelInt(viewModel, "DouyinLiveMaxDurationSeconds", 3600);
+        AssertViewModelInt(viewModel, "DouyinLiveChunkSize", 131072);
+        AssertViewModelInt(viewModel, "DouyinLiveIdleTimeoutSeconds", 45);
         Assert.Equal(
             ["post", "like", "mix", "music", "post,like,mix,music", "collect", "collectmix"],
             viewModel.DouyinModeOptions);
@@ -208,6 +214,9 @@ public class SettingsViewModelTests
         SetViewModelBool(viewModel, "DouyinCommentIncludeReplies", value: true);
         SetViewModelInt(viewModel, "DouyinMaxComments", 500);
         SetViewModelInt(viewModel, "DouyinCommentPageSize", 99);
+        SetViewModelInt(viewModel, "DouyinLiveMaxDurationSeconds", 3600);
+        SetViewModelInt(viewModel, "DouyinLiveChunkSize", 131072);
+        SetViewModelInt(viewModel, "DouyinLiveIdleTimeoutSeconds", 0);
 
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
 
@@ -236,6 +245,12 @@ public class SettingsViewModelTests
         AssertViewModelInt(viewModel, "DouyinMaxComments", 500);
         AssertViewModelInt(viewModel, "DouyinCommentPageSize", 20);
         AssertViewModelBool(viewModel, "DouyinEnableBrowserFallback", expected: true);
+        AssertAppConfigInt(config.Config, "DouyinLiveMaxDurationSeconds", 3600);
+        AssertAppConfigInt(config.Config, "DouyinLiveChunkSize", 131072);
+        AssertAppConfigInt(config.Config, "DouyinLiveIdleTimeoutSeconds", 30);
+        AssertViewModelInt(viewModel, "DouyinLiveMaxDurationSeconds", 3600);
+        AssertViewModelInt(viewModel, "DouyinLiveChunkSize", 131072);
+        AssertViewModelInt(viewModel, "DouyinLiveIdleTimeoutSeconds", 30);
     }
 
     [Fact]
@@ -394,6 +409,31 @@ public class SettingsViewModelTests
         var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
         Assert.Same(saved.Task, completed);
         AssertAppConfigBool(config.Config, "DouyinEnableBrowserFallback", expected: true);
+    }
+
+    [Fact]
+    public async Task DouyinLiveRecordingOptionsChange_AutoSavesSettings()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var saveCount = 0;
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () =>
+        {
+            saveCount++;
+            if (saveCount >= 3)
+                saved.TrySetResult();
+        };
+
+        SetViewModelInt(viewModel, "DouyinLiveMaxDurationSeconds", 1800);
+        SetViewModelInt(viewModel, "DouyinLiveChunkSize", 131072);
+        SetViewModelInt(viewModel, "DouyinLiveIdleTimeoutSeconds", 45);
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        AssertAppConfigInt(config.Config, "DouyinLiveMaxDurationSeconds", 1800);
+        AssertAppConfigInt(config.Config, "DouyinLiveChunkSize", 131072);
+        AssertAppConfigInt(config.Config, "DouyinLiveIdleTimeoutSeconds", 45);
     }
 
     private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)

@@ -113,6 +113,30 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task LoadAndSave_PreservesDouyinLiveRecordingOptions()
+    {
+        var service = new ConfigService(_tempDir);
+
+        await service.LoadAsync();
+
+        AssertAppConfigInt(service.Config, "DouyinLiveMaxDurationSeconds", 0);
+        AssertAppConfigInt(service.Config, "DouyinLiveChunkSize", 65536);
+        AssertAppConfigInt(service.Config, "DouyinLiveIdleTimeoutSeconds", 30);
+        SetAppConfigInt(service.Config, "DouyinLiveMaxDurationSeconds", 3600);
+        SetAppConfigInt(service.Config, "DouyinLiveChunkSize", 131072);
+        SetAppConfigInt(service.Config, "DouyinLiveIdleTimeoutSeconds", 45);
+
+        await service.SaveAsync();
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        AssertAppConfigInt(reloaded.Config, "DouyinLiveMaxDurationSeconds", 3600);
+        AssertAppConfigInt(reloaded.Config, "DouyinLiveChunkSize", 131072);
+        AssertAppConfigInt(reloaded.Config, "DouyinLiveIdleTimeoutSeconds", 45);
+    }
+
+    [Fact]
     public void NormalizeRuntimeConfig_ClampsPerformanceValuesToSafeRange()
     {
         var config = new AppConfig
@@ -247,6 +271,9 @@ public class ConfigServiceTests
         SetAppConfigBool(config, "DouyinIncrementalDownload", value: true);
         SetAppConfigInt(config, "DouyinMaxComments", -5);
         SetAppConfigInt(config, "DouyinCommentPageSize", 99);
+        SetAppConfigInt(config, "DouyinLiveMaxDurationSeconds", -1);
+        SetAppConfigInt(config, "DouyinLiveChunkSize", -1);
+        SetAppConfigInt(config, "DouyinLiveIdleTimeoutSeconds", 0);
 
         ConfigService.NormalizeRuntimeConfig(config);
 
@@ -261,6 +288,9 @@ public class ConfigServiceTests
         AssertAppConfigBool(config, "DouyinIncrementalDownload", expected: true);
         AssertAppConfigInt(config, "DouyinMaxComments", 0);
         AssertAppConfigInt(config, "DouyinCommentPageSize", 20);
+        AssertAppConfigInt(config, "DouyinLiveMaxDurationSeconds", 0);
+        AssertAppConfigInt(config, "DouyinLiveChunkSize", 65536);
+        AssertAppConfigInt(config, "DouyinLiveIdleTimeoutSeconds", 30);
     }
 
     [Fact]

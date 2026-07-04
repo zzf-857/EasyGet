@@ -253,6 +253,35 @@ class SidecarCliTests(unittest.TestCase):
             self.assertTrue(config["browser_fallback"]["enabled"])
             self.assertFalse(config["browser_fallback"]["headless"])
 
+    def test_dry_run_maps_live_recording_options(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = self.run_sidecar(
+                [
+                    "--dry-run",
+                    "--url",
+                    "https://live.douyin.com/123456789",
+                    "--live-max-duration-seconds",
+                    "3600",
+                    "--live-chunk-size",
+                    "131072",
+                    "--live-idle-timeout-seconds",
+                    "45",
+                ],
+                Path(temp_dir),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            config = events[0]["details"]["config"]
+            self.assertEqual(
+                {
+                    "max_duration_seconds": 3600,
+                    "chunk_size": 131072,
+                    "idle_timeout_seconds": 45,
+                },
+                config["live"],
+            )
+
     def test_dry_run_rejects_unknown_template_variable(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             result = self.run_sidecar(

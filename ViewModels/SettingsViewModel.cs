@@ -111,6 +111,9 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _douyinEnableDatabase;
     [ObservableProperty] private bool _douyinIncrementalDownload;
     [ObservableProperty] private bool _douyinEnableBrowserFallback;
+    [ObservableProperty] private int _douyinLiveMaxDurationSeconds;
+    [ObservableProperty] private int _douyinLiveChunkSize = AppConfig.DefaultDouyinLiveChunkSize;
+    [ObservableProperty] private int _douyinLiveIdleTimeoutSeconds = AppConfig.DefaultDouyinLiveIdleTimeoutSeconds;
 
     [ObservableProperty] private bool _autoCategorizeByPlatform = true;
 
@@ -247,6 +250,9 @@ public partial class SettingsViewModel : ObservableObject
             DouyinEnableDatabase = c.DouyinEnableDatabase;
             DouyinIncrementalDownload = c.DouyinIncrementalDownload;
             DouyinEnableBrowserFallback = c.DouyinEnableBrowserFallback;
+            DouyinLiveMaxDurationSeconds = c.DouyinLiveMaxDurationSeconds;
+            DouyinLiveChunkSize = c.DouyinLiveChunkSize;
+            DouyinLiveIdleTimeoutSeconds = c.DouyinLiveIdleTimeoutSeconds;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
             SelectedThemeColor = c.ThemeColor;
             TgApiId = c.TgApiId;
@@ -373,6 +379,9 @@ public partial class SettingsViewModel : ObservableObject
         c.DouyinEnableDatabase = DouyinEnableDatabase;
         c.DouyinIncrementalDownload = DouyinIncrementalDownload;
         c.DouyinEnableBrowserFallback = DouyinEnableBrowserFallback;
+        c.DouyinLiveMaxDurationSeconds = DouyinLiveMaxDurationSeconds;
+        c.DouyinLiveChunkSize = DouyinLiveChunkSize;
+        c.DouyinLiveIdleTimeoutSeconds = DouyinLiveIdleTimeoutSeconds;
         c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
         c.ThemeColor = SelectedThemeColor;
         c.TgApiId = TgApiId;
@@ -418,6 +427,9 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinEnableDatabaseChanged(bool value) => AutoSave();
     partial void OnDouyinIncrementalDownloadChanged(bool value) => AutoSave();
     partial void OnDouyinEnableBrowserFallbackChanged(bool value) => AutoSave();
+    partial void OnDouyinLiveMaxDurationSecondsChanged(int value) => AutoSave();
+    partial void OnDouyinLiveChunkSizeChanged(int value) => AutoSave();
+    partial void OnDouyinLiveIdleTimeoutSecondsChanged(int value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
     partial void OnTgApiIdChanged(string value) => AutoSave();
     partial void OnTgApiHashChanged(string value) => AutoSave();
@@ -480,6 +492,9 @@ public partial class SettingsViewModel : ObservableObject
             && DouyinGroupByMode == config.DouyinGroupByMode
             && DouyinMaxComments == config.DouyinMaxComments
             && DouyinCommentPageSize == config.DouyinCommentPageSize
+            && DouyinLiveMaxDurationSeconds == config.DouyinLiveMaxDurationSeconds
+            && DouyinLiveChunkSize == config.DouyinLiveChunkSize
+            && DouyinLiveIdleTimeoutSeconds == config.DouyinLiveIdleTimeoutSeconds
             && DouyinStartTime == config.DouyinStartTime
             && DouyinEndTime == config.DouyinEndTime)
         {
@@ -497,6 +512,9 @@ public partial class SettingsViewModel : ObservableObject
             DouyinGroupByMode = config.DouyinGroupByMode;
             DouyinMaxComments = config.DouyinMaxComments;
             DouyinCommentPageSize = config.DouyinCommentPageSize;
+            DouyinLiveMaxDurationSeconds = config.DouyinLiveMaxDurationSeconds;
+            DouyinLiveChunkSize = config.DouyinLiveChunkSize;
+            DouyinLiveIdleTimeoutSeconds = config.DouyinLiveIdleTimeoutSeconds;
             DouyinStartTime = config.DouyinStartTime;
             DouyinEndTime = config.DouyinEndTime;
         }

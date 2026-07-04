@@ -685,6 +685,9 @@ public class DouyinSpecialDownloadServiceTests
         SetAppConfigBool(config, "DouyinCommentIncludeReplies", value: true);
         SetAppConfigInt(config, "DouyinMaxComments", 500);
         SetAppConfigInt(config, "DouyinCommentPageSize", 12);
+        SetAppConfigInt(config, "DouyinLiveMaxDurationSeconds", 3600);
+        SetAppConfigInt(config, "DouyinLiveChunkSize", 131072);
+        SetAppConfigInt(config, "DouyinLiveIdleTimeoutSeconds", 45);
         SetAppConfigString(config, "DouyinFilenameTemplate", " {author}_{title}_{id} ");
         SetAppConfigString(config, "DouyinFolderTemplate", "{date}_{title}");
         SetAppConfigString(config, "DouyinAuthorDirectoryMode", " sec_uid ");
@@ -721,6 +724,9 @@ public class DouyinSpecialDownloadServiceTests
         Assert.True(GetRequestValue<bool>(runner.LastRequest, "CommentIncludeReplies"));
         Assert.Equal(500, GetRequestValue<int>(runner.LastRequest, "MaxComments"));
         Assert.Equal(12, GetRequestValue<int>(runner.LastRequest, "CommentPageSize"));
+        Assert.Equal(3600, GetRequestValue<int>(runner.LastRequest, "LiveMaxDurationSeconds"));
+        Assert.Equal(131072, GetRequestValue<int>(runner.LastRequest, "LiveChunkSize"));
+        Assert.Equal(45, GetRequestValue<int>(runner.LastRequest, "LiveIdleTimeoutSeconds"));
     }
 
     [Theory]
@@ -928,7 +934,10 @@ public class DouyinSpecialDownloadServiceTests
             ["ThreadCount"] = 7,
             ["CommentIncludeReplies"] = true,
             ["MaxComments"] = 500,
-            ["CommentPageSize"] = 12
+            ["CommentPageSize"] = 12,
+            ["LiveMaxDurationSeconds"] = 3600,
+            ["LiveChunkSize"] = 131072,
+            ["LiveIdleTimeoutSeconds"] = 45
         });
 
         var psi = CreateProcessStartInfo(runner, request);
@@ -958,6 +967,9 @@ public class DouyinSpecialDownloadServiceTests
         Assert.Contains("--comment-include-replies", args);
         AssertArgument(args, "--max-comments", "500");
         AssertArgument(args, "--comment-page-size", "12");
+        AssertArgument(args, "--live-max-duration-seconds", "3600");
+        AssertArgument(args, "--live-chunk-size", "131072");
+        AssertArgument(args, "--live-idle-timeout-seconds", "45");
         Assert.Contains("--include-cover", args);
         Assert.DoesNotContain("--include-music", args);
         Assert.Contains("--include-json", args);

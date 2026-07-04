@@ -187,6 +187,13 @@ public class ConfigService
             config.DouyinCommentPageSize,
             1,
             AppConfig.MaxDouyinCommentPageSize);
+        config.DouyinLiveMaxDurationSeconds = Math.Max(0, config.DouyinLiveMaxDurationSeconds);
+        config.DouyinLiveChunkSize = config.DouyinLiveChunkSize > 0
+            ? config.DouyinLiveChunkSize
+            : AppConfig.DefaultDouyinLiveChunkSize;
+        config.DouyinLiveIdleTimeoutSeconds = config.DouyinLiveIdleTimeoutSeconds > 0
+            ? config.DouyinLiveIdleTimeoutSeconds
+            : AppConfig.DefaultDouyinLiveIdleTimeoutSeconds;
         config.DouyinFilenameTemplate = NormalizeDouyinTemplate(config.DouyinFilenameTemplate);
         config.DouyinFolderTemplate = NormalizeDouyinTemplate(config.DouyinFolderTemplate);
         config.DouyinAuthorDirectoryMode = NormalizeDouyinAuthorDirectoryMode(

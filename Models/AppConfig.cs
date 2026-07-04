@@ -14,6 +14,8 @@ public class AppConfig
     public const int MaxConcurrentDownloadLimit = 8;
     public const string DefaultDouyinTemplate = "{date}_{title}_{id}";
     public const int MaxDouyinCommentPageSize = 20;
+    public const int DefaultDouyinLiveChunkSize = 65536;
+    public const int DefaultDouyinLiveIdleTimeoutSeconds = 30;
 
     /// <summary>默认下载目录</summary>
     public string DefaultDownloadPath { get; set; } = 
@@ -111,6 +113,15 @@ public class AppConfig
 
     /// <summary>抖音专项下载是否启用浏览器兜底；用于翻页受限或需要人工验证的批量下载</summary>
     public bool DouyinEnableBrowserFallback { get; set; } = false;
+
+    /// <summary>抖音直播最大录制时长（秒）；0 表示录到主播下播</summary>
+    public int DouyinLiveMaxDurationSeconds { get; set; } = 0;
+
+    /// <summary>抖音直播流读取分块大小（字节）</summary>
+    public int DouyinLiveChunkSize { get; set; } = DefaultDouyinLiveChunkSize;
+
+    /// <summary>抖音直播流空闲超时（秒）</summary>
+    public int DouyinLiveIdleTimeoutSeconds { get; set; } = DefaultDouyinLiveIdleTimeoutSeconds;
 
     /// <summary>是否按平台自动归类下载文件到子文件夹</summary>
     public bool AutoCategorizeByPlatform { get; set; } = true;

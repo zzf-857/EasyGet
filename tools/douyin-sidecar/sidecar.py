@@ -262,6 +262,9 @@ def build_config(
     author_dir: str = "nickname",
     group_by_mode: bool = True,
     thread: int = 3,
+    live_max_duration_seconds: int = 0,
+    live_chunk_size: int = 65536,
+    live_idle_timeout_seconds: int = 30,
 ) -> Dict[str, Any]:
     modes = normalize_modes(mode)
     numbers = {name: 0 for name in KNOWN_NUMBER_MODES}
@@ -289,6 +292,12 @@ def build_config(
     normalized_folder_template = normalize_template(folder_template, "--folder-template")
 
     enable_browser_fallback = bool(browser_fallback)
+    normalized_live_chunk_size = int(live_chunk_size or 65536)
+    if normalized_live_chunk_size <= 0:
+        normalized_live_chunk_size = 65536
+    normalized_live_idle_timeout = int(live_idle_timeout_seconds or 30)
+    if normalized_live_idle_timeout <= 0:
+        normalized_live_idle_timeout = 30
     config = {
         "link": [url],
         "path": str(output_dir),
@@ -328,6 +337,11 @@ def build_config(
             "max_scrolls": 240 if enable_browser_fallback else 60,
             "idle_rounds": 8 if enable_browser_fallback else 6,
             "wait_timeout_seconds": 600 if enable_browser_fallback else 300,
+        },
+        "live": {
+            "max_duration_seconds": max(0, int(live_max_duration_seconds or 0)),
+            "chunk_size": normalized_live_chunk_size,
+            "idle_timeout_seconds": normalized_live_idle_timeout,
         },
         "comments": {
             "enabled": bool(include_comments),
@@ -381,6 +395,9 @@ def build_config_from_args(args: argparse.Namespace, output_dir: Path) -> Tuple[
         author_dir=args.author_dir,
         group_by_mode=args.group_by_mode,
         thread=args.thread,
+        live_max_duration_seconds=args.live_max_duration_seconds,
+        live_chunk_size=args.live_chunk_size,
+        live_idle_timeout_seconds=args.live_idle_timeout_seconds,
     )
     return config, cookie_source, cookie_redaction_secrets(cookie_text, config)
 
@@ -1715,6 +1732,9 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--enable-database", action="store_true", help="Enable local SQLite deduplication/history database")
     parser.add_argument("--incremental", action="store_true", help="Enable incremental download for supported batch modes")
     parser.add_argument("--browser-fallback", action="store_true", help="Enable visible browser fallback for profile pagination or verification")
+    parser.add_argument("--live-max-duration-seconds", type=int, default=0, help="Live recording duration limit in seconds; 0 records until stream ends")
+    parser.add_argument("--live-chunk-size", type=int, default=65536, help="Live recording stream chunk size in bytes")
+    parser.add_argument("--live-idle-timeout-seconds", type=int, default=30, help="Live recording idle timeout in seconds")
     parser.add_argument("--start-time", default="", help="Pass through third-party start_time filter value")
     parser.add_argument("--end-time", default="", help="Pass through third-party end_time filter value")
     parser.add_argument("--download-pinned", action="store_true", help="Include pinned posts in third-party downloads")

@@ -836,6 +836,9 @@ public class XamlBindingTests
         Assert.Contains("Settings.DouyinEnableDatabase", source);
         Assert.Contains("Settings.DouyinIncrementalDownload", source);
         Assert.Contains("Settings.DouyinEnableBrowserFallback", source);
+        Assert.Contains("Settings.DouyinLiveMaxDurationSeconds", source);
+        Assert.Contains("Settings.DouyinLiveChunkSize", source);
+        Assert.Contains("Settings.DouyinLiveIdleTimeoutSeconds", source);
         Assert.Contains("Settings.DouyinDownloadCover", source);
         Assert.Contains("Settings.DouyinDownloadAvatar", source);
         Assert.Contains("Settings.DouyinDownloadMusic", source);
@@ -1142,6 +1145,9 @@ public class XamlBindingTests
         Assert.Contains("启用本地去重数据库", texts);
         Assert.Contains("增量下载", texts);
         Assert.Contains("浏览器兜底", texts);
+        Assert.Contains("直播最大录制时长", texts);
+        Assert.Contains("直播分块大小", texts);
+        Assert.Contains("直播空闲超时", texts);
         Assert.Contains(texts, text => text.Contains("在下载目录下维护本地记录", StringComparison.Ordinal));
         Assert.Contains(texts, text => text.Contains("依赖本地去重数据库", StringComparison.Ordinal));
         Assert.Contains(texts, text => text.Contains("翻页受限或遇到验证时", StringComparison.Ordinal));
@@ -1172,6 +1178,9 @@ public class XamlBindingTests
         Assert.Contains("DouyinEnableDatabase", source);
         Assert.Contains("DouyinIncrementalDownload", source);
         Assert.Contains("DouyinEnableBrowserFallback", source);
+        Assert.Contains("DouyinLiveMaxDurationSeconds", source);
+        Assert.Contains("DouyinLiveChunkSize", source);
+        Assert.Contains("DouyinLiveIdleTimeoutSeconds", source);
 
         var filenameTemplateTextBox = document
             .Descendants()

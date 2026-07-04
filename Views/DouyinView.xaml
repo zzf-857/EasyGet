@@ -1722,6 +1722,60 @@
                         <Grid Margin="0,0,0,16">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="120"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="直播最大录制时长" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="秒，0 表示录到主播下播。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextAlignment="Center"
+                                     Text="{Binding Settings.DouyinLiveMaxDurationSeconds, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="120"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="直播分块大小" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="字节，默认 65536。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextAlignment="Center"
+                                     Text="{Binding Settings.DouyinLiveChunkSize, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="120"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="直播空闲超时" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="秒，网络空闲后停止录制。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,0,0"/>
+                            </StackPanel>
+                            <TextBox Grid.Column="1"
+                                     Style="{StaticResource DarkTextBox}"
+                                     TextAlignment="Center"
+                                     Text="{Binding Settings.DouyinLiveIdleTimeoutSeconds, UpdateSourceTrigger=LostFocus}"
+                                     IsEnabled="{Binding Settings.EnableDouyinSpecialEngine}"/>
+                        </Grid>
+
+                        <Grid Margin="0,0,0,16">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel>

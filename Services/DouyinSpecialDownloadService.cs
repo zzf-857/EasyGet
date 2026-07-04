@@ -1124,6 +1124,9 @@ internal sealed record DouyinSidecarRequest(
     bool IncludeDatabase = false,
     bool IncrementalDownload = false,
     bool EnableBrowserFallback = false,
+    int LiveMaxDurationSeconds = 0,
+    int LiveChunkSize = AppConfig.DefaultDouyinLiveChunkSize,
+    int LiveIdleTimeoutSeconds = AppConfig.DefaultDouyinLiveIdleTimeoutSeconds,
     string FilenameTemplate = AppConfig.DefaultDouyinTemplate,
     string FolderTemplate = AppConfig.DefaultDouyinTemplate,
     string AuthorDirectoryMode = "nickname",
@@ -1143,6 +1146,12 @@ internal sealed record DouyinSidecarRequest(
             config?.DouyinCommentPageSize ?? AppConfig.MaxDouyinCommentPageSize,
             1,
             AppConfig.MaxDouyinCommentPageSize);
+        var liveChunkSize = config?.DouyinLiveChunkSize ?? AppConfig.DefaultDouyinLiveChunkSize;
+        if (liveChunkSize <= 0)
+            liveChunkSize = AppConfig.DefaultDouyinLiveChunkSize;
+        var liveIdleTimeoutSeconds = config?.DouyinLiveIdleTimeoutSeconds ?? AppConfig.DefaultDouyinLiveIdleTimeoutSeconds;
+        if (liveIdleTimeoutSeconds <= 0)
+            liveIdleTimeoutSeconds = AppConfig.DefaultDouyinLiveIdleTimeoutSeconds;
 
         return new DouyinSidecarRequest(
             Url: NormalizeText(task.Url),
@@ -1168,6 +1177,9 @@ internal sealed record DouyinSidecarRequest(
             IncludeDatabase: config?.DouyinEnableDatabase ?? false,
             IncrementalDownload: config?.DouyinIncrementalDownload ?? false,
             EnableBrowserFallback: config?.DouyinEnableBrowserFallback ?? false,
+            LiveMaxDurationSeconds: Math.Max(0, config?.DouyinLiveMaxDurationSeconds ?? 0),
+            LiveChunkSize: liveChunkSize,
+            LiveIdleTimeoutSeconds: liveIdleTimeoutSeconds,
             FilenameTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFilenameTemplate),
             FolderTemplate: ConfigService.NormalizeDouyinTemplate(config?.DouyinFolderTemplate),
             AuthorDirectoryMode: ConfigService.NormalizeDouyinAuthorDirectoryMode(config?.DouyinAuthorDirectoryMode),
@@ -1327,6 +1339,9 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
         AddSwitch(psi, "--enable-database", request.IncludeDatabase);
         AddSwitch(psi, "--incremental", request.IncrementalDownload);
         AddSwitch(psi, "--browser-fallback", request.EnableBrowserFallback);
+        AddArgument(psi, "--live-max-duration-seconds", request.LiveMaxDurationSeconds.ToString(CultureInfo.InvariantCulture));
+        AddArgument(psi, "--live-chunk-size", request.LiveChunkSize.ToString(CultureInfo.InvariantCulture));
+        AddArgument(psi, "--live-idle-timeout-seconds", request.LiveIdleTimeoutSeconds.ToString(CultureInfo.InvariantCulture));
 
         return psi;
     }
