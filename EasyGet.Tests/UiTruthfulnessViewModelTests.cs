@@ -98,13 +98,14 @@ public class UiTruthfulnessViewModelTests
     public void DouyinViewModelSwitchesQuickDownloadMode()
     {
         using var context = CreateViewModelContext();
-        context.Settings.EnableDouyinSpecialEngine = true;
+        context.Settings.EnableDouyinSpecialEngine = false;
         context.Settings.DouyinMode = "post";
 
         Assert.Equal("当前内容：作品", context.Douyin.DouyinQuickDownloadModeLabelText);
 
         context.Douyin.SetDouyinQuickDownloadModeCommand.Execute("mix");
 
+        Assert.True(context.Settings.EnableDouyinSpecialEngine);
         Assert.Equal("mix", context.Settings.DouyinMode);
         Assert.Equal("专项引擎已启用 · mix", context.Douyin.DouyinQuickDownloadEngineStatusText);
         Assert.Equal("当前内容：合集", context.Douyin.DouyinQuickDownloadModeLabelText);

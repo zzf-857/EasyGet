@@ -448,6 +448,7 @@ public partial class DouyinViewModel : ObservableObject
         if (!Settings.DouyinModeOptions.Contains(normalizedMode, StringComparer.Ordinal))
             return;
 
+        Settings.EnableDouyinSpecialEngine = true;
         Settings.DouyinMode = normalizedMode;
     }
 
