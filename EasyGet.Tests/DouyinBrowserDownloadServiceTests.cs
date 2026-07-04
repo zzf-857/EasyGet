@@ -181,6 +181,24 @@ public class DouyinBrowserDownloadServiceTests : IDisposable
     }
 
     [Fact]
+    public void CaptureVideoAsync_AttachesBrowserToKillOnCloseJob()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "DouyinBrowserDownloadService.cs")));
+
+        Assert.Contains("BrowserProcessJob.TryCreate(process)", source, StringComparison.Ordinal);
+        Assert.Contains("JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE", source, StringComparison.Ordinal);
+        Assert.Contains("AssignProcessToJobObject", source, StringComparison.Ordinal);
+
+        var startIndex = source.IndexOf("using var process = StartBrowser", StringComparison.Ordinal);
+        var jobIndex = source.IndexOf("BrowserProcessJob.TryCreate(process)", StringComparison.Ordinal);
+        var waitIndex = source.IndexOf("await WaitForDevToolsAsync", StringComparison.Ordinal);
+        Assert.True(startIndex >= 0, "CaptureVideoAsync should start the browser explicitly.");
+        Assert.True(jobIndex > startIndex, "The browser process should be placed in the cleanup job immediately after launch.");
+        Assert.True(waitIndex > jobIndex, "DevTools work should not begin until the process is covered by the cleanup job.");
+    }
+
+    [Fact]
     public void BuildOutputPath_AppendsCounterWhenFileExists()
     {
         Directory.CreateDirectory(_tempDir);
