@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -17,6 +19,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly YtDlpService _ytDlpService;
+    private readonly Action<ProcessStartInfo> _startProcess;
 
     [ObservableProperty] private string _urlsText = "";
     [ObservableProperty] private string _selectedFormat = "mp4";
@@ -69,10 +72,20 @@ public partial class BatchDownloadViewModel : ObservableObject
     }
 
     public BatchDownloadViewModel(DownloadManager downloadManager, ConfigService configService, YtDlpService ytDlpService)
+        : this(downloadManager, configService, ytDlpService, StartProcess)
+    {
+    }
+
+    internal BatchDownloadViewModel(
+        DownloadManager downloadManager,
+        ConfigService configService,
+        YtDlpService ytDlpService,
+        Action<ProcessStartInfo> startProcess)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _ytDlpService = ytDlpService;
+        _startProcess = startProcess;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
     }
 
@@ -220,6 +233,66 @@ public partial class BatchDownloadViewModel : ObservableObject
         await _downloadManager.RetryAsync(taskId);
     }
 
+    [RelayCommand]
+    private async Task OpenTaskFolder(string? taskId)
+    {
+        if (string.IsNullOrWhiteSpace(taskId))
+            return;
+
+        var task = _downloadManager.Tasks.FirstOrDefault(t => t.Id == taskId);
+        if (task is null)
+            return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                var startInfo = CreateOpenTaskFolderStartInfo(task);
+                if (startInfo is not null)
+                    _startProcess(startInfo);
+            }
+            catch
+            {
+            }
+        });
+    }
+
+    internal static ProcessStartInfo? CreateOpenTaskFolderStartInfo(DownloadTask task)
+    {
+        if (!string.IsNullOrWhiteSpace(task.OutputFilePath))
+        {
+            if (File.Exists(task.OutputFilePath))
+            {
+                return new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{task.OutputFilePath}\"",
+                    UseShellExecute = true
+                };
+            }
+
+            if (Directory.Exists(task.OutputFilePath))
+            {
+                return new ProcessStartInfo
+                {
+                    FileName = task.OutputFilePath,
+                    UseShellExecute = true
+                };
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(task.OutputDirectory) && Directory.Exists(task.OutputDirectory))
+        {
+            return new ProcessStartInfo
+            {
+                FileName = task.OutputDirectory,
+                UseShellExecute = true
+            };
+        }
+
+        return null;
+    }
+
     public Func<string, string, bool>? ConfirmFunc { get; set; } = (msg, title) =>
     {
         if (System.Windows.Application.Current == null)
@@ -265,4 +338,8 @@ public partial class BatchDownloadViewModel : ObservableObject
         }
     }
 
+    private static void StartProcess(ProcessStartInfo startInfo)
+    {
+        Process.Start(startInfo);
+    }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,6 +17,25 @@ public class BatchDownloadViewModelTests
 
     private static void TryDeleteDatabase(string dbPath)
         => TestTempPaths.TryDeleteSqliteDatabase(dbPath);
+
+    private static string CreateTempOutputDirectory()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"easyget-batch-open-folder-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+                Directory.Delete(path, recursive: true);
+        }
+        catch
+        {
+        }
+    }
 
     [Fact]
     public void CancelAll_WhenConfirmed_CancelsAndClearsTasks()
@@ -193,6 +213,78 @@ public class BatchDownloadViewModelTests
         finally
         {
             TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task OpenTaskFolderCommand_SelectsExistingOutputFileWithInjectedLauncher()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDirectory = CreateTempOutputDirectory();
+        using var history = new HistoryService(dbPath);
+        var configService = new ConfigService();
+        var ytDlp = new YtDlpService(configService, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, configService);
+        var startedProcesses = new List<ProcessStartInfo>();
+        var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp, startedProcesses.Add);
+
+        try
+        {
+            var outputPath = Path.Combine(outputDirectory, "clip.mp4");
+            await File.WriteAllTextAsync(outputPath, "video");
+            var task = new DownloadTask
+            {
+                OutputFilePath = outputPath,
+                OutputDirectory = outputDirectory
+            };
+            manager.Tasks.Add(task);
+
+            await viewModel.OpenTaskFolderCommand.ExecuteAsync(task.Id);
+
+            var startInfo = Assert.Single(startedProcesses);
+            Assert.Equal("explorer.exe", startInfo.FileName);
+            Assert.Equal($"/select,\"{outputPath}\"", startInfo.Arguments);
+            Assert.True(startInfo.UseShellExecute);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task OpenTaskFolderCommand_OpensOutputDirectoryWhenOutputFileIsMissing()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var outputDirectory = CreateTempOutputDirectory();
+        using var history = new HistoryService(dbPath);
+        var configService = new ConfigService();
+        var ytDlp = new YtDlpService(configService, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, configService);
+        var startedProcesses = new List<ProcessStartInfo>();
+        var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp, startedProcesses.Add);
+
+        try
+        {
+            var task = new DownloadTask
+            {
+                OutputFilePath = Path.Combine(outputDirectory, "missing.mp4"),
+                OutputDirectory = outputDirectory
+            };
+            manager.Tasks.Add(task);
+
+            await viewModel.OpenTaskFolderCommand.ExecuteAsync(task.Id);
+
+            var startInfo = Assert.Single(startedProcesses);
+            Assert.Equal(outputDirectory, startInfo.FileName);
+            Assert.True(startInfo.UseShellExecute);
+            Assert.True(string.IsNullOrEmpty(startInfo.Arguments));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(outputDirectory);
         }
     }
 }

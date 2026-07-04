@@ -837,6 +837,7 @@ public class XamlBindingTests
         Assert.Contains("Batch.PauseTaskCommand", source);
         Assert.Contains("Batch.ResumeTaskCommand", source);
         Assert.Contains("Batch.RetryTaskCommand", source);
+        Assert.Contains("Batch.OpenTaskFolderCommand", source);
         Assert.Contains("Batch.CancelTaskCommand", source);
         Assert.Contains("Progress", source);
         Assert.Contains("ErrorMessage", source);

@@ -949,6 +949,31 @@
                                                         <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}"/>
                                                     </Button>
 
+                                                    <Button ToolTip="打开输出目录"
+                                                            AutomationProperties.Name="打开输出目录"
+                                                            Padding="8,5"
+                                                            Margin="0,0,4,0"
+                                                            Command="{Binding DataContext.Batch.OpenTaskFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                            CommandParameter="{Binding Id}">
+                                                        <Button.Style>
+                                                            <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="Completed">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="Failed">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Status}" Value="Cancelled">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Button.Style>
+                                                        <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}"/>
+                                                    </Button>
+
                                                     <Button Style="{StaticResource SurfaceButton}"
                                                             ToolTip="取消或移除任务"
                                                             AutomationProperties.Name="取消或移除任务"
