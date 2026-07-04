@@ -864,11 +864,14 @@ public partial class DouyinViewModel : ObservableObject
         foreach (var item in DouyinDiscoveryItems)
         {
             var url = BuildDouyinDiscoveryDownloadUrl(item);
-            item.QueueStateText = string.IsNullOrWhiteSpace(url)
+            var isDownloadable = !string.IsNullOrWhiteSpace(url);
+            var isQueued = isDownloadable && _downloadManager.Tasks.Any(task => IsSameUrl(task.Url, url));
+            item.QueueStateText = !isDownloadable
                 ? "不可入队"
-                : _downloadManager.Tasks.Any(task => IsSameUrl(task.Url, url))
+                : isQueued
                     ? "已在队列"
                     : "未入队";
+            item.CanAddToQueue = isDownloadable && !isQueued;
         }
 
         SyncDouyinDiscoveryFilteredItems();

@@ -59,6 +59,7 @@ public sealed record DouyinDiscoveryItem(
     string Url = "") : INotifyPropertyChanged
 {
     private bool _isSelected;
+    private bool _canAddToQueue;
     private string _queueStateText = "未入队";
 
     public bool IsSelected
@@ -84,6 +85,19 @@ public sealed record DouyinDiscoveryItem(
 
             _queueStateText = value;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(QueueStateText)));
+        }
+    }
+
+    public bool CanAddToQueue
+    {
+        get => _canAddToQueue;
+        set
+        {
+            if (_canAddToQueue == value)
+                return;
+
+            _canAddToQueue = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanAddToQueue)));
         }
     }
 

@@ -1409,6 +1409,38 @@ public class UiTruthfulnessViewModelTests
     }
 
     [Fact]
+    public void DouyinViewModelMarksOnlyUnqueuedDownloadableDiscoveryItemsAddable()
+    {
+        var discovery = new FakeDouyinDiscoveryService();
+        using var context = CreateViewModelContext(discovery);
+        var directUrl = new DouyinDiscoveryItem(
+            AwemeId: "not-numeric-but-url-is-usable",
+            Description: "直接链接作品",
+            Url: "https://www.douyin.com/video/7604129988555574538");
+        var numericAweme = new DouyinDiscoveryItem(
+            AwemeId: "7604129988555574539",
+            Description: "数字作品 ID");
+        var hotWord = new DouyinDiscoveryItem(Word: "猫咪热词", HotValue: 123);
+        context.Douyin.DouyinDiscoveryItems.Add(directUrl);
+        context.Douyin.DouyinDiscoveryItems.Add(numericAweme);
+        context.Douyin.DouyinDiscoveryItems.Add(hotWord);
+
+        Assert.True(directUrl.CanAddToQueue);
+        Assert.True(numericAweme.CanAddToQueue);
+        Assert.False(hotWord.CanAddToQueue);
+
+        var existingTask = new DownloadTask { Url = "https://www.douyin.com/video/7604129988555574538" };
+        context.BatchContext.Manager.Tasks.Add(existingTask);
+
+        Assert.False(directUrl.CanAddToQueue);
+        Assert.True(numericAweme.CanAddToQueue);
+
+        context.BatchContext.Manager.Tasks.Remove(existingTask);
+
+        Assert.True(directUrl.CanAddToQueue);
+    }
+
+    [Fact]
     public void DouyinViewModelFiltersDiscoveryResultsByQueueState()
     {
         var discovery = new FakeDouyinDiscoveryService();

@@ -697,6 +697,7 @@
                                                     <Button Style="{StaticResource SurfaceButton}"
                                                             Command="{Binding DataContext.AddDouyinDiscoveryItemToQueueCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}"
+                                                            IsEnabled="{Binding CanAddToQueue}"
                                                             ToolTip="加入下载队列"
                                                             AutomationProperties.Name="加入下载队列"
                                                             HorizontalAlignment="Right"
