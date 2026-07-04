@@ -182,12 +182,30 @@
                             </Button>
                             <Button Style="{StaticResource SurfaceButton}"
                                     Padding="12,6"
-                                    Margin="0,0,12,0"
+                                    Margin="0,0,8,0"
                                     ToolTip="按作品、喜欢、合集和音乐全量尝试"
                                     AutomationProperties.Name="全量下载内容"
                                     Command="{Binding SetDouyinQuickDownloadModeCommand}"
                                     CommandParameter="post,like,mix,music">
                                 <TextBlock Text="全量" Style="{StaticResource TextCaption}"/>
+                            </Button>
+                            <Button Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,8,0"
+                                    ToolTip="下载本人收藏作品"
+                                    AutomationProperties.Name="下载本人收藏作品"
+                                    Command="{Binding SetDouyinQuickDownloadModeCommand}"
+                                    CommandParameter="collect">
+                                <TextBlock Text="收藏" Style="{StaticResource TextCaption}"/>
+                            </Button>
+                            <Button Style="{StaticResource SurfaceButton}"
+                                    Padding="12,6"
+                                    Margin="0,0,12,0"
+                                    ToolTip="下载本人收藏合集"
+                                    AutomationProperties.Name="下载本人收藏合集"
+                                    Command="{Binding SetDouyinQuickDownloadModeCommand}"
+                                    CommandParameter="collectmix">
+                                <TextBlock Text="收藏合集" Style="{StaticResource TextCaption}"/>
                             </Button>
                             <TextBlock Text="{Binding DouyinQuickDownloadModeLabelText, Mode=OneWay}"
                                        Style="{StaticResource TextCaption}"

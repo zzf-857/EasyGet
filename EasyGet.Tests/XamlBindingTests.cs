@@ -885,6 +885,19 @@ public class XamlBindingTests
         Assert.DoesNotContain("ItemsSource=\"{Binding History.HistoryItems}", source);
     }
 
+    [Fact]
+    public void DouyinViewExposesCollectionQuickDownloadModes()
+    {
+        var source = File.ReadAllText(GetViewPath("DouyinView.xaml"));
+
+        Assert.Contains("CommandParameter=\"collect\"", source);
+        Assert.Contains("CommandParameter=\"collectmix\"", source);
+        Assert.Contains("Text=\"收藏\"", source);
+        Assert.Contains("Text=\"收藏合集\"", source);
+        Assert.Contains("下载本人收藏作品", source);
+        Assert.Contains("下载本人收藏合集", source);
+    }
+
     [Theory]
     [InlineData("PasteUrlCommand")]
     [InlineData("StartDownloadCommand")]
