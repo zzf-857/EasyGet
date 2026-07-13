@@ -13,6 +13,7 @@ namespace EasyGet.Services;
 /// </summary>
 public class ConfigService
 {
+    internal const string LegacyUnscopedCookieStorageKey = "legacy-unscoped";
     private static readonly string[] SupportedFormats = ["mp4", "mkv", "webm", "mp3", "m4a"];
     private static readonly string[] SupportedQualities = ["best", "2160", "1080", "720", "480"];
     private static readonly string[] SupportedSubtitles = ["none", "auto", "all"];
@@ -116,6 +117,31 @@ public class ConfigService
 
         NormalizeRuntimeConfig(_config);
 
+        if (string.IsNullOrWhiteSpace(_config.CookieContent))
+        {
+            try
+            {
+                var quarantinedCookie = await new PlatformCookieVault(
+                        _configDir,
+                        _migrationProtector)
+                    .LoadAsync(
+                        LegacyUnscopedCookieStorageKey,
+                        CancellationToken.None);
+                if (!string.IsNullOrWhiteSpace(quarantinedCookie))
+                {
+                    _config.CookieContent = quarantinedCookie;
+                    _config.LegacyCookiePlatform = "";
+                }
+            }
+            catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or CryptographicException)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ConfigService] Encrypted legacy Cookie restore failed: {ex.Message}");
+            }
+        }
+
         // 确保下载目录存在
         if (!Directory.Exists(_config.DefaultDownloadPath))
         {
@@ -131,9 +157,41 @@ public class ConfigService
         try
         {
             NormalizeRuntimeConfig(_config);
+            if (!string.IsNullOrWhiteSpace(_config.CookieContent))
+            {
+                try
+                {
+                    var vault = new PlatformCookieVault(_configDir, _migrationProtector);
+                    if (CookieFileSerializer.HasExplicitDomainRows(_config.CookieContent)
+                        || !string.IsNullOrWhiteSpace(_config.LegacyCookiePlatform))
+                    {
+                        await CompleteLegacyCookieMigrationAsync(
+                            _config.LegacyCookiePlatform,
+                            vault,
+                            CancellationToken.None);
+                    }
+                    else
+                    {
+                        await vault.SaveAsync(
+                            LegacyUnscopedCookieStorageKey,
+                            _config.CookieContent,
+                            CancellationToken.None);
+                        _config.CookieContent = "";
+                        _config.LegacyCookiePlatform = "";
+                        _config.ConfigVersion = AppConfig.CurrentConfigVersion;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[ConfigService] Cookie migration during save failed: {ex.Message}");
+                    return;
+                }
+            }
+
             Directory.CreateDirectory(_configDir);
             BackupExistingConfig(_configFile);
-            var json = JsonSerializer.Serialize(_config, JsonOptions);
+            var json = SerializeWithoutPlaintextCookie(_config);
             await File.WriteAllTextAsync(_configFile, json);
         }
         catch (Exception ex)
@@ -272,6 +330,19 @@ public class ConfigService
             _config.CookieContent = "";
             _config.LegacyCookiePlatform = "";
             _config.ConfigVersion = AppConfig.CurrentConfigVersion;
+            try
+            {
+                await vault.DeleteAsync(
+                    LegacyUnscopedCookieStorageKey,
+                    CancellationToken.None);
+            }
+            catch (Exception ex) when (ex is IOException
+                                       or UnauthorizedAccessException
+                                       or System.Security.SecurityException)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ConfigService] Legacy Cookie quarantine cleanup failed: {ex.Message}");
+            }
         }
         finally
         {
@@ -305,7 +376,39 @@ public class ConfigService
             return;
 
         var backupFile = Path.Combine(directory, "config.backup.json");
-        File.Copy(configFile, backupFile, overwrite: true);
+        try
+        {
+            var existingJson = File.ReadAllText(configFile);
+            var existingConfig = JsonSerializer.Deserialize<AppConfig>(existingJson, JsonOptions);
+            var sanitizedJson = existingConfig is null
+                ? "{}"
+                : SerializeWithoutPlaintextCookie(existingConfig);
+            File.WriteAllText(backupFile, sanitizedJson);
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or JsonException
+                                   or NotSupportedException)
+        {
+            File.WriteAllText(backupFile, "{}");
+        }
+    }
+
+    private static string SerializeWithoutPlaintextCookie(AppConfig config)
+    {
+        var originalContent = config.CookieContent;
+        var originalPlatform = config.LegacyCookiePlatform;
+        try
+        {
+            config.CookieContent = "";
+            config.LegacyCookiePlatform = "";
+            return JsonSerializer.Serialize(config, JsonOptions);
+        }
+        finally
+        {
+            config.CookieContent = originalContent;
+            config.LegacyCookiePlatform = originalPlatform;
+        }
     }
 
     private static void TryDeleteMigrationFile(string? path)

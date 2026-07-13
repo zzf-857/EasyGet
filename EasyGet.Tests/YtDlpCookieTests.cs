@@ -13,6 +13,27 @@ public class YtDlpCookieTests
             "www.youtube.com");
 
     [Fact]
+    public void CookieImplementation_DoesNotLogSecretsOrUsePermanentGlobalCookieFile()
+    {
+        var root = TestRepositoryPaths.Root;
+        var sourceDirectories = new[] { "Services", "Models", "ViewModels", "Converters" };
+        var sourceFiles = sourceDirectories
+            .SelectMany(directory => Directory.GetFiles(
+                Path.Combine(root, directory),
+                "*.cs",
+                SearchOption.AllDirectories))
+            .Concat(Directory.GetFiles(root, "*.cs", SearchOption.TopDirectoryOnly));
+        var source = string.Join(
+            Environment.NewLine,
+            sourceFiles.Select(File.ReadAllText));
+        var forbiddenArgumentLog = "[yt-dlp] args: {" + "string.Join";
+        var forbiddenGlobalFile = "cookies" + ".txt";
+
+        Assert.DoesNotContain(forbiddenArgumentLog, source, StringComparison.Ordinal);
+        Assert.DoesNotContain(forbiddenGlobalFile, source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void Source_UsesCoordinatorForMetadataPlaylistAndDownload()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
@@ -53,6 +74,20 @@ public class YtDlpCookieTests
             [option, sensitiveValue]);
 
         Assert.DoesNotContain(sensitiveValue, redacted, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[已隐藏]", redacted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RedactCookieArgumentValues_HidesBrowserPathWithoutArgumentPrefix()
+    {
+        const string profilePath = @"C:\Users\me\Chrome\Profile 1";
+        var line = $"ERROR: Could not copy Chrome cookie database from {profilePath}";
+
+        var redacted = YtDlpService.RedactCookieArgumentValues(
+            line,
+            ["--cookies-from-browser", $"chrome:{profilePath}"]);
+
+        Assert.DoesNotContain(profilePath, redacted, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("[已隐藏]", redacted, StringComparison.Ordinal);
     }
 
@@ -257,6 +292,54 @@ public class YtDlpCookieTests
         Assert.Contains("B 站", message);
         Assert.Contains("412", message);
         Assert.Contains("请求头", message);
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessage_RedactsLocalPathsAndCredentialAssignments()
+    {
+        const string error =
+            @"ERROR: failed reading C:\Users\me\Secret Profile\Cookies; SID=secret-value";
+
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://media.example.org/watch/1",
+            [error],
+            1);
+
+        Assert.DoesNotContain(@"C:\Users\me", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("secret-value", message, StringComparison.Ordinal);
+        Assert.Contains("[已隐藏]", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessage_RedactsCompleteCredentialHeaders()
+    {
+        const string cookieSecret = "second-cookie-secret";
+        const string bearerSecret = "bearer-secret-value";
+        const string error =
+            $"ERROR: Cookie: SID=first-cookie-secret; SAPISID={cookieSecret}\n" +
+            $"Authorization: Bearer {bearerSecret}";
+
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://media.example.org/watch/1",
+            [error],
+            1);
+
+        Assert.DoesNotContain(cookieSecret, message, StringComparison.Ordinal);
+        Assert.DoesNotContain(bearerSecret, message, StringComparison.Ordinal);
+        Assert.Contains("[已隐藏]", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DownloadPipeline_StoresOnlyRedactedStderrForTaskErrors()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.Contains(
+            "stderrLines.Add(RedactCookieArgumentValues(",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("stderrLines.Add(line);", source, StringComparison.Ordinal);
     }
 
     [Fact]

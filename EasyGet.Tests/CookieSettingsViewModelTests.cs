@@ -120,6 +120,40 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
+    public async Task LoginPlatformAsync_EmptyManagedSessionInvalidatesStaleSuccess()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var health = new RecordingCookieHealthStore();
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: health,
+            managedLogin: new RecordingManagedLoginSessionService([]));
+        await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+        var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
+
+        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+
+        Assert.Empty(health.Successes);
+        var failure = Assert.Single(health.Failures);
+        Assert.Equal("youtube", failure.PlatformId);
+        Assert.Equal(CookieSourceKind.ManagedSession, failure.Source);
+        Assert.Equal(CookieFailureCategory.AuthenticationRequired, failure.Category);
+        Assert.False(item.IsAvailable);
+        Assert.True(item.NeedsLogin);
+    }
+
+    [Fact]
     public async Task LoginPlatformAsync_DoesNotExposeManagedLoginExceptionDetails()
     {
         using var root = new TestDirectory();
@@ -295,6 +329,167 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
+    public async Task SaveSettingsAsync_EncryptsManualCookieAndClearsPlaintextState()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault)
+        {
+            CookieContent = "Cookie: auth_token=manual-secret",
+            LegacyCookiePlatform = "twitter"
+        };
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        Assert.Equal("", config.Config.CookieContent);
+        Assert.Equal("", config.Config.LegacyCookiePlatform);
+        Assert.Equal("", viewModel.CookieContent);
+        Assert.Equal("", viewModel.LegacyCookiePlatform);
+        Assert.Equal(
+            "Cookie: auth_token=manual-secret",
+            await vault.LoadAsync("twitter", CancellationToken.None));
+        Assert.Contains("已加密保存", viewModel.ManualCookieValidationMessage, StringComparison.Ordinal);
+        Assert.Contains("已加密保存", viewModel.ManualCookieStatusText, StringComparison.Ordinal);
+        Assert.True(viewModel.IsManualCookieMessageSuccess);
+        foreach (var fileName in new[] { "config.json", "config.backup.json" })
+        {
+            var json = await File.ReadAllTextAsync(root.Path("config", fileName));
+            Assert.DoesNotContain("manual-secret", json, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_SplitsDomainScopedCookieWithoutPlatformSelection()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault)
+        {
+            CookieContent = """
+                # Netscape HTTP Cookie File
+                .youtube.com	TRUE	/	TRUE	0	SID	youtube-secret
+                .x.com	TRUE	/	TRUE	0	auth_token	twitter-secret
+                """,
+            LegacyCookiePlatform = ""
+        };
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        Assert.True(await vault.ExistsAsync("youtube", CancellationToken.None));
+        Assert.True(await vault.ExistsAsync("twitter", CancellationToken.None));
+        Assert.Equal("", viewModel.CookieContent);
+        Assert.Contains("按域名拆分", viewModel.ManualCookieStatusText, StringComparison.Ordinal);
+        Assert.True(viewModel.IsManualCookieMessageSuccess);
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_QuarantinesLoadedUnscopedLegacyCookieWithoutLosingIt()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        config.Config.CookieContent = "Cookie: legacy_unscoped=secret-value";
+        config.Config.LegacyCookiePlatform = "";
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault);
+        viewModel.Initialize();
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            "Cookie: legacy_unscoped=secret-value",
+            await vault.LoadAsync(
+                ConfigService.LegacyUnscopedCookieStorageKey,
+                CancellationToken.None));
+        Assert.Equal("", config.Config.CookieContent);
+        Assert.Equal("Cookie: legacy_unscoped=secret-value", viewModel.CookieContent);
+        Assert.Contains("选择所属平台", viewModel.ManualCookieValidationMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ClearCookieAsync_DeletesOnlySelectedPlatformEncryptedCookie()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
+        await vault.SaveAsync("twitter", "auth_token=twitter-secret", CancellationToken.None);
+        await vault.SaveAsync("youtube", "SID=youtube-secret", CancellationToken.None);
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault)
+        {
+            LegacyCookiePlatform = "twitter"
+        };
+
+        await viewModel.ClearCookieCommand.ExecuteAsync(null);
+
+        Assert.False(await vault.ExistsAsync("twitter", CancellationToken.None));
+        Assert.True(await vault.ExistsAsync("youtube", CancellationToken.None));
+        Assert.Equal("", viewModel.LegacyCookiePlatform);
+        Assert.Contains("X / Twitter", viewModel.ManualCookieValidationMessage, StringComparison.Ordinal);
+        Assert.Contains("已清除", viewModel.ManualCookieValidationMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ClearAllManagedSessionsAsync_ClearsEveryPlatformBeforeStatusRefreshCompletes()
     {
         using var root = new TestDirectory();
@@ -358,7 +553,9 @@ public sealed class CookieSettingsViewModelTests
     public async Task InitializeAndSaveSettings_PreserveSmartModeAndPlatformScopedHeader()
     {
         using var root = new TestDirectory();
-        var config = new ConfigService(root.Path("config"));
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
         config.Config.SmartCookieEnabled = false;
         config.Config.CookieContent = "Cookie: SID=initial";
         config.Config.LegacyCookiePlatform = "youtube";
@@ -375,21 +572,27 @@ public sealed class CookieSettingsViewModelTests
             new TelegramDownloadService(config),
             cookieProfiles: new StaticBrowserProfiles([]),
             cookieHealthStore: new StaticCookieHealthStore([]),
-            managedLogin: new FakeManagedLoginSessionService());
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault);
 
         viewModel.Initialize();
 
         Assert.False(viewModel.SmartCookieEnabled);
         Assert.Equal("youtube", viewModel.LegacyCookiePlatform);
-        viewModel.SmartCookieEnabled = true;
         viewModel.CookieContent = "Cookie: auth_token=updated";
         viewModel.LegacyCookiePlatform = "twitter";
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+        viewModel.SmartCookieEnabled = true;
+        if (viewModel.SaveSettingsCommand.ExecutionTask is { } autoSave)
+            await autoSave;
 
         Assert.True(config.Config.SmartCookieEnabled);
-        Assert.Equal("Cookie: auth_token=updated", config.Config.CookieContent);
-        Assert.Equal("twitter", config.Config.LegacyCookiePlatform);
-        Assert.Equal("", viewModel.ManualCookieValidationMessage);
+        Assert.Equal("", config.Config.CookieContent);
+        Assert.Equal("", config.Config.LegacyCookiePlatform);
+        Assert.Equal(
+            "Cookie: auth_token=updated",
+            await vault.LoadAsync("twitter", CancellationToken.None));
+        Assert.Contains("已加密保存", viewModel.ManualCookieValidationMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -405,6 +608,7 @@ public sealed class CookieSettingsViewModelTests
         Assert.Contains("ClearAllManagedSessionsCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LegacyCookiePlatform", xaml, StringComparison.Ordinal);
         Assert.Contains("ManualCookieValidationMessage", xaml, StringComparison.Ordinal);
+        Assert.Contains("加密保存手动 Cookie", xaml, StringComparison.Ordinal);
         Assert.Contains("Expander", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name", xaml, StringComparison.Ordinal);
     }
@@ -471,6 +675,10 @@ public sealed class CookieSettingsViewModelTests
     private sealed class RecordingCookieHealthStore : ICookieHealthStore
     {
         public List<(string PlatformId, CookieSourceKind Source)> Successes { get; } = [];
+        public List<(
+            string PlatformId,
+            CookieSourceKind Source,
+            CookieFailureCategory Category)> Failures { get; } = [];
         public List<string> ClearedPlatformIds { get; } = [];
 
         public IReadOnlyList<CookieHealthRecord> Snapshot() => [];
@@ -491,7 +699,10 @@ public sealed class CookieSettingsViewModelTests
             BrowserProfile? profile,
             CookieFailureCategory category,
             CancellationToken cancellationToken)
-            => Task.CompletedTask;
+        {
+            Failures.Add((platformId, source, category));
+            return Task.CompletedTask;
+        }
 
         public Task ClearPlatformAsync(string platformId, CancellationToken cancellationToken)
         {
@@ -549,5 +760,14 @@ public sealed class CookieSettingsViewModelTests
             => Task.CompletedTask;
 
         public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class XorTestProtector : ISecretProtector
+    {
+        public byte[] Protect(byte[] plaintext)
+            => plaintext.Select(value => (byte)(value ^ 0xA5)).ToArray();
+
+        public byte[] Unprotect(byte[] ciphertext)
+            => Protect(ciphertext);
     }
 }

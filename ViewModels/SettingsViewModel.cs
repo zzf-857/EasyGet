@@ -40,6 +40,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ICookieHealthStore _cookieHealthStore;
     private readonly IManagedLoginSessionService _managedLogin;
     private readonly CookieAcquisitionCoordinator? _cookieCoordinator;
+    private readonly PlatformCookieVault _cookieVault;
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
     private bool _isInitializing;
@@ -100,6 +101,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private bool _smartCookieEnabled = true;
     [ObservableProperty] private string _legacyCookiePlatform = "";
     [ObservableProperty] private string _manualCookieValidationMessage = "";
+    [ObservableProperty] private string _manualCookieStatusText = "未配置 Cookie";
+    [ObservableProperty] private bool _isManualCookieMessageSuccess;
     [ObservableProperty] private string _cookieStatusSummary = "尚未检测本机登录状态";
     [ObservableProperty] private bool _isRefreshingCookieStatus;
 
@@ -223,7 +226,8 @@ public partial class SettingsViewModel : ObservableObject
         IBrowserProfileDiscoveryService? cookieProfiles = null,
         ICookieHealthStore? cookieHealthStore = null,
         IManagedLoginSessionService? managedLogin = null,
-        CookieAcquisitionCoordinator? cookieCoordinator = null)
+        CookieAcquisitionCoordinator? cookieCoordinator = null,
+        PlatformCookieVault? cookieVault = null)
     {
         _configService = configService;
         _envService = envService;
@@ -235,6 +239,7 @@ public partial class SettingsViewModel : ObservableObject
         _cookieHealthStore = cookieHealthStore ?? new CookieHealthStore(configService.ConfigDirectory);
         _managedLogin = managedLogin ?? new EmptyManagedLoginSessionService();
         _cookieCoordinator = cookieCoordinator;
+        _cookieVault = cookieVault ?? new PlatformCookieVault(configService.ConfigDirectory);
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
     }
@@ -265,6 +270,10 @@ public partial class SettingsViewModel : ObservableObject
             CookieContent = c.CookieContent;
             SmartCookieEnabled = c.SmartCookieEnabled;
             LegacyCookiePlatform = c.LegacyCookiePlatform;
+            ManualCookieStatusText = string.IsNullOrWhiteSpace(c.CookieContent)
+                ? "未配置 Cookie"
+                : "待选择平台并加密保存";
+            IsManualCookieMessageSuccess = false;
             EnableDouyinSpecialEngine = c.EnableDouyinSpecialEngine;
             DouyinMode = c.DouyinMode;
             DouyinLimit = c.DouyinLimit;
@@ -420,6 +429,12 @@ public partial class SettingsViewModel : ObservableObject
             var cookies = await _managedLogin.GetCookiesAsync(platform, cancellationToken);
             if (cookies.Count == 0)
             {
+                await _cookieHealthStore.RecordFailureAsync(
+                    platform.StorageKey,
+                    CookieSourceKind.ManagedSession,
+                    profile: null,
+                    CookieFailureCategory.AuthenticationRequired,
+                    cancellationToken);
                 item.IsAvailable = false;
                 item.NeedsLogin = true;
                 item.StatusText = "未完成登录，下载时仍会继续尝试本机浏览器";
@@ -650,14 +665,25 @@ public partial class SettingsViewModel : ObservableObject
                                             && !CookieFileSerializer.HasExplicitDomainRows(CookieContent);
         var canPersistManualCookie = !cookieContentRequiresPlatform
                                      || selectedCookiePlatform.Length > 0;
-        ManualCookieValidationMessage = canPersistManualCookie
-            ? ""
-            : "请先选择所属平台，再保存 Header 格式 Cookie。";
-        c.CookieContent = canPersistManualCookie ? CookieContent : "";
+        if (!canPersistManualCookie)
+        {
+            ManualCookieValidationMessage = "请先选择所属平台，再保存 Header 格式 Cookie。";
+            IsManualCookieMessageSuccess = false;
+        }
+        else if (!string.IsNullOrWhiteSpace(CookieContent))
+        {
+            ManualCookieValidationMessage = "";
+            IsManualCookieMessageSuccess = false;
+        }
+        if (canPersistManualCookie)
+            c.CookieContent = CookieContent;
         c.SmartCookieEnabled = SmartCookieEnabled;
-        c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
-            ? ""
-            : selectedCookiePlatform;
+        if (canPersistManualCookie)
+        {
+            c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
+                ? ""
+                : selectedCookiePlatform;
+        }
         c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
         c.DouyinMode = DouyinMode;
         c.DouyinLimit = DouyinLimit;
@@ -693,6 +719,35 @@ public partial class SettingsViewModel : ObservableObject
         SyncNormalizedDouyinValues(c);
 
         _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
+        if (canPersistManualCookie && !string.IsNullOrWhiteSpace(c.CookieContent))
+        {
+            var savedPlatform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(platform =>
+                string.Equals(
+                    platform.StorageKey,
+                    selectedCookiePlatform,
+                    StringComparison.Ordinal));
+            await _configService.CompleteLegacyCookieMigrationAsync(
+                selectedCookiePlatform,
+                _cookieVault,
+                CancellationToken.None);
+            _isInitializing = true;
+            try
+            {
+                CookieContent = "";
+                LegacyCookiePlatform = "";
+            }
+            finally
+            {
+                _isInitializing = false;
+            }
+
+            ManualCookieValidationMessage = "手动 Cookie 已加密保存并按平台隔离。";
+            ManualCookieStatusText = savedPlatform is null
+                ? "已加密保存 · 已按域名拆分"
+                : $"已加密保存 · {savedPlatform.DisplayName}";
+            IsManualCookieMessageSuccess = true;
+        }
+
         await _configService.SaveAsync();
         SettingsSaved?.Invoke();
     }
@@ -705,9 +760,17 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnUseProxyChanged(bool value) => AutoSave();
     partial void OnProxyAddressChanged(string value) => AutoSave();
     partial void OnUseAria2cChanged(bool value) => AutoSave();
-    partial void OnCookieContentChanged(string value) => AutoSave();
+    partial void OnCookieContentChanged(string value)
+    {
+        if (_isInitializing)
+            return;
+
+        ManualCookieStatusText = string.IsNullOrWhiteSpace(value)
+            ? "未配置 Cookie"
+            : "待加密保存";
+        IsManualCookieMessageSuccess = false;
+    }
     partial void OnSmartCookieEnabledChanged(bool value) => AutoSave();
-    partial void OnLegacyCookiePlatformChanged(string value) => AutoSave();
     partial void OnEnableDouyinSpecialEngineChanged(bool value) => AutoSave();
     partial void OnDouyinModeChanged(string value) => AutoSave();
     partial void OnDouyinLimitChanged(int value) => AutoSave();
@@ -882,9 +945,45 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void ClearCookie()
+    private async Task ClearCookie(CancellationToken cancellationToken)
     {
-        CookieContent = "";
+        var platform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(definition =>
+            string.Equals(
+                definition.StorageKey,
+                LegacyCookiePlatform?.Trim(),
+                StringComparison.Ordinal));
+        if (platform is null && string.IsNullOrWhiteSpace(CookieContent))
+        {
+            ManualCookieValidationMessage = "请先选择要清除手动 Cookie 的平台。";
+            IsManualCookieMessageSuccess = false;
+            return;
+        }
+
+        if (platform is not null)
+            await _cookieVault.DeleteAsync(platform.StorageKey, cancellationToken);
+        await _cookieVault.DeleteAsync(
+            ConfigService.LegacyUnscopedCookieStorageKey,
+            cancellationToken);
+
+        _isInitializing = true;
+        try
+        {
+            CookieContent = "";
+            LegacyCookiePlatform = "";
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
+
+        _configService.Config.CookieContent = "";
+        _configService.Config.LegacyCookiePlatform = "";
+        await _configService.SaveAsync();
+        ManualCookieValidationMessage = platform is null
+            ? "未保存的手动 Cookie 内容已清空。"
+            : $"{platform.DisplayName} 的加密手动 Cookie 已清除。";
+        ManualCookieStatusText = "未配置 Cookie";
+        IsManualCookieMessageSuccess = true;
     }
 
     [RelayCommand]

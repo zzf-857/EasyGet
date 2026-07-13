@@ -54,14 +54,17 @@ public sealed class ManagedLoginSessionService : IManagedLoginSessionService
                 platform.CookieDomains,
                 cancellationToken),
             platform.CookieDomains);
-        if (storedCookies.Count > 0)
+        if (ManagedLoginCookieValidator.HasAuthenticatedSession(platform, storedCookies))
             return storedCookies;
 
-        return FilterCookies(
+        var loginCookies = FilterCookies(
             await window.ShowForLoginAsync(
                 platform.CookieDomains,
                 cancellationToken),
             platform.CookieDomains);
+        return ManagedLoginCookieValidator.HasAuthenticatedSession(platform, loginCookies)
+            ? loginCookies
+            : [];
     }
 
     public async Task ClearAsync(string platformId, CancellationToken cancellationToken)

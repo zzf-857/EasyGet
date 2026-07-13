@@ -546,7 +546,9 @@ public partial class YtDlpService
                     },
                     line =>
                     {
-                        stderrLines.Add(line);
+                        stderrLines.Add(RedactCookieArgumentValues(
+                            line,
+                            cookieArguments.Arguments));
                         logCallback?.Invoke($"[stderr] {RedactCookieArgumentValues(
                             line,
                             cookieArguments.Arguments)}");
@@ -560,7 +562,7 @@ public partial class YtDlpService
             }
             catch (TimeoutException ex)
             {
-                var message = $"ERROR: {ex.Message}";
+                var message = RedactPotentialSensitiveText($"ERROR: {ex.Message}");
                 stderrLines.Add(message);
                 lastStderr = stderrLines;
                 allStderr.AddRange(stderrLines);
@@ -964,12 +966,24 @@ public partial class YtDlpService
                     sensitiveValue,
                     "[已隐藏]",
                     StringComparison.OrdinalIgnoreCase);
+                if (option == "--cookies-from-browser")
+                {
+                    var separatorIndex = sensitiveValue.IndexOf(':');
+                    if (separatorIndex >= 0 && separatorIndex < sensitiveValue.Length - 1)
+                    {
+                        var profilePath = sensitiveValue[(separatorIndex + 1)..];
+                        redacted = redacted.Replace(
+                            profilePath,
+                            "[已隐藏]",
+                            StringComparison.OrdinalIgnoreCase);
+                    }
+                }
             }
 
             index++;
         }
 
-        return redacted;
+        return RedactPotentialSensitiveText(redacted);
     }
 
     private static bool IsDouyinUrl(string url)
@@ -1075,7 +1089,16 @@ public partial class YtDlpService
             return "B 站返回 412 Precondition Failed，通常是请求头或站点风控校验导致。EasyGet 已自动补充 B 站请求头；如果仍失败，请稍后重试或更新 yt-dlp。";
         }
 
-        return lastErrorLine ?? $"yt-dlp exit code: {exitCode}";
+        return lastErrorLine is null
+            ? $"yt-dlp exit code: {exitCode}"
+            : RedactPotentialSensitiveText(lastErrorLine);
+    }
+
+    private static string RedactPotentialSensitiveText(string text)
+    {
+        var redacted = WindowsLocalPathRegex().Replace(text, "[已隐藏]");
+        redacted = CredentialHeaderRegex().Replace(redacted, "[已隐藏]");
+        return CredentialAssignmentRegex().Replace(redacted, "[已隐藏]");
     }
 
     private static string? ParseOutputPath(string line)
@@ -1385,4 +1408,13 @@ public partial class YtDlpService
 
     [GeneratedRegex(@"\[Merger\].*?""(.+?)""")]
     private static partial Regex MergerOutputRegex();
+
+    [GeneratedRegex(@"(?i)(?:[A-Z]:\\|\\\\)[^;\r\n""']+")]
+    private static partial Regex WindowsLocalPathRegex();
+
+    [GeneratedRegex(@"(?i)\b(?:cookie|authorization|auth_token|sessionid|sid)\s*[:=]\s*[^;\s,]+")]
+    private static partial Regex CredentialAssignmentRegex();
+
+    [GeneratedRegex(@"(?im)\b(?:cookie|authorization)\s*:\s*[^\r\n]+")]
+    private static partial Regex CredentialHeaderRegex();
 }

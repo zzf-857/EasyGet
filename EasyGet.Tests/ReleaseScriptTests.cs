@@ -27,9 +27,19 @@ public class ReleaseScriptTests
         Assert.Contains("/p:DebugSymbols=false", script, StringComparison.Ordinal);
         Assert.Contains("Remove-Item -Force", script, StringComparison.Ordinal);
         Assert.Contains("EasyGet.exe", script, StringComparison.Ordinal);
+        Assert.Contains("WebView2Loader.dll", script, StringComparison.Ordinal);
+        Assert.Contains("Microsoft.Web.WebView2.Wpf.dll", script, StringComparison.Ordinal);
         Assert.Contains("Compress-Archive", script, StringComparison.Ordinal);
         Assert.Contains("SkipZip", script, StringComparison.Ordinal);
         Assert.Contains("Version", script, StringComparison.Ordinal);
+        Assert.True(
+            script.LastIndexOf(
+                "dotnet restore $projectPath -r $Runtime",
+                StringComparison.Ordinal)
+            > script.IndexOf(
+                "dotnet test $testProjectPath -c $Configuration --no-restore",
+                StringComparison.Ordinal),
+            "The runtime-specific app restore must run after the test restore so publish --no-restore keeps win-x64 assets.");
     }
 
     [Fact]
@@ -306,7 +316,48 @@ public class ReleaseScriptTests
             "The test project should be restored immediately before running tests.");
     }
 
+    [Fact]
+    public void WindowsPublishScriptStopsImmediatelyWhenDotnetRestoreFails()
+    {
+        using var root = new TestDirectory();
+        var fakeBin = root.Path("fake-bin");
+        Directory.CreateDirectory(fakeBin);
+        File.WriteAllText(
+            Path.Combine(fakeBin, "dotnet.cmd"),
+            "@echo fake dotnet failure\r\n@exit /b 7\r\n");
+        var scriptPath = TestRepositoryPaths.GetRootPath(
+            Path.Combine("scripts", "publish-win-x64.ps1"));
+
+        var result = RunPowerShellScriptWithPathPrefix(
+            scriptPath,
+            fakeBin,
+            "-SkipZip",
+            "-SkipDouyinSidecar",
+            "-OutputRoot",
+            root.Path("publish"));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(
+            "dotnet restore test project failed with exit code 7",
+            result.CombinedOutput,
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("[EasyGet] Test", result.CombinedOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("[EasyGet] Publish", result.CombinedOutput, StringComparison.Ordinal);
+    }
+
     private static (int ExitCode, string CombinedOutput) RunPowerShellScript(string scriptPath, params string[] arguments)
+        => RunPowerShellScriptCore(scriptPath, pathPrefix: null, arguments);
+
+    private static (int ExitCode, string CombinedOutput) RunPowerShellScriptWithPathPrefix(
+        string scriptPath,
+        string pathPrefix,
+        params string[] arguments)
+        => RunPowerShellScriptCore(scriptPath, pathPrefix, arguments);
+
+    private static (int ExitCode, string CombinedOutput) RunPowerShellScriptCore(
+        string scriptPath,
+        string? pathPrefix,
+        params string[] arguments)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -315,6 +366,12 @@ public class ReleaseScriptTests
             RedirectStandardOutput = true,
             UseShellExecute = false
         };
+        if (!string.IsNullOrWhiteSpace(pathPrefix))
+        {
+            startInfo.Environment["PATH"] = pathPrefix
+                                             + Path.PathSeparator
+                                             + startInfo.Environment["PATH"];
+        }
         startInfo.ArgumentList.Add("-NoProfile");
         startInfo.ArgumentList.Add("-ExecutionPolicy");
         startInfo.ArgumentList.Add("Bypass");

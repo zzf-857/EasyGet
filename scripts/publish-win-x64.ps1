@@ -40,6 +40,17 @@ $projectPath = Join-Path $repoRoot "EasyGet.csproj"
 $testProjectPath = Join-Path $repoRoot "EasyGet.Tests\EasyGet.Tests.csproj"
 $sidecarBuildScriptPath = Join-Path $repoRoot "scripts\build-douyin-sidecar.ps1"
 
+function Assert-NativeCommandSucceeded {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Description failed with exit code $LASTEXITCODE."
+    }
+}
+
 if (-not [string]::IsNullOrWhiteSpace($DouyinCookieEnvVar) -and -not [string]::IsNullOrWhiteSpace($DouyinCookieFile)) {
     throw "Cannot specify both -DouyinCookieEnvVar and -DouyinCookieFile. Choose exactly one Cookie source for Douyin real download smoke."
 }
@@ -95,13 +106,19 @@ if (Test-Path -LiteralPath $publishDirFullPath) {
 }
 
 Write-Host "[EasyGet] Restore"
-dotnet restore $projectPath -r $Runtime
-
 if (-not $SkipTests) {
     dotnet restore $testProjectPath
+    Assert-NativeCommandSucceeded "dotnet restore test project"
     Write-Host "[EasyGet] Test"
     dotnet test $testProjectPath -c $Configuration --no-restore
+    Assert-NativeCommandSucceeded "dotnet test"
 }
+
+# Restoring the test project can replace the app assets file with a target graph
+# that omits the publish runtime. Keep this runtime-specific restore immediately
+# before publish --no-restore.
+dotnet restore $projectPath -r $Runtime
+Assert-NativeCommandSucceeded "dotnet restore app runtime"
 
 Write-Host "[EasyGet] Publish $Configuration $Runtime"
 $publishArgs = @(
@@ -125,6 +142,7 @@ if (-not [string]::IsNullOrWhiteSpace($Version)) {
 }
 
 dotnet @publishArgs
+Assert-NativeCommandSucceeded "dotnet publish"
 
 $publishPrunePatterns = @(
     "*.pdb",
@@ -150,6 +168,21 @@ if (-not (Test-Path $exePath)) {
 $exeInfo = Get-Item $exePath
 if ($exeInfo.Length -le 0) {
     throw "Publish smoke check failed: EasyGet.exe is empty."
+}
+
+$requiredWebView2Files = @(
+    "Microsoft.Web.WebView2.Core.dll",
+    "Microsoft.Web.WebView2.Wpf.dll",
+    "WebView2Loader.dll"
+)
+foreach ($fileName in $requiredWebView2Files) {
+    $filePath = Join-Path $publishDir $fileName
+    if (-not (Test-Path -LiteralPath $filePath -PathType Leaf)) {
+        throw "Publish smoke check failed: required WebView2 asset was not found: $fileName"
+    }
+    if ((Get-Item -LiteralPath $filePath).Length -le 0) {
+        throw "Publish smoke check failed: required WebView2 asset is empty: $fileName"
+    }
 }
 
 Write-Host "[EasyGet] Smoke check passed: $exePath"
@@ -739,6 +772,7 @@ else {
     }
 
     & $sidecarBuildScriptPath @sidecarBuildArgs
+    Assert-NativeCommandSucceeded "Douyin sidecar build"
 
     $sidecarStageDir = Join-Path $sidecarOutputRoot $Runtime
     $sidecarPublishDir = Join-Path $publishDir "sidecars\douyin"

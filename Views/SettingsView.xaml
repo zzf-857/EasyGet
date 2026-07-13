@@ -489,11 +489,20 @@
                                           SelectedValue="{Binding LegacyCookiePlatform}"
                                           AutomationProperties.Name="手动 Cookie 所属平台"/>
                                 <TextBlock Text="{Binding ManualCookieValidationMessage}"
-                                           Style="{StaticResource TextBody}"
-                                           Foreground="{StaticResource WarningBrush}"
                                            Margin="0,6,0,0"
                                            TextWrapping="Wrap"
-                                           AutomationProperties.Name="手动 Cookie 校验提示"/>
+                                           AutomationProperties.Name="手动 Cookie 校验提示">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
+                                            <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsManualCookieMessageSuccess}" Value="True">
+                                                    <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <TextBox Style="{StaticResource DarkTextBox}"
                                          Margin="0,10,0,0"
                                          Text="{Binding CookieContent, UpdateSourceTrigger=LostFocus}"
@@ -507,16 +516,24 @@
                                          VerticalContentAlignment="Top"
                                          AutomationProperties.Name="手动 Cookie 内容"/>
                                 <DockPanel Margin="0,10,0,0">
-                                    <Button DockPanel.Dock="Right"
-                                            Style="{StaticResource SurfaceButton}"
-                                            Padding="10,5"
-                                            Command="{Binding ClearCookieCommand}"
-                                            AutomationProperties.Name="清空手动 Cookie">
-                                        <TextBlock Text="清空手动 Cookie"/>
-                                    </Button>
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                        <Button Style="{StaticResource AccentButton}"
+                                                Padding="10,5"
+                                                Command="{Binding SaveSettingsCommand}"
+                                                AutomationProperties.Name="加密保存手动 Cookie">
+                                            <TextBlock Text="加密保存手动 Cookie"/>
+                                        </Button>
+                                        <Button Style="{StaticResource SurfaceButton}"
+                                                Margin="8,0,0,0"
+                                                Padding="10,5"
+                                                Command="{Binding ClearCookieCommand}"
+                                                AutomationProperties.Name="清空手动 Cookie">
+                                            <TextBlock Text="清空手动 Cookie"/>
+                                        </Button>
+                                    </StackPanel>
                                     <TextBlock Style="{StaticResource TextBody}"
                                                VerticalAlignment="Center"
-                                               Text="{Binding CookieContent, Converter={StaticResource CookieStatusConverter}}"/>
+                                               Text="{Binding ManualCookieStatusText}"/>
                                 </DockPanel>
                             </StackPanel>
                         </Expander>

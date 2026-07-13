@@ -1,5 +1,6 @@
 using EasyGet.Models;
 using EasyGet.Services;
+using EasyGet.Services.Cookies;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -17,7 +18,7 @@ public class ConfigServiceTests
     }
 
     [Fact]
-    public async Task SaveAsync_CreatesBackupBeforeOverwritingExistingConfig()
+    public async Task SaveAsync_SanitizesCookieBeforeBackingUpOrOverwritingConfig()
     {
         Directory.CreateDirectory(_tempDir);
         var configPath = Path.Combine(_tempDir, "config.json");
@@ -41,8 +42,93 @@ public class ConfigServiceTests
         var backupPath = Path.Combine(_tempDir, "config.backup.json");
         Assert.True(File.Exists(backupPath));
         var backupJson = await File.ReadAllTextAsync(backupPath);
-        Assert.Contains("old-cookie", backupJson);
+        Assert.DoesNotContain("old-cookie", backupJson);
+        Assert.DoesNotContain("new-cookie", backupJson);
         Assert.Contains("old-hash", backupJson);
+        Assert.DoesNotContain(
+            "new-cookie",
+            await File.ReadAllTextAsync(configPath),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveAsync_MigratesScopedCookieIntoEncryptedVault()
+    {
+        var protector = new XorTestProtector();
+        var service = new ConfigService(_tempDir, protector);
+        service.Config.CookieContent = "auth_token=scoped-secret";
+        service.Config.LegacyCookiePlatform = "twitter";
+
+        await service.SaveAsync();
+
+        var vault = new PlatformCookieVault(_tempDir, protector);
+        Assert.Equal(
+            "auth_token=scoped-secret",
+            await vault.LoadAsync("twitter", CancellationToken.None));
+        Assert.Equal("", service.Config.CookieContent);
+        foreach (var fileName in new[] { "config.json", "config.backup.json" })
+        {
+            var json = await File.ReadAllTextAsync(Path.Combine(_tempDir, fileName));
+            Assert.DoesNotContain("scoped-secret", json, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAsync_QuarantinesUnscopedLegacyCookieAndRestoresItOnlyInMemory()
+    {
+        var protector = new XorTestProtector();
+        var service = new ConfigService(_tempDir, protector);
+        service.Config.CookieContent = "Cookie: legacy_unscoped=secret-value";
+        service.Config.LegacyCookiePlatform = "";
+
+        await service.SaveAsync();
+
+        var vault = new PlatformCookieVault(_tempDir, protector);
+        Assert.Equal(
+            "Cookie: legacy_unscoped=secret-value",
+            await vault.LoadAsync(
+                ConfigService.LegacyUnscopedCookieStorageKey,
+                CancellationToken.None));
+        Assert.Equal("", service.Config.CookieContent);
+        Assert.DoesNotContain(
+            "secret-value",
+            await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json")),
+            StringComparison.Ordinal);
+
+        var reloaded = new ConfigService(_tempDir, protector);
+        await reloaded.LoadAsync();
+
+        Assert.Equal("Cookie: legacy_unscoped=secret-value", reloaded.Config.CookieContent);
+        Assert.Equal("", reloaded.Config.LegacyCookiePlatform);
+        Assert.DoesNotContain(
+            "secret-value",
+            await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json")),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveAsync_WhenCookieEncryptionFails_PreservesExistingPersistentCopy()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var configPath = Path.Combine(_tempDir, "config.json");
+        await File.WriteAllTextAsync(
+            configPath,
+            """
+            {
+              "cookieContent": "auth_token=only-persistent-copy",
+              "legacyCookiePlatform": "twitter"
+            }
+            """);
+        var service = new ConfigService(_tempDir, new ThrowingTestProtector());
+        await service.LoadAsync();
+
+        await service.SaveAsync();
+
+        Assert.Contains(
+            "only-persistent-copy",
+            await File.ReadAllTextAsync(configPath),
+            StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(_tempDir, "config.backup.json")));
     }
 
     [Fact]
@@ -454,5 +540,24 @@ public class ConfigServiceTests
         var property = typeof(AppConfig).GetProperty(propertyName);
         Assert.NotNull(property);
         property!.SetValue(config, value);
+    }
+
+    private sealed class XorTestProtector : ISecretProtector
+    {
+        public byte[] Protect(byte[] plaintext) => Transform(plaintext);
+        public byte[] Unprotect(byte[] ciphertext) => Transform(ciphertext);
+
+        private static byte[] Transform(byte[] input)
+            => input.Select(value => (byte)(value ^ 0xA5)).ToArray();
+    }
+
+    private sealed class ThrowingTestProtector : ISecretProtector
+    {
+        public byte[] Protect(byte[] plaintext)
+            => throw new System.Security.Cryptography.CryptographicException(
+                "test encryption failed");
+
+        public byte[] Unprotect(byte[] ciphertext)
+            => ciphertext.ToArray();
     }
 }

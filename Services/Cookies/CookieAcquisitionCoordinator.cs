@@ -76,9 +76,8 @@ public sealed class CookieAcquisitionCoordinator
     private readonly ICookieHealthStore _health;
     private readonly IManagedLoginSessionService _managedLogin;
     private readonly string _temporaryDirectory;
-    private readonly ConcurrentDictionary<
-        string,
-        Lazy<Task<IReadOnlyList<BrowserCookie>>>> _managedRequests = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ManagedLoginRequest> _managedRequests =
+        new(StringComparer.Ordinal);
 
     public CookieAcquisitionCoordinator(
         ConfigService config,
@@ -115,14 +114,15 @@ public sealed class CookieAcquisitionCoordinator
         {
             new(CookieSourceKind.Anonymous, platform)
         };
-        if (!_config.Config.SmartCookieEnabled)
-            return attempts;
 
         if (await _vault.ExistsAsync(platform.StorageKey, cancellationToken)
             || HasLegacyCookieForPlatform(platform, url))
         {
             attempts.Add(new CookieAttempt(CookieSourceKind.LegacyScoped, platform));
         }
+
+        if (!_config.Config.SmartCookieEnabled)
+            return attempts;
 
         var successfulProfiles = _health.Snapshot()
             .Where(record => string.Equals(
@@ -206,17 +206,11 @@ public sealed class CookieAcquisitionCoordinator
         {
             var storageKey = attempt.Platform.StorageKey;
             CookieStorageKey.ValidatePlatformId(storageKey);
-            var request = _managedRequests.GetOrAdd(
-                storageKey,
-                _ => new Lazy<Task<IReadOnlyList<BrowserCookie>>>(
-                    () => _managedLogin.GetCookiesAsync(
-                        attempt.Platform,
-                        CancellationToken.None),
-                    LazyThreadSafetyMode.ExecutionAndPublication));
+            var request = GetManagedRequest(storageKey, attempt.Platform);
             IReadOnlyList<BrowserCookie> cookies;
             try
             {
-                cookies = await request.Value.WaitAsync(cancellationToken);
+                cookies = await request.Task.WaitAsync(cancellationToken);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -224,8 +218,13 @@ public sealed class CookieAcquisitionCoordinator
             }
             catch
             {
-                RemoveManagedRequest(storageKey, request);
+                RemoveManagedRequest(storageKey, request, cancel: true);
                 throw;
+            }
+            finally
+            {
+                if (request.ReleaseWaiterAndShouldCancel())
+                    RemoveManagedRequest(storageKey, request, cancel: true);
             }
 
             if (cookies.Count == 0)
@@ -326,7 +325,12 @@ public sealed class CookieAcquisitionCoordinator
         finally
         {
             if (attempt.Source == CookieSourceKind.ManagedSession)
-                _managedRequests.TryRemove(attempt.Platform.StorageKey, out _);
+            {
+                RemoveManagedRequest(
+                    attempt.Platform.StorageKey,
+                    expected: null,
+                    cancel: true);
+            }
         }
 
         return failure;
@@ -384,19 +388,107 @@ public sealed class CookieAcquisitionCoordinator
         ArgumentNullException.ThrowIfNull(platform);
         CookieStorageKey.ValidatePlatformId(platform.StorageKey);
         cancellationToken.ThrowIfCancellationRequested();
-        _managedRequests.TryRemove(platform.StorageKey, out _);
+        RemoveManagedRequest(platform.StorageKey, expected: null, cancel: true);
         await _managedLogin.ClearAsync(platform.StorageKey, cancellationToken);
         await _health.ClearPlatformAsync(platform.StorageKey, cancellationToken);
     }
 
+    private ManagedLoginRequest GetManagedRequest(
+        string platformId,
+        MediaPlatformDefinition platform)
+    {
+        while (true)
+        {
+            var request = _managedRequests.GetOrAdd(
+                platformId,
+                _ => new ManagedLoginRequest(token =>
+                    _managedLogin.GetCookiesAsync(platform, token)));
+            if (request.TryAddWaiter())
+                return request;
+
+            RemoveManagedRequest(platformId, request, cancel: true);
+        }
+    }
+
     private void RemoveManagedRequest(
         string platformId,
-        Lazy<Task<IReadOnlyList<BrowserCookie>>> request)
+        ManagedLoginRequest? expected,
+        bool cancel = false)
     {
-        if (_managedRequests.TryGetValue(platformId, out var current)
-            && ReferenceEquals(current, request))
+        if (!_managedRequests.TryGetValue(platformId, out var current)
+            || (expected is not null && !ReferenceEquals(current, expected)))
         {
-            _managedRequests.TryRemove(platformId, out _);
+            return;
+        }
+
+        if (((ICollection<KeyValuePair<string, ManagedLoginRequest>>)_managedRequests)
+            .Remove(new KeyValuePair<string, ManagedLoginRequest>(platformId, current)))
+        {
+            if (cancel)
+                current.Cancel();
+        }
+    }
+
+    private sealed class ManagedLoginRequest
+    {
+        private readonly object _gate = new();
+        private readonly CancellationTokenSource _cancellation = new();
+        private readonly Lazy<Task<IReadOnlyList<BrowserCookie>>> _task;
+        private int _waiterCount;
+        private bool _acceptingWaiters = true;
+
+        public ManagedLoginRequest(
+            Func<CancellationToken, Task<IReadOnlyList<BrowserCookie>>> requestFactory)
+        {
+            ArgumentNullException.ThrowIfNull(requestFactory);
+            _task = new Lazy<Task<IReadOnlyList<BrowserCookie>>>(
+                () => requestFactory(_cancellation.Token),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+        }
+
+        public Task<IReadOnlyList<BrowserCookie>> Task => _task.Value;
+
+        public bool TryAddWaiter()
+        {
+            lock (_gate)
+            {
+                if (!_acceptingWaiters)
+                    return false;
+
+                _waiterCount++;
+                return true;
+            }
+        }
+
+        public bool ReleaseWaiterAndShouldCancel()
+        {
+            lock (_gate)
+            {
+                if (_waiterCount <= 0)
+                    throw new InvalidOperationException("Managed login waiter count is unbalanced.");
+
+                _waiterCount--;
+                if (_waiterCount != 0
+                    || !_task.IsValueCreated
+                    || _task.Value.IsCompleted)
+                {
+                    return false;
+                }
+
+                _acceptingWaiters = false;
+                return true;
+            }
+        }
+
+        public void Cancel()
+        {
+            try
+            {
+                _cancellation.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
         }
     }
 }

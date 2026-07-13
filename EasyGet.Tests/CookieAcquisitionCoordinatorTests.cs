@@ -68,6 +68,23 @@ public sealed class CookieAcquisitionCoordinatorTests
     }
 
     [Fact]
+    public async Task BuildAttemptsAsync_WhenSmartModeIsDisabledStillUsesEncryptedManualCookie()
+    {
+        await using var fixture = await CoordinatorFixture.CreateAsync(
+            platformId: "twitter",
+            manualCookie: "auth_token=manual-secret");
+        fixture.Config.Config.SmartCookieEnabled = false;
+
+        var attempts = await fixture.Coordinator.BuildAttemptsAsync(
+            "https://x.com/user/status/1",
+            CancellationToken.None);
+
+        Assert.Equal(
+            [CookieSourceKind.Anonymous, CookieSourceKind.LegacyScoped],
+            attempts.Select(attempt => attempt.Source));
+    }
+
+    [Fact]
     public async Task BuildAttemptsAsync_UsesLegacyConfigOnlyAfterItsPlatformIsExplicitlyScoped()
     {
         await using var fixture = await CoordinatorFixture.CreateAsync();
@@ -355,6 +372,40 @@ public sealed class CookieAcquisitionCoordinatorTests
         await using var waitingLease = await waitingRequest;
         await using var laterLease = await laterRequest;
         Assert.Equal(1, provider.CallCount);
+    }
+
+    [Fact]
+    public async Task AcquireArgumentsAsync_LastConsumerCancellationStopsSharedLoginAndAllowsFreshRequest()
+    {
+        var provider = new BlockingManagedLoginSessionService(
+            [new BrowserCookie(".x.com", "/", "auth_token", "managed-secret", true, 0)]);
+        await using var fixture = await CoordinatorFixture.CreateAsync(managedLogin: provider);
+        var attempt = new CookieAttempt(
+            CookieSourceKind.ManagedSession,
+            MediaPlatformResolver.Resolve("https://x.com/user/status/1"));
+        using var cancellation = new CancellationTokenSource();
+        var canceledRequest = fixture.Coordinator.AcquireArgumentsAsync(
+            attempt,
+            "https://x.com/user/status/1",
+            cancellation.Token);
+        await provider.Started.WaitAsync(TimeSpan.FromSeconds(1));
+
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceledRequest);
+        await provider.CancellationObserved.WaitAsync(TimeSpan.FromSeconds(1));
+        var freshRequest = fixture.Coordinator.AcquireArgumentsAsync(
+            attempt,
+            "https://x.com/user/status/1",
+            CancellationToken.None);
+        for (var attemptIndex = 0; attemptIndex < 50 && provider.CallCount < 2; attemptIndex++)
+            await Task.Delay(10);
+        Assert.Equal(2, provider.CallCount);
+        provider.Release();
+        await using var freshLease = await freshRequest;
+
+        Assert.Equal(2, provider.CallCount);
+        Assert.Equal("--cookies", freshLease.Arguments[0]);
     }
 
     [Fact]
@@ -846,10 +897,13 @@ public sealed class CookieAcquisitionCoordinatorTests
             TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _release = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _cancellationObserved = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         private int _callCount;
 
         public int CallCount => Volatile.Read(ref _callCount);
         public Task Started => _started.Task;
+        public Task CancellationObserved => _cancellationObserved.Task;
 
         public void Release() => _release.TrySetResult();
 
@@ -859,7 +913,15 @@ public sealed class CookieAcquisitionCoordinatorTests
         {
             Interlocked.Increment(ref _callCount);
             _started.TrySetResult();
-            await _release.Task.WaitAsync(cancellationToken);
+            try
+            {
+                await _release.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _cancellationObserved.TrySetResult();
+                throw;
+            }
             return cookies;
         }
 

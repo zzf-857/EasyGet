@@ -52,12 +52,16 @@ public class DownloadManagerTests
         var metadataResult = await Task.WhenAny(
             service.AllMetadataResolved.Task,
             Task.Delay(TimeSpan.FromSeconds(1)));
+        var downloadsQueued = await WaitUntilAsync(
+            () => manager.Tasks.Count(task => task.Status == DownloadStatus.Waiting) == 19,
+            TimeSpan.FromSeconds(1));
         var waitingForDownloadCount = manager.Tasks.Count(
             task => task.Status == DownloadStatus.Waiting);
         service.ReleaseDownloads();
         await service.AllDownloadsCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
 
         Assert.Same(service.AllMetadataResolved.Task, metadataResult);
+        Assert.True(downloadsQueued);
         Assert.Equal(20, service.MetadataCallCount);
         Assert.Equal(19, waitingForDownloadCount);
     }
@@ -1133,6 +1137,22 @@ public class DownloadManagerTests
         catch
         {
         }
+    }
+
+    private static async Task<bool> WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+                return true;
+
+            await Task.Delay(10);
+        }
+
+        return condition();
     }
 
     private sealed class FakeYtDlpDownloadService : IYtDlpDownloadService

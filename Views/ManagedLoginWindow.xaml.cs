@@ -1,7 +1,6 @@
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
-using System.Windows.Interop;
 using EasyGet.Services.Cookies;
 using Microsoft.Web.WebView2.Core;
 
@@ -14,6 +13,7 @@ public partial class ManagedLoginWindow : Window, IManagedLoginWindow
     private TaskCompletionSource<IReadOnlyList<BrowserCookie>>? _loginCompletion;
     private bool _disposed;
     private bool _isClosed;
+    private bool _isPreparingSession = true;
 
     internal ManagedLoginWindow(
         MediaPlatformDefinition platform,
@@ -39,15 +39,24 @@ public partial class ManagedLoginWindow : Window, IManagedLoginWindow
     {
         cancellationToken.ThrowIfCancellationRequested();
         Directory.CreateDirectory(_sessionDirectory);
-        _ = new WindowInteropHelper(this).EnsureHandle();
+        StatusText.Text = "正在检查已保存的登录状态...";
+        ContinueButton.IsEnabled = false;
+        CancelButton.IsEnabled = false;
+        ShowActivated = false;
+        ShowInTaskbar = false;
+        Opacity = 1;
+        _isPreparingSession = true;
+        Show();
 
         try
         {
             var environment = await CoreWebView2Environment.CreateAsync(
                 browserExecutableFolder: null,
                 userDataFolder: _sessionDirectory,
-                options: null);
-            await Browser.EnsureCoreWebView2Async(environment);
+                options: null)
+                .WaitAsync(cancellationToken);
+            await Browser.EnsureCoreWebView2Async(environment)
+                .WaitAsync(cancellationToken);
         }
         catch (WebView2RuntimeNotFoundException ex)
         {
@@ -55,7 +64,6 @@ public partial class ManagedLoginWindow : Window, IManagedLoginWindow
                 "未检测到 Microsoft Edge WebView2 Runtime，请安装 WebView2 运行时后重试智能登录。",
                 ex);
         }
-
         cancellationToken.ThrowIfCancellationRequested();
         Browser.CoreWebView2.Settings.AreDevToolsEnabled = false;
         Browser.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -88,9 +96,9 @@ public partial class ManagedLoginWindow : Window, IManagedLoginWindow
                 var cookies = await ReadCookiesOnUiThreadAsync(
                     allowedDomains,
                     CancellationToken.None);
-                if (cookies.Count == 0)
+                if (!ManagedLoginCookieValidator.HasAuthenticatedSession(_platform, cookies))
                 {
-                    StatusText.Text = "尚未检测到登录状态，请确认登录完成后再继续。";
+                    StatusText.Text = "尚未检测到已登录账号，请完成平台登录后再继续。";
                     return;
                 }
 
@@ -112,12 +120,19 @@ public partial class ManagedLoginWindow : Window, IManagedLoginWindow
         // Local callbacks are assigned for the button handlers while this login request is active.
         _completeLogin = CompleteLogin;
         _cancelLogin = CancelLogin;
+        _isPreparingSession = false;
 
         await Dispatcher.InvokeAsync(() =>
         {
             StatusText.Text = "请在上方网页完成登录，然后点击继续。";
+            ContinueButton.IsEnabled = true;
+            CancelButton.IsEnabled = true;
             Browser.Source = _platform.LoginUri;
-            Show();
+            ShowActivated = true;
+            ShowInTaskbar = true;
+            Opacity = 1;
+            if (!IsVisible)
+                Show();
             Activate();
         });
 
@@ -191,7 +206,16 @@ public partial class ManagedLoginWindow : Window, IManagedLoginWindow
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
-        => _loginCompletion?.TrySetResult([]);
+    {
+        if (_isPreparingSession && !_disposed)
+        {
+            e.Cancel = true;
+            StatusText.Text = "正在初始化安全登录环境，请稍候...";
+            return;
+        }
+
+        _loginCompletion?.TrySetResult([]);
+    }
 
     private void CancelPendingLogin()
     {

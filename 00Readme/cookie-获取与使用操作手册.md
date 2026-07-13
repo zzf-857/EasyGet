@@ -1,361 +1,98 @@
-# Cookie 获取与使用操作手册
+# 智能登录与 Cookie 使用手册
 
-## 1. 这份笔记是干什么的
+## 默认用法：直接下载
 
-很多流媒体平台在下载时都会校验登录状态、风控状态、年龄限制或地区限制。  
-这时只靠视频链接往往不够，还需要配合对应平台的 `cookie` 文件。
+多数情况下无需导出、复制或粘贴 Cookie：
 
-最适合长期使用的方式就是：
+1. 在“视频下载”或“批量下载”中输入链接。
+2. EasyGet 先匿名解析公开内容。
+3. 平台明确要求登录时，EasyGet 自动尝试本机已安装浏览器的登录配置。
+4. 浏览器配置均不可用时，EasyGet 才打开一次目标平台的真实登录页。
+5. 在平台官网完成登录或验证码后，原任务会自动继续。
 
-- 一个平台准备一个独立的 `cookie.txt`
-- 下载哪个平台，就用哪个平台的 `cookie.txt`
-- 过期了就只更新对应平台的 cookie，不影响别的平台
+“无感”表示尽量复用本机已有登录状态，不表示绕过登录、验证码、地区限制、付费权限或平台服务条款。
 
-例如：
+## 支持的浏览器
 
-- `youtubeCookie.txt`
-- `douyinCookie.txt`
-- `bilibiliCookie.txt`
-- `xiaohongshuCookie.txt`
+Windows 版会自动发现下列浏览器的默认配置和多个用户配置：
 
----
+- Chrome
+- Edge
+- Firefox
+- Brave
+- Chromium
+- Vivaldi
+- Opera / Opera GX
 
-## 2. 推荐的文件管理方式
+EasyGet 只枚举可用配置并交给 yt-dlp 尝试，不在设置页显示 Cookie 值或完整配置路径。浏览器数据库被占用或某个配置不可用时，会自动尝试下一个配置。
 
-建议单独准备一个 Cookie 文件夹，例如：
+## 设置页状态
 
-```text
-D:\Videos\02流媒体视频下载\Cookies
-```
+打开“系统设置 → 智能登录与 Cookie”可以：
 
-推荐这样命名：
+- 开启或关闭智能 Cookie 模式；
+- 刷新浏览器配置与最近认证健康状态；
+- 按平台登录或重新登录；
+- 清除单个平台或全部 EasyGet 托管登录会话；
+- 在折叠的高级区域手动导入 Cookie。
 
-```text
-youtubeCookie.txt
-douyinCookie.txt
-bilibiliCookie.txt
-xiaohongshuCookie.txt
-```
+状态含义：
 
-这样做的好处：
+- 绿色：该平台近期已有验证成功的策略；
+- 灰色：发现了可尝试的浏览器配置，但尚未验证该平台是否已登录；
+- 黄色：未发现可复用配置，首次使用受限内容时可能需要登录。
 
-- 一眼就知道每个文件属于哪个平台
-- 某个平台失效时，只更新那个文件
-- 后面程序也更容易做“按平台选择 cookie 文件”
+## 首次托管登录
 
----
+托管登录窗口直接打开目标平台的真实网页。EasyGet 不读取、保存或记录账号、密码和验证码：
 
-## 3. 通用原则
+1. 确认窗口顶部显示的平台和允许域名正确。
+2. 在网页内正常完成登录或验证。
+3. EasyGet 只导出当前平台允许域名的会话 Cookie，并以临时文件交给 yt-dlp。
+4. 登录完成后点击“已完成登录，继续”；检测到平台会话后窗口关闭，所有等待该平台认证的任务继续运行。
+5. 点击“取消”只取消本次认证，不清除其他平台会话。
 
-不管哪个平台，获取 Cookie 时都尽量遵守下面这些规则：
+如果 WebView2 Runtime 缺失，请按窗口提示安装 Microsoft Edge WebView2 Runtime，再重试登录。
 
-1. 先登录目标平台账号
-2. 尽量使用无痕模式 / 隐私模式 / InPrivate 模式
-3. 在同一个窗口里完成登录和导出
-4. 导出后尽量关闭这个无痕窗口
-5. 优先导出 `Netscape` 格式的 `cookies.txt`
-6. 不要只复制一长串 `SID=xxx; token=xxx` 这种文本
-7. 最好保存成独立文件，不要和别的平台混在一起
+## 高级手动导入
 
----
+只有自动浏览器与托管登录都不可用时才建议使用高级手动导入。
 
-## 4. 获取 Cookie 之前的准备
+- Header 格式（如 `key=value; key2=value2`）必须先选择所属平台，否则不会写入配置。
+- Netscape 或 JSON 格式若包含真实域名，EasyGet 会按域名自动拆分。
+- 无关平台的 Cookie 行会被丢弃，不会复制到其他站点。
+- 填写后点击“加密保存手动 Cookie”；成功后输入框会清空，内容按平台写入 Windows DPAPI 加密仓库，不以明文保存在 `config.json` 或备份中。
+- 旧版本遗留且尚未选择平台的 Header Cookie 会先进入同目录的 DPAPI 加密隔离项；下次启动仍会回填到输入框，选择正确平台后再点击保存即可完成迁移。
+- 关闭“智能 Cookie 模式”只停用浏览器自动探测和托管登录，不会禁用用户主动保存的加密手动 Cookie。
+- 要删除手动 Cookie，先选择平台，再点击“清空手动 Cookie”；只删除该平台，不影响其他平台。
 
-以 Chrome 或 Edge 为例，建议先做一次基础设置。
+不要在 Issue、日志、截图、聊天记录或网盘中分享 Cookie。Cookie 通常等同于临时登录凭据。
 
-### 4.1 安装导出插件
+## 本地隐私与清理
 
-推荐使用：
+| 数据 | 本地位置 | 说明 |
+|---|---|---|
+| 手动 Cookie | `%LocalAppData%/EasyGet/manual-cookies/` | 按平台隔离；未归属的旧版内容暂存为加密隔离项；均由当前 Windows 用户 DPAPI 加密 |
+| 托管登录会话 | `%LocalAppData%/EasyGet/sessions/<platform>/` | 每个平台独立的 WebView2 用户目录 |
+| 健康记录 | `%LocalAppData%/EasyGet/cookie-health.json` | 不含 Cookie 值和完整浏览器路径 |
+| 临时 Cookie 文件 | `%LocalAppData%/EasyGet/temp/cookies/` | 仅当前用户可访问；任务结束删除，启动时清理遗留 |
 
-```text
-Get cookies.txt LOCALLY
-```
+平台列表行内的“清除”只清理 EasyGet 托管会话和对应健康记录；高级区域的“清空手动 Cookie”只删除选中平台的加密手动内容。两者都不会退出 Chrome、Edge、Firefox 等外部浏览器中的账号。
 
-注意：
+## 常见问题
 
-- 要找带 `LOCALLY` 的版本
-- 它导出的格式更适合 `yt-dlp`
+### 公开内容为什么还提示登录？
 
-### 4.2 允许插件在无痕模式中使用
+平台可能触发年龄、机器人验证、频率限制或地区策略。EasyGet 只在错误被判定为认证相关时切换 Cookie 来源；普通网络错误不会反复弹登录。
 
-Chrome：
+### 浏览器已经登录但仍不可用？
 
-1. 打开 `chrome://extensions/`
-2. 找到 `Get cookies.txt LOCALLY`
-3. 点“详细信息”
-4. 打开 `允许在无痕模式中使用`
+可能是配置数据库被占用、浏览器加密策略变化、Cookie 已过期，或登录发生在另一个用户配置。EasyGet 会继续尝试其他配置，最后再提供托管登录。
 
-Edge：
+### 为什么不再推荐 Cookie 导出扩展？
 
-1. 打开 `edge://extensions/`
-2. 找到 `Get cookies.txt LOCALLY`
-3. 点“详细信息”
-4. 打开 `在 InPrivate 中允许`
+智能模式可以复用浏览器状态或使用平台真实登录页，减少手工导出、过期维护和误传 Cookie 的风险。手动导入仍作为高级兜底保留。
 
-如果这一步没开，无痕窗口里就看不到插件。
+### 如何让某个平台重新登录？
 
----
-
-## 5. YouTube 获取 Cookie 详细流程
-
-这是目前最容易忘、也最容易出错的平台，所以单独记录。
-
-### 5.1 目标
-
-最终拿到一个真正可用的：
-
-```text
-youtubeCookie.txt
-```
-
-### 5.2 正确操作步骤
-
-1. 先关闭所有已经打开的 YouTube 页面
-2. 打开一个新的无痕窗口
-3. 在这个无痕窗口里登录你的 YouTube 账号
-4. 登录成功后，不要切到别的网站
-5. 在同一个窗口、同一个标签页输入：
-
-```text
-https://www.youtube.com/robots.txt
-```
-
-6. 打开这个页面后，不要下载 `robots.txt` 文件本身
-7. 这一步的真正目的，是让浏览器停留在一个更稳定的 YouTube 会话页面
-8. 点击右上角插件 `Get cookies.txt LOCALLY`
-9. 如果插件有多个选项，优先这样选：
-
-- 先选 `Export`
-- 如果还要继续选择格式，就选 `Export As`
-- 然后选 `Netscape`
-- 不要优先选 `Export All Cookies`
-
-10. 保存文件到：
-
-```text
-D:\Videos\02流媒体视频下载\Cookies\youtubeCookie.txt
-```
-
-11. 导出完成后，关闭整个无痕窗口
-
-### 5.3 为什么不能只下载 robots.txt
-
-因为 `robots.txt` 文件本身没有用。  
-真正有用的是：
-
-- 你在无痕窗口里的登录状态
-- 你在这个状态下导出的 `youtubeCookie.txt`
-
-所以关键不是“下载 robots.txt”，而是“访问 robots.txt 后导出 cookie”。
-
-### 5.4 怎么确认导出的文件基本正常
-
-用记事本打开 `youtubeCookie.txt`，第一行通常应该像下面这样：
-
-```text
-# Netscape HTTP Cookie File
-```
-
-如果不是这个格式，后续工具大概率不能直接识别。
-
----
-
-## 6. 其他平台如何套用
-
-除了 YouTube，其他平台大多数也能按类似思路处理。
-
-通用模板：
-
-1. 打开目标平台
-2. 登录账号
-3. 用无痕窗口完成整个过程更稳
-4. 在目标平台的页面里导出当前站点 Cookie
-5. 保存成独立文件
-
-例如：
-
-### 6.1 抖音
-
-建议文件名：
-
-```text
-douyinCookie.txt
-```
-
-建议流程：
-
-1. 打开无痕窗口
-2. 登录抖音网页版
-3. 停留在 `douyin.com` 相关页面
-4. 用插件导出当前站点 Cookie
-5. 保存为 `douyinCookie.txt`
-
-### 6.2 B 站
-
-建议文件名：
-
-```text
-bilibiliCookie.txt
-```
-
-建议流程：
-
-1. 打开无痕窗口
-2. 登录 B 站
-3. 停留在 `bilibili.com` 视频页面
-4. 导出当前站点 Cookie
-5. 保存为 `bilibiliCookie.txt`
-
-### 6.3 小红书 / 其他平台
-
-思路也是一样：
-
-1. 登录
-2. 打开目标平台页面
-3. 导出当前站点 Cookie
-4. 单独保存
-
----
-
-## 7. 实际使用建议
-
-以后建议你固定按下面流程操作：
-
-### 方案 A：先准备 Cookie，再下载
-
-适合经常下载的人。
-
-1. 先把常用平台的 Cookie 都准备好
-2. 分类保存到：
-
-```text
-D:\Videos\02流媒体视频下载\Cookies
-```
-
-3. 需要下载时，直接选择对应平台的 Cookie 文件
-
-例如：
-
-- 下载 YouTube 时用 `youtubeCookie.txt`
-- 下载抖音时用 `douyinCookie.txt`
-- 下载 B 站时用 `bilibiliCookie.txt`
-
-### 方案 B：报错时再补 Cookie
-
-适合偶尔下载的人。
-
-1. 先直接尝试下载
-2. 如果平台报需要登录、年龄限制、风控校验
-3. 再去补导出该平台 Cookie
-
----
-
-## 8. 常见错误排查
-
-### 8.1 错误：无痕模式里插件不能用
-
-原因：
-
-- 没有开启“允许在无痕模式中使用”
-
-解决：
-
-- 到扩展管理页面打开无痕权限
-
-### 8.2 错误：导出了 Cookie 但还是不能下载
-
-常见原因：
-
-- Cookie 已过期
-- 导出的不是当前站点 Cookie
-- 导出的不是 Netscape 格式
-- 导出后又继续在浏览器里操作，Cookie 被平台轮换
-- 平台风控更严格，需要重新登录后再导出
-
-解决：
-
-1. 重新开无痕窗口
-2. 重新登录
-3. 重新导出
-4. 用新的文件替换旧文件
-
-### 8.3 错误：只有一长串 `key=value; key2=value2`
-
-说明：
-
-- 这不一定是标准 `cookies.txt`
-- 某些工具不能直接用
-
-更稳的做法：
-
-- 用插件直接导出 `Netscape cookies.txt`
-
-### 8.4 错误：导出时选了 `Export All Cookies`
-
-说明：
-
-- 会把很多无关网站的 Cookie 一起导出来
-- 容易杂乱，也不够安全
-
-建议：
-
-- 优先选当前网站的 `Export`
-
----
-
-## 9. 我的长期使用规范
-
-建议以后固定这样做：
-
-### 9.1 目录规范
-
-```text
-D:\Videos\02流媒体视频下载\Cookies
-```
-
-### 9.2 命名规范
-
-```text
-youtubeCookie.txt
-douyinCookie.txt
-bilibiliCookie.txt
-xiaohongshuCookie.txt
-```
-
-### 9.3 使用规范
-
-- 下载前先判断平台
-- 按平台选择对应 Cookie 文件
-- 如果下载失败，优先怀疑 Cookie 失效
-- 某个平台失效时，只重做那个平台的 Cookie
-
----
-
-## 10. 一句话总结
-
-以后你只要记住这一套就够了：
-
-```text
-一个平台一个 cookie.txt
-下载哪个平台，就用哪个平台的 cookie.txt
-YouTube 要在无痕窗口登录后，访问 robots.txt，再导出当前站点 Cookie
-```
-
----
-
-## 11. 你这次已经验证成功的文件
-
-本次实际验证成功的 YouTube Cookie 文件是：
-
-```text
-C:\Users\admin\AppData\Local\EasyGet\www.youtube.com_cookies.txt
-```
-
-后面你可以把它整理或复制为：
-
-```text
-D:\Videos\02流媒体视频下载\Cookies\youtubeCookie.txt
-```
-
-这样后续就更好找。
-
+在“智能登录与 Cookie”列表中先点该平台的“清除”，再点“登录”。其他平台会话不会受影响。

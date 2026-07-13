@@ -76,7 +76,8 @@
                            Text="请在上方网页完成登录，然后点击继续。"
                            TextWrapping="Wrap"
                            AutomationProperties.LiveSetting="Polite" />
-                <Button Grid.Column="1"
+                <Button x:Name="CancelButton"
+                        Grid.Column="1"
                         Margin="16,0,8,0"
                         MinWidth="112"
                         Padding="16,9"
@@ -84,7 +85,8 @@
                         Style="{StaticResource SurfaceButton}"
                         Click="CancelButton_Click"
                         AutomationProperties.Name="取消平台登录" />
-                <Button Grid.Column="2"
+                <Button x:Name="ContinueButton"
+                        Grid.Column="2"
                         MinWidth="168"
                         Padding="16,9"
                         Content="已完成登录，继续"
