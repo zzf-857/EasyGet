@@ -2,6 +2,7 @@ using System.Windows;
 using System.IO;
 using Microsoft.Extensions.DependencyInjection;
 using EasyGet.Services;
+using EasyGet.Services.Cookies;
 using EasyGet.ViewModels;
 
 namespace EasyGet;
@@ -28,6 +29,11 @@ public partial class App : System.Windows.Application
         };
 
         base.OnStartup(e);
+
+        CookieFileLease.CleanupStaleFiles(
+            CookieFileLease.DefaultTemporaryDirectory,
+            DateTime.UtcNow,
+            TimeSpan.FromDays(1));
 
         try 
         {

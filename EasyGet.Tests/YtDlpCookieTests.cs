@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using EasyGet.Services.Cookies;
 using System.Collections;
 using System.Reflection;
 using Xunit;
@@ -7,6 +8,12 @@ namespace EasyGet.Tests;
 
 public class YtDlpCookieTests
 {
+    private static IReadOnlyList<string> BuildYoutubeScopedLines(string content)
+        => CookieFileSerializer.BuildScopedLines(
+            content,
+            MediaPlatformResolver.Resolve("https://www.youtube.com/watch?v=test"),
+            "www.youtube.com");
+
     [Fact]
     public void BuildCookieFileLines_PreservesNetscapeCookieFileInput()
     {
@@ -16,7 +23,7 @@ public class YtDlpCookieTests
             .youtube.com	TRUE	/	FALSE	0	PREF	tz=UTC
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688281\t__Secure-1PSID\ttoken-value", lines);
         Assert.Contains(".youtube.com\tTRUE\t/\tFALSE\t0\tPREF\ttz=UTC", lines);
@@ -32,7 +39,7 @@ public class YtDlpCookieTests
             .youtube.com	TRUE	/	FALSE	0	PREF	tz=UTC
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains("#HttpOnly_.youtube.com\tTRUE\t/\tTRUE\t1811688281\t__Secure-3PSID\thttp-only-token", lines);
         Assert.Contains(".youtube.com\tTRUE\t/\tFALSE\t0\tPREF\ttz=UTC", lines);
@@ -42,7 +49,7 @@ public class YtDlpCookieTests
     [Fact]
     public void BuildCookieFileLines_StripsCookieHeaderNameAndMarksYoutubeCookiesSecure()
     {
-        var lines = YtDlpService.BuildCookieFileLines("Cookie: __Secure-1PSID=token-value; PREF=tz=UTC");
+        var lines = BuildYoutubeScopedLines("Cookie: __Secure-1PSID=token-value; PREF=tz=UTC");
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\t__Secure-1PSID\ttoken-value", lines);
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\ttz=UTC", lines);
@@ -66,7 +73,7 @@ public class YtDlpCookieTests
             ]
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688281\t__Secure-1PSID\ttoken-value", lines);
     }
@@ -95,7 +102,7 @@ public class YtDlpCookieTests
             ]
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688281\tPREF\ttz=UTC", lines);
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t1811688299\tVISITOR_INFO1_LIVE\tvisitor-token", lines);
@@ -123,7 +130,7 @@ public class YtDlpCookieTests
             ]
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\ttz=UTC", lines);
         Assert.Contains("www.youtube.com\tFALSE\t/watch\tTRUE\t0\tVISITOR_INFO1_LIVE\tvisitor-token", lines);
@@ -147,7 +154,7 @@ public class YtDlpCookieTests
             }
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tPREF\ttz=UTC", lines);
     }
@@ -169,7 +176,7 @@ public class YtDlpCookieTests
             }
             """;
 
-        var lines = YtDlpService.BuildCookieFileLines(input);
+        var lines = BuildYoutubeScopedLines(input);
 
         Assert.Contains(".youtube.com\tTRUE\t/\tTRUE\t0\tVISITOR_INFO1_LIVE\tvisitor-token", lines);
     }
