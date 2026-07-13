@@ -24,7 +24,7 @@ public class ProjectDependencyTests
             Assert.False(
                 package.Version.Contains('*', StringComparison.Ordinal),
                 $"{package.Name} should use a pinned version instead of {package.Version}.");
-            Assert.Matches(@"^\d+\.\d+\.\d+$", package.Version);
+            Assert.Matches(@"^\d+(?:\.\d+){2,3}$", package.Version);
         });
     }
 

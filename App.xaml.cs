@@ -50,7 +50,13 @@ public partial class App : System.Windows.Application
             services.AddSingleton<ICookieHealthStore>(provider =>
                 new CookieHealthStore(
                     provider.GetRequiredService<ConfigService>().ConfigDirectory));
-            services.AddSingleton<IManagedLoginSessionService, EmptyManagedLoginSessionService>();
+            services.AddSingleton<IManagedLoginWindowFactory, ManagedLoginWindowFactory>();
+            services.AddSingleton<IManagedLoginSessionService>(provider =>
+                new ManagedLoginSessionService(
+                    provider.GetRequiredService<IManagedLoginWindowFactory>(),
+                    Path.Combine(
+                        provider.GetRequiredService<ConfigService>().ConfigDirectory,
+                        "sessions")));
             services.AddSingleton<CookieAcquisitionCoordinator>(provider =>
                 new CookieAcquisitionCoordinator(
                     provider.GetRequiredService<ConfigService>(),
