@@ -138,10 +138,14 @@ public partial class BatchDownloadViewModel : ObservableObject
 
         IsDownloading = true;
 
+        var knownUrls = new HashSet<string>(
+            _downloadManager.Tasks.Select(task => task.Url),
+            StringComparer.OrdinalIgnoreCase);
         var urls = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                            .Select(line => DownloadViewModel.ExtractUrl(line))
                            .Where(u => u != null)
                            .Cast<string>()
+                           .Where(knownUrls.Add)
                            .ToList();
 
         var format = SelectedFormat switch

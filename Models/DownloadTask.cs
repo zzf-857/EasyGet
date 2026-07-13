@@ -30,7 +30,13 @@ public partial class DownloadTask : ObservableObject
     public string Url { get; set; } = "";
 
     /// <summary>视频标题</summary>
-    [ObservableProperty] private string _title = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(DisplayTitle))]
+    private string _title = "";
+
+    public string DisplayTitle => string.IsNullOrWhiteSpace(Title)
+        ? "等待解析..."
+        : Title;
 
     /// <summary>平台名称</summary>
     [ObservableProperty] private string _platform = "";
@@ -84,10 +90,25 @@ public partial class DownloadTask : ObservableObject
     [ObservableProperty] private long _downloadedSize;
 
     /// <summary>当前状态</summary>
-    [ObservableProperty] private DownloadStatus _status = DownloadStatus.Waiting;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private DownloadStatus _status = DownloadStatus.Waiting;
 
     /// <summary>错误信息</summary>
     [ObservableProperty] private string _errorMessage = "";
+
+    public string StatusText => Status switch
+    {
+        DownloadStatus.Waiting => "等待中",
+        DownloadStatus.Resolving => "解析与认证中",
+        DownloadStatus.Downloading => "下载中",
+        DownloadStatus.Merging => "合并中",
+        DownloadStatus.Completed => "已完成",
+        DownloadStatus.Failed => "失败",
+        DownloadStatus.Cancelled => "已取消",
+        DownloadStatus.Paused => "已暂停",
+        _ => "未知"
+    };
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasDouyinTaskOutcome))]

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Threading.Channels;
 using EasyGet.Models;
 
 namespace EasyGet.Services;
@@ -6,7 +7,7 @@ namespace EasyGet.Services;
 /// <summary>
 /// 下载队列管理器 — 管理并发下载任务
 /// </summary>
-public class DownloadManager
+public class DownloadManager : IDisposable
 {
     private readonly IYtDlpDownloadService _ytDlpService;
     private readonly M3u8DownloadService _m3u8DownloadService;
@@ -14,8 +15,17 @@ public class DownloadManager
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly SemaphoreSlim _semaphore;
+    private readonly SemaphoreSlim _historyWriteSemaphore = new(1, 1);
+    private readonly Channel<DownloadTask> _metadataQueue;
+    private readonly Task[] _metadataWorkers;
     private int _currentConcurrencyLimit;
     private readonly object _concurrencyLock = new();
+    private readonly object _idleLock = new();
+    private int _activeTaskCount;
+    private int _disposed;
+    private TaskCompletionSource _idleSignal = CreateCompletedSignal();
+    private const int MetadataWorkerCount = 4;
+    private const int MetadataQueueCapacity = 128;
 
     /// <summary>所有任务</summary>
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
@@ -58,6 +68,17 @@ public class DownloadManager
         _configService = configService;
         _currentConcurrencyLimit = NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads);
         _semaphore = new SemaphoreSlim(_currentConcurrencyLimit, 100);
+        _metadataQueue = Channel.CreateBounded<DownloadTask>(new BoundedChannelOptions(
+            MetadataQueueCapacity)
+        {
+            FullMode = BoundedChannelFullMode.Wait,
+            SingleReader = false,
+            SingleWriter = false,
+            AllowSynchronousContinuations = false
+        });
+        _metadataWorkers = Enumerable.Range(0, MetadataWorkerCount)
+            .Select(_ => Task.Run(ProcessMetadataQueueAsync))
+            .ToArray();
     }
 
     /// <summary>
@@ -100,8 +121,11 @@ public class DownloadManager
     /// <summary>
     /// 添加并开始下载任务
     /// </summary>
-    public async Task EnqueueAsync(DownloadTask task)
+    public Task EnqueueAsync(DownloadTask task)
     {
+        ObjectDisposedException.ThrowIf(
+            Volatile.Read(ref _disposed) != 0,
+            this);
         task.Cts = new CancellationTokenSource();
 
         if (string.IsNullOrEmpty(task.OutputDirectory))
@@ -113,71 +137,195 @@ public class DownloadManager
         task.Status = DownloadStatus.Resolving;
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 正在解析: {task.Url}");
 
-        var info = await _ytDlpService.GetVideoInfoAsync(task.Url, task.Cts.Token);
-        if (info != null)
+        RegisterActiveTask();
+        _ = QueueMetadataAsync(task);
+        return Task.CompletedTask;
+    }
+
+    public Task WaitForIdleAsync(CancellationToken cancellationToken)
+    {
+        Task idleTask;
+        lock (_idleLock)
+            idleTask = _idleSignal.Task;
+
+        return cancellationToken.CanBeCanceled
+            ? idleTask.WaitAsync(cancellationToken)
+            : idleTask;
+    }
+
+    private async Task QueueMetadataAsync(DownloadTask task)
+    {
+        try
         {
-            ApplyVideoInfoMetadata(task, info);
+            await _metadataQueue.Writer.WriteAsync(
+                task,
+                task.Cts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            if (task.Status != DownloadStatus.Paused)
+                task.Status = DownloadStatus.Cancelled;
+            CompleteActiveTask();
+            NotifyTaskFinished(task);
+        }
+        catch (Exception)
+        {
+            task.Status = DownloadStatus.Failed;
+            task.ErrorMessage = "加入解析队列失败，请重试";
+            CompleteActiveTask();
+            NotifyTaskFinished(task);
+        }
+    }
+
+    private async Task ProcessMetadataQueueAsync()
+    {
+        await foreach (var task in _metadataQueue.Reader.ReadAllAsync())
+            await ResolveMetadataAsync(task);
+    }
+
+    private async Task ResolveMetadataAsync(DownloadTask task)
+    {
+        try
+        {
+            var info = await _ytDlpService.GetVideoInfoAsync(
+                task.Url,
+                task.Cts?.Token ?? CancellationToken.None);
+            if (info != null)
+                ApplyVideoInfoMetadata(task, info);
+        }
+        catch (OperationCanceledException)
+        {
+            if (task.Status != DownloadStatus.Paused)
+                task.Status = DownloadStatus.Cancelled;
+            CompleteActiveTask();
+            NotifyTaskFinished(task);
+            return;
+        }
+        catch (Exception)
+        {
+            task.Status = DownloadStatus.Failed;
+            task.ErrorMessage = "解析失败，请检查链接、网络或登录状态后重试";
+            LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 解析失败，请检查链接、网络或登录状态后重试");
+            CompleteActiveTask();
+            NotifyTaskFinished(task);
+            return;
         }
 
+        task.Status = DownloadStatus.Waiting;
+        _ = ProcessDownloadAsync(task);
+    }
+
+    private async Task ProcessDownloadAsync(DownloadTask task)
+    {
         // 等待并发位
-        _ = Task.Run(async () =>
+        try
         {
-            try
+            await _semaphore.WaitAsync(task.Cts?.Token ?? CancellationToken.None);
+        }
+        catch (OperationCanceledException)
+        {
+            if (task.Status != DownloadStatus.Paused)
             {
-                await _semaphore.WaitAsync(task.Cts.Token);
+                task.Status = DownloadStatus.Cancelled;
+                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
             }
-            catch (OperationCanceledException)
+            CompleteActiveTask();
+            NotifyTaskFinished(task);
+            return;
+        }
+
+        try
+        {
+            var progress = new Progress<DownloadProgress>(p =>
             {
-                if (task.Status != DownloadStatus.Paused)
-                {
-                    task.Status = DownloadStatus.Cancelled;
-                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
-                }
-                TaskFinished?.Invoke(task);
+                ApplyProgress(task, p);
+            });
+
+            await DownloadWithMatchingServiceAsync(task, progress);
+            await SaveHistoryIfCompletedAsync(task);
+        }
+        catch (OperationCanceledException)
+        {
+            if (task.Status != DownloadStatus.Paused)
+            {
+                task.Status = DownloadStatus.Cancelled;
+                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
+            }
+            else
+            {
+                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已暂停: {task.Title}");
+            }
+        }
+        catch (Exception)
+        {
+            task.Status = DownloadStatus.Failed;
+            task.ErrorMessage = "下载失败，请检查网络、登录状态或输出目录后重试";
+            LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 下载失败，请检查网络、登录状态或输出目录后重试");
+        }
+        finally
+        {
+            _semaphore.Release();
+            CompleteActiveTask();
+            NotifyTaskFinished(task);
+        }
+    }
+
+    private void RegisterActiveTask()
+    {
+        lock (_idleLock)
+        {
+            if (_activeTaskCount++ == 0)
+            {
+                _idleSignal = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+        }
+    }
+
+    private void CompleteActiveTask()
+    {
+        TaskCompletionSource? signal = null;
+        lock (_idleLock)
+        {
+            if (_activeTaskCount <= 0)
                 return;
-            }
+            if (--_activeTaskCount == 0)
+                signal = _idleSignal;
+        }
 
-            try
-            {
-                var progress = new Progress<DownloadProgress>(p =>
-                {
-                    ApplyProgress(task, p);
-                });
+        signal?.TrySetResult();
+    }
 
-                await DownloadWithMatchingServiceAsync(task, progress);
-                await SaveHistoryIfCompletedAsync(task);
-            }
-            catch (OperationCanceledException)
-            {
-                if (task.Status != DownloadStatus.Paused)
-                {
-                    task.Status = DownloadStatus.Cancelled;
-                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
-                }
-                else
-                {
-                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已暂停: {task.Title}");
-                }
-            }
-            catch (Exception ex)
-            {
-                task.Status = DownloadStatus.Failed;
-                task.ErrorMessage = ex.Message;
-                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 失败: {ex.Message}");
-            }
-            finally
-            {
-                _semaphore.Release();
-                TaskFinished?.Invoke(task);
-            }
-        });
+    private void NotifyTaskFinished(DownloadTask task)
+    {
+        try
+        {
+            TaskFinished?.Invoke(task);
+        }
+        catch (Exception)
+        {
+            // UI subscribers must not terminate metadata/download workers.
+        }
+    }
+
+    private static TaskCompletionSource CreateCompletedSignal()
+    {
+        var signal = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        signal.SetResult();
+        return signal;
     }
 
     /// <summary>取消任务</summary>
     public void Cancel(string taskId)
     {
         var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-        task?.Cts?.Cancel();
+        if (task is null)
+            return;
+
+        task.Cts?.Cancel();
+        if (task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving)
+            task.Status = DownloadStatus.Cancelled;
     }
 
     /// <summary>暂停任务</summary>
@@ -192,10 +340,11 @@ public class DownloadManager
     }
 
     /// <summary>恢复暂停的任务（yt-dlp 自动续传部分下载文件）</summary>
-    public async Task ResumeAsync(string taskId)
+    public Task ResumeAsync(string taskId)
     {
         var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-        if (task == null || task.Status != DownloadStatus.Paused) return;
+        if (task == null || task.Status != DownloadStatus.Paused)
+            return Task.CompletedTask;
 
         task.Speed = 0;
         task.Eta = 0;
@@ -208,58 +357,9 @@ public class DownloadManager
         task.Status = DownloadStatus.Waiting;
         Tasks.Add(task);
 
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await _semaphore.WaitAsync(task.Cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                if (task.Status != DownloadStatus.Paused)
-                {
-                    task.Status = DownloadStatus.Cancelled;
-                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
-                }
-
-                TaskFinished?.Invoke(task);
-                return;
-            }
-
-            try
-            {
-                var progress = new Progress<DownloadProgress>(p =>
-                {
-                    ApplyProgress(task, p);
-                });
-
-                await DownloadWithMatchingServiceAsync(task, progress);
-                await SaveHistoryIfCompletedAsync(task);
-            }
-            catch (OperationCanceledException)
-            {
-                if (task.Status != DownloadStatus.Paused)
-                {
-                    task.Status = DownloadStatus.Cancelled;
-                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
-                }
-                else
-                {
-                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已暂停: {task.Title}");
-                }
-            }
-            catch (Exception ex)
-            {
-                task.Status = DownloadStatus.Failed;
-                task.ErrorMessage = ex.Message;
-                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 失败: {ex.Message}");
-            }
-            finally
-            {
-                _semaphore.Release();
-                TaskFinished?.Invoke(task);
-            }
-        });
+        RegisterActiveTask();
+        _ = ProcessDownloadAsync(task);
+        return Task.CompletedTask;
     }
 
     /// <summary>重试失败/已取消的任务</summary>
@@ -287,8 +387,17 @@ public class DownloadManager
     /// <summary>取消所有任务</summary>
     public void CancelAll()
     {
-        foreach (var task in Tasks)
-            task.Cts?.Cancel();
+        foreach (var task in Tasks.ToArray())
+            Cancel(task.Id);
+    }
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        CancelAll();
+        _metadataQueue.Writer.TryComplete();
     }
 
     /// <summary>
@@ -376,19 +485,27 @@ public class DownloadManager
         if (task.Status != DownloadStatus.Completed)
             return;
 
-        await _historyService.AddAsync(new DownloadHistory
+        await _historyWriteSemaphore.WaitAsync();
+        try
         {
-            Url = task.Url,
-            Title = task.Title,
-            Platform = task.Platform,
-            Format = task.Format,
-            Quality = task.Quality,
-            FileSize = task.FileSize,
-            FilePath = task.OutputFilePath,
-            AttachmentFilePaths = GetAttachmentFilePathsForHistory(task),
-            ThumbnailUrl = task.ThumbnailUrl,
-            DownloadTime = DateTime.Now
-        });
+            await _historyService.AddAsync(new DownloadHistory
+            {
+                Url = task.Url,
+                Title = task.Title,
+                Platform = task.Platform,
+                Format = task.Format,
+                Quality = task.Quality,
+                FileSize = task.FileSize,
+                FilePath = task.OutputFilePath,
+                AttachmentFilePaths = GetAttachmentFilePathsForHistory(task),
+                ThumbnailUrl = task.ThumbnailUrl,
+                DownloadTime = DateTime.Now
+            });
+        }
+        finally
+        {
+            _historyWriteSemaphore.Release();
+        }
     }
 
     private static List<string> GetAttachmentFilePathsForHistory(DownloadTask task)

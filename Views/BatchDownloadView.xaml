@@ -344,13 +344,13 @@
                                                                     Style="{StaticResource TextCaption}"
                                                                     Foreground="{DynamicResource AccentBrush}"/>
                                                     </Border>
-                                                    <TextBlock Text="{Binding Title, FallbackValue='解析中...'}"
+                                                    <TextBlock Text="{Binding DisplayTitle}"
                                                                Style="{StaticResource TextBodyStrong}"
                                                                TextTrimming="CharacterEllipsis"/>
                                                 </DockPanel>
                                                 <Grid Margin="0,6,0,4">
                                                     <TextBlock Style="{StaticResource TextCaption}">
-                                                        <Run Text="{Binding Status, Converter={StaticResource StatusToText}}"/>
+                                                        <Run Text="{Binding StatusText}"/>
                                                         <Run Text=" · "/>
                                                         <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
                                                     </TextBlock>

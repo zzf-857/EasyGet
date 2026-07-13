@@ -1,5 +1,6 @@
 using EasyGet.Models;
 using EasyGet.Services;
+using EasyGet.Services.Cookies;
 using System.Reflection;
 using Xunit;
 
@@ -7,6 +8,278 @@ namespace EasyGet.Tests;
 
 public class DownloadManagerTests
 {
+    [Fact]
+    public void DownloadTask_StatusText_DescribesMetadataAuthenticationWithoutNewStatus()
+    {
+        var task = new DownloadTask { Status = DownloadStatus.Resolving };
+
+        Assert.Equal(DownloadStatus.Resolving, task.Status);
+        Assert.Contains("认证", task.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DownloadTask_DisplayTitleShowsUsefulPlaceholderBeforeMetadataArrives()
+    {
+        var task = new DownloadTask
+        {
+            Url = "https://x.com/user/status/1",
+            Title = ""
+        };
+
+        Assert.Contains("等待解析", task.DisplayTitle, StringComparison.Ordinal);
+        task.Title = "已解析标题";
+        Assert.Equal("已解析标题", task.DisplayTitle);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_MetadataWorkersContinueWhileDownloadsWaitForConcurrency()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.MaxConcurrentDownloads = 1;
+        var service = new DownloadBlockingYtDlpDownloadService(expectedTaskCount: 20);
+        var manager = new DownloadManager(service, history, config);
+
+        foreach (var index in Enumerable.Range(1, 20))
+        {
+            await manager.EnqueueAsync(new DownloadTask
+            {
+                Url = $"https://x.com/user/status/{index}"
+            });
+        }
+
+        var metadataResult = await Task.WhenAny(
+            service.AllMetadataResolved.Task,
+            Task.Delay(TimeSpan.FromSeconds(1)));
+        var waitingForDownloadCount = manager.Tasks.Count(
+            task => task.Status == DownloadStatus.Waiting);
+        service.ReleaseDownloads();
+        await service.AllDownloadsCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Same(service.AllMetadataResolved.Task, metadataResult);
+        Assert.Equal(20, service.MetadataCallCount);
+        Assert.Equal(19, waitingForDownloadCount);
+    }
+
+    [Fact]
+    public async Task WaitForIdleAsync_CompletesAfterMetadataAndDownloadsFinish()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new FakeYtDlpDownloadService();
+        var manager = new DownloadManager(service, history, config);
+        var tasks = Enumerable.Range(1, 6)
+            .Select(index => new DownloadTask
+            {
+                Url = $"https://example.com/watch/{index}"
+            })
+            .ToArray();
+
+        foreach (var task in tasks)
+            await manager.EnqueueAsync(task);
+
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.All(tasks, task => Assert.Equal(DownloadStatus.Completed, task.Status));
+        Assert.Equal(6, service.GetVideoInfoCallCount);
+        Assert.Equal(6, service.DownloadCallCount);
+    }
+
+    [Fact]
+    public async Task Cancel_QueuedMetadataTaskUpdatesImmediatelyAndSkipsResolution()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new QueueBlockingYtDlpDownloadService();
+        var manager = new DownloadManager(service, history, config);
+        var tasks = Enumerable.Range(1, 5)
+            .Select(index => new DownloadTask
+            {
+                Url = $"https://example.com/watch/{index}"
+            })
+            .ToArray();
+        foreach (var task in tasks)
+            await manager.EnqueueAsync(task);
+        await service.FourMetadataRequestsStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        manager.Cancel(tasks[4].Id);
+
+        var statusAfterCancel = tasks[4].Status;
+        service.Release();
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(DownloadStatus.Cancelled, statusAfterCancel);
+        Assert.DoesNotContain(tasks[4].Url, service.ResolvedUrls);
+    }
+
+    [Fact]
+    public async Task WaitForIdleAsync_IncludesResumedDownloads()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new ResumeBlockingYtDlpDownloadService();
+        var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask
+        {
+            Url = "https://example.com/resume",
+            Status = DownloadStatus.Paused
+        };
+        manager.Tasks.Add(task);
+
+        await manager.ResumeAsync(task.Id);
+        await service.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var idleTask = manager.WaitForIdleAsync(CancellationToken.None);
+        var completedBeforeRelease = idleTask.IsCompleted;
+        service.Release();
+        await idleTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.False(completedBeforeRelease);
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_TwentySamePlatformTasksReuseOneManagedAuthentication()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var managedLogin = new CountingManagedLoginSessionService();
+        var coordinator = new CookieAcquisitionCoordinator(
+            config,
+            new PlatformCookieVault(root.Path("config")),
+            new EmptyBrowserProfileDiscoveryService(),
+            new CookieHealthStore(root.Path("config")),
+            managedLogin,
+            root.Path("temp"));
+        var service = new CoordinatorBackedYtDlpDownloadService(coordinator);
+        var manager = new DownloadManager(service, history, config);
+
+        foreach (var index in Enumerable.Range(1, 20))
+        {
+            await manager.EnqueueAsync(new DownloadTask
+            {
+                Url = $"https://x.com/user/status/{index}"
+            });
+        }
+
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(1, managedLogin.CallCount);
+        Assert.All(manager.Tasks, task => Assert.Equal(DownloadStatus.Completed, task.Status));
+    }
+
+    [Fact]
+    public async Task Dispose_CancelsActiveAndQueuedMetadataTasks()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new QueueBlockingYtDlpDownloadService();
+        var manager = new DownloadManager(service, history, config);
+        var tasks = Enumerable.Range(1, 5)
+            .Select(index => new DownloadTask
+            {
+                Url = $"https://example.com/dispose/{index}"
+            })
+            .ToArray();
+        foreach (var task in tasks)
+            await manager.EnqueueAsync(task);
+        await service.FourMetadataRequestsStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        manager.Dispose();
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.All(tasks, task => Assert.Equal(DownloadStatus.Cancelled, task.Status));
+    }
+
+    [Fact]
+    public async Task MetadataFailure_DoesNotExposeCookieOrProfileDetails()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var manager = new DownloadManager(
+            new ThrowingMetadataYtDlpDownloadService(
+                @"SID=secret-value in C:\Users\me\Secret Profile\Cookies"),
+            history,
+            config);
+        var logs = new List<string>();
+        manager.LogReceived += logs.Add;
+        var task = new DownloadTask { Url = "https://example.com/private" };
+
+        await manager.EnqueueAsync(task);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(DownloadStatus.Failed, task.Status);
+        Assert.Contains("解析失败", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-value", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Secret Profile", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(logs, log => log.Contains("secret-value", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task DownloadFailure_DoesNotExposeCookieOrProfileDetails()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var manager = new DownloadManager(
+            new ThrowingDownloadYtDlpDownloadService(
+                @"auth_token=secret-value in C:\Users\me\Secret Profile"),
+            history,
+            config);
+        var logs = new List<string>();
+        manager.LogReceived += logs.Add;
+        var task = new DownloadTask { Url = "https://example.com/private" };
+
+        await manager.EnqueueAsync(task);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(DownloadStatus.Failed, task.Status);
+        Assert.Contains("下载失败", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-value", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Secret Profile", task.ErrorMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain(logs, log => log.Contains("secret-value", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task TaskFinishedSubscriberFailure_DoesNotStopMetadataWorkers()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var manager = new DownloadManager(
+            new ThrowingMetadataYtDlpDownloadService("metadata failed"),
+            history,
+            config);
+        manager.TaskFinished += _ => throw new InvalidOperationException("subscriber failed");
+        var tasks = Enumerable.Range(1, 6)
+            .Select(index => new DownloadTask
+            {
+                Url = $"https://example.com/failure/{index}"
+            })
+            .ToArray();
+
+        foreach (var task in tasks)
+            await manager.EnqueueAsync(task);
+        var idleTask = manager.WaitForIdleAsync(CancellationToken.None);
+        var completed = await Task.WhenAny(
+            idleTask,
+            Task.Delay(TimeSpan.FromSeconds(1)));
+
+        Assert.Same(idleTask, completed);
+        Assert.All(tasks, task => Assert.Equal(DownloadStatus.Failed, task.Status));
+    }
+
     [Fact(Skip = "抖音专项 sidecar 已移除，抖音单链接改走 yt-dlp 主链路")]
     public async Task EnqueueAsync_DouyinNoteWithSpecialEngineEnabled_SkipsYtDlpInfoAndRunsSidecar()
     {
@@ -864,8 +1137,11 @@ public class DownloadManagerTests
 
     private sealed class FakeYtDlpDownloadService : IYtDlpDownloadService
     {
-        public int GetVideoInfoCallCount { get; private set; }
-        public int DownloadCallCount { get; private set; }
+        private int _getVideoInfoCallCount;
+        private int _downloadCallCount;
+
+        public int GetVideoInfoCallCount => Volatile.Read(ref _getVideoInfoCallCount);
+        public int DownloadCallCount => Volatile.Read(ref _downloadCallCount);
         public string? OutputDirectoryAtDownload { get; private set; }
         public VideoInfo? InfoToReturn { get; set; } = new()
         {
@@ -875,7 +1151,7 @@ public class DownloadManagerTests
 
         public Task<VideoInfo?> GetVideoInfoAsync(string url, CancellationToken cancellationToken = default)
         {
-            GetVideoInfoCallCount++;
+            Interlocked.Increment(ref _getVideoInfoCallCount);
             return Task.FromResult(InfoToReturn);
         }
 
@@ -885,7 +1161,7 @@ public class DownloadManagerTests
             Action<string>? logCallback = null,
             CancellationToken cancellationToken = default)
         {
-            DownloadCallCount++;
+            Interlocked.Increment(ref _downloadCallCount);
             OutputDirectoryAtDownload = task.OutputDirectory;
             task.Status = DownloadStatus.Completed;
             task.Progress = 100;
@@ -893,6 +1169,217 @@ public class DownloadManagerTests
             task.OutputFilePath = Path.Combine(task.OutputDirectory, $"{task.Title}.mp4");
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class DownloadBlockingYtDlpDownloadService(int expectedTaskCount)
+        : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _releaseDownloads = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _metadataCallCount;
+        private int _downloadCallCount;
+
+        public int MetadataCallCount => Volatile.Read(ref _metadataCallCount);
+        public TaskCompletionSource AllMetadataResolved { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource AllDownloadsCompleted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+        {
+            if (Interlocked.Increment(ref _metadataCallCount) == expectedTaskCount)
+                AllMetadataResolved.TrySetResult();
+            return Task.FromResult<VideoInfo?>(new VideoInfo
+            {
+                Title = url,
+                Platform = "Twitter"
+            });
+        }
+
+        public async Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                task.Status = DownloadStatus.Downloading;
+                await _releaseDownloads.Task.WaitAsync(cancellationToken);
+                task.Status = DownloadStatus.Completed;
+            }
+            finally
+            {
+                if (Interlocked.Increment(ref _downloadCallCount) == expectedTaskCount)
+                    AllDownloadsCompleted.TrySetResult();
+            }
+        }
+
+        public void ReleaseDownloads() => _releaseDownloads.TrySetResult();
+    }
+
+    private sealed class QueueBlockingYtDlpDownloadService : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _release = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly object _resolvedUrlsLock = new();
+        private readonly List<string> _resolvedUrls = [];
+
+        public TaskCompletionSource FourMetadataRequestsStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IReadOnlyList<string> ResolvedUrls
+        {
+            get
+            {
+                lock (_resolvedUrlsLock)
+                    return _resolvedUrls.ToArray();
+            }
+        }
+
+        public async Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lock (_resolvedUrlsLock)
+            {
+                _resolvedUrls.Add(url);
+                if (_resolvedUrls.Count == 4)
+                    FourMetadataRequestsStarted.TrySetResult();
+            }
+            await _release.Task.WaitAsync(cancellationToken);
+            return new VideoInfo { Title = url, Platform = "Generic" };
+        }
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            task.Status = DownloadStatus.Completed;
+            return Task.CompletedTask;
+        }
+
+        public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class ResumeBlockingYtDlpDownloadService : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _release = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource DownloadStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<VideoInfo?>(null);
+
+        public async Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            DownloadStarted.TrySetResult();
+            await _release.Task.WaitAsync(cancellationToken);
+            task.Status = DownloadStatus.Completed;
+        }
+
+        public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class CoordinatorBackedYtDlpDownloadService(
+        CookieAcquisitionCoordinator coordinator) : IYtDlpDownloadService
+    {
+        public async Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+        {
+            var platform = MediaPlatformResolver.Resolve(url);
+            await using var lease = await coordinator.AcquireArgumentsAsync(
+                new CookieAttempt(CookieSourceKind.ManagedSession, platform),
+                url,
+                cancellationToken);
+            return new VideoInfo { Title = url, Platform = "Twitter" };
+        }
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            task.Status = DownloadStatus.Completed;
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class EmptyBrowserProfileDiscoveryService
+        : IBrowserProfileDiscoveryService
+    {
+        public IReadOnlyList<BrowserProfile> Discover() => [];
+    }
+
+    private sealed class CountingManagedLoginSessionService
+        : IManagedLoginSessionService
+    {
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public async Task<IReadOnlyList<BrowserCookie>> GetCookiesAsync(
+            MediaPlatformDefinition platform,
+            CancellationToken cancellationToken)
+        {
+            Interlocked.Increment(ref _callCount);
+            await Task.Delay(TimeSpan.FromMilliseconds(40), cancellationToken);
+            return [new BrowserCookie(".x.com", "/", "auth_token", "value", true, 0)];
+        }
+
+        public Task ClearAsync(string platformId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingMetadataYtDlpDownloadService(string message)
+        : IYtDlpDownloadService
+    {
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+            => Task.FromException<VideoInfo?>(new InvalidOperationException(message));
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingDownloadYtDlpDownloadService(string message)
+        : IYtDlpDownloadService
+    {
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<VideoInfo?>(new VideoInfo
+            {
+                Title = "private",
+                Platform = "Generic"
+            });
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+            => Task.FromException(new InvalidOperationException(message));
     }
 
     private sealed class FakeDouyinSpecialDownloadService : IDouyinSpecialDownloadService

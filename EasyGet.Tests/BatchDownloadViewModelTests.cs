@@ -38,6 +38,77 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
+    public async Task StartBatchDownload_AddsAllTasksBeforeMetadataResolutionCompletes()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var blocker = new BlockingYtDlpDownloadService();
+        var manager = new DownloadManager(blocker, history, config);
+        var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp)
+        {
+            UrlsText = string.Join(
+                '\n',
+                Enumerable.Range(1, 20).Select(i => $"https://x.com/user/status/{i}"))
+        };
+
+        var command = viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await blocker.FirstMetadataRequest.WaitAsync(TimeSpan.FromSeconds(2));
+        var admittedTaskCount = manager.Tasks.Count;
+        blocker.Release();
+        await command.WaitAsync(TimeSpan.FromSeconds(5));
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(20, admittedTaskCount);
+        Assert.InRange(blocker.MaxConcurrentMetadataRequests, 1, 4);
+    }
+
+    [Fact]
+    public async Task StartBatchDownload_DeduplicatesInputAndExistingQueueUrls()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        var manager = new DownloadManager(service, history, config);
+        manager.Tasks.Add(new DownloadTask { Url = "https://example.com/already" });
+        var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp)
+        {
+            UrlsText = string.Join('\n',
+            [
+                "https://example.com/already",
+                "https://example.com/new",
+                "https://example.com/new",
+                "https://example.com/second"
+            ])
+        };
+
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(3, manager.Tasks.Count);
+        Assert.Single(manager.Tasks, task => string.Equals(
+            task.Url,
+            "https://example.com/new",
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void BatchDownloadXaml_ShowsTaskStatusTextIncludingAuthenticationPhase()
+    {
+        var xaml = File.ReadAllText(
+            TestRepositoryPaths.GetViewPath("BatchDownloadView.xaml"));
+
+        Assert.Contains("Text=\"{Binding StatusText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding DisplayTitle}\"", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CancelAll_WhenConfirmed_CancelsAndClearsTasks()
     {
         var dbPath = CreateTempDatabasePath();
@@ -285,6 +356,63 @@ public class BatchDownloadViewModelTests
         {
             TryDeleteDatabase(dbPath);
             TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    private sealed class BlockingYtDlpDownloadService : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _first = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _release = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _activeMetadataRequests;
+        private int _maxConcurrentMetadataRequests;
+
+        public Task FirstMetadataRequest => _first.Task;
+        public int MaxConcurrentMetadataRequests => Volatile.Read(
+            ref _maxConcurrentMetadataRequests);
+
+        public async Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+        {
+            var active = Interlocked.Increment(ref _activeMetadataRequests);
+            UpdateMaximum(ref _maxConcurrentMetadataRequests, active);
+            _first.TrySetResult();
+            try
+            {
+                await _release.Task.WaitAsync(cancellationToken);
+                return new VideoInfo { Title = url, Platform = "Twitter" };
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeMetadataRequests);
+            }
+        }
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            task.Status = DownloadStatus.Completed;
+            return Task.CompletedTask;
+        }
+
+        public void Release() => _release.TrySetResult();
+
+        private static void UpdateMaximum(ref int maximum, int candidate)
+        {
+            while (true)
+            {
+                var current = Volatile.Read(ref maximum);
+                if (candidate <= current
+                    || Interlocked.CompareExchange(ref maximum, candidate, current) == current)
+                {
+                    return;
+                }
+            }
         }
     }
 }
