@@ -9,6 +9,14 @@ public class ConfigServiceTests
     private readonly string _tempDir = Path.Combine(Path.GetTempPath(), $"easyget-config-tests-{Guid.NewGuid():N}");
 
     [Fact]
+    public void ConfigDirectory_ReturnsTheConfiguredApplicationDataRoot()
+    {
+        var service = new ConfigService(_tempDir);
+
+        Assert.Equal(_tempDir, service.ConfigDirectory);
+    }
+
+    [Fact]
     public async Task SaveAsync_CreatesBackupBeforeOverwritingExistingConfig()
     {
         Directory.CreateDirectory(_tempDir);

@@ -81,6 +81,9 @@ public class ConfigService
     /// <summary>当前配置</summary>
     public AppConfig Config => _config;
 
+    /// <summary>当前配置及关联应用数据的根目录。</summary>
+    public string ConfigDirectory => _configDir;
+
     /// <summary>
     /// 加载配置（如果配置文件不存在则使用默认值）
     /// </summary>
