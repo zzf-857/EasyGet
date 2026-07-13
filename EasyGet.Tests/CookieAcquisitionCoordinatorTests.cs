@@ -428,7 +428,7 @@ public sealed class CookieAcquisitionCoordinatorTests
     }
 
     [Fact]
-    public async Task ClassifyAndRecordFailureAsync_ResetsManagedCacheEvenWhenHealthWriteFails()
+    public async Task ClassifyAndRecordFailureAsync_HealthWriteFailureDoesNotBlockRetry()
     {
         var provider = new CountingManagedLoginSessionService(
             [new BrowserCookie(".x.com", "/", "auth_token", "managed-secret", true, 0)],
@@ -447,16 +447,16 @@ public sealed class CookieAcquisitionCoordinatorTests
         {
             Assert.Equal(1, provider.CallCount);
         }
-        await Assert.ThrowsAsync<IOException>(() =>
-            fixture.Coordinator.ClassifyAndRecordFailureAsync(
-                attempt,
-                ["ERROR: login required"],
-                CancellationToken.None));
+        var failure = await fixture.Coordinator.ClassifyAndRecordFailureAsync(
+            attempt,
+            ["ERROR: login required"],
+            CancellationToken.None);
         await using var second = await fixture.Coordinator.AcquireArgumentsAsync(
             attempt,
             "https://x.com/user/status/1",
             CancellationToken.None);
 
+        Assert.True(failure.ShouldTryNextCookieSource);
         Assert.Equal(2, provider.CallCount);
     }
 
@@ -535,6 +535,18 @@ public sealed class CookieAcquisitionCoordinatorTests
         var recorded = Assert.Single(health.Successes);
         Assert.Equal(platform.StorageKey, recorded.PlatformId);
         Assert.NotEqual(platform.Id, recorded.PlatformId);
+    }
+
+    [Fact]
+    public async Task RecordSuccessAsync_HealthWriteFailureDoesNotDiscardSuccessfulResult()
+    {
+        await using var fixture = await CoordinatorFixture.CreateAsync(
+            healthStore: new ThrowingSuccessHealthStore());
+        var attempt = new CookieAttempt(
+            CookieSourceKind.Anonymous,
+            MediaPlatformResolver.Resolve("https://youtube.com/watch?v=1"));
+
+        await fixture.Coordinator.RecordSuccessAsync(attempt, CancellationToken.None);
     }
 
     private sealed class CoordinatorFixture : IAsyncDisposable
@@ -676,6 +688,29 @@ public sealed class CookieAcquisitionCoordinatorTests
             CookieFailureCategory category,
             CancellationToken cancellationToken)
             => Task.FromException(new IOException("health store unavailable"));
+
+        public Task ClearPlatformAsync(string platformId, CancellationToken cancellationToken)
+            => Task.CompletedTask;
+    }
+
+    private sealed class ThrowingSuccessHealthStore : ICookieHealthStore
+    {
+        public IReadOnlyList<CookieHealthRecord> Snapshot() => [];
+
+        public Task RecordSuccessAsync(
+            string platformId,
+            CookieSourceKind source,
+            BrowserProfile? profile,
+            CancellationToken cancellationToken)
+            => Task.FromException(new IOException("health store unavailable"));
+
+        public Task RecordFailureAsync(
+            string platformId,
+            CookieSourceKind source,
+            BrowserProfile? profile,
+            CookieFailureCategory category,
+            CancellationToken cancellationToken)
+            => Task.CompletedTask;
 
         public Task ClearPlatformAsync(string platformId, CancellationToken cancellationToken)
             => Task.CompletedTask;

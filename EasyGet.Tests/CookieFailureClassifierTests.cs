@@ -19,6 +19,7 @@ public sealed class CookieFailureClassifierTests
     [InlineData("generic", "Could not copy Chrome cookie database", CookieFailureCategory.CookieStoreLocked, true)]
     [InlineData("generic", "database is locked while reading cookies", CookieFailureCategory.CookieStoreLocked, true)]
     [InlineData("generic", "Failed to decrypt with DPAPI", CookieFailureCategory.CookieDecryptFailed, true)]
+    [InlineData("generic", "Key not valid for use in specified state", CookieFailureCategory.CookieDecryptFailed, true)]
     [InlineData("generic", "HTTP Error 429: Too Many Requests", CookieFailureCategory.RateLimited, false)]
     [InlineData("generic", "No space left on device", CookieFailureCategory.UnrelatedFailure, false)]
     [InlineData("generic", "Requested format is not available", CookieFailureCategory.UnrelatedFailure, false)]

@@ -1,7 +1,5 @@
 using EasyGet.Services;
 using EasyGet.Services.Cookies;
-using System.Collections;
-using System.Reflection;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -13,6 +11,50 @@ public class YtDlpCookieTests
             content,
             MediaPlatformResolver.Resolve("https://www.youtube.com/watch?v=test"),
             "www.youtube.com");
+
+    [Fact]
+    public void Source_UsesCoordinatorForMetadataPlaylistAndDownload()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "YtDlpService.cs")));
+
+        Assert.True(
+            CountOccurrences(source, "_cookieCoordinator.BuildAttemptsAsync(") >= 3,
+            "metadata, playlist, and download must all build the same Cookie attempt plan");
+        Assert.True(
+            CountOccurrences(source, "_cookieCoordinator.AcquireArgumentsAsync(") >= 3,
+            "metadata, playlist, and download must all acquire Cookie arguments through the coordinator");
+        Assert.True(
+            CountOccurrences(source, "acquisitionFailure.ShouldTryNextCookieSource") >= 3,
+            "Cookie source access failures must fall through in all three yt-dlp flows");
+        Assert.Contains("ClassifyAndRecordFailureAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("HasBrowserCookies(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CookieStrategy.BrowserChrome", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CookieFilePath", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("[yt-dlp] args: {string.Join", source, StringComparison.Ordinal);
+
+        var appSource = File.ReadAllText(TestRepositoryPaths.GetRootPath("App.xaml.cs"));
+        Assert.Contains("AddSingleton<IBrowserProfileDiscoveryService", appSource, StringComparison.Ordinal);
+        Assert.Contains("AddSingleton<ICookieHealthStore", appSource, StringComparison.Ordinal);
+        Assert.Contains("AddSingleton<CookieAcquisitionCoordinator>", appSource, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("--cookies", @"C:\Users\me\AppData\Local\EasyGet\temp\cookies\twitter-secret.txt")]
+    [InlineData("--cookies-from-browser", @"chrome:C:\Users\me\Chrome\Profile 1")]
+    public void RedactCookieArgumentValues_HidesSensitiveFileAndProfilePaths(
+        string option,
+        string sensitiveValue)
+    {
+        var line = $"ERROR: failed while reading {sensitiveValue}";
+
+        var redacted = YtDlpService.RedactCookieArgumentValues(
+            line,
+            [option, sensitiveValue]);
+
+        Assert.DoesNotContain(sensitiveValue, redacted, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("[已隐藏]", redacted, StringComparison.Ordinal);
+    }
 
     [Fact]
     public void BuildCookieFileLines_PreservesNetscapeCookieFileInput()
@@ -182,46 +224,6 @@ public class YtDlpCookieTests
     }
 
     [Fact]
-    public void WriteCookieFileIfChanged_SkipsUnchangedContentButRewritesChangedContent()
-    {
-        var method = typeof(YtDlpService).GetMethod(
-            "WriteCookieFileIfChanged",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-
-        var directory = Path.Combine(Path.GetTempPath(), $"easyget-cookie-cache-{Guid.NewGuid():N}");
-        var cookiePath = Path.Combine(directory, "cookies.txt");
-        const string firstCookie = "Cookie: PREF=tz=UTC";
-        const string updatedCookie = "Cookie: PREF=tz=UTC; VISITOR_INFO1_LIVE=visitor-token";
-
-        try
-        {
-            method!.Invoke(null, [firstCookie, cookiePath]);
-            var markerTime = DateTime.UtcNow.AddMinutes(-10);
-            File.SetLastWriteTimeUtc(cookiePath, markerTime);
-
-            method.Invoke(null, [firstCookie, cookiePath]);
-            var unchangedWriteTime = File.GetLastWriteTimeUtc(cookiePath);
-
-            Assert.True(
-                Math.Abs((unchangedWriteTime - markerTime).TotalSeconds) < 2,
-                "Saving identical cookie content should not rewrite cookies.txt.");
-
-            method.Invoke(null, [updatedCookie, cookiePath]);
-
-            Assert.Contains("VISITOR_INFO1_LIVE", File.ReadAllText(cookiePath));
-            Assert.True(
-                File.GetLastWriteTimeUtc(cookiePath) > markerTime.AddMinutes(1),
-                "Changing cookie content should rewrite cookies.txt.");
-        }
-        finally
-        {
-            TryDeleteDirectory(directory);
-        }
-    }
-
-    [Fact]
     public void BuildDownloadFailureMessage_PreservesYoutubeForbiddenCauseAfterBrowserCookieFailures()
     {
         var stderrLines = new[]
@@ -269,106 +271,6 @@ public class YtDlpCookieTests
     }
 
     [Fact]
-    public void ShouldRetryWithNextCookieStrategy_RetriesDouyinAfterBrowserCookieDatabaseFailure()
-    {
-        var method = typeof(YtDlpService).GetMethod(
-            "ShouldRetryWithNextCookieStrategy",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-
-        var shouldRetry = (bool)method!.Invoke(null, new object[]
-        {
-            "https://v.douyin.com/i6EpMYVJgA8/",
-            new List<string> { "ERROR: Could not copy Chrome cookie database." }
-        })!;
-
-        Assert.True(shouldRetry);
-    }
-
-    [Fact]
-    public void ShouldRetryWithNextCookieStrategy_RetriesYoutubeAfterAgeGate()
-    {
-        var method = typeof(YtDlpService).GetMethod(
-            "ShouldRetryWithNextCookieStrategy",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-
-        var shouldRetry = (bool)method!.Invoke(null, new object[]
-        {
-            "https://www.youtube.com/watch?v=wFbtM0sfcEw",
-            new List<string>
-            {
-                "ERROR: [youtube] wFbtM0sfcEw: Sign in to confirm your age. This video may be inappropriate for some users."
-            }
-        })!;
-
-        Assert.True(shouldRetry);
-    }
-
-    [Fact]
-    public void ShouldRetryWithNextCookieStrategy_ScansStderrLinesOnce()
-    {
-        var method = typeof(YtDlpService).GetMethod(
-            "ShouldRetryWithNextCookieStrategy",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        Assert.NotNull(method);
-
-        var shouldRetry = (bool)method!.Invoke(null, new object[]
-        {
-            "https://v.douyin.com/i6EpMYVJgA8/",
-            new SingleUseEnumerable([
-                "WARNING: unrelated",
-                "ERROR: Could not copy Chrome cookie database."
-            ])
-        })!;
-
-        Assert.True(shouldRetry);
-    }
-
-    [Fact]
-    public void ShouldRetryWithNextCookieStrategy_StreamsProcessOutputWithoutListSnapshot()
-    {
-        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
-            Path.Combine("Services", "YtDlpService.cs")));
-
-        Assert.Contains("ShouldRetryWithNextCookieStrategy(url, EnumerateProcessLines(result.StandardError))", source, StringComparison.Ordinal);
-        Assert.Contains("private static IEnumerable<string> EnumerateProcessLines(string output)", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ShouldRetryWithNextCookieStrategy(url, SplitProcessLines(result.StandardError))", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("SplitProcessLines(string output)", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BuildCookieStrategies_AddsBrowserStrategiesForYoutubeWhenAvailable()
-    {
-        var strategies = YtDlpService.BuildCookieStrategies(
-            "https://www.youtube.com/watch?v=wFbtM0sfcEw",
-            chromeCookiesAvailable: true,
-            edgeCookiesAvailable: true);
-
-        Assert.Equal(
-            [
-                YtDlpService.CookieStrategy.Default,
-                YtDlpService.CookieStrategy.BrowserChrome,
-                YtDlpService.CookieStrategy.BrowserEdge
-            ],
-            strategies);
-    }
-
-    [Fact]
-    public void BuildCookieStrategies_KeepsGenericSitesOnDefaultStrategy()
-    {
-        var strategies = YtDlpService.BuildCookieStrategies(
-            "https://example.com/video",
-            chromeCookiesAvailable: true,
-            edgeCookiesAvailable: true);
-
-        Assert.Equal([YtDlpService.CookieStrategy.Default], strategies);
-    }
-
-    [Fact]
     public void BuildDownloadFailureMessage_ExplainsDouyinFreshCookiesAfterBrowserCookieFailures()
     {
         var stderrLines = new[]
@@ -383,7 +285,7 @@ public class YtDlpCookieTests
             1);
 
         Assert.Contains("抖音", message);
-        Assert.Contains("最新 Cookie", message);
+        Assert.Contains("智能登录", message);
     }
 
     [Fact]
@@ -396,32 +298,16 @@ public class YtDlpCookieTests
         Assert.Equal("https://v.douyin.com/vi3b7QpNklg/", info.Url);
     }
 
-    private sealed class SingleUseEnumerable(IEnumerable<string> lines) : IEnumerable<string>
+    private static int CountOccurrences(string text, string value)
     {
-        private bool _used;
-
-        public IEnumerator<string> GetEnumerator()
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
         {
-            if (_used)
-                throw new InvalidOperationException("stderr lines should be scanned only once.");
-
-            _used = true;
-            return lines.GetEnumerator();
+            count++;
+            index += value.Length;
         }
 
-        IEnumerator IEnumerable.GetEnumerator()
-            => GetEnumerator();
-    }
-
-    private static void TryDeleteDirectory(string path)
-    {
-        try
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-        catch
-        {
-        }
+        return count;
     }
 }

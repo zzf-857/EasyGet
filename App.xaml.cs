@@ -43,6 +43,22 @@ public partial class App : System.Windows.Application
             services.AddSingleton<ConfigService>();
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
+            services.AddSingleton<IBrowserProfileDiscoveryService, BrowserProfileDiscoveryService>();
+            services.AddSingleton<PlatformCookieVault>(provider =>
+                new PlatformCookieVault(
+                    provider.GetRequiredService<ConfigService>().ConfigDirectory));
+            services.AddSingleton<ICookieHealthStore>(provider =>
+                new CookieHealthStore(
+                    provider.GetRequiredService<ConfigService>().ConfigDirectory));
+            services.AddSingleton<IManagedLoginSessionService, EmptyManagedLoginSessionService>();
+            services.AddSingleton<CookieAcquisitionCoordinator>(provider =>
+                new CookieAcquisitionCoordinator(
+                    provider.GetRequiredService<ConfigService>(),
+                    provider.GetRequiredService<PlatformCookieVault>(),
+                    provider.GetRequiredService<IBrowserProfileDiscoveryService>(),
+                    provider.GetRequiredService<ICookieHealthStore>(),
+                    provider.GetRequiredService<IManagedLoginSessionService>(),
+                    CookieFileLease.DefaultTemporaryDirectory));
             services.AddSingleton<YtDlpService>();
             services.AddSingleton<M3u8DownloadService>();
             services.AddSingleton<TelegramDownloadService>();

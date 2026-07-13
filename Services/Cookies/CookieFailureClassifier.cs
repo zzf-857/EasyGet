@@ -79,7 +79,8 @@ public static class CookieFailureClassifier
                 "Failed to decrypt with DPAPI",
                 "Unable to decrypt cookie",
                 "Could not decrypt cookie",
-                "cookie decryption failed"))
+                "cookie decryption failed",
+                "Key not valid for use in specified state"))
         {
             return CookieFailureCategory.CookieDecryptFailed;
         }

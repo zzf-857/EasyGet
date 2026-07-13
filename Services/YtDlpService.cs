@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using EasyGet.Models;
+using EasyGet.Services.Cookies;
 
 namespace EasyGet.Services;
 
@@ -38,20 +39,41 @@ public partial class YtDlpService
 {
     private static readonly TimeSpan DefaultDownloadNoOutputTimeout = TimeSpan.FromMinutes(10);
 
-    internal enum CookieStrategy
-    {
-        Default,
-        BrowserChrome,
-        BrowserEdge
-    }
-
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
+    private readonly CookieAcquisitionCoordinator _cookieCoordinator;
 
     public YtDlpService(ConfigService configService, EnvironmentService envService)
+        : this(
+            configService,
+            envService,
+            CreateDefaultCookieCoordinator(configService))
     {
+    }
+
+    public YtDlpService(
+        ConfigService configService,
+        EnvironmentService envService,
+        CookieAcquisitionCoordinator cookieCoordinator)
+    {
+        ArgumentNullException.ThrowIfNull(configService);
+        ArgumentNullException.ThrowIfNull(envService);
+        ArgumentNullException.ThrowIfNull(cookieCoordinator);
         _configService = configService;
         _envService = envService;
+        _cookieCoordinator = cookieCoordinator;
+    }
+
+    private static CookieAcquisitionCoordinator CreateDefaultCookieCoordinator(ConfigService configService)
+    {
+        ArgumentNullException.ThrowIfNull(configService);
+        return new CookieAcquisitionCoordinator(
+            configService,
+            new PlatformCookieVault(configService.ConfigDirectory),
+            new BrowserProfileDiscoveryService(),
+            new CookieHealthStore(configService.ConfigDirectory),
+            new EmptyManagedLoginSessionService(),
+            CookieFileLease.DefaultTemporaryDirectory);
     }
 
     private string GetYtDlpPath()
@@ -133,14 +155,38 @@ public partial class YtDlpService
 
         try
         {
-            var strategies = GetCookieStrategies(url);
-            for (var i = 0; i < strategies.Count; i++)
+            var attempts = await _cookieCoordinator.BuildAttemptsAsync(url, ct);
+            foreach (var attempt in attempts)
             {
+                CookieArgumentLease cookieArguments;
+                try
+                {
+                    cookieArguments = await _cookieCoordinator.AcquireArgumentsAsync(
+                        attempt,
+                        url,
+                        ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    var acquisitionFailure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
+                        attempt,
+                        [$"ERROR: {ex.Message}"],
+                        ct);
+                    if (acquisitionFailure.ShouldTryNextCookieSource)
+                        continue;
+                    break;
+                }
+
+                await using var cookieArgumentLease = cookieArguments;
                 var args = BuildVideoInfoBaseArgs();
 
                 AddSiteCompatibilityArgs(args, url);
                 AddProxyArgs(args);
-                AddCookieArgs(args, url, strategies[i]);
+                args.AddRange(cookieArguments.Arguments);
                 args.Add(url);
 
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
@@ -150,17 +196,27 @@ public partial class YtDlpService
                         .FirstOrDefault(line => line.StartsWith("{", StringComparison.Ordinal));
 
                     if (!string.IsNullOrWhiteSpace(firstJson))
-                        return ParseVideoInfoJson(firstJson, url);
+                    {
+                        var info = ParseVideoInfoJson(firstJson, url);
+                        if (info is not null)
+                        {
+                            await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
+                            return info;
+                        }
+                    }
                 }
 
-                if (i < strategies.Count - 1
-                    && ShouldRetryWithNextCookieStrategy(url, EnumerateProcessLines(result.StandardError)))
-                {
-                    continue;
-                }
-
-                break;
+                var failure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
+                    attempt,
+                    EnumerateProcessLines(result.StandardError),
+                    ct);
+                if (!failure.ShouldTryNextCookieSource)
+                    break;
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -282,26 +338,51 @@ public partial class YtDlpService
 
         try
         {
-            var strategies = GetCookieStrategies(url);
-            for (var i = 0; i < strategies.Count; i++)
+            var attempts = await _cookieCoordinator.BuildAttemptsAsync(url, ct);
+            foreach (var attempt in attempts)
             {
+                CookieArgumentLease cookieArguments;
+                try
+                {
+                    cookieArguments = await _cookieCoordinator.AcquireArgumentsAsync(
+                        attempt,
+                        url,
+                        ct);
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    var acquisitionFailure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
+                        attempt,
+                        [$"ERROR: {ex.Message}"],
+                        ct);
+                    if (acquisitionFailure.ShouldTryNextCookieSource)
+                        continue;
+                    break;
+                }
+
+                await using var cookieArgumentLease = cookieArguments;
                 var args = BuildPlaylistBaseArgs();
 
                 AddSiteCompatibilityArgs(args, url);
                 AddProxyArgs(args);
-                AddCookieArgs(args, url, strategies[i]);
+                args.AddRange(cookieArguments.Arguments);
                 args.Add(url);
 
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
                 if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
+                    var attemptUrls = new List<string>();
                     foreach (var line in EnumerateProcessLines(result.StandardOutput))
                     {
                         try
                         {
                             var videoUrl = ExtractPlaylistUrlFromJson(line);
                             if (!string.IsNullOrWhiteSpace(videoUrl))
-                                urls.Add(videoUrl);
+                                attemptUrls.Add(videoUrl);
                         }
                         catch
                         {
@@ -309,17 +390,24 @@ public partial class YtDlpService
                         }
                     }
 
-                    return urls;
+                    if (attemptUrls.Count > 0)
+                    {
+                        await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
+                        return attemptUrls;
+                    }
                 }
 
-                if (i < strategies.Count - 1
-                    && ShouldRetryWithNextCookieStrategy(url, EnumerateProcessLines(result.StandardError)))
-                {
-                    continue;
-                }
-
-                break;
+                var failure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
+                    attempt,
+                    EnumerateProcessLines(result.StandardError),
+                    ct);
+                if (!failure.ShouldTryNextCookieSource)
+                    break;
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -362,29 +450,74 @@ public partial class YtDlpService
     {
         task.Status = DownloadStatus.Downloading;
 
-        var strategies = GetCookieStrategies(task.Url);
+        IReadOnlyList<CookieAttempt> attempts;
+        try
+        {
+            attempts = await _cookieCoordinator.BuildAttemptsAsync(task.Url, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            task.Status = DownloadStatus.Cancelled;
+            return;
+        }
+        catch (Exception ex)
+        {
+            task.Status = DownloadStatus.Failed;
+            task.ErrorMessage = ex.Message;
+            logCallback?.Invoke($"[yt-dlp] Cookie strategy initialization failed: {ex.Message}");
+            return;
+        }
 
         List<string> lastStderr = [];
         var allStderr = new List<string>();
         int lastExitCode = -1;
 
-        for (var i = 0; i < strategies.Count; i++)
+        for (var i = 0; i < attempts.Count; i++)
         {
-            var strategy = strategies[i];
+            var attempt = attempts[i];
+            CookieArgumentLease cookieArguments;
+            try
+            {
+                cookieArguments = await _cookieCoordinator.AcquireArgumentsAsync(
+                    attempt,
+                    task.Url,
+                    ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                task.Status = DownloadStatus.Cancelled;
+                return;
+            }
+            catch (Exception ex)
+            {
+                var errorLine = $"ERROR: {ex.Message}";
+                lastStderr = [errorLine];
+                allStderr.Add(errorLine);
+                var acquisitionFailure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
+                    attempt,
+                    lastStderr,
+                    ct);
+                if (i < attempts.Count - 1 && acquisitionFailure.ShouldTryNextCookieSource)
+                    continue;
+                break;
+            }
+
+            await using var cookieArgumentLease = cookieArguments;
             var aria2cPath = _configService.Config.UseAria2c ? _envService.GetAria2cPath() : null;
             if (_configService.Config.UseAria2c && string.IsNullOrWhiteSpace(aria2cPath))
                 logCallback?.Invoke("[yt-dlp] aria2c 已启用但未找到 aria2c.exe，已回退到 yt-dlp 内置下载器。");
 
-            var args = BuildDownloadArgs(task, strategy, aria2cPath);
-            var strategyTag = strategy switch
+            var args = BuildDownloadArgs(task, cookieArguments.Arguments, aria2cPath);
+            var strategyTag = attempt.Source switch
             {
-                CookieStrategy.BrowserChrome => " (cookies-from-browser: chrome)",
-                CookieStrategy.BrowserEdge => " (cookies-from-browser: edge)",
-                _ => string.Empty
+                CookieSourceKind.Anonymous => "匿名访问",
+                CookieSourceKind.LegacyScoped => "平台手动 Cookie",
+                CookieSourceKind.Browser => $"浏览器 {attempt.BrowserProfile?.BrowserName}",
+                CookieSourceKind.ManagedSession => "托管登录",
+                _ => "未知策略"
             };
 
-            logCallback?.Invoke($"[yt-dlp] start{strategyTag}: {task.Url}");
-            logCallback?.Invoke($"[yt-dlp] args: {string.Join(" ", args)}");
+            logCallback?.Invoke($"[yt-dlp] start ({strategyTag}): {task.Url}");
 
             var stderrLines = new List<string>();
             string? capturedOutputPath = null;
@@ -407,12 +540,16 @@ public partial class YtDlpService
                             progress?.Report(handling.Progress);
 
                         if (handling.ShouldLog)
-                            logCallback?.Invoke(line);
+                            logCallback?.Invoke(RedactCookieArgumentValues(
+                                line,
+                                cookieArguments.Arguments));
                     },
                     line =>
                     {
                         stderrLines.Add(line);
-                        logCallback?.Invoke($"[stderr] {line}");
+                        logCallback?.Invoke($"[stderr] {RedactCookieArgumentValues(
+                            line,
+                            cookieArguments.Arguments)}");
                     },
                     ct);
             }
@@ -435,6 +572,7 @@ public partial class YtDlpService
             var outputFile = ResolveOutputFile(capturedOutputPath, task, downloadStartTime);
             if (processOutput.ExitCode == 0)
             {
+                await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
 
@@ -452,9 +590,13 @@ public partial class YtDlpService
             allStderr.AddRange(stderrLines);
             lastExitCode = processOutput.ExitCode;
 
+            var failure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
+                attempt,
+                stderrLines,
+                ct);
             var canRetryWithNextCookieStrategy =
-                i < strategies.Count - 1
-                && ShouldRetryWithNextCookieStrategy(task.Url, stderrLines);
+                i < attempts.Count - 1
+                && failure.ShouldTryNextCookieSource;
 
             if (canRetryWithNextCookieStrategy)
             {
@@ -479,8 +621,12 @@ public partial class YtDlpService
         logCallback?.Invoke($"[yt-dlp] failed (exit code: {lastExitCode})");
     }
 
-    private List<string> BuildDownloadArgs(DownloadTask task, CookieStrategy cookieStrategy = CookieStrategy.Default, string? aria2cPath = null)
+    private List<string> BuildDownloadArgs(
+        DownloadTask task,
+        IReadOnlyList<string> cookieArguments,
+        string? aria2cPath = null)
     {
+        ArgumentNullException.ThrowIfNull(cookieArguments);
         var args = new List<string>
         {
             "--no-playlist",
@@ -550,7 +696,7 @@ public partial class YtDlpService
 
         AddSiteCompatibilityArgs(args, task.Url);
         AddProxyArgs(args);
-        AddCookieArgs(args, task.Url, cookieStrategy);
+        args.AddRange(cookieArguments);
 
         args.Add(task.Url);
         return args;
@@ -630,32 +776,6 @@ public partial class YtDlpService
 
         AddNetworkReliabilityArgs(args);
         return args;
-    }
-
-    internal static List<CookieStrategy> BuildCookieStrategies(
-        string url,
-        bool chromeCookiesAvailable,
-        bool edgeCookiesAvailable)
-    {
-        var strategies = new List<CookieStrategy> { CookieStrategy.Default };
-        if (!IsDouyinUrl(url) && !IsYoutubeUrl(url))
-            return strategies;
-
-        if (chromeCookiesAvailable)
-            strategies.Add(CookieStrategy.BrowserChrome);
-
-        if (edgeCookiesAvailable)
-            strategies.Add(CookieStrategy.BrowserEdge);
-
-        return strategies;
-    }
-
-    private List<CookieStrategy> GetCookieStrategies(string url)
-    {
-        return BuildCookieStrategies(
-            url,
-            HasBrowserCookies("chrome"),
-            HasBrowserCookies("edge"));
     }
 
     private static string BuildFormatString(string format, string quality)
@@ -823,46 +943,33 @@ public partial class YtDlpService
         }
     }
 
-    private static readonly string CookieFilePath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "EasyGet",
-        "cookies.txt");
-    private static readonly object CookieFileWriteLock = new();
-    private static string? _cachedCookieContent;
-    private static string? _cachedCookieFilePath;
-    private static DateTime _cachedCookieFileWriteTimeUtc;
-    private static long _cachedCookieFileLength;
-
-    private void AddCookieArgs(List<string> args, string url, CookieStrategy strategy)
+    internal static string RedactCookieArgumentValues(
+        string text,
+        IReadOnlyList<string> cookieArguments)
     {
-        if (strategy is CookieStrategy.BrowserChrome or CookieStrategy.BrowserEdge)
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(cookieArguments);
+
+        var redacted = text;
+        for (var index = 0; index + 1 < cookieArguments.Count; index++)
         {
-            var browser = strategy == CookieStrategy.BrowserChrome ? "chrome" : "edge";
-            if (HasBrowserCookies(browser))
+            var option = cookieArguments[index];
+            if (option is not "--cookies" and not "--cookies-from-browser")
+                continue;
+
+            var sensitiveValue = cookieArguments[index + 1];
+            if (!string.IsNullOrWhiteSpace(sensitiveValue))
             {
-                args.Add("--cookies-from-browser");
-                args.Add(browser);
+                redacted = redacted.Replace(
+                    sensitiveValue,
+                    "[已隐藏]",
+                    StringComparison.OrdinalIgnoreCase);
             }
-            return;
+
+            index++;
         }
 
-        var config = _configService.Config;
-        if (string.IsNullOrWhiteSpace(config.CookieContent))
-            return;
-
-        try
-        {
-            SaveCookieFile(config.CookieContent);
-            if (File.Exists(CookieFilePath))
-            {
-                args.Add("--cookies");
-                args.Add(CookieFilePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine($"[YtDlpService] AddCookieArgs failed: {ex.Message}");
-        }
+        return redacted;
     }
 
     private static bool IsDouyinUrl(string url)
@@ -920,15 +1027,6 @@ public partial class YtDlpService
         return new string(chars);
     }
 
-    private static bool IsYoutubeUrl(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return false;
-
-        return uri.Host.Contains("youtube.com", StringComparison.OrdinalIgnoreCase)
-            || uri.Host.Contains("youtu.be", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool IsBilibiliUrl(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -947,417 +1045,37 @@ public partial class YtDlpService
             || url.Contains("xhslink.com", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool ShouldRetryWithNextCookieStrategy(string url, IEnumerable<string> stderrLines)
-    {
-        var isDouyinUrl = IsDouyinUrl(url);
-        var isYoutubeUrl = IsYoutubeUrl(url);
-        if (!isDouyinUrl && !isYoutubeUrl)
-            return false;
-
-        foreach (var line in stderrLines)
-        {
-            if (IsBrowserCookieAccessError(line))
-                return true;
-
-            if (isDouyinUrl && line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            if (isYoutubeUrl && IsYoutubeBotOrForbiddenError(line))
-                return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsYoutubeBotOrForbiddenError(string line)
-    {
-        return line.Contains("Sign in to confirm you’re not a bot", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("Sign in to confirm you're not a bot", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("Sign in to confirm your age", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("This video may be inappropriate for some users", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("age-restricted", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("HTTP Error 403", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsBrowserCookieAccessError(string line)
-    {
-        return line.Contains("Could not copy Chrome cookie database", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("Could not copy cookie database", StringComparison.OrdinalIgnoreCase)
-               || line.Contains("Failed to decrypt with DPAPI", StringComparison.OrdinalIgnoreCase);
-    }
-
     internal static string BuildDownloadFailureMessage(string url, IEnumerable<string> stderrLines, int exitCode)
     {
-        var isDouyinUrl = IsDouyinUrl(url);
-        var isYoutubeUrl = IsYoutubeUrl(url);
-        var isBilibiliUrl = IsBilibiliUrl(url);
+        var platform = MediaPlatformResolver.Resolve(url);
+        var failure = CookieFailureClassifier.Classify(platform.Id, stderrLines);
+        var lastErrorLine = failure.LastErrorLine;
 
-        var douyinCookieProblem = false;
-        var youtubeBotOrForbidden = false;
-        var bilibiliPreconditionFailed = false;
-        string? lastErrorLine = null;
-
-        foreach (var line in stderrLines)
+        if (platform.Id == "douyin"
+            && failure.Category is CookieFailureCategory.AuthenticationRequired
+                or CookieFailureCategory.CookieStoreLocked
+                or CookieFailureCategory.CookieDecryptFailed
+                or CookieFailureCategory.CookieExpired
+                or CookieFailureCategory.BotChallenge)
         {
-            if (line.Contains("ERROR", StringComparison.OrdinalIgnoreCase))
-                lastErrorLine = line;
-
-            if (isDouyinUrl
-                && (line.Contains("Fresh cookies", StringComparison.OrdinalIgnoreCase)
-                    || IsBrowserCookieAccessError(line)))
-            {
-                douyinCookieProblem = true;
-            }
-
-            if (isYoutubeUrl && IsYoutubeBotOrForbiddenError(line))
-                youtubeBotOrForbidden = true;
-
-            if (isBilibiliUrl && IsBilibiliPreconditionFailedError(line))
-                bilibiliPreconditionFailed = true;
+            return "抖音需要有效登录状态，但本机浏览器 Cookie 不可用或已失效。EasyGet 会继续尝试其他浏览器；如仍失败，请在智能登录设置中重新登录抖音。";
         }
 
-        if (douyinCookieProblem)
+        if (platform.Id == "youtube"
+            && failure.Category is CookieFailureCategory.AuthenticationRequired
+                or CookieFailureCategory.CookieExpired
+                or CookieFailureCategory.BotChallenge)
         {
-            return "抖音需要最新 Cookie，但自动读取浏览器 Cookie 失败或 Cookie 已失效。请关闭 Chrome/Edge 后重试，或在设置中粘贴最新抖音 Cookie。";
+            return "YouTube 下载被风控拦截，或需要登录验证。EasyGet 已尝试本机浏览器登录状态；如仍失败，请在智能登录设置中重新登录 YouTube。";
         }
 
-        if (youtubeBotOrForbidden)
-        {
-            return "YouTube 下载被风控拦截（403/需要登录验证）。请在设置中粘贴最新 YouTube Cookie，或关闭浏览器后重试。";
-        }
-
-        if (bilibiliPreconditionFailed)
+        if (platform.Id == "bilibili"
+            && failure.Category == CookieFailureCategory.BotChallenge)
         {
             return "B 站返回 412 Precondition Failed，通常是请求头或站点风控校验导致。EasyGet 已自动补充 B 站请求头；如果仍失败，请稍后重试或更新 yt-dlp。";
         }
 
         return lastErrorLine ?? $"yt-dlp exit code: {exitCode}";
-    }
-
-    private static bool IsBilibiliPreconditionFailedError(string line)
-    {
-        return line.Contains("BiliBili", StringComparison.OrdinalIgnoreCase)
-               && line.Contains("HTTP Error 412", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool HasBrowserCookies(string browser)
-    {
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var roots = browser.ToLowerInvariant() switch
-        {
-            "chrome" => new[] { Path.Combine(localAppData, "Google", "Chrome", "User Data", "Default") },
-            "edge" => new[] { Path.Combine(localAppData, "Microsoft", "Edge", "User Data", "Default") },
-            _ => Array.Empty<string>()
-        };
-
-        foreach (var root in roots)
-        {
-            if (File.Exists(Path.Combine(root, "Network", "Cookies"))
-                || File.Exists(Path.Combine(root, "Cookies")))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static void SaveCookieFile(string cookieContent)
-    {
-        WriteCookieFileIfChanged(cookieContent, CookieFilePath);
-    }
-
-    private static void WriteCookieFileIfChanged(string cookieContent, string cookieFilePath)
-    {
-        lock (CookieFileWriteLock)
-        {
-            var directory = Path.GetDirectoryName(cookieFilePath);
-            if (!string.IsNullOrEmpty(directory))
-                Directory.CreateDirectory(directory);
-
-            if (CookieFileCacheMatches(cookieContent, cookieFilePath))
-                return;
-
-            var lines = BuildCookieFileLines(cookieContent);
-            if (File.Exists(cookieFilePath) && File.ReadLines(cookieFilePath).SequenceEqual(lines))
-            {
-                CacheCookieFileState(cookieContent, cookieFilePath);
-                return;
-            }
-
-            File.WriteAllLines(cookieFilePath, lines);
-            CacheCookieFileState(cookieContent, cookieFilePath);
-        }
-    }
-
-    private static bool CookieFileCacheMatches(string cookieContent, string cookieFilePath)
-    {
-        if (!string.Equals(_cachedCookieContent, cookieContent, StringComparison.Ordinal)
-            || !string.Equals(_cachedCookieFilePath, cookieFilePath, StringComparison.OrdinalIgnoreCase)
-            || !TryGetCookieFileState(cookieFilePath, out var writeTimeUtc, out var length))
-        {
-            return false;
-        }
-
-        return writeTimeUtc == _cachedCookieFileWriteTimeUtc
-            && length == _cachedCookieFileLength;
-    }
-
-    private static void CacheCookieFileState(string cookieContent, string cookieFilePath)
-    {
-        if (!TryGetCookieFileState(cookieFilePath, out var writeTimeUtc, out var length))
-            return;
-
-        _cachedCookieContent = cookieContent;
-        _cachedCookieFilePath = cookieFilePath;
-        _cachedCookieFileWriteTimeUtc = writeTimeUtc;
-        _cachedCookieFileLength = length;
-    }
-
-    private static bool TryGetCookieFileState(string cookieFilePath, out DateTime writeTimeUtc, out long length)
-    {
-        if (File.Exists(cookieFilePath))
-        {
-            var file = new FileInfo(cookieFilePath);
-            writeTimeUtc = file.LastWriteTimeUtc;
-            length = file.Length;
-            return true;
-        }
-
-        writeTimeUtc = default;
-        length = 0;
-        return false;
-    }
-
-    internal static List<string> BuildCookieFileLines(string cookieContent)
-    {
-        var lines = new List<string>
-        {
-            "# Netscape HTTP Cookie File",
-            "# Generated by EasyGet",
-            ""
-        };
-
-        var trimmed = cookieContent.Trim();
-
-        if (LooksLikeNetscapeCookieFile(trimmed))
-        {
-            foreach (var line in trimmed.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                if (string.IsNullOrWhiteSpace(line))
-                    continue;
-
-                var fields = line.Split('\t');
-                if (line.StartsWith("#", StringComparison.Ordinal)
-                    && !IsHttpOnlyNetscapeCookieLine(line, fields))
-                    continue;
-
-                if (fields.Length >= 7)
-                    lines.Add(line);
-            }
-
-            return lines;
-        }
-
-        if (trimmed.StartsWith("[") || trimmed.StartsWith("{"))
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(trimmed);
-                foreach (var item in EnumerateCookieJsonItems(doc.RootElement))
-                {
-                    var domain = GetCookieDomain(item, out var domainImpliesHostOnly);
-                    var name = GetOptionalString(item, "name");
-                    var value = GetCookieValue(item);
-                    var path = GetOptionalString(item, "path");
-                    if (string.IsNullOrWhiteSpace(path))
-                        path = "/";
-                    var secure = GetOptionalBoolean(item, "secure");
-                    var hostOnly = GetOptionalBoolean(item, "hostOnly") || domainImpliesHostOnly;
-                    var expiry = GetCookieExpiry(item);
-
-                    if (string.IsNullOrWhiteSpace(domain) || string.IsNullOrWhiteSpace(name))
-                        continue;
-
-                    var includeSubdomains = hostOnly ? "FALSE" : "TRUE";
-                    var secureText = (secure || name.StartsWith("__Secure-", StringComparison.OrdinalIgnoreCase)) ? "TRUE" : "FALSE";
-
-                    lines.Add($"{domain}\t{includeSubdomains}\t{path}\t{secureText}\t{expiry}\t{name}\t{value}");
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"[YtDlpService] JSON cookie parse failed: {ex.Message}");
-                ParsePlainTextCookies(trimmed, lines);
-            }
-        }
-        else
-        {
-            ParsePlainTextCookies(trimmed, lines);
-        }
-
-        return lines;
-    }
-
-    private static IEnumerable<JsonElement> EnumerateCookieJsonItems(JsonElement root)
-    {
-        if (root.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var item in root.EnumerateArray())
-                yield return item;
-
-            yield break;
-        }
-
-        if (root.ValueKind != JsonValueKind.Object)
-            yield break;
-
-        foreach (var propertyName in new[] { "cookies", "data" })
-        {
-            if (root.TryGetProperty(propertyName, out var cookies)
-                && cookies.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var item in cookies.EnumerateArray())
-                    yield return item;
-
-                yield break;
-            }
-        }
-    }
-
-    private static void ParsePlainTextCookies(string cookieContent, List<string> lines)
-    {
-        string[] domains = [".youtube.com", ".x.com", ".twitter.com", ".instagram.com", ".bilibili.com", ".douyin.com", ".tiktok.com"];
-
-        var headerValue = ExtractCookieHeaderValue(cookieContent);
-        var pairs = headerValue.Split(';', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var pair in pairs)
-        {
-            var index = pair.IndexOf('=');
-            if (index <= 0)
-                continue;
-
-            var name = pair[..index].Trim();
-            var value = pair[(index + 1)..].Trim();
-            if (string.IsNullOrWhiteSpace(name))
-                continue;
-
-            foreach (var domain in domains)
-                lines.Add($"{domain}\tTRUE\t/\tTRUE\t0\t{name}\t{value}");
-        }
-    }
-
-    private static string GetCookieValue(JsonElement item)
-    {
-        var value = GetOptionalString(item, "value");
-        if (!string.IsNullOrEmpty(value))
-            return value;
-
-        return GetOptionalString(item, "sessionValue");
-    }
-
-    private static string GetCookieDomain(JsonElement item, out bool domainImpliesHostOnly)
-    {
-        domainImpliesHostOnly = false;
-
-        var domain = GetOptionalString(item, "domain").Trim();
-        if (!string.IsNullOrWhiteSpace(domain))
-            return domain;
-
-        var host = GetOptionalString(item, "host").Trim();
-        if (!string.IsNullOrWhiteSpace(host))
-        {
-            domainImpliesHostOnly = !host.StartsWith(".", StringComparison.Ordinal);
-            return host;
-        }
-
-        var url = GetOptionalString(item, "url").Trim();
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            && !string.IsNullOrWhiteSpace(uri.Host))
-        {
-            domainImpliesHostOnly = true;
-            return uri.Host;
-        }
-
-        return "";
-    }
-
-    private static long GetCookieExpiry(JsonElement item)
-    {
-        foreach (var propertyName in new[] { "expirationDate", "expires", "expiry" })
-        {
-            var expiry = GetOptionalUnixTime(item, propertyName);
-            if (expiry > 0)
-                return expiry;
-        }
-
-        return 0;
-    }
-
-    private static bool GetOptionalBoolean(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value))
-        {
-            return false;
-        }
-
-        return value.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
-            JsonValueKind.Number => value.TryGetInt32(out var number) && number != 0,
-            _ => false
-        };
-    }
-
-    private static long GetOptionalUnixTime(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value))
-        {
-            return 0;
-        }
-
-        var seconds = value.ValueKind switch
-        {
-            JsonValueKind.Number when value.TryGetDouble(out var number) => number,
-            JsonValueKind.String when double.TryParse(
-                value.GetString(),
-                System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out var number) => number,
-            _ => 0
-        };
-
-        return Math.Max(0, (long)seconds);
-    }
-
-    private static bool LooksLikeNetscapeCookieFile(string cookieContent)
-    {
-        if (cookieContent.Contains("# Netscape HTTP Cookie File", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        return cookieContent
-            .Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Any(line => !line.StartsWith("#") && line.Split('\t').Length >= 7);
-    }
-
-    private static bool IsHttpOnlyNetscapeCookieLine(string line, string[] fields)
-        => line.StartsWith("#HttpOnly_", StringComparison.Ordinal)
-           && fields.Length >= 7;
-
-    private static string ExtractCookieHeaderValue(string cookieContent)
-    {
-        var lines = cookieContent.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var cookieLine = lines.FirstOrDefault(line => line.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase));
-        var value = cookieLine ?? cookieContent.Trim();
-
-        if (value.StartsWith("cookie:", StringComparison.OrdinalIgnoreCase))
-            value = value["cookie:".Length..].Trim();
-
-        return value;
     }
 
     private static string? ParseOutputPath(string line)
@@ -1436,12 +1154,6 @@ public partial class YtDlpService
         }
 
         return newestPath is null ? null : Path.GetFullPath(newestPath);
-    }
-
-    private async Task<string> RunAsync(List<string> args, CancellationToken ct = default)
-    {
-        var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
-        return result.StandardOutput;
     }
 
     private static IEnumerable<string> EnumerateProcessLines(string output)

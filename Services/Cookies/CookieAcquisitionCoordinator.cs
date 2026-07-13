@@ -12,6 +12,25 @@ public interface IManagedLoginSessionService
     Task ClearAsync(string platformId, CancellationToken cancellationToken);
 }
 
+public sealed class EmptyManagedLoginSessionService : IManagedLoginSessionService
+{
+    public Task<IReadOnlyList<BrowserCookie>> GetCookiesAsync(
+        MediaPlatformDefinition platform,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(platform);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult<IReadOnlyList<BrowserCookie>>([]);
+    }
+
+    public Task ClearAsync(string platformId, CancellationToken cancellationToken)
+    {
+        CookieStorageKey.ValidatePlatformId(platformId);
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
+    }
+}
+
 public sealed record CookieAttempt(
     CookieSourceKind Source,
     MediaPlatformDefinition Platform,
@@ -275,6 +294,15 @@ public sealed class CookieAcquisitionCoordinator
                 failure.Category,
                 cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CookieCoordinator] Failed to persist health metadata: {ex.Message}");
+        }
         finally
         {
             if (attempt.Source == CookieSourceKind.ManagedSession)
@@ -284,16 +312,28 @@ public sealed class CookieAcquisitionCoordinator
         return failure;
     }
 
-    public Task RecordSuccessAsync(
+    public async Task RecordSuccessAsync(
         CookieAttempt attempt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(attempt);
-        return _health.RecordSuccessAsync(
-            attempt.Platform.StorageKey,
-            attempt.Source,
-            attempt.BrowserProfile,
-            cancellationToken);
+        try
+        {
+            await _health.RecordSuccessAsync(
+                attempt.Platform.StorageKey,
+                attempt.Source,
+                attempt.BrowserProfile,
+                cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[CookieCoordinator] Failed to persist health metadata: {ex.Message}");
+        }
     }
 
     private void RemoveManagedRequest(

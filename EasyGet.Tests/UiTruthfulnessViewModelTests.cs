@@ -1818,6 +1818,9 @@ public class UiTruthfulnessViewModelTests
             "EasyGetTests",
             Guid.NewGuid().ToString("N"),
             "history.db");
+        environment.Status.YtDlpPath = Path.Combine(
+            Path.GetDirectoryName(historyPath)!,
+            "missing-test-yt-dlp.exe");
         var history = new HistoryService(historyPath);
         var ytDlp = new YtDlpService(config, environment);
         var manager = new DownloadManager(
