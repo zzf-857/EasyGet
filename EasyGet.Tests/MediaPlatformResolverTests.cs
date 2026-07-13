@@ -8,13 +8,13 @@ public class MediaPlatformResolverTests
     [Theory]
     [InlineData("https://www.youtube.com/watch?v=video", "youtube", "https://accounts.google.com/ServiceLogin?service=youtube", "youtube.com|google.com")]
     [InlineData("https://space.bilibili.com/123", "bilibili", "https://passport.bilibili.com/login", "bilibili.com")]
-    [InlineData("https://www.douyin.com/video/123", "douyin", "https://www.douyin.com/", "douyin.com")]
+    [InlineData("https://www.douyin.com/video/123", "douyin", "https://www.douyin.com/", "douyin.com|iesdouyin.com")]
     [InlineData("https://www.tiktok.com/@creator/video/123", "tiktok", "https://www.tiktok.com/login", "tiktok.com")]
     [InlineData("https://x.com/user/status/123", "twitter", "https://x.com/i/flow/login", "x.com|twitter.com")]
     [InlineData("https://www.instagram.com/reel/example/", "instagram", "https://www.instagram.com/accounts/login/", "instagram.com")]
     [InlineData("https://www.facebook.com/watch/?v=123", "facebook", "https://www.facebook.com/login", "facebook.com")]
     [InlineData("https://www.kuaishou.com/short-video/123", "kuaishou", "https://www.kuaishou.com/", "kuaishou.com")]
-    [InlineData("https://www.xiaohongshu.com/explore/123", "xiaohongshu", "https://www.xiaohongshu.com/", "xiaohongshu.com")]
+    [InlineData("https://www.xiaohongshu.com/explore/123", "xiaohongshu", "https://www.xiaohongshu.com/", "xiaohongshu.com|xhslink.com")]
     [InlineData("https://weibo.com/tv/show/123", "weibo", "https://weibo.com/login.php", "weibo.com")]
     [InlineData("https://www.twitch.tv/example", "twitch", "https://www.twitch.tv/login", "twitch.tv")]
     public void Resolve_MapsKnownPlatforms(
@@ -84,5 +84,20 @@ public class MediaPlatformResolverTests
         Assert.Equal("generic", definition.Id);
         Assert.Empty(definition.CookieDomains);
         Assert.True(definition.AnonymousFirst);
+    }
+
+    [Fact]
+    public void ResolverTypesAndHostMatcher_ArePublicForCookieScopingReuse()
+    {
+        Assert.True(typeof(MediaPlatformDefinition).IsPublic);
+        Assert.True(typeof(MediaPlatformResolver).IsPublic);
+
+        var hostMatches = typeof(MediaPlatformResolver).GetMethod(
+            "HostMatches",
+            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+
+        Assert.NotNull(hostMatches);
+        Assert.True((bool)hostMatches!.Invoke(null, ["sub.youtube.com", "youtube.com"])!);
+        Assert.False((bool)hostMatches.Invoke(null, ["evilyoutube.com", "youtube.com"])!);
     }
 }

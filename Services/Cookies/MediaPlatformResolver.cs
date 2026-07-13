@@ -1,13 +1,13 @@
 namespace EasyGet.Services.Cookies;
 
-internal sealed record MediaPlatformDefinition(
+public sealed record MediaPlatformDefinition(
     string Id,
     string DisplayName,
     Uri LoginUri,
     IReadOnlyList<string> CookieDomains,
     bool AnonymousFirst = true);
 
-internal static class MediaPlatformResolver
+public static class MediaPlatformResolver
 {
     private static readonly MediaPlatformDefinition InvalidDefinition = CreateDefinition(
         "generic",
@@ -38,7 +38,7 @@ internal static class MediaPlatformResolver
                 "douyin",
                 "抖音",
                 "https://www.douyin.com/",
-                new[] { "douyin.com" }),
+                new[] { "douyin.com", "iesdouyin.com" }),
             "douyin.com",
             "iesdouyin.com"),
         Register(
@@ -82,7 +82,7 @@ internal static class MediaPlatformResolver
                 "xiaohongshu",
                 "小红书",
                 "https://www.xiaohongshu.com/",
-                new[] { "xiaohongshu.com" }),
+                new[] { "xiaohongshu.com", "xhslink.com" }),
             "xiaohongshu.com",
             "xhslink.com"),
         Register(
@@ -123,7 +123,7 @@ internal static class MediaPlatformResolver
             Array.AsReadOnly(new[] { uri.Host }));
     }
 
-    private static bool HostMatches(string host, string domain)
+    public static bool HostMatches(string host, string domain)
         => host.Equals(domain, StringComparison.OrdinalIgnoreCase)
            || host.EndsWith($".{domain}", StringComparison.OrdinalIgnoreCase);
 
