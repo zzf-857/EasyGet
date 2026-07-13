@@ -654,7 +654,7 @@ public class XamlBindingTests
         Assert.Contains("环境检测", texts);
         Assert.Contains("下载设置", texts);
         Assert.Contains("代理设置", texts);
-        Assert.Contains("Cookie 设置", texts);
+        Assert.Contains("智能登录与 Cookie", texts);
         Assert.Contains("性能设置", texts);
         Assert.Contains("默认保存目录", texts);
         Assert.Contains("默认下载格式", texts);

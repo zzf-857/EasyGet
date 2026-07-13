@@ -353,39 +353,173 @@
                     <TextBlock Text="&#xE8D7;" Style="{StaticResource IconGlyph}"
                                FontSize="{StaticResource IconSizeLarge}"
                                Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
-                    <TextBlock Text="Cookie 设置" Style="{StaticResource TextSection}"/>
+                    <TextBlock Text="智能登录与 Cookie" Style="{StaticResource TextSection}"/>
                 </StackPanel>
                 <Border Style="{StaticResource ToolPanelBorder}" Padding="18">
                     <StackPanel>
-                        <TextBlock Text="X(Twitter)、Instagram 等平台的年龄限制/私密视频需要登录 Cookie 才能下载"
-                                   Style="{StaticResource TextBodyStrong}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,12"/>
-                        <TextBox Style="{StaticResource DarkTextBox}"
-                                 Text="{Binding CookieContent, UpdateSourceTrigger=LostFocus}"
-                                 AcceptsReturn="True"
-                                 TextWrapping="Wrap"
-                                 MinHeight="88"
-                                 MaxHeight="150"
-                                 VerticalScrollBarVisibility="Auto"
-                                 FontFamily="{StaticResource FontFamilyMono}"
-                                 FontSize="{StaticResource FontSizeCaption}"
-                                 VerticalContentAlignment="Top"/>
-                        <DockPanel Margin="0,10,0,0">
-                            <Button DockPanel.Dock="Right"
-                                    Style="{StaticResource SurfaceButton}"
-                                    Padding="10,5"
-                                    Command="{Binding ClearCookieCommand}">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"
-                                               FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="清空 Cookie"/>
-                                </StackPanel>
-                            </Button>
-                            <TextBlock Style="{StaticResource TextBody}"
-                                       VerticalAlignment="Center"
-                                       Text="{Binding CookieContent, Converter={StaticResource CookieStatusConverter}}"/>
-                        </DockPanel>
+                        <Grid Margin="0,0,0,14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel>
+                                <TextBlock Text="智能 Cookie 模式" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="公开内容先匿名下载；需要登录时自动复用本机浏览器，最后才显示一次平台登录窗口。"
+                                           Style="{StaticResource TextBody}"
+                                           Margin="0,4,18,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <ToggleButton Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitch}"
+                                          IsChecked="{Binding SmartCookieEnabled}"
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="启用智能 Cookie 模式"/>
+                        </Grid>
+
+                        <Border Background="{DynamicResource AccentContainerBrush}"
+                                CornerRadius="7"
+                                Padding="12,9"
+                                Margin="0,0,0,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding CookieStatusSummary}"
+                                           Style="{StaticResource TextBody}"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap"/>
+                                <Button Grid.Column="1"
+                                        Style="{StaticResource SurfaceButton}"
+                                        Margin="12,0,6,0"
+                                        Padding="10,5"
+                                        Command="{Binding RefreshCookieStatusCommand}"
+                                        IsEnabled="{Binding IsRefreshingCookieStatus, Converter={StaticResource InverseBool}}"
+                                        AutomationProperties.Name="刷新智能登录状态">
+                                    <TextBlock Text="刷新"/>
+                                </Button>
+                                <Button Grid.Column="2"
+                                        Style="{StaticResource SurfaceButton}"
+                                        Padding="10,5"
+                                        Command="{Binding ClearAllManagedSessionsCommand}"
+                                        AutomationProperties.Name="清除全部 EasyGet 托管登录状态">
+                                    <TextBlock Text="全部清除"/>
+                                </Button>
+                            </Grid>
+                        </Border>
+
+                        <ItemsControl ItemsSource="{Binding CookiePlatformStatuses}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{DynamicResource BorderSubtleBrush}"
+                                            BorderThickness="0,0,0,1"
+                                            Padding="4,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="150"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Ellipse Width="8" Height="8" Margin="0,0,8,0">
+                                                    <Ellipse.Style>
+                                                        <Style TargetType="Ellipse">
+                                                            <Setter Property="Fill" Value="{StaticResource TextMutedBrush}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsAvailable}" Value="True">
+                                                                    <Setter Property="Fill" Value="{StaticResource SuccessBrush}"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding NeedsLogin}" Value="True">
+                                                                    <Setter Property="Fill" Value="{StaticResource WarningBrush}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Ellipse.Style>
+                                                </Ellipse>
+                                                <TextBlock Text="{Binding DisplayName}" Style="{StaticResource TextBodyStrong}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{Binding StatusText}"
+                                                       Style="{StaticResource TextBody}"
+                                                       Margin="12,0"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"/>
+                                            <Button Grid.Column="2"
+                                                    Style="{StaticResource AccentButton}"
+                                                    Margin="0,0,6,0"
+                                                    Padding="10,5"
+                                                    Command="{Binding DataContext.LoginPlatformCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
+                                                    AutomationProperties.Name="登录当前流媒体平台">
+                                                <TextBlock Text="登录"/>
+                                            </Button>
+                                            <Button Grid.Column="3"
+                                                    Style="{StaticResource SurfaceButton}"
+                                                    Padding="10,5"
+                                                    Command="{Binding DataContext.ClearPlatformSessionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
+                                                    AutomationProperties.Name="清除当前平台托管登录状态">
+                                                <TextBlock Text="清除"/>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <Expander Margin="0,14,0,0"
+                                  IsExpanded="False"
+                                  AutomationProperties.Name="高级手动 Cookie 导入">
+                            <Expander.Header>
+                                <TextBlock Text="高级选项：手动导入 Cookie" Style="{StaticResource TextBodyStrong}"/>
+                            </Expander.Header>
+                            <StackPanel Margin="0,12,0,0">
+                                <TextBlock Text="仅在自动浏览器与托管登录都不可用时使用。Header 格式必须先选择所属平台；带域名的 Netscape/JSON 文件会自动拆分。"
+                                           Style="{StaticResource TextBody}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,10"/>
+                                <ComboBox Style="{StaticResource DarkComboBox}"
+                                          ItemsSource="{Binding CookiePlatformOptions}"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectedValuePath="StorageKey"
+                                          SelectedValue="{Binding LegacyCookiePlatform}"
+                                          AutomationProperties.Name="手动 Cookie 所属平台"/>
+                                <TextBlock Text="{Binding ManualCookieValidationMessage}"
+                                           Style="{StaticResource TextBody}"
+                                           Foreground="{StaticResource WarningBrush}"
+                                           Margin="0,6,0,0"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.Name="手动 Cookie 校验提示"/>
+                                <TextBox Style="{StaticResource DarkTextBox}"
+                                         Margin="0,10,0,0"
+                                         Text="{Binding CookieContent, UpdateSourceTrigger=LostFocus}"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         MinHeight="88"
+                                         MaxHeight="150"
+                                         VerticalScrollBarVisibility="Auto"
+                                         FontFamily="{StaticResource FontFamilyMono}"
+                                         FontSize="{StaticResource FontSizeCaption}"
+                                         VerticalContentAlignment="Top"
+                                         AutomationProperties.Name="手动 Cookie 内容"/>
+                                <DockPanel Margin="0,10,0,0">
+                                    <Button DockPanel.Dock="Right"
+                                            Style="{StaticResource SurfaceButton}"
+                                            Padding="10,5"
+                                            Command="{Binding ClearCookieCommand}"
+                                            AutomationProperties.Name="清空手动 Cookie">
+                                        <TextBlock Text="清空手动 Cookie"/>
+                                    </Button>
+                                    <TextBlock Style="{StaticResource TextBody}"
+                                               VerticalAlignment="Center"
+                                               Text="{Binding CookieContent, Converter={StaticResource CookieStatusConverter}}"/>
+                                </DockPanel>
+                            </StackPanel>
+                        </Expander>
                     </StackPanel>
                 </Border>
             </StackPanel>

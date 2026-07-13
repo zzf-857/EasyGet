@@ -520,6 +520,35 @@ public sealed class CookieAcquisitionCoordinatorTests
     }
 
     [Fact]
+    public async Task ClearPlatformSessionAsync_InvalidatesManagedCookieCache()
+    {
+        var provider = new CountingManagedLoginSessionService(
+            [new BrowserCookie(".x.com", "/", "auth_token", "managed-secret", true, 0)],
+            TimeSpan.Zero);
+        await using var fixture = await CoordinatorFixture.CreateAsync(managedLogin: provider);
+        var platform = MediaPlatformResolver.Resolve("https://x.com/user/status/1");
+        var attempt = new CookieAttempt(CookieSourceKind.ManagedSession, platform);
+        await using (var first = await fixture.Coordinator.AcquireArgumentsAsync(
+                         attempt,
+                         "https://x.com/user/status/1",
+                         CancellationToken.None))
+        {
+            Assert.Equal(1, provider.CallCount);
+        }
+
+        await fixture.Coordinator.ClearPlatformSessionAsync(
+            platform,
+            CancellationToken.None);
+        await using var second = await fixture.Coordinator.AcquireArgumentsAsync(
+            attempt,
+            "https://x.com/user/status/1",
+            CancellationToken.None);
+
+        Assert.Equal(2, provider.CallCount);
+        Assert.Equal(["twitter"], provider.ClearedPlatformIds);
+    }
+
+    [Fact]
     public async Task BuildAttemptsAsync_KeepsGenericWebsiteVaultsSeparate()
     {
         await using var fixture = await CoordinatorFixture.CreateAsync();
@@ -792,6 +821,7 @@ public sealed class CookieAcquisitionCoordinatorTests
         private int _callCount;
 
         public int CallCount => Volatile.Read(ref _callCount);
+        public List<string> ClearedPlatformIds { get; } = [];
 
         public async Task<IReadOnlyList<BrowserCookie>> GetCookiesAsync(
             MediaPlatformDefinition platform,
@@ -803,7 +833,10 @@ public sealed class CookieAcquisitionCoordinatorTests
         }
 
         public Task ClearAsync(string platformId, CancellationToken cancellationToken)
-            => Task.CompletedTask;
+        {
+            ClearedPlatformIds.Add(platformId);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class BlockingManagedLoginSessionService(

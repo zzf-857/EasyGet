@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
 using EasyGet.Services;
+using EasyGet.Services.Cookies;
 
 namespace EasyGet.ViewModels;
 
@@ -34,6 +36,10 @@ public partial class SettingsViewModel : ObservableObject
     private readonly TelegramDownloadService _telegramDownloadService;
     private readonly IAppUpdateService _appUpdateService;
     private readonly IDouyinSidecarHealthService _douyinSidecarHealthService;
+    private readonly IBrowserProfileDiscoveryService _cookieProfiles;
+    private readonly ICookieHealthStore _cookieHealthStore;
+    private readonly IManagedLoginSessionService _managedLogin;
+    private readonly CookieAcquisitionCoordinator? _cookieCoordinator;
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
     private bool _isInitializing;
@@ -90,6 +96,16 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DouyinCookieHealthText))]
     private string _cookieContent = "";
+
+    [ObservableProperty] private bool _smartCookieEnabled = true;
+    [ObservableProperty] private string _legacyCookiePlatform = "";
+    [ObservableProperty] private string _manualCookieValidationMessage = "";
+    [ObservableProperty] private string _cookieStatusSummary = "尚未检测本机登录状态";
+    [ObservableProperty] private bool _isRefreshingCookieStatus;
+
+    public ObservableCollection<CookiePlatformStatusItem> CookiePlatformStatuses { get; } = [];
+    public IReadOnlyList<MediaPlatformDefinition> CookiePlatformOptions =>
+        MediaPlatformResolver.KnownPlatforms;
 
     [ObservableProperty] private bool _enableDouyinSpecialEngine;
     [ObservableProperty] private string _douyinMode = "post";
@@ -203,7 +219,11 @@ public partial class SettingsViewModel : ObservableObject
         DownloadManager downloadManager,
         TelegramDownloadService telegramDownloadService,
         IAppUpdateService? appUpdateService = null,
-        IDouyinSidecarHealthService? douyinSidecarHealthService = null)
+        IDouyinSidecarHealthService? douyinSidecarHealthService = null,
+        IBrowserProfileDiscoveryService? cookieProfiles = null,
+        ICookieHealthStore? cookieHealthStore = null,
+        IManagedLoginSessionService? managedLogin = null,
+        CookieAcquisitionCoordinator? cookieCoordinator = null)
     {
         _configService = configService;
         _envService = envService;
@@ -211,6 +231,10 @@ public partial class SettingsViewModel : ObservableObject
         _telegramDownloadService = telegramDownloadService;
         _appUpdateService = appUpdateService ?? new AppUpdateService();
         _douyinSidecarHealthService = douyinSidecarHealthService ?? new DouyinSpecialDownloadService();
+        _cookieProfiles = cookieProfiles ?? new BrowserProfileDiscoveryService();
+        _cookieHealthStore = cookieHealthStore ?? new CookieHealthStore(configService.ConfigDirectory);
+        _managedLogin = managedLogin ?? new EmptyManagedLoginSessionService();
+        _cookieCoordinator = cookieCoordinator;
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
     }
@@ -239,6 +263,8 @@ public partial class SettingsViewModel : ObservableObject
             ProxyAddress = c.ProxyAddress;
             UseAria2c = c.UseAria2c;
             CookieContent = c.CookieContent;
+            SmartCookieEnabled = c.SmartCookieEnabled;
+            LegacyCookiePlatform = c.LegacyCookiePlatform;
             EnableDouyinSpecialEngine = c.EnableDouyinSpecialEngine;
             DouyinMode = c.DouyinMode;
             DouyinLimit = c.DouyinLimit;
@@ -278,6 +304,7 @@ public partial class SettingsViewModel : ObservableObject
 
         RefreshEnvironmentStatus();
         _ = RefreshTgStatusAsync();
+        _ = RefreshCookieStatus();
     }
 
     public void RefreshEnvironmentStatus()
@@ -287,6 +314,230 @@ public partial class SettingsViewModel : ObservableObject
         YtDlpVersion = status.YtDlpVersion;
         FfmpegFound = status.FfmpegFound;
         FfmpegVersion = status.FfmpegVersion;
+    }
+
+    [RelayCommand]
+    private async Task RefreshCookieStatus()
+    {
+        if (IsRefreshingCookieStatus)
+            return;
+
+        IsRefreshingCookieStatus = true;
+        try
+        {
+            var profiles = await Task.Run(_cookieProfiles.Discover);
+            var health = _cookieHealthStore.Snapshot();
+            CookiePlatformStatuses.Clear();
+            var verifiedPlatforms = 0;
+
+            foreach (var platform in MediaPlatformResolver.KnownPlatforms)
+            {
+                var successful = health
+                    .Where(record => string.Equals(
+                                         record.PlatformId,
+                                         platform.StorageKey,
+                                         StringComparison.Ordinal)
+                                     && record.LastSuccessUtc.HasValue
+                                     && record.ConsecutiveFailures == 0
+                                     && (!record.LastFailureUtc.HasValue
+                                         || record.LastSuccessUtc.Value >= record.LastFailureUtc.Value))
+                    .OrderByDescending(record => record.LastSuccessUtc)
+                    .FirstOrDefault();
+
+                var item = new CookiePlatformStatusItem
+                {
+                    PlatformId = platform.Id,
+                    StorageKey = platform.StorageKey,
+                    DisplayName = platform.DisplayName
+                };
+                if (successful is not null)
+                {
+                    verifiedPlatforms++;
+                    item.IsAvailable = true;
+                    item.NeedsLogin = false;
+                    item.StatusText = $"最近验证可用 · {DescribeCookieSource(successful.Source)}";
+                }
+                else if (profiles.Count > 0)
+                {
+                    item.IsAvailable = false;
+                    item.NeedsLogin = false;
+                    item.StatusText = $"已发现 {profiles.Count} 个浏览器配置，下载时自动尝试";
+                }
+                else
+                {
+                    item.IsAvailable = false;
+                    item.NeedsLogin = true;
+                    item.StatusText = "未发现可复用浏览器配置，首次使用时需要登录";
+                }
+
+                CookiePlatformStatuses.Add(item);
+            }
+
+            CookieStatusSummary = profiles.Count == 0
+                ? $"未发现受支持浏览器配置 · {verifiedPlatforms} 个平台近期验证可用"
+                : $"已发现 {profiles.Count} 个浏览器配置 · {verifiedPlatforms} 个平台近期验证可用";
+        }
+        catch (Exception)
+        {
+            CookieStatusSummary = "登录状态检测失败，请稍后重试";
+        }
+        finally
+        {
+            IsRefreshingCookieStatus = false;
+        }
+    }
+
+    private static string DescribeCookieSource(CookieSourceKind source)
+        => source switch
+        {
+            CookieSourceKind.Anonymous => "公开访问",
+            CookieSourceKind.LegacyScoped => "平台手动 Cookie",
+            CookieSourceKind.Browser => "本机浏览器",
+            CookieSourceKind.ManagedSession => "EasyGet 托管登录",
+            _ => "本地登录状态"
+        };
+
+    [RelayCommand]
+    private async Task LoginPlatform(
+        CookiePlatformStatusItem? item,
+        CancellationToken cancellationToken)
+    {
+        if (item is null || item.IsOperating)
+            return;
+
+        var platform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(definition =>
+            string.Equals(definition.StorageKey, item.StorageKey, StringComparison.Ordinal));
+        if (platform is null)
+        {
+            item.StatusText = "平台定义不可用，请更新 EasyGet";
+            return;
+        }
+
+        item.IsOperating = true;
+        item.StatusText = "正在读取或创建平台登录状态...";
+        try
+        {
+            var cookies = await _managedLogin.GetCookiesAsync(platform, cancellationToken);
+            if (cookies.Count == 0)
+            {
+                item.IsAvailable = false;
+                item.NeedsLogin = true;
+                item.StatusText = "未完成登录，下载时仍会继续尝试本机浏览器";
+                return;
+            }
+
+            await _cookieHealthStore.RecordSuccessAsync(
+                platform.StorageKey,
+                CookieSourceKind.ManagedSession,
+                profile: null,
+                cancellationToken);
+            item.IsAvailable = true;
+            item.NeedsLogin = false;
+            item.StatusText = "登录成功 · EasyGet 托管会话可用";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            item.StatusText = "登录已取消";
+        }
+        catch (Exception)
+        {
+            item.IsAvailable = false;
+            item.NeedsLogin = true;
+            item.StatusText = "登录失败，请重试或检查 WebView2 运行环境";
+        }
+        finally
+        {
+            item.IsOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ClearPlatformSession(
+        CookiePlatformStatusItem? item,
+        CancellationToken cancellationToken)
+        => _ = await ClearPlatformSessionCore(item, cancellationToken);
+
+    private async Task<bool> ClearPlatformSessionCore(
+        CookiePlatformStatusItem? item,
+        CancellationToken cancellationToken)
+    {
+        if (item is null || item.IsOperating)
+            return false;
+
+        var platform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(definition =>
+            string.Equals(definition.StorageKey, item.StorageKey, StringComparison.Ordinal));
+        if (platform is null)
+            return false;
+
+        item.IsOperating = true;
+        item.StatusText = "正在清除托管登录状态...";
+        try
+        {
+            if (_cookieCoordinator is not null)
+            {
+                await _cookieCoordinator.ClearPlatformSessionAsync(
+                    platform,
+                    cancellationToken);
+            }
+            else
+            {
+                await _managedLogin.ClearAsync(platform.StorageKey, cancellationToken);
+                await _cookieHealthStore.ClearPlatformAsync(
+                    platform.StorageKey,
+                    cancellationToken);
+            }
+
+            item.IsAvailable = false;
+            item.NeedsLogin = true;
+            item.StatusText = "托管登录状态已清除；下载时仍会自动尝试本机浏览器";
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            item.StatusText = "清除操作已取消";
+            return false;
+        }
+        catch (Exception)
+        {
+            item.StatusText = "清除失败，请关闭相关登录窗口后重试";
+            return false;
+        }
+        finally
+        {
+            item.IsOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ClearAllManagedSessions(CancellationToken cancellationToken)
+    {
+        if (CookiePlatformStatuses.Count == 0)
+        {
+            foreach (var platform in MediaPlatformResolver.KnownPlatforms)
+            {
+                CookiePlatformStatuses.Add(new CookiePlatformStatusItem
+                {
+                    PlatformId = platform.Id,
+                    StorageKey = platform.StorageKey,
+                    DisplayName = platform.DisplayName
+                });
+            }
+        }
+
+        var failureCount = 0;
+        foreach (var item in CookiePlatformStatuses.ToArray())
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+            if (!await ClearPlatformSessionCore(item, cancellationToken))
+                failureCount++;
+        }
+
+        CookieStatusSummary = cancellationToken.IsCancellationRequested
+            ? "批量清除登录状态已取消"
+            : failureCount > 0
+                ? $"{failureCount} 个平台清除失败，请逐项重试"
+                : "所有平台的 EasyGet 托管登录状态已清除";
     }
 
     [RelayCommand]
@@ -389,7 +640,24 @@ public partial class SettingsViewModel : ObservableObject
         c.UseProxy = UseProxy;
         c.ProxyAddress = ProxyAddress;
         c.UseAria2c = UseAria2c;
-        c.CookieContent = CookieContent;
+        var selectedCookiePlatform = MediaPlatformResolver.KnownPlatforms
+            .FirstOrDefault(platform => string.Equals(
+                platform.StorageKey,
+                LegacyCookiePlatform?.Trim(),
+                StringComparison.Ordinal))
+            ?.StorageKey ?? "";
+        var cookieContentRequiresPlatform = !string.IsNullOrWhiteSpace(CookieContent)
+                                            && !CookieFileSerializer.HasExplicitDomainRows(CookieContent);
+        var canPersistManualCookie = !cookieContentRequiresPlatform
+                                     || selectedCookiePlatform.Length > 0;
+        ManualCookieValidationMessage = canPersistManualCookie
+            ? ""
+            : "请先选择所属平台，再保存 Header 格式 Cookie。";
+        c.CookieContent = canPersistManualCookie ? CookieContent : "";
+        c.SmartCookieEnabled = SmartCookieEnabled;
+        c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
+            ? ""
+            : selectedCookiePlatform;
         c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
         c.DouyinMode = DouyinMode;
         c.DouyinLimit = DouyinLimit;
@@ -438,6 +706,8 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnProxyAddressChanged(string value) => AutoSave();
     partial void OnUseAria2cChanged(bool value) => AutoSave();
     partial void OnCookieContentChanged(string value) => AutoSave();
+    partial void OnSmartCookieEnabledChanged(bool value) => AutoSave();
+    partial void OnLegacyCookiePlatformChanged(string value) => AutoSave();
     partial void OnEnableDouyinSpecialEngineChanged(bool value) => AutoSave();
     partial void OnDouyinModeChanged(string value) => AutoSave();
     partial void OnDouyinLimitChanged(int value) => AutoSave();

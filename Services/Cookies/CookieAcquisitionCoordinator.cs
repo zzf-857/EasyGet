@@ -377,6 +377,18 @@ public sealed class CookieAcquisitionCoordinator
         }
     }
 
+    public async Task ClearPlatformSessionAsync(
+        MediaPlatformDefinition platform,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(platform);
+        CookieStorageKey.ValidatePlatformId(platform.StorageKey);
+        cancellationToken.ThrowIfCancellationRequested();
+        _managedRequests.TryRemove(platform.StorageKey, out _);
+        await _managedLogin.ClearAsync(platform.StorageKey, cancellationToken);
+        await _health.ClearPlatformAsync(platform.StorageKey, cancellationToken);
+    }
+
     private void RemoveManagedRequest(
         string platformId,
         Lazy<Task<IReadOnlyList<BrowserCookie>>> request)
