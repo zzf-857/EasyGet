@@ -8,6 +8,7 @@ namespace EasyGet.Models;
 /// </summary>
 public class AppConfig
 {
+    public const int CurrentConfigVersion = 2;
     public const int MinConcurrentFragments = 1;
     public const int MaxConcurrentFragments = 32;
     public const int MinConcurrentDownloadLimit = 1;
@@ -16,6 +17,9 @@ public class AppConfig
     public const int MaxDouyinCommentPageSize = 20;
     public const int DefaultDouyinLiveChunkSize = 65536;
     public const int DefaultDouyinLiveIdleTimeoutSeconds = 30;
+
+    /// <summary>配置结构版本，用于执行可审计的本地迁移</summary>
+    public int ConfigVersion { get; set; } = CurrentConfigVersion;
 
     /// <summary>默认下载目录</summary>
     public string DefaultDownloadPath { get; set; } = 

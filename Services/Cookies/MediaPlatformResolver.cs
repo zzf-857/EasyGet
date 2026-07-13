@@ -123,6 +123,9 @@ public static class MediaPlatformResolver
             "twitch.tv")
     };
 
+    public static IReadOnlyList<MediaPlatformDefinition> KnownPlatforms { get; } =
+        Array.AsReadOnly(Platforms.Select(platform => platform.Definition).ToArray());
+
     public static MediaPlatformDefinition Resolve(string url)
     {
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)

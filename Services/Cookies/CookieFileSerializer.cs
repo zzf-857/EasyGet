@@ -15,6 +15,44 @@ public static class CookieFileSerializer
 {
     private static readonly string[] LineSeparators = ["\r\n", "\n"];
 
+    internal static bool HasExplicitDomainRows(string content)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+        var trimmed = content.Trim();
+        if (trimmed.Length == 0)
+            return false;
+
+        if (LooksLikeNetscapeCookieFile(trimmed))
+        {
+            return trimmed
+                .Split(LineSeparators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(line =>
+                {
+                    var fields = line.Split('\t');
+                    return fields.Length >= 7
+                           && !string.IsNullOrWhiteSpace(
+                               fields[0].Replace("#HttpOnly_", "", StringComparison.Ordinal));
+                });
+        }
+
+        if (!trimmed.StartsWith("[", StringComparison.Ordinal)
+            && !trimmed.StartsWith("{", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(trimmed);
+            return EnumerateCookieJsonItems(document.RootElement)
+                .Any(item => !string.IsNullOrWhiteSpace(GetCookieDomain(item, out _)));
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     public static IReadOnlyList<string> BuildScopedLines(
         string content,
         MediaPlatformDefinition platform,

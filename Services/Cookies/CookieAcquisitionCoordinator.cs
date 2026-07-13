@@ -119,11 +119,7 @@ public sealed class CookieAcquisitionCoordinator
             return attempts;
 
         if (await _vault.ExistsAsync(platform.StorageKey, cancellationToken)
-            || (!string.IsNullOrWhiteSpace(_config.Config.CookieContent)
-                && string.Equals(
-                    _config.Config.LegacyCookiePlatform,
-                    platform.StorageKey,
-                    StringComparison.Ordinal)))
+            || HasLegacyCookieForPlatform(platform, url))
         {
             attempts.Add(new CookieAttempt(CookieSourceKind.LegacyScoped, platform));
         }
@@ -184,10 +180,7 @@ public sealed class CookieAcquisitionCoordinator
         {
             var content = await _vault.LoadAsync(attempt.Platform.StorageKey, cancellationToken);
             if (string.IsNullOrWhiteSpace(content)
-                && string.Equals(
-                    _config.Config.LegacyCookiePlatform,
-                    attempt.Platform.StorageKey,
-                    StringComparison.Ordinal))
+                && HasLegacyCookieForPlatform(attempt.Platform, url))
             {
                 content = _config.Config.CookieContent;
             }
@@ -277,6 +270,33 @@ public sealed class CookieAcquisitionCoordinator
         }
     }
 
+    private bool HasLegacyCookieForPlatform(
+        MediaPlatformDefinition platform,
+        string url)
+    {
+        var content = _config.Config.CookieContent;
+        if (string.IsNullOrWhiteSpace(content))
+            return false;
+        if (string.Equals(
+                _config.Config.LegacyCookiePlatform,
+                platform.StorageKey,
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+        if (!CookieFileSerializer.HasExplicitDomainRows(content)
+            || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        var lines = CookieFileSerializer.BuildScopedLines(
+            content,
+            platform,
+            uri.Host);
+        return lines.Skip(3).Any();
+    }
+
     public async Task<CookieFailure> ClassifyAndRecordFailureAsync(
         CookieAttempt attempt,
         IEnumerable<string> lines,
@@ -317,6 +337,27 @@ public sealed class CookieAcquisitionCoordinator
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(attempt);
+        if (attempt.Source == CookieSourceKind.LegacyScoped
+            && !string.IsNullOrWhiteSpace(_config.Config.CookieContent))
+        {
+            try
+            {
+                await _config.CompleteLegacyCookieMigrationAsync(
+                    attempt.Platform.StorageKey,
+                    _vault,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CookieCoordinator] Failed to migrate legacy Cookie config: {ex.Message}");
+            }
+        }
+
         try
         {
             await _health.RecordSuccessAsync(

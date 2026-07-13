@@ -1,7 +1,10 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using EasyGet.Models;
+using EasyGet.Services.Cookies;
 
 namespace EasyGet.Services;
 
@@ -66,16 +69,25 @@ public class ConfigService
     private AppConfig _config = new();
     private readonly string _configDir;
     private readonly string _configFile;
+    private readonly ISecretProtector _migrationProtector;
 
     public ConfigService()
-        : this(DefaultConfigDir)
+        : this(DefaultConfigDir, new DpapiSecretProtector())
     {
     }
 
     internal ConfigService(string configDir)
+        : this(configDir, new DpapiSecretProtector())
     {
+    }
+
+    internal ConfigService(string configDir, ISecretProtector migrationProtector)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(configDir);
+        ArgumentNullException.ThrowIfNull(migrationProtector);
         _configDir = configDir;
         _configFile = Path.Combine(_configDir, "config.json");
+        _migrationProtector = migrationProtector;
     }
 
     /// <summary>当前配置</summary>
@@ -130,6 +142,149 @@ public class ConfigService
         }
     }
 
+    public async Task CompleteLegacyCookieMigrationAsync(
+        string platformId,
+        PlatformCookieVault vault,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(vault);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(_config.CookieContent))
+            return;
+
+        var originalContent = _config.CookieContent;
+        var scopedContents = new List<(string StorageKey, string Content)>();
+        if (CookieFileSerializer.HasExplicitDomainRows(originalContent))
+        {
+            foreach (var platform in MediaPlatformResolver.KnownPlatforms)
+            {
+                var targetHost = platform.CookieDomains.FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(targetHost))
+                    continue;
+
+                var lines = CookieFileSerializer.BuildScopedLines(
+                    originalContent,
+                    platform,
+                    targetHost);
+                if (!lines.Skip(3).Any())
+                    continue;
+
+                scopedContents.Add((
+                    platform.StorageKey,
+                    string.Join(Environment.NewLine, lines)));
+            }
+
+            if (scopedContents.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "Cookie 文件未包含任何受支持平台的域名，无法安全迁移。");
+            }
+        }
+        else
+        {
+            CookieStorageKey.ValidatePlatformId(platformId);
+            if (!string.Equals(
+                    _config.LegacyCookiePlatform,
+                    platformId,
+                    StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "旧版 Cookie 尚未明确绑定到当前平台，无法安全迁移。");
+            }
+
+            scopedContents.Add((platformId, originalContent));
+        }
+
+        Directory.CreateDirectory(_configDir);
+        var originalJson = JsonSerializer.Serialize(_config, JsonOptions);
+        var originalPlatform = _config.LegacyCookiePlatform;
+        var originalVersion = _config.ConfigVersion;
+        string sanitizedJson;
+        try
+        {
+            _config.CookieContent = "";
+            _config.LegacyCookiePlatform = "";
+            _config.ConfigVersion = AppConfig.CurrentConfigVersion;
+            sanitizedJson = JsonSerializer.Serialize(_config, JsonOptions);
+        }
+        finally
+        {
+            _config.CookieContent = originalContent;
+            _config.LegacyCookiePlatform = originalPlatform;
+            _config.ConfigVersion = originalVersion;
+        }
+
+        string? encryptedTemporaryPath = null;
+        string? backupTemporaryPath = null;
+        string? configTemporaryPath = null;
+        byte[]? plaintext = null;
+        byte[]? encrypted = null;
+        try
+        {
+            foreach (var scopedContent in scopedContents)
+            {
+                await vault.SaveAsync(
+                    scopedContent.StorageKey,
+                    scopedContent.Content,
+                    cancellationToken);
+            }
+
+            plaintext = Encoding.UTF8.GetBytes(originalJson);
+            encrypted = _migrationProtector.Protect(plaintext);
+            encryptedTemporaryPath = Path.Combine(
+                _configDir,
+                $"config.cookie-migration.{Guid.NewGuid():N}.tmp");
+            await File.WriteAllBytesAsync(
+                encryptedTemporaryPath,
+                encrypted,
+                cancellationToken);
+            CookieFilePermissions.RestrictToCurrentUser(encryptedTemporaryPath);
+
+            backupTemporaryPath = Path.Combine(
+                _configDir,
+                $"config.backup.{Guid.NewGuid():N}.tmp");
+            configTemporaryPath = Path.Combine(
+                _configDir,
+                $"config.{Guid.NewGuid():N}.tmp");
+            await File.WriteAllTextAsync(
+                backupTemporaryPath,
+                sanitizedJson,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken);
+            await File.WriteAllTextAsync(
+                configTemporaryPath,
+                sanitizedJson,
+                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                cancellationToken);
+
+            File.Move(
+                encryptedTemporaryPath,
+                Path.Combine(_configDir, "config.cookie-migration.backup.bin"),
+                overwrite: true);
+            encryptedTemporaryPath = null;
+            File.Move(
+                backupTemporaryPath,
+                Path.Combine(_configDir, "config.backup.json"),
+                overwrite: true);
+            backupTemporaryPath = null;
+            File.Move(configTemporaryPath, _configFile, overwrite: true);
+            configTemporaryPath = null;
+            _config.CookieContent = "";
+            _config.LegacyCookiePlatform = "";
+            _config.ConfigVersion = AppConfig.CurrentConfigVersion;
+        }
+        finally
+        {
+            TryDeleteMigrationFile(encryptedTemporaryPath);
+            TryDeleteMigrationFile(backupTemporaryPath);
+            TryDeleteMigrationFile(configTemporaryPath);
+            if (plaintext is not null)
+                CryptographicOperations.ZeroMemory(plaintext);
+            if (encrypted is not null)
+                CryptographicOperations.ZeroMemory(encrypted);
+        }
+    }
+
     /// <summary>
     /// 获取 tools 目录（用于存放 yt-dlp / ffmpeg）
     /// </summary>
@@ -151,6 +306,22 @@ public class ConfigService
 
         var backupFile = Path.Combine(directory, "config.backup.json");
         File.Copy(configFile, backupFile, overwrite: true);
+    }
+
+    private static void TryDeleteMigrationFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or System.Security.SecurityException)
+        {
+        }
     }
 
     internal static void NormalizeRuntimeConfig(AppConfig config)
@@ -183,6 +354,11 @@ public class ConfigService
         config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
         config.ProxyAddress = config.ProxyAddress?.Trim() ?? "";
         config.CookieContent ??= "";
+        config.ConfigVersion = config.ConfigVersion is > 0 and <= AppConfig.CurrentConfigVersion
+            ? config.ConfigVersion
+            : AppConfig.CurrentConfigVersion;
+        config.LegacyCookiePlatform = NormalizeLegacyCookiePlatform(
+            config.LegacyCookiePlatform);
         config.DouyinMode = NormalizeDouyinMode(config.DouyinMode, defaults.DouyinMode);
         config.DouyinLimit = Math.Max(0, config.DouyinLimit);
         config.DouyinMaxComments = Math.Max(0, config.DouyinMaxComments);
@@ -228,6 +404,23 @@ public class ConfigService
         }
 
         return defaultValue;
+    }
+
+    private static string NormalizeLegacyCookiePlatform(string? value)
+    {
+        var candidate = value?.Trim().ToLowerInvariant() ?? "";
+        if (candidate.Length == 0)
+            return "";
+
+        try
+        {
+            CookieStorageKey.ValidatePlatformId(candidate);
+            return candidate;
+        }
+        catch (ArgumentException)
+        {
+            return "";
+        }
     }
 
     internal static string NormalizeDouyinMode(string? value, string defaultValue = "post")

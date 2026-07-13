@@ -90,6 +90,31 @@ public sealed class CookieAcquisitionCoordinatorTests
     }
 
     [Fact]
+    public async Task BuildAttemptsAsync_UsesDomainScopedLegacyFileWithoutManualPlatformGuessing()
+    {
+        await using var fixture = await CoordinatorFixture.CreateAsync();
+        fixture.Config.Config.CookieContent = """
+            # Netscape HTTP Cookie File
+            .x.com	TRUE	/	TRUE	0	auth_token	secret
+            """;
+        fixture.Config.Config.LegacyCookiePlatform = "";
+
+        var twitter = await fixture.Coordinator.BuildAttemptsAsync(
+            "https://x.com/user/status/1",
+            CancellationToken.None);
+        var youtube = await fixture.Coordinator.BuildAttemptsAsync(
+            "https://youtube.com/watch?v=1",
+            CancellationToken.None);
+
+        Assert.Contains(
+            twitter,
+            attempt => attempt.Source == CookieSourceKind.LegacyScoped);
+        Assert.DoesNotContain(
+            youtube,
+            attempt => attempt.Source == CookieSourceKind.LegacyScoped);
+    }
+
+    [Fact]
     public async Task BuildAttemptsAsync_PrioritizesBrowserThatPreviouslySucceededForPlatform()
     {
         var recentlyActive = new BrowserProfile(
@@ -549,6 +574,28 @@ public sealed class CookieAcquisitionCoordinatorTests
         await fixture.Coordinator.RecordSuccessAsync(attempt, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task RecordSuccessAsync_MigratesVerifiedLegacyCookieOutOfPlaintextConfig()
+    {
+        await using var fixture = await CoordinatorFixture.CreateAsync();
+        fixture.Config.Config.CookieContent = "auth_token=verified-secret";
+        fixture.Config.Config.LegacyCookiePlatform = "twitter";
+        var attempt = new CookieAttempt(
+            CookieSourceKind.LegacyScoped,
+            MediaPlatformResolver.Resolve("https://x.com/user/status/1"));
+
+        await fixture.Coordinator.RecordSuccessAsync(attempt, CancellationToken.None);
+
+        Assert.Equal("", fixture.Config.Config.CookieContent);
+        Assert.Equal(
+            "auth_token=verified-secret",
+            await fixture.Vault.LoadAsync("twitter", CancellationToken.None));
+        Assert.DoesNotContain(
+            "verified-secret",
+            await File.ReadAllTextAsync(fixture.Root.Path("config.json")),
+            StringComparison.Ordinal);
+    }
+
     private sealed class CoordinatorFixture : IAsyncDisposable
     {
         private CoordinatorFixture(
@@ -579,7 +626,7 @@ public sealed class CookieAcquisitionCoordinatorTests
             var root = new TestDirectory();
             try
             {
-                var config = new ConfigService(root.DirectoryPath);
+                var config = new ConfigService(root.DirectoryPath, new XorTestProtector());
                 config.Config.SmartCookieEnabled = true;
                 var vault = new PlatformCookieVault(root.DirectoryPath, new XorTestProtector());
                 if (platformId is not null && manualCookie is not null)
