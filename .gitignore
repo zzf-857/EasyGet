@@ -60,6 +60,7 @@ test_best_stderr.txt
 temp_ffmpeg*.txt
 
 ## Misc
+.worktrees/
 nul
 *.tmp
 *.bak
