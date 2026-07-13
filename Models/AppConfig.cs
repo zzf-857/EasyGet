@@ -51,6 +51,12 @@ public class AppConfig
     /// <summary>Cookie 原始内容（从浏览器复制 of cookie 字符串）</summary>
     public string CookieContent { get; set; } = "";
 
+    /// <summary>是否启用按平台自动编排 Cookie 获取策略</summary>
+    public bool SmartCookieEnabled { get; set; } = true;
+
+    /// <summary>旧版手动 Cookie 已确认适用的平台；空值表示尚未限定范围</summary>
+    public string LegacyCookiePlatform { get; set; } = "";
+
     /// <summary>是否启用抖音专项引擎配置（下载流程接线后生效）</summary>
     public bool EnableDouyinSpecialEngine { get; set; } = false;
 

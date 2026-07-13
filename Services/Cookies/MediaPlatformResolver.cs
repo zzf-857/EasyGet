@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace EasyGet.Services.Cookies;
 
 public sealed record MediaPlatformDefinition(
@@ -5,7 +8,26 @@ public sealed record MediaPlatformDefinition(
     string DisplayName,
     Uri LoginUri,
     IReadOnlyList<string> CookieDomains,
-    bool AnonymousFirst = true);
+    bool AnonymousFirst = true)
+{
+    public string StorageKey
+    {
+        get
+        {
+            if (!string.Equals(Id, "generic", StringComparison.Ordinal))
+                return Id;
+
+            var scope = CookieDomains.FirstOrDefault()?.Trim().TrimStart('.').ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(scope))
+                return "generic-invalid";
+
+            var hash = Convert.ToHexString(
+                    SHA256.HashData(Encoding.UTF8.GetBytes(scope)))
+                .ToLowerInvariant();
+            return $"generic-{hash[..32]}";
+        }
+    }
+}
 
 public static class MediaPlatformResolver
 {
