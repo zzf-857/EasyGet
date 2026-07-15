@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.2.2 - 2026-07-16
+
+### Fixes
+- Completed the system-browser login loop: “Login and Detect” now opens the Windows default browser, polls local browser Cookie metadata for up to three minutes, and updates the platform row as soon as the login is detected.
+- Distinguished a detected browser login from a Cookie source that has already passed a real download or metadata request, avoiding both false success and the previous ambiguous “browser profiles found” message.
+- Use Chromium WAL activity when detecting profile changes so newly completed logins are noticed before the browser checkpoints its main Cookie database.
+
+### Performance
+- Prioritize the browser profile that contains the matching platform login before other profiles during downloads.
+- Cache readable and briefly unavailable profile probes; repeated status checks are instant while Cookie activity still invalidates stale results automatically.
+
+### Privacy
+- Login detection queries only Cookie domain, name, and expiry metadata. Cookie values, account details, and full browser profile paths are never displayed or logged.
+
+### User Experience
+- Renamed the primary action to “Login and Detect” and added separate visual states for detected login, download-verified access, login required, and temporarily unreadable browser data.
+
+### Tests
+- Added Chromium, Firefox, expiry, domain-isolation, malformed-database, cache-invalidation, WAL-activity, detected-profile ordering, login-loop, and truthful-error regression coverage.
+- Verified 845 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.2.1 - 2026-07-16
 
 ### Fixes
