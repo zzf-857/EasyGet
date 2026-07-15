@@ -10,6 +10,8 @@ namespace EasyGet.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
+    private const int AutoSaveDebounceMilliseconds = 150;
+
     private static readonly IReadOnlyDictionary<string, string> DouyinTemplatePreviewValues =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -39,8 +41,15 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IBrowserProfileDiscoveryService _cookieProfiles;
     private readonly ICookieHealthStore _cookieHealthStore;
     private readonly IManagedLoginSessionService _managedLogin;
+    private readonly IDefaultBrowserLauncher _defaultBrowserLauncher;
     private readonly CookieAcquisitionCoordinator? _cookieCoordinator;
     private readonly PlatformCookieVault _cookieVault;
+    private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
+    private readonly object _autoSaveGate = new();
+    private CancellationTokenSource? _autoSaveDebounce;
+    private Task _pendingAutoSaveTask = Task.CompletedTask;
+    private long _autoSaveRequestedVersion;
+    private long _autoSavePersistedVersion;
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
     private bool _isInitializing;
@@ -58,7 +67,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowTgSubmitCodeButton))]
     private bool _showTgPasswordInput;
-    
+
     [ObservableProperty] private string _tgVerificationCode = "";
     [ObservableProperty] private string _tgTwoFactorPassword = "";
     [ObservableProperty] private string _tgStatusMessage = "";
@@ -88,6 +97,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _defaultQuality = "最高画质";
     [ObservableProperty] private int _maxConcurrentDownloads = 3;
     [ObservableProperty] private int _concurrentFragments = 8;
+    [ObservableProperty] private string _settingsSaveStatusMessage = "";
 
     [ObservableProperty] private bool _useProxy;
     [ObservableProperty] private string _proxyAddress = "";
@@ -227,7 +237,8 @@ public partial class SettingsViewModel : ObservableObject
         ICookieHealthStore? cookieHealthStore = null,
         IManagedLoginSessionService? managedLogin = null,
         CookieAcquisitionCoordinator? cookieCoordinator = null,
-        PlatformCookieVault? cookieVault = null)
+        PlatformCookieVault? cookieVault = null,
+        IDefaultBrowserLauncher? defaultBrowserLauncher = null)
     {
         _configService = configService;
         _envService = envService;
@@ -238,6 +249,7 @@ public partial class SettingsViewModel : ObservableObject
         _cookieProfiles = cookieProfiles ?? new BrowserProfileDiscoveryService();
         _cookieHealthStore = cookieHealthStore ?? new CookieHealthStore(configService.ConfigDirectory);
         _managedLogin = managedLogin ?? new EmptyManagedLoginSessionService();
+        _defaultBrowserLauncher = defaultBrowserLauncher ?? new DefaultBrowserLauncher();
         _cookieCoordinator = cookieCoordinator;
         _cookieVault = cookieVault ?? new PlatformCookieVault(configService.ConfigDirectory);
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
@@ -423,11 +435,49 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         item.IsOperating = true;
-        item.StatusText = "正在读取或创建平台登录状态...";
+        item.StatusText = "正在打开系统默认浏览器...";
+        try
+        {
+            await _defaultBrowserLauncher.OpenAsync(platform.LoginUri, cancellationToken);
+            item.StatusText = "已打开系统默认浏览器；完成登录后直接重试下载";
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            item.StatusText = "打开浏览器操作已取消";
+        }
+        catch (Exception)
+        {
+            item.StatusText = "无法打开系统默认浏览器，请检查 Windows 默认应用设置";
+        }
+        finally
+        {
+            item.IsOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task CompatibleLoginPlatform(
+        CookiePlatformStatusItem? item,
+        CancellationToken cancellationToken)
+    {
+        if (item is null || item.IsOperating)
+            return;
+
+        var platform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(definition =>
+            string.Equals(definition.StorageKey, item.StorageKey, StringComparison.Ordinal));
+        if (platform is null)
+        {
+            item.StatusText = "平台定义不可用，请更新 EasyGet";
+            return;
+        }
+
+        item.IsOperating = true;
+        item.StatusText = "正在打开 EasyGet 兼容登录窗口...";
         try
         {
             var cookies = await _managedLogin.GetCookiesAsync(platform, cancellationToken);
-            if (cookies.Count == 0)
+            var scopedLines = CookieFileSerializer.BuildScopedLines(cookies, platform);
+            if (!scopedLines.Skip(3).Any())
             {
                 await _cookieHealthStore.RecordFailureAsync(
                     platform.StorageKey,
@@ -437,10 +487,14 @@ public partial class SettingsViewModel : ObservableObject
                     cancellationToken);
                 item.IsAvailable = false;
                 item.NeedsLogin = true;
-                item.StatusText = "未完成登录，下载时仍会继续尝试本机浏览器";
+                item.StatusText = "未完成兼容登录；系统浏览器登录状态不受影响";
                 return;
             }
 
+            await _cookieVault.SaveAsync(
+                platform.StorageKey,
+                string.Join(Environment.NewLine, scopedLines),
+                cancellationToken);
             await _cookieHealthStore.RecordSuccessAsync(
                 platform.StorageKey,
                 CookieSourceKind.ManagedSession,
@@ -448,17 +502,17 @@ public partial class SettingsViewModel : ObservableObject
                 cancellationToken);
             item.IsAvailable = true;
             item.NeedsLogin = false;
-            item.StatusText = "登录成功 · EasyGet 托管会话可用";
+            item.StatusText = "兼容登录成功 · Cookie 已加密保存";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            item.StatusText = "登录已取消";
+            item.StatusText = "兼容登录已取消";
         }
         catch (Exception)
         {
             item.IsAvailable = false;
             item.NeedsLogin = true;
-            item.StatusText = "登录失败，请重试或检查 WebView2 运行环境";
+            item.StatusText = "兼容登录失败，请重试或检查 WebView2 运行环境";
         }
         finally
         {
@@ -485,7 +539,7 @@ public partial class SettingsViewModel : ObservableObject
             return false;
 
         item.IsOperating = true;
-        item.StatusText = "正在清除托管登录状态...";
+        item.StatusText = "正在清除 EasyGet 登录数据...";
         try
         {
             if (_cookieCoordinator is not null)
@@ -497,6 +551,7 @@ public partial class SettingsViewModel : ObservableObject
             else
             {
                 await _managedLogin.ClearAsync(platform.StorageKey, cancellationToken);
+                await _cookieVault.DeleteAsync(platform.StorageKey, cancellationToken);
                 await _cookieHealthStore.ClearPlatformAsync(
                     platform.StorageKey,
                     cancellationToken);
@@ -504,7 +559,7 @@ public partial class SettingsViewModel : ObservableObject
 
             item.IsAvailable = false;
             item.NeedsLogin = true;
-            item.StatusText = "托管登录状态已清除；下载时仍会自动尝试本机浏览器";
+            item.StatusText = "EasyGet 登录数据已清除；系统浏览器登录不受影响";
             return true;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -552,7 +607,7 @@ public partial class SettingsViewModel : ObservableObject
             ? "批量清除登录状态已取消"
             : failureCount > 0
                 ? $"{failureCount} 个平台清除失败，请逐项重试"
-                : "所有平台的 EasyGet 托管登录状态已清除";
+                : "所有平台的 EasyGet 登录数据已清除；系统浏览器不受影响";
     }
 
     [RelayCommand]
@@ -623,7 +678,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void BrowseDownloadPath()
+    private async Task BrowseDownloadPath()
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
@@ -632,124 +687,155 @@ public partial class SettingsViewModel : ObservableObject
         };
 
         if (dialog.ShowDialog() == true)
+        {
             DefaultDownloadPath = dialog.FolderName;
+            SettingsSaveStatusMessage = "正在保存下载目录...";
+            await FlushPendingSaveAsync();
+        }
     }
 
     [RelayCommand]
     private async Task SaveSettings()
     {
-        var c = _configService.Config;
-        c.DefaultDownloadPath = DefaultDownloadPath;
-        c.DefaultFormat = DefaultFormat;
-        c.DefaultQuality = DefaultQuality switch
-        {
-            "最高画质" => "best",
-            "2160p" => "2160",
-            "1080p" => "1080",
-            "720p" => "720",
-            "480p" => "480",
-            _ => "best"
-        };
-        c.MaxConcurrentDownloads = MaxConcurrentDownloads;
-        c.ConcurrentFragments = ConcurrentFragments;
-        c.UseProxy = UseProxy;
-        c.ProxyAddress = ProxyAddress;
-        c.UseAria2c = UseAria2c;
-        var selectedCookiePlatform = MediaPlatformResolver.KnownPlatforms
-            .FirstOrDefault(platform => string.Equals(
-                platform.StorageKey,
-                LegacyCookiePlatform?.Trim(),
-                StringComparison.Ordinal))
-            ?.StorageKey ?? "";
-        var cookieContentRequiresPlatform = !string.IsNullOrWhiteSpace(CookieContent)
-                                            && !CookieFileSerializer.HasExplicitDomainRows(CookieContent);
-        var canPersistManualCookie = !cookieContentRequiresPlatform
-                                     || selectedCookiePlatform.Length > 0;
-        if (!canPersistManualCookie)
-        {
-            ManualCookieValidationMessage = "请先选择所属平台，再保存 Header 格式 Cookie。";
-            IsManualCookieMessageSuccess = false;
-        }
-        else if (!string.IsNullOrWhiteSpace(CookieContent))
-        {
-            ManualCookieValidationMessage = "";
-            IsManualCookieMessageSuccess = false;
-        }
-        if (canPersistManualCookie)
-            c.CookieContent = CookieContent;
-        c.SmartCookieEnabled = SmartCookieEnabled;
-        if (canPersistManualCookie)
-        {
-            c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
-                ? ""
-                : selectedCookiePlatform;
-        }
-        c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
-        c.DouyinMode = DouyinMode;
-        c.DouyinLimit = DouyinLimit;
-        c.DouyinFilenameTemplate = DouyinFilenameTemplate;
-        c.DouyinFolderTemplate = DouyinFolderTemplate;
-        c.DouyinAuthorDirectoryMode = DouyinAuthorDirectoryMode;
-        c.DouyinGroupByMode = DouyinGroupByMode;
-        c.DouyinStartTime = DouyinStartTime;
-        c.DouyinEndTime = DouyinEndTime;
-        c.DouyinDownloadPinned = DouyinDownloadPinned;
-        c.DouyinDownloadCover = DouyinDownloadCover;
-        c.DouyinDownloadAvatar = DouyinDownloadAvatar;
-        c.DouyinDownloadMusic = DouyinDownloadMusic;
-        c.DouyinDownloadComments = DouyinDownloadComments;
-        c.DouyinCommentIncludeReplies = DouyinCommentIncludeReplies;
-        c.DouyinMaxComments = DouyinMaxComments;
-        c.DouyinCommentPageSize = DouyinCommentPageSize;
-        c.DouyinDownloadJson = DouyinDownloadJson;
-        c.DouyinEnableDatabase = DouyinEnableDatabase;
-        c.DouyinIncrementalDownload = DouyinIncrementalDownload;
-        c.DouyinEnableBrowserFallback = DouyinEnableBrowserFallback;
-        c.DouyinLiveMaxDurationSeconds = DouyinLiveMaxDurationSeconds;
-        c.DouyinLiveChunkSize = DouyinLiveChunkSize;
-        c.DouyinLiveIdleTimeoutSeconds = DouyinLiveIdleTimeoutSeconds;
-        c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
-        c.ThemeColor = SelectedThemeColor;
-        c.TgApiId = TgApiId;
-        c.TgApiHash = TgApiHash;
-        c.TgPhoneNumber = TgPhoneNumber;
+        CancelPendingAutoSave();
+        if (await PersistSettingsAsync())
+            MarkLatestAutoSaveVersionPersisted();
+    }
 
-        ConfigService.NormalizeRuntimeConfig(c);
-        SyncNormalizedPerformanceValues(c);
-        SyncNormalizedDouyinValues(c);
-
-        _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
-        if (canPersistManualCookie && !string.IsNullOrWhiteSpace(c.CookieContent))
+    private async Task<bool> PersistSettingsAsync()
+    {
+        await _settingsSaveGate.WaitAsync();
+        try
         {
-            var savedPlatform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(platform =>
-                string.Equals(
+            var c = _configService.Config;
+            c.DefaultDownloadPath = DefaultDownloadPath;
+            c.DefaultFormat = DefaultFormat;
+            c.DefaultQuality = DefaultQuality switch
+            {
+                "最高画质" => "best",
+                "2160p" => "2160",
+                "1080p" => "1080",
+                "720p" => "720",
+                "480p" => "480",
+                _ => "best"
+            };
+            c.MaxConcurrentDownloads = MaxConcurrentDownloads;
+            c.ConcurrentFragments = ConcurrentFragments;
+            c.UseProxy = UseProxy;
+            c.ProxyAddress = ProxyAddress;
+            c.UseAria2c = UseAria2c;
+            var selectedCookiePlatform = MediaPlatformResolver.KnownPlatforms
+                .FirstOrDefault(platform => string.Equals(
                     platform.StorageKey,
+                    LegacyCookiePlatform?.Trim(),
+                    StringComparison.Ordinal))
+                ?.StorageKey ?? "";
+            var cookieContentRequiresPlatform = !string.IsNullOrWhiteSpace(CookieContent)
+                                                && !CookieFileSerializer.HasExplicitDomainRows(CookieContent);
+            var canPersistManualCookie = !cookieContentRequiresPlatform
+                                         || selectedCookiePlatform.Length > 0;
+            if (!canPersistManualCookie)
+            {
+                ManualCookieValidationMessage = "请先选择所属平台，再保存 Header 格式 Cookie。";
+                IsManualCookieMessageSuccess = false;
+            }
+            else if (!string.IsNullOrWhiteSpace(CookieContent))
+            {
+                ManualCookieValidationMessage = "";
+                IsManualCookieMessageSuccess = false;
+            }
+            if (canPersistManualCookie)
+                c.CookieContent = CookieContent;
+            c.SmartCookieEnabled = SmartCookieEnabled;
+            if (canPersistManualCookie)
+            {
+                c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
+                    ? ""
+                    : selectedCookiePlatform;
+            }
+            c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
+            c.DouyinMode = DouyinMode;
+            c.DouyinLimit = DouyinLimit;
+            c.DouyinFilenameTemplate = DouyinFilenameTemplate;
+            c.DouyinFolderTemplate = DouyinFolderTemplate;
+            c.DouyinAuthorDirectoryMode = DouyinAuthorDirectoryMode;
+            c.DouyinGroupByMode = DouyinGroupByMode;
+            c.DouyinStartTime = DouyinStartTime;
+            c.DouyinEndTime = DouyinEndTime;
+            c.DouyinDownloadPinned = DouyinDownloadPinned;
+            c.DouyinDownloadCover = DouyinDownloadCover;
+            c.DouyinDownloadAvatar = DouyinDownloadAvatar;
+            c.DouyinDownloadMusic = DouyinDownloadMusic;
+            c.DouyinDownloadComments = DouyinDownloadComments;
+            c.DouyinCommentIncludeReplies = DouyinCommentIncludeReplies;
+            c.DouyinMaxComments = DouyinMaxComments;
+            c.DouyinCommentPageSize = DouyinCommentPageSize;
+            c.DouyinDownloadJson = DouyinDownloadJson;
+            c.DouyinEnableDatabase = DouyinEnableDatabase;
+            c.DouyinIncrementalDownload = DouyinIncrementalDownload;
+            c.DouyinEnableBrowserFallback = DouyinEnableBrowserFallback;
+            c.DouyinLiveMaxDurationSeconds = DouyinLiveMaxDurationSeconds;
+            c.DouyinLiveChunkSize = DouyinLiveChunkSize;
+            c.DouyinLiveIdleTimeoutSeconds = DouyinLiveIdleTimeoutSeconds;
+            c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
+            c.ThemeColor = SelectedThemeColor;
+            c.TgApiId = TgApiId;
+            c.TgApiHash = TgApiHash;
+            c.TgPhoneNumber = TgPhoneNumber;
+
+            ConfigService.NormalizeRuntimeConfig(c);
+            SyncNormalizedPerformanceValues(c);
+            SyncNormalizedDouyinValues(c);
+
+            _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
+            if (canPersistManualCookie && !string.IsNullOrWhiteSpace(c.CookieContent))
+            {
+                var savedPlatform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(platform =>
+                    string.Equals(
+                        platform.StorageKey,
+                        selectedCookiePlatform,
+                        StringComparison.Ordinal));
+                await _configService.CompleteLegacyCookieMigrationAsync(
                     selectedCookiePlatform,
-                    StringComparison.Ordinal));
-            await _configService.CompleteLegacyCookieMigrationAsync(
-                selectedCookiePlatform,
-                _cookieVault,
-                CancellationToken.None);
-            _isInitializing = true;
-            try
-            {
-                CookieContent = "";
-                LegacyCookiePlatform = "";
-            }
-            finally
-            {
-                _isInitializing = false;
+                    _cookieVault,
+                    CancellationToken.None);
+                _isInitializing = true;
+                try
+                {
+                    CookieContent = "";
+                    LegacyCookiePlatform = "";
+                }
+                finally
+                {
+                    _isInitializing = false;
+                }
+
+                ManualCookieValidationMessage = "手动 Cookie 已加密保存并按平台隔离。";
+                ManualCookieStatusText = savedPlatform is null
+                    ? "已加密保存 · 已按域名拆分"
+                    : $"已加密保存 · {savedPlatform.DisplayName}";
+                IsManualCookieMessageSuccess = true;
             }
 
-            ManualCookieValidationMessage = "手动 Cookie 已加密保存并按平台隔离。";
-            ManualCookieStatusText = savedPlatform is null
-                ? "已加密保存 · 已按域名拆分"
-                : $"已加密保存 · {savedPlatform.DisplayName}";
-            IsManualCookieMessageSuccess = true;
+            if (!await _configService.SaveAsync())
+            {
+                SettingsSaveStatusMessage = "设置保存失败，请稍后重试";
+                return false;
+            }
+
+            SettingsSaveStatusMessage = "设置已保存";
+            SettingsSaved?.Invoke();
+            return true;
         }
-
-        await _configService.SaveAsync();
-        SettingsSaved?.Invoke();
+        catch (Exception)
+        {
+            SettingsSaveStatusMessage = "设置保存失败，请检查目录权限后重试";
+            return false;
+        }
+        finally
+        {
+            _settingsSaveGate.Release();
+        }
     }
 
     partial void OnDefaultDownloadPathChanged(string value) => AutoSave();
@@ -824,7 +910,111 @@ public partial class SettingsViewModel : ObservableObject
         if (_isInitializing)
             return;
 
-        SaveSettingsCommand.Execute(null);
+        CancellationTokenSource debounce;
+        CancellationTokenSource? previousDebounce;
+        long version;
+        lock (_autoSaveGate)
+        {
+            version = ++_autoSaveRequestedVersion;
+            previousDebounce = _autoSaveDebounce;
+            debounce = new CancellationTokenSource();
+            _autoSaveDebounce = debounce;
+            _pendingAutoSaveTask = RunAutoSaveAsync(version, debounce);
+        }
+        TryCancelDebounce(previousDebounce);
+    }
+
+    private async Task RunAutoSaveAsync(
+        long version,
+        CancellationTokenSource debounce)
+    {
+        try
+        {
+            await Task.Delay(AutoSaveDebounceMilliseconds, debounce.Token);
+            if (await PersistSettingsAsync())
+            {
+                lock (_autoSaveGate)
+                    _autoSavePersistedVersion = Math.Max(_autoSavePersistedVersion, version);
+            }
+        }
+        catch (OperationCanceledException) when (debounce.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            lock (_autoSaveGate)
+            {
+                if (ReferenceEquals(_autoSaveDebounce, debounce))
+                    _autoSaveDebounce = null;
+            }
+
+            debounce.Dispose();
+        }
+    }
+
+    public async Task<bool> FlushPendingSaveAsync()
+    {
+        while (true)
+        {
+            Task pendingSave;
+            CancellationTokenSource? debounce;
+            long targetVersion;
+            lock (_autoSaveGate)
+            {
+                targetVersion = _autoSaveRequestedVersion;
+                debounce = _autoSaveDebounce;
+                pendingSave = _pendingAutoSaveTask;
+            }
+            TryCancelDebounce(debounce);
+
+            await pendingSave;
+
+            lock (_autoSaveGate)
+            {
+                if (_autoSavePersistedVersion >= targetVersion
+                    && _autoSaveRequestedVersion == targetVersion)
+                {
+                    return true;
+                }
+            }
+
+            if (!await PersistSettingsAsync())
+                return false;
+
+            lock (_autoSaveGate)
+            {
+                _autoSavePersistedVersion = Math.Max(
+                    _autoSavePersistedVersion,
+                    targetVersion);
+                if (_autoSaveRequestedVersion == targetVersion)
+                    return true;
+            }
+        }
+    }
+
+    private void CancelPendingAutoSave()
+    {
+        CancellationTokenSource? debounce;
+        lock (_autoSaveGate)
+            debounce = _autoSaveDebounce;
+        TryCancelDebounce(debounce);
+    }
+
+    private static void TryCancelDebounce(CancellationTokenSource? debounce)
+    {
+        try
+        {
+            debounce?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    private void MarkLatestAutoSaveVersionPersisted()
+    {
+        lock (_autoSaveGate)
+            _autoSavePersistedVersion = _autoSaveRequestedVersion;
     }
 
     private void SyncNormalizedPerformanceValues(EasyGet.Models.AppConfig config)
@@ -1057,11 +1247,18 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void InstallAppUpdate()
+    private async Task InstallAppUpdate()
     {
         if (string.IsNullOrWhiteSpace(_downloadedInstallerPath))
         {
             AppUpdateStatusMessage = "请先下载更新包。";
+            return;
+        }
+
+        AppUpdateStatusMessage = "正在保存设置并准备安装...";
+        if (!await FlushPendingSaveAsync() || !await _configService.SaveAsync())
+        {
+            AppUpdateStatusMessage = "设置保存失败，已取消启动安装程序，请重试。";
             return;
         }
 

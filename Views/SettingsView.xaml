@@ -207,6 +207,11 @@
                             <StackPanel>
                                 <TextBlock Text="默认保存目录" Style="{StaticResource TextBodyStrong}"/>
                                 <TextBlock Text="{Binding DefaultDownloadPath}" Style="{StaticResource TextBody}" Margin="0,4,0,0" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Text="{Binding SettingsSaveStatusMessage}"
+                                           Style="{StaticResource TextCaption}"
+                                           Margin="0,4,0,0"
+                                           Visibility="{Binding SettingsSaveStatusMessage, Converter={StaticResource StringToVisibility}}"
+                                           AutomationProperties.Name="设置保存状态"/>
                             </StackPanel>
                             <Button Grid.Column="1"
                                     Style="{StaticResource AccentButton}"
@@ -364,7 +369,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="智能 Cookie 模式" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="公开内容先匿名下载；需要登录时自动复用本机浏览器，最后才显示一次平台登录窗口。"
+                                <TextBlock Text="公开内容先匿名下载；需要登录时优先读取系统默认浏览器和本机活跃配置。下载过程中不会主动弹出登录窗口。"
                                            Style="{StaticResource TextBody}"
                                            Margin="0,4,18,0"
                                            TextWrapping="Wrap"/>
@@ -403,8 +408,8 @@
                                         Style="{StaticResource SurfaceButton}"
                                         Padding="10,5"
                                         Command="{Binding ClearAllManagedSessionsCommand}"
-                                        AutomationProperties.Name="清除全部 EasyGet 托管登录状态">
-                                    <TextBlock Text="全部清除"/>
+                                        AutomationProperties.Name="清除全部 EasyGet 登录数据">
+                                    <TextBlock Text="清除 EasyGet 登录"/>
                                 </Button>
                             </Grid>
                         </Border>
@@ -419,6 +424,7 @@
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="150"/>
                                                 <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
@@ -453,16 +459,26 @@
                                                     Command="{Binding DataContext.LoginPlatformCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                     CommandParameter="{Binding}"
                                                     IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
-                                                    AutomationProperties.Name="登录当前流媒体平台">
-                                                <TextBlock Text="登录"/>
+                                                    AutomationProperties.Name="在系统默认浏览器登录当前流媒体平台">
+                                                <TextBlock Text="浏览器登录"/>
                                             </Button>
                                             <Button Grid.Column="3"
+                                                    Style="{StaticResource SurfaceButton}"
+                                                    Margin="0,0,6,0"
+                                                    Padding="10,5"
+                                                    Command="{Binding DataContext.CompatibleLoginPlatformCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
+                                                    AutomationProperties.Name="使用 EasyGet 兼容窗口登录当前流媒体平台">
+                                                <TextBlock Text="兼容登录"/>
+                                            </Button>
+                                            <Button Grid.Column="4"
                                                     Style="{StaticResource SurfaceButton}"
                                                     Padding="10,5"
                                                     Command="{Binding DataContext.ClearPlatformSessionCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                     CommandParameter="{Binding}"
                                                     IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
-                                                    AutomationProperties.Name="清除当前平台托管登录状态">
+                                                    AutomationProperties.Name="清除当前平台 EasyGet 登录数据">
                                                 <TextBlock Text="清除"/>
                                             </Button>
                                         </Grid>
@@ -478,7 +494,7 @@
                                 <TextBlock Text="高级选项：手动导入 Cookie" Style="{StaticResource TextBodyStrong}"/>
                             </Expander.Header>
                             <StackPanel Margin="0,12,0,0">
-                                <TextBlock Text="仅在自动浏览器与托管登录都不可用时使用。Header 格式必须先选择所属平台；带域名的 Netscape/JSON 文件会自动拆分。"
+                                <TextBlock Text="仅在系统浏览器读取与兼容登录都不可用时使用。Header 格式必须先选择所属平台；带域名的 Netscape/JSON 文件会自动拆分。"
                                            Style="{StaticResource TextBody}"
                                            TextWrapping="Wrap"
                                            Margin="0,0,0,10"/>

@@ -143,15 +143,14 @@ public sealed class CookieAcquisitionCoordinator
 
         attempts.AddRange(_profiles.Discover()
             .OrderByDescending(profile => successfulProfiles.GetValueOrDefault(profile.StableId))
-            .ThenByDescending(profile => profile.LastActivityUtc)
             .ThenByDescending(profile => profile.IsDefaultBrowser)
+            .ThenByDescending(profile => profile.LastActivityUtc)
             .ThenBy(profile => profile.BrowserName, StringComparer.Ordinal)
             .ThenBy(profile => profile.DisplayName, StringComparer.Ordinal)
             .Select(profile => new CookieAttempt(
                 CookieSourceKind.Browser,
                 platform,
                 profile)));
-        attempts.Add(new CookieAttempt(CookieSourceKind.ManagedSession, platform));
         return attempts;
     }
 
@@ -390,6 +389,7 @@ public sealed class CookieAcquisitionCoordinator
         cancellationToken.ThrowIfCancellationRequested();
         RemoveManagedRequest(platform.StorageKey, expected: null, cancel: true);
         await _managedLogin.ClearAsync(platform.StorageKey, cancellationToken);
+        await _vault.DeleteAsync(platform.StorageKey, cancellationToken);
         await _health.ClearPlatformAsync(platform.StorageKey, cancellationToken);
     }
 

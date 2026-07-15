@@ -1,6 +1,8 @@
 using EasyGet.Models;
 using EasyGet.Services;
 using EasyGet.Services.Cookies;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -15,6 +17,144 @@ public class ConfigServiceTests
         var service = new ConfigService(_tempDir);
 
         Assert.Equal(_tempDir, service.ConfigDirectory);
+    }
+
+    [Fact]
+    public async Task SaveAndReload_PreservesCustomDownloadPath()
+    {
+        var expectedPath = Path.Combine(_tempDir, "用户选择的下载目录");
+        var service = new ConfigService(_tempDir);
+        service.Config.DefaultDownloadPath = expectedPath;
+
+        Assert.True(await service.SaveAsync());
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+        Assert.Equal(expectedPath, reloaded.Config.DefaultDownloadPath);
+    }
+
+    [Fact]
+    public async Task LoadAsync_PrefersVersionedBackupWhenLegacyProcessOverwritesPrimary()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var stalePath = Path.Combine(_tempDir, "stale-default");
+        var expectedPath = Path.Combine(_tempDir, "preserved-user-path");
+        await File.WriteAllTextAsync(
+            Path.Combine(_tempDir, "config.json"),
+            $$"""
+              {
+                "defaultDownloadPath": "{{stalePath.Replace("\\", "\\\\")}}",
+                "defaultFormat": "mp4"
+              }
+              """);
+        await File.WriteAllTextAsync(
+            Path.Combine(_tempDir, "config.backup.json"),
+            JsonSerializer.Serialize(new AppConfig
+            {
+                ConfigVersion = AppConfig.CurrentConfigVersion,
+                DefaultDownloadPath = expectedPath
+            }, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+            }));
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+
+        Assert.Equal(expectedPath, service.Config.DefaultDownloadPath);
+        var restoredPrimary = await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json"));
+        Assert.Contains("\"configVersion\": 2", restoredPrimary, StringComparison.Ordinal);
+        Assert.Contains("preserved-user-path", restoredPrimary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoadAsync_RecoversCorruptPrimaryWithoutOverwritingGoodBackup()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var expectedPath = Path.Combine(_tempDir, "backup-downloads");
+        var backupPath = Path.Combine(_tempDir, "config.backup.json");
+        var backupJson = JsonSerializer.Serialize(new AppConfig
+        {
+            DefaultDownloadPath = expectedPath
+        }, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true,
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+        });
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "config.json"), "{ broken json");
+        await File.WriteAllTextAsync(backupPath, backupJson);
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+
+        Assert.Equal(expectedPath, service.Config.DefaultDownloadPath);
+        Assert.Equal(backupJson, await File.ReadAllTextAsync(backupPath));
+        using var restored = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json")));
+        Assert.Equal(JsonValueKind.Object, restored.RootElement.ValueKind);
+    }
+
+    [Fact]
+    public async Task SaveAsync_DoesNotReplaceNewerBackupWithLegacyPrimary()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var expectedPath = Path.Combine(_tempDir, "preserved-downloads");
+        await File.WriteAllTextAsync(
+            Path.Combine(_tempDir, "config.json"),
+            """
+            {
+              "defaultDownloadPath": "C:\\stale-default"
+            }
+            """);
+        var backupPath = Path.Combine(_tempDir, "config.backup.json");
+        var backupJson = JsonSerializer.Serialize(new AppConfig
+        {
+            ConfigVersion = AppConfig.CurrentConfigVersion,
+            DefaultDownloadPath = expectedPath
+        }, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+        });
+        await File.WriteAllTextAsync(backupPath, backupJson);
+        var service = new ConfigService(_tempDir);
+        service.Config.DefaultDownloadPath = expectedPath;
+
+        Assert.True(await service.SaveAsync());
+
+        var preservedBackup = JsonSerializer.Deserialize<AppConfig>(
+            await File.ReadAllTextAsync(backupPath),
+            new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+            });
+        Assert.NotNull(preservedBackup);
+        Assert.Equal(expectedPath, preservedBackup!.DefaultDownloadPath);
+    }
+
+    [Fact]
+    public async Task ConcurrentSaveAsync_LeavesValidJsonAndNoTemporaryFiles()
+    {
+        var services = Enumerable.Range(0, 12)
+            .Select(index =>
+            {
+                var service = new ConfigService(_tempDir);
+                service.Config.DefaultDownloadPath = Path.Combine(_tempDir, $"downloads-{index}");
+                service.Config.MaxConcurrentDownloads = 1 + index % AppConfig.MaxConcurrentDownloadLimit;
+                return service;
+            })
+            .ToArray();
+
+        var results = await Task.WhenAll(services.Select(service => service.SaveAsync()));
+
+        Assert.All(results, Assert.True);
+        using var config = JsonDocument.Parse(
+            await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json")));
+        Assert.Equal(JsonValueKind.Object, config.RootElement.ValueKind);
+        Assert.Empty(Directory.GetFiles(_tempDir, "*.tmp", SearchOption.TopDirectoryOnly));
     }
 
     [Fact]

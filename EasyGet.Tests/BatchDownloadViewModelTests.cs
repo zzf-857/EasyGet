@@ -113,7 +113,7 @@ public class BatchDownloadViewModelTests
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
@@ -149,7 +149,7 @@ public class BatchDownloadViewModelTests
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
@@ -183,7 +183,7 @@ public class BatchDownloadViewModelTests
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
@@ -223,7 +223,7 @@ public class BatchDownloadViewModelTests
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
@@ -257,7 +257,7 @@ public class BatchDownloadViewModelTests
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var viewModel = new BatchDownloadViewModel(manager, configService, ytDlp);
@@ -293,7 +293,7 @@ public class BatchDownloadViewModelTests
         var dbPath = CreateTempDatabasePath();
         var outputDirectory = CreateTempOutputDirectory();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var startedProcesses = new List<ProcessStartInfo>();
@@ -330,7 +330,7 @@ public class BatchDownloadViewModelTests
         var dbPath = CreateTempDatabasePath();
         var outputDirectory = CreateTempOutputDirectory();
         using var history = new HistoryService(dbPath);
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, history, configService);
         var startedProcesses = new List<ProcessStartInfo>();

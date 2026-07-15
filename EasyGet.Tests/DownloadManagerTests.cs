@@ -924,7 +924,7 @@ public class DownloadManagerTests
     [Fact]
     public async Task ResumeAsync_CancelWhileWaitingForConcurrencyMarksTaskCancelled()
     {
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         configService.Config.MaxConcurrentDownloads = 1;
         using var historyService = new HistoryService();
         var manager = new DownloadManager(
@@ -1062,7 +1062,7 @@ public class DownloadManagerTests
 
     private static ConfigService CreateConfigService(string outputDir, bool enableDouyinSpecialEngine)
     {
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         configService.Config.DefaultDownloadPath = outputDir;
         configService.Config.AutoCategorizeByPlatform = true;
         configService.Config.EnableDouyinSpecialEngine = enableDouyinSpecialEngine;

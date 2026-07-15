@@ -2,6 +2,7 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using EasyGet.Models;
 using EasyGet.Services.Cookies;
@@ -64,13 +65,17 @@ public class ConfigService
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
         NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
     };
 
     private AppConfig _config = new();
     private readonly string _configDir;
     private readonly string _configFile;
+    private readonly string _backupFile;
+    private readonly string _lockFile;
     private readonly ISecretProtector _migrationProtector;
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
 
     public ConfigService()
         : this(DefaultConfigDir, new DpapiSecretProtector())
@@ -88,6 +93,8 @@ public class ConfigService
         ArgumentNullException.ThrowIfNull(migrationProtector);
         _configDir = configDir;
         _configFile = Path.Combine(_configDir, "config.json");
+        _backupFile = Path.Combine(_configDir, "config.backup.json");
+        _lockFile = Path.Combine(_configDir, ".config.lock");
         _migrationProtector = migrationProtector;
     }
 
@@ -102,61 +109,97 @@ public class ConfigService
     /// </summary>
     public async Task LoadAsync()
     {
+        await _saveGate.WaitAsync();
         try
         {
-            if (File.Exists(_configFile))
-            {
-                var json = await File.ReadAllTextAsync(_configFile);
-                _config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) ?? new AppConfig();
-            }
-        }
-        catch
-        {
-            _config = new AppConfig();
-        }
+            var primary = await TryReadConfigAsync(_configFile, CancellationToken.None);
+            var backup = await TryReadConfigAsync(_backupFile, CancellationToken.None);
+            var selected = SelectConfigCandidate(primary, backup);
+            _config = selected?.Config ?? new AppConfig();
 
-        NormalizeRuntimeConfig(_config);
+            NormalizeRuntimeConfig(_config);
 
-        if (string.IsNullOrWhiteSpace(_config.CookieContent))
-        {
-            try
+            if (string.IsNullOrWhiteSpace(_config.CookieContent))
             {
-                var quarantinedCookie = await new PlatformCookieVault(
-                        _configDir,
-                        _migrationProtector)
-                    .LoadAsync(
-                        LegacyUnscopedCookieStorageKey,
-                        CancellationToken.None);
-                if (!string.IsNullOrWhiteSpace(quarantinedCookie))
+                try
                 {
-                    _config.CookieContent = quarantinedCookie;
-                    _config.LegacyCookiePlatform = "";
+                    var quarantinedCookie = await new PlatformCookieVault(
+                            _configDir,
+                            _migrationProtector)
+                        .LoadAsync(
+                            LegacyUnscopedCookieStorageKey,
+                            CancellationToken.None);
+                    if (!string.IsNullOrWhiteSpace(quarantinedCookie))
+                    {
+                        _config.CookieContent = quarantinedCookie;
+                        _config.LegacyCookiePlatform = "";
+                    }
+                }
+                catch (Exception ex) when (ex is IOException
+                                           or UnauthorizedAccessException
+                                           or CryptographicException)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[ConfigService] Encrypted legacy Cookie restore failed: {ex.Message}");
                 }
             }
-            catch (Exception ex) when (ex is IOException
-                                       or UnauthorizedAccessException
-                                       or CryptographicException)
+
+            TryEnsureDownloadDirectory(_config.DefaultDownloadPath);
+
+            var recoveredFromBackup = backup is not null
+                                      && ReferenceEquals(selected, backup)
+                                      && !ReferenceEquals(primary, backup);
+            var shouldUpgradePrimary = ReferenceEquals(selected, primary)
+                                       && primary is not null
+                                       && (!primary.HasExplicitVersion
+                                           || primary.ExplicitVersion < AppConfig.CurrentConfigVersion)
+                                       && string.IsNullOrWhiteSpace(_config.CookieContent);
+            if ((recoveredFromBackup || shouldUpgradePrimary)
+                && string.IsNullOrWhiteSpace(_config.CookieContent))
             {
-                System.Diagnostics.Debug.WriteLine(
-                    $"[ConfigService] Encrypted legacy Cookie restore failed: {ex.Message}");
+                try
+                {
+                    Directory.CreateDirectory(_configDir);
+                    await using var configLock = await AcquireConfigLockAsync(CancellationToken.None);
+                    await PersistConfigFilesCoreAsync(
+                        createBackupFromPrimary: shouldUpgradePrimary,
+                        ensureBackup: false,
+                        CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[ConfigService] Config recovery rewrite failed: {ex.Message}");
+                }
             }
         }
-
-        // 确保下载目录存在
-        if (!Directory.Exists(_config.DefaultDownloadPath))
+        catch (Exception ex)
         {
-            Directory.CreateDirectory(_config.DefaultDownloadPath);
+            System.Diagnostics.Debug.WriteLine($"[ConfigService] Load failed: {ex.Message}");
+            _config = new AppConfig();
+            NormalizeRuntimeConfig(_config);
+            TryEnsureDownloadDirectory(_config.DefaultDownloadPath);
+        }
+        finally
+        {
+            _saveGate.Release();
         }
     }
 
     /// <summary>
     /// 保存配置到文件
     /// </summary>
-    public async Task SaveAsync()
+    public async Task<bool> SaveAsync(CancellationToken cancellationToken = default)
     {
+        await _saveGate.WaitAsync(cancellationToken);
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
             NormalizeRuntimeConfig(_config);
+            Directory.CreateDirectory(_configDir);
+            await using var configLock = await AcquireConfigLockAsync(cancellationToken);
+
+            var migrationPersistedConfig = false;
             if (!string.IsNullOrWhiteSpace(_config.CookieContent))
             {
                 try
@@ -165,17 +208,18 @@ public class ConfigService
                     if (CookieFileSerializer.HasExplicitDomainRows(_config.CookieContent)
                         || !string.IsNullOrWhiteSpace(_config.LegacyCookiePlatform))
                     {
-                        await CompleteLegacyCookieMigrationAsync(
+                        await CompleteLegacyCookieMigrationCoreAsync(
                             _config.LegacyCookiePlatform,
                             vault,
-                            CancellationToken.None);
+                            cancellationToken);
+                        migrationPersistedConfig = true;
                     }
                     else
                     {
                         await vault.SaveAsync(
                             LegacyUnscopedCookieStorageKey,
                             _config.CookieContent,
-                            CancellationToken.None);
+                            cancellationToken);
                         _config.CookieContent = "";
                         _config.LegacyCookiePlatform = "";
                         _config.ConfigVersion = AppConfig.CurrentConfigVersion;
@@ -185,18 +229,28 @@ public class ConfigService
                 {
                     System.Diagnostics.Debug.WriteLine(
                         $"[ConfigService] Cookie migration during save failed: {ex.Message}");
-                    return;
+                    return false;
                 }
             }
 
-            Directory.CreateDirectory(_configDir);
-            BackupExistingConfig(_configFile);
-            var json = SerializeWithoutPlaintextCookie(_config);
-            await File.WriteAllTextAsync(_configFile, json);
+            if (!migrationPersistedConfig)
+            {
+                await PersistConfigFilesCoreAsync(
+                    createBackupFromPrimary: true,
+                    ensureBackup: false,
+                    cancellationToken);
+            }
+
+            return true;
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[ConfigService] Save failed: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            _saveGate.Release();
         }
     }
 
@@ -206,11 +260,39 @@ public class ConfigService
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(vault);
+        await _saveGate.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(_config.CookieContent))
+                return;
+
+            Directory.CreateDirectory(_configDir);
+            await using var configLock = await AcquireConfigLockAsync(cancellationToken);
+            await CompleteLegacyCookieMigrationCoreAsync(
+                platformId,
+                vault,
+                cancellationToken);
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
+    }
+
+    private async Task CompleteLegacyCookieMigrationCoreAsync(
+        string platformId,
+        PlatformCookieVault vault,
+        CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(_config.CookieContent))
             return;
 
         var originalContent = _config.CookieContent;
+        var originalPlatform = _config.LegacyCookiePlatform;
+        var originalVersion = _config.ConfigVersion;
+        var originalJson = JsonSerializer.Serialize(_config, JsonOptions);
         var scopedContents = new List<(string StorageKey, string Content)>();
         if (CookieFileSerializer.HasExplicitDomainRows(originalContent))
         {
@@ -241,10 +323,7 @@ public class ConfigService
         else
         {
             CookieStorageKey.ValidatePlatformId(platformId);
-            if (!string.Equals(
-                    _config.LegacyCookiePlatform,
-                    platformId,
-                    StringComparison.Ordinal))
+            if (!string.Equals(originalPlatform, platformId, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     "旧版 Cookie 尚未明确绑定到当前平台，无法安全迁移。");
@@ -253,28 +332,6 @@ public class ConfigService
             scopedContents.Add((platformId, originalContent));
         }
 
-        Directory.CreateDirectory(_configDir);
-        var originalJson = JsonSerializer.Serialize(_config, JsonOptions);
-        var originalPlatform = _config.LegacyCookiePlatform;
-        var originalVersion = _config.ConfigVersion;
-        string sanitizedJson;
-        try
-        {
-            _config.CookieContent = "";
-            _config.LegacyCookiePlatform = "";
-            _config.ConfigVersion = AppConfig.CurrentConfigVersion;
-            sanitizedJson = JsonSerializer.Serialize(_config, JsonOptions);
-        }
-        finally
-        {
-            _config.CookieContent = originalContent;
-            _config.LegacyCookiePlatform = originalPlatform;
-            _config.ConfigVersion = originalVersion;
-        }
-
-        string? encryptedTemporaryPath = null;
-        string? backupTemporaryPath = null;
-        string? configTemporaryPath = null;
         byte[]? plaintext = null;
         byte[]? encrypted = null;
         try
@@ -289,47 +346,19 @@ public class ConfigService
 
             plaintext = Encoding.UTF8.GetBytes(originalJson);
             encrypted = _migrationProtector.Protect(plaintext);
-            encryptedTemporaryPath = Path.Combine(
-                _configDir,
-                $"config.cookie-migration.{Guid.NewGuid():N}.tmp");
-            await File.WriteAllBytesAsync(
-                encryptedTemporaryPath,
-                encrypted,
-                cancellationToken);
-            CookieFilePermissions.RestrictToCurrentUser(encryptedTemporaryPath);
-
-            backupTemporaryPath = Path.Combine(
-                _configDir,
-                $"config.backup.{Guid.NewGuid():N}.tmp");
-            configTemporaryPath = Path.Combine(
-                _configDir,
-                $"config.{Guid.NewGuid():N}.tmp");
-            await File.WriteAllTextAsync(
-                backupTemporaryPath,
-                sanitizedJson,
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                cancellationToken);
-            await File.WriteAllTextAsync(
-                configTemporaryPath,
-                sanitizedJson,
-                new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-                cancellationToken);
-
-            File.Move(
-                encryptedTemporaryPath,
+            await WriteBytesAtomicallyAsync(
                 Path.Combine(_configDir, "config.cookie-migration.backup.bin"),
-                overwrite: true);
-            encryptedTemporaryPath = null;
-            File.Move(
-                backupTemporaryPath,
-                Path.Combine(_configDir, "config.backup.json"),
-                overwrite: true);
-            backupTemporaryPath = null;
-            File.Move(configTemporaryPath, _configFile, overwrite: true);
-            configTemporaryPath = null;
+                encrypted,
+                restrictToCurrentUser: true,
+                cancellationToken);
+
             _config.CookieContent = "";
             _config.LegacyCookiePlatform = "";
             _config.ConfigVersion = AppConfig.CurrentConfigVersion;
+            await PersistConfigFilesCoreAsync(
+                createBackupFromPrimary: true,
+                ensureBackup: true,
+                cancellationToken);
             try
             {
                 await vault.DeleteAsync(
@@ -344,11 +373,15 @@ public class ConfigService
                     $"[ConfigService] Legacy Cookie quarantine cleanup failed: {ex.Message}");
             }
         }
+        catch
+        {
+            _config.CookieContent = originalContent;
+            _config.LegacyCookiePlatform = originalPlatform;
+            _config.ConfigVersion = originalVersion;
+            throw;
+        }
         finally
         {
-            TryDeleteMigrationFile(encryptedTemporaryPath);
-            TryDeleteMigrationFile(backupTemporaryPath);
-            TryDeleteMigrationFile(configTemporaryPath);
             if (plaintext is not null)
                 CryptographicOperations.ZeroMemory(plaintext);
             if (encrypted is not null)
@@ -366,56 +399,211 @@ public class ConfigService
         return dir;
     }
 
-    private static void BackupExistingConfig(string configFile)
+    private static string SerializeWithoutPlaintextCookie(AppConfig config)
     {
-        if (!File.Exists(configFile))
-            return;
+        var root = JsonSerializer.SerializeToNode(config, JsonOptions) as JsonObject
+                   ?? throw new JsonException("The application config could not be serialized.");
+        root["cookieContent"] = "";
+        root["legacyCookiePlatform"] = "";
+        return root.ToJsonString(JsonOptions);
+    }
 
-        var directory = Path.GetDirectoryName(configFile);
-        if (string.IsNullOrWhiteSpace(directory))
-            return;
+    private async Task PersistConfigFilesCoreAsync(
+        bool createBackupFromPrimary,
+        bool ensureBackup,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var configJson = SerializeWithoutPlaintextCookie(_config);
+        ValidateSerializedConfig(configJson);
 
-        var backupFile = Path.Combine(directory, "config.backup.json");
+        var primary = createBackupFromPrimary
+            ? await TryReadConfigAsync(_configFile, cancellationToken)
+            : null;
+        if (primary is not null)
+        {
+            var existingBackup = await TryReadConfigAsync(_backupFile, cancellationToken);
+            if (existingBackup is null
+                || ReferenceEquals(
+                    SelectConfigCandidate(primary, existingBackup),
+                    primary))
+            {
+                var backupJson = SerializeWithoutPlaintextCookie(primary.Config);
+                ValidateSerializedConfig(backupJson);
+                await WriteTextAtomicallyAsync(_backupFile, backupJson, cancellationToken);
+            }
+        }
+        else if (ensureBackup
+                 && await TryReadConfigAsync(_backupFile, cancellationToken) is null)
+        {
+            await WriteTextAtomicallyAsync(_backupFile, configJson, cancellationToken);
+        }
+
+        await WriteTextAtomicallyAsync(_configFile, configJson, cancellationToken);
+    }
+
+    private static void ValidateSerializedConfig(string json)
+    {
+        if (JsonSerializer.Deserialize<AppConfig>(json, JsonOptions) is null)
+            throw new JsonException("The serialized application config is empty.");
+    }
+
+    private static async Task<ConfigCandidate?> TryReadConfigAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
         try
         {
-            var existingJson = File.ReadAllText(configFile);
-            var existingConfig = JsonSerializer.Deserialize<AppConfig>(existingJson, JsonOptions);
-            var sanitizedJson = existingConfig is null
-                ? "{}"
-                : SerializeWithoutPlaintextCookie(existingConfig);
-            File.WriteAllText(backupFile, sanitizedJson);
+            if (!File.Exists(path))
+                return null;
+
+            var json = await File.ReadAllTextAsync(path, cancellationToken);
+            var config = JsonSerializer.Deserialize<AppConfig>(json, JsonOptions);
+            if (config is null)
+                return null;
+
+            var hasExplicitVersion = false;
+            var explicitVersion = 0;
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    if (!string.Equals(
+                            property.Name,
+                            "configVersion",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    hasExplicitVersion = true;
+                    if (property.Value.ValueKind == JsonValueKind.Number)
+                        property.Value.TryGetInt32(out explicitVersion);
+                    else if (property.Value.ValueKind == JsonValueKind.String)
+                        int.TryParse(property.Value.GetString(), out explicitVersion);
+                    break;
+                }
+            }
+
+            return new ConfigCandidate(config, hasExplicitVersion, explicitVersion);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex) when (ex is IOException
                                    or UnauthorizedAccessException
+                                   or System.Security.SecurityException
                                    or JsonException
                                    or NotSupportedException)
         {
-            File.WriteAllText(backupFile, "{}");
+            System.Diagnostics.Debug.WriteLine(
+                $"[ConfigService] Ignoring unreadable config '{Path.GetFileName(path)}': {ex.Message}");
+            return null;
         }
     }
 
-    private static string SerializeWithoutPlaintextCookie(AppConfig config)
+    private static ConfigCandidate? SelectConfigCandidate(
+        ConfigCandidate? primary,
+        ConfigCandidate? backup)
     {
-        var originalContent = config.CookieContent;
-        var originalPlatform = config.LegacyCookiePlatform;
+        if (primary is null)
+            return backup;
+        if (backup is null)
+            return primary;
+        if (backup.HasExplicitVersion
+            && (!primary.HasExplicitVersion
+                || backup.ExplicitVersion > primary.ExplicitVersion))
+        {
+            return backup;
+        }
+
+        return primary;
+    }
+
+    private async Task<FileStream> AcquireConfigLockAsync(
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 100;
+        Directory.CreateDirectory(_configDir);
+        IOException? lastError = null;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                return new FileStream(
+                    _lockFile,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 1,
+                    FileOptions.None);
+            }
+            catch (IOException ex)
+            {
+                lastError = ex;
+                if (attempt + 1 < maxAttempts)
+                    await Task.Delay(50, cancellationToken);
+            }
+        }
+
+        throw new IOException("Timed out while waiting to save the application config.", lastError);
+    }
+
+    private static Task WriteTextAtomicallyAsync(
+        string destinationPath,
+        string content,
+        CancellationToken cancellationToken)
+        => WriteBytesAtomicallyAsync(
+            destinationPath,
+            new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(content),
+            restrictToCurrentUser: false,
+            cancellationToken);
+
+    private static async Task WriteBytesAtomicallyAsync(
+        string destinationPath,
+        byte[] content,
+        bool restrictToCurrentUser,
+        CancellationToken cancellationToken)
+    {
+        var directory = Path.GetDirectoryName(destinationPath)
+                        ?? throw new ArgumentException(
+                            "A destination directory is required.",
+                            nameof(destinationPath));
+        Directory.CreateDirectory(directory);
+        var temporaryPath = Path.Combine(
+            directory,
+            $".{Path.GetFileName(destinationPath)}.{Guid.NewGuid():N}.tmp");
+
         try
         {
-            config.CookieContent = "";
-            config.LegacyCookiePlatform = "";
-            return JsonSerializer.Serialize(config, JsonOptions);
+            await using (var stream = new FileStream(
+                             temporaryPath,
+                             FileMode.CreateNew,
+                             FileAccess.Write,
+                             FileShare.None,
+                             bufferSize: 4096,
+                             FileOptions.Asynchronous | FileOptions.WriteThrough))
+            {
+                await stream.WriteAsync(content, cancellationToken);
+                await stream.FlushAsync(cancellationToken);
+                stream.Flush(flushToDisk: true);
+            }
+
+            if (restrictToCurrentUser)
+                CookieFilePermissions.RestrictToCurrentUser(temporaryPath);
+            File.Move(temporaryPath, destinationPath, overwrite: true);
         }
         finally
         {
-            config.CookieContent = originalContent;
-            config.LegacyCookiePlatform = originalPlatform;
+            TryDeleteTemporaryFile(temporaryPath);
         }
     }
 
-    private static void TryDeleteMigrationFile(string? path)
+    private static void TryDeleteTemporaryFile(string path)
     {
-        if (string.IsNullOrWhiteSpace(path))
-            return;
-
         try
         {
             File.Delete(path);
@@ -425,6 +613,33 @@ public class ConfigService
                                    or System.Security.SecurityException)
         {
         }
+    }
+
+    private static void TryEnsureDownloadDirectory(string path)
+    {
+        try
+        {
+            Directory.CreateDirectory(path);
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or System.Security.SecurityException
+                                   or ArgumentException
+                                   or NotSupportedException)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[ConfigService] Download directory is currently unavailable: {ex.Message}");
+        }
+    }
+
+    private sealed class ConfigCandidate(
+        AppConfig config,
+        bool hasExplicitVersion,
+        int explicitVersion)
+    {
+        public AppConfig Config { get; } = config;
+        public bool HasExplicitVersion { get; } = hasExplicitVersion;
+        public int ExplicitVersion { get; } = explicitVersion;
     }
 
     internal static void NormalizeRuntimeConfig(AppConfig config)

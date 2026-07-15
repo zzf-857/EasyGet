@@ -33,7 +33,7 @@ public class UiTruthfulnessViewModelTests
     [Fact]
     public void DownloadViewModelSummariesComeFromRuntimeConfig()
     {
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         configService.Config.UseProxy = false;
         configService.Config.ProxyAddress = "socks5://127.0.0.1:7890";
         configService.Config.ConcurrentFragments = 8;
@@ -1811,7 +1811,7 @@ public class UiTruthfulnessViewModelTests
 
     private static BatchContext CreateBatchContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
-        var config = new ConfigService();
+        var config = new TestConfigService();
         var environment = new EnvironmentService();
         var historyPath = Path.Combine(
             Path.GetTempPath(),

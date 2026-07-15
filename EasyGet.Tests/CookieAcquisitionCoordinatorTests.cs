@@ -7,7 +7,7 @@ namespace EasyGet.Tests;
 public sealed class CookieAcquisitionCoordinatorTests
 {
     [Fact]
-    public async Task BuildAttemptsAsync_UsesAnonymousThenScopedManualBrowsersAndManagedSession()
+    public async Task BuildAttemptsAsync_UsesAnonymousThenScopedManualAndBrowsersWithoutOpeningManagedLogin()
     {
         await using var fixture = await CoordinatorFixture.CreateAsync(
             platformId: "twitter",
@@ -37,10 +37,43 @@ public sealed class CookieAcquisitionCoordinatorTests
                 CookieSourceKind.Anonymous,
                 CookieSourceKind.LegacyScoped,
                 CookieSourceKind.Browser,
-                CookieSourceKind.Browser,
-                CookieSourceKind.ManagedSession
+                CookieSourceKind.Browser
             ],
             attempts.Select(attempt => attempt.Source));
+        Assert.DoesNotContain(
+            attempts,
+            attempt => attempt.Source == CookieSourceKind.ManagedSession);
+    }
+
+    [Fact]
+    public async Task BuildAttemptsAsync_PrioritizesDefaultBrowserBeforeMoreRecentlyActiveBrowser()
+    {
+        var defaultBrowser = new BrowserProfile(
+            "chrome",
+            "Chrome",
+            "Default",
+            @"C:\Profiles\DefaultBrowser",
+            DateTime.UtcNow.AddDays(-1),
+            IsDefaultBrowser: true);
+        var recentOtherBrowser = new BrowserProfile(
+            "firefox",
+            "Firefox",
+            "default-release",
+            @"C:\Profiles\RecentOtherBrowser",
+            DateTime.UtcNow,
+            IsDefaultBrowser: false);
+        await using var fixture = await CoordinatorFixture.CreateAsync(
+            profiles: [recentOtherBrowser, defaultBrowser]);
+
+        var attempts = await fixture.Coordinator.BuildAttemptsAsync(
+            "https://youtube.com/watch?v=1",
+            CancellationToken.None);
+
+        var browsers = attempts
+            .Where(attempt => attempt.Source == CookieSourceKind.Browser)
+            .Select(attempt => attempt.BrowserProfile!)
+            .ToArray();
+        Assert.Equal([defaultBrowser, recentOtherBrowser], browsers);
     }
 
     [Fact]
@@ -578,6 +611,10 @@ public sealed class CookieAcquisitionCoordinatorTests
             TimeSpan.Zero);
         await using var fixture = await CoordinatorFixture.CreateAsync(managedLogin: provider);
         var platform = MediaPlatformResolver.Resolve("https://x.com/user/status/1");
+        await fixture.Vault.SaveAsync(
+            platform.StorageKey,
+            "auth_token=encrypted-cookie",
+            CancellationToken.None);
         var attempt = new CookieAttempt(CookieSourceKind.ManagedSession, platform);
         await using (var first = await fixture.Coordinator.AcquireArgumentsAsync(
                          attempt,
@@ -597,6 +634,9 @@ public sealed class CookieAcquisitionCoordinatorTests
 
         Assert.Equal(2, provider.CallCount);
         Assert.Equal(["twitter"], provider.ClearedPlatformIds);
+        Assert.False(await fixture.Vault.ExistsAsync(
+            platform.StorageKey,
+            CancellationToken.None));
     }
 
     [Fact]

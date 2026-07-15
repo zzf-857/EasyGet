@@ -123,7 +123,7 @@ public class XiaohongshuImageDownloadServiceTests
             Url = server.NoteUrl,
             OutputDirectory = outputDirectory
         };
-        var service = new XiaohongshuImageDownloadService(new ConfigService());
+        var service = new XiaohongshuImageDownloadService(new TestConfigService());
 
         try
         {
@@ -159,7 +159,7 @@ public class XiaohongshuImageDownloadServiceTests
     [Fact(Skip = "Live external-site test. Run manually when validating Xiaohongshu network behavior.")]
     public async Task LiveDownloadTest()
     {
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         await configService.LoadAsync();
         
         var service = new XiaohongshuImageDownloadService(configService);

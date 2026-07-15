@@ -76,7 +76,7 @@ public class NotificationTests
     [Fact]
     public void MainViewModel_LimitsStackToThreeToasts()
     {
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var dbPath = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(),
             $"easyget-notif-vm-{Guid.NewGuid():N}.db");

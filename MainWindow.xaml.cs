@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -14,6 +15,8 @@ public partial class MainWindow : Window
 
     private readonly MainViewModel _viewModel;
     private readonly ConfigService _configService;
+    private bool _closeInProgress;
+    private bool _closeCommitted;
 
     public MainWindow(MainViewModel viewModel, ConfigService configService)
     {
@@ -30,14 +33,52 @@ public partial class MainWindow : Window
             RestoreWindowState();
         };
 
-        Closing += async (_, _) =>
-        {
-            SaveWindowState();
-            await _configService.SaveAsync();
-        };
+        Closing += MainWindow_Closing;
 
         Activated += MainWindow_Activated;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+    }
+
+    private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+    {
+        if (_closeCommitted)
+            return;
+
+        e.Cancel = true;
+        if (_closeInProgress)
+            return;
+
+        _closeInProgress = true;
+        try
+        {
+            SaveWindowState();
+            var settingsSaved = await _viewModel.SettingsVM.FlushPendingSaveAsync();
+            var configSaved = await _configService.SaveAsync();
+            if (!settingsSaved || !configSaved)
+            {
+                System.Windows.MessageBox.Show(
+                    this,
+                    "设置保存失败，EasyGet 暂未退出。请检查配置目录权限后重试。",
+                    "EasyGet",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                _closeInProgress = false;
+                return;
+            }
+
+            _closeCommitted = true;
+            Close();
+        }
+        catch (Exception)
+        {
+            _closeInProgress = false;
+            System.Windows.MessageBox.Show(
+                this,
+                "设置保存时发生异常，EasyGet 暂未退出，请重试。",
+                "EasyGet",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)

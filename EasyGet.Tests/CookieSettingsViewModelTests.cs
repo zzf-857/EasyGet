@@ -85,10 +85,84 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
-    public async Task LoginPlatformAsync_RecordsManagedSessionSuccessAndUpdatesStatus()
+    public async Task LoginPlatformAsync_OpensDefaultBrowserWithoutManagedSessionOrFakeSuccess()
     {
         using var root = new TestDirectory();
         var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var health = new RecordingCookieHealthStore();
+        var managed = new RecordingManagedLoginSessionService(
+            [new BrowserCookie(".youtube.com", "/", "SID", "value", true, 0)]);
+        var browserLauncher = new RecordingDefaultBrowserLauncher();
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: health,
+            managedLogin: managed,
+            defaultBrowserLauncher: browserLauncher);
+        await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+        var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
+
+        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+
+        Assert.Equal(0, managed.GetCookiesCallCount);
+        Assert.Empty(health.Successes);
+        Assert.Equal(
+            MediaPlatformResolver.KnownPlatforms.Single(platform => platform.Id == "youtube").LoginUri,
+            Assert.Single(browserLauncher.OpenedUris));
+        Assert.False(item.IsAvailable);
+        Assert.Contains("系统默认浏览器", item.StatusText, StringComparison.Ordinal);
+        Assert.Contains("重试下载", item.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoginPlatformAsync_DoesNotExposeBrowserLaunchExceptionDetails()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var managed = new RecordingManagedLoginSessionService([]);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: managed,
+            defaultBrowserLauncher: new ThrowingDefaultBrowserLauncher(
+                @"Cannot launch C:\Users\me\SecretBrowser SID=secret-value"));
+        await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+        var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
+
+        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+
+        Assert.Equal(0, managed.GetCookiesCallCount);
+        Assert.Contains("无法打开系统默认浏览器", item.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("SecretBrowser", item.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-value", item.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CompatibleLoginPlatformAsync_PersistsScopedCookieAndRecordsSuccess()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
         using var history = new HistoryService(root.Path("history.db"));
         var environment = new EnvironmentService();
         var manager = new DownloadManager(
@@ -105,22 +179,27 @@ public sealed class CookieSettingsViewModelTests
             new TelegramDownloadService(config),
             cookieProfiles: new StaticBrowserProfiles([]),
             cookieHealthStore: health,
-            managedLogin: managed);
+            managedLogin: managed,
+            cookieVault: vault);
         await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
         var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
 
-        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+        await viewModel.CompatibleLoginPlatformCommand.ExecuteAsync(item);
 
         Assert.Equal(1, managed.GetCookiesCallCount);
         var success = Assert.Single(health.Successes);
         Assert.Equal("youtube", success.PlatformId);
         Assert.Equal(CookieSourceKind.ManagedSession, success.Source);
+        Assert.Contains(
+            "SID\tvalue",
+            await vault.LoadAsync("youtube", CancellationToken.None),
+            StringComparison.Ordinal);
         Assert.True(item.IsAvailable);
-        Assert.Contains("登录成功", item.StatusText, StringComparison.Ordinal);
+        Assert.Contains("兼容登录成功", item.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task LoginPlatformAsync_EmptyManagedSessionInvalidatesStaleSuccess()
+    public async Task CompatibleLoginPlatformAsync_EmptyManagedSessionInvalidatesStaleSuccess()
     {
         using var root = new TestDirectory();
         var config = new ConfigService(root.Path("config"));
@@ -142,7 +221,7 @@ public sealed class CookieSettingsViewModelTests
         await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
         var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
 
-        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+        await viewModel.CompatibleLoginPlatformCommand.ExecuteAsync(item);
 
         Assert.Empty(health.Successes);
         var failure = Assert.Single(health.Failures);
@@ -154,7 +233,7 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
-    public async Task LoginPlatformAsync_DoesNotExposeManagedLoginExceptionDetails()
+    public async Task CompatibleLoginPlatformAsync_DoesNotExposeManagedLoginExceptionDetails()
     {
         using var root = new TestDirectory();
         var config = new ConfigService(root.Path("config"));
@@ -176,15 +255,15 @@ public sealed class CookieSettingsViewModelTests
         await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
         var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
 
-        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+        await viewModel.CompatibleLoginPlatformCommand.ExecuteAsync(item);
 
-        Assert.Contains("登录失败", item.StatusText, StringComparison.Ordinal);
+        Assert.Contains("兼容登录失败", item.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("Secret Session", item.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("secret-value", item.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task LoginPlatformAsync_AllowsDifferentPlatformsToOperateConcurrently()
+    public async Task CompatibleLoginPlatformAsync_AllowsDifferentPlatformsToOperateConcurrently()
     {
         using var root = new TestDirectory();
         var config = new ConfigService(root.Path("config"));
@@ -207,9 +286,9 @@ public sealed class CookieSettingsViewModelTests
         var youtube = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
         var twitter = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "twitter");
 
-        var first = viewModel.LoginPlatformCommand.ExecuteAsync(youtube);
+        var first = viewModel.CompatibleLoginPlatformCommand.ExecuteAsync(youtube);
         await managed.FirstCallStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
-        var second = viewModel.LoginPlatformCommand.ExecuteAsync(twitter);
+        var second = viewModel.CompatibleLoginPlatformCommand.ExecuteAsync(twitter);
         var concurrentResult = await Task.WhenAny(
             managed.TwoCallsStarted.Task,
             Task.Delay(TimeSpan.FromSeconds(1)));
@@ -585,8 +664,7 @@ public sealed class CookieSettingsViewModelTests
         viewModel.LegacyCookiePlatform = "twitter";
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
         viewModel.SmartCookieEnabled = true;
-        if (viewModel.SaveSettingsCommand.ExecutionTask is { } autoSave)
-            await autoSave;
+        Assert.True(await viewModel.FlushPendingSaveAsync());
 
         Assert.True(config.Config.SmartCookieEnabled);
         Assert.Equal("", config.Config.CookieContent);
@@ -606,6 +684,7 @@ public sealed class CookieSettingsViewModelTests
         Assert.Contains("SmartCookieEnabled", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCookieStatusCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LoginPlatformCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("CompatibleLoginPlatformCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("ClearPlatformSessionCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("ClearAllManagedSessionsCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LegacyCookiePlatform", xaml, StringComparison.Ordinal);
@@ -613,6 +692,8 @@ public sealed class CookieSettingsViewModelTests
         Assert.Contains("加密保存手动 Cookie", xaml, StringComparison.Ordinal);
         Assert.Contains("Expander", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name", xaml, StringComparison.Ordinal);
+        Assert.Contains("系统默认浏览器", xaml, StringComparison.Ordinal);
+        Assert.DoesNotContain("最后才显示一次平台登录窗口", xaml, StringComparison.Ordinal);
     }
 
     private sealed class StaticBrowserProfiles(IReadOnlyList<BrowserProfile> profiles)
@@ -625,6 +706,25 @@ public sealed class CookieSettingsViewModelTests
         : IBrowserProfileDiscoveryService
     {
         public IReadOnlyList<BrowserProfile> Discover() => throw new IOException(message);
+    }
+
+    private sealed class RecordingDefaultBrowserLauncher : IDefaultBrowserLauncher
+    {
+        public List<Uri> OpenedUris { get; } = [];
+
+        public Task OpenAsync(Uri uri, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            OpenedUris.Add(uri);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingDefaultBrowserLauncher(string message)
+        : IDefaultBrowserLauncher
+    {
+        public Task OpenAsync(Uri uri, CancellationToken cancellationToken = default)
+            => Task.FromException(new IOException(message));
     }
 
     private sealed class StaticCookieHealthStore(IReadOnlyList<CookieHealthRecord> records)
@@ -680,7 +780,8 @@ public sealed class CookieSettingsViewModelTests
         public List<(
             string PlatformId,
             CookieSourceKind Source,
-            CookieFailureCategory Category)> Failures { get; } = [];
+            CookieFailureCategory Category)> Failures
+        { get; } = [];
         public List<string> ClearedPlatformIds { get; } = [];
 
         public IReadOnlyList<CookieHealthRecord> Snapshot() => [];

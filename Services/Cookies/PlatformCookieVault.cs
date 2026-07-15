@@ -124,7 +124,14 @@ public sealed class PlatformCookieVault
     {
         var path = GetPath(platformId);
         cancellationToken.ThrowIfCancellationRequested();
-        File.Delete(path);
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (DirectoryNotFoundException)
+        {
+        }
         return Task.CompletedTask;
     }
 

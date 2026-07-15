@@ -12,7 +12,7 @@ public class TaskbarProgressTests
     [Fact]
     public void TaskbarProgressFollowsLifecycleStates()
     {
-        var config = new ConfigService();
+        var config = new TestConfigService();
         var environment = new EnvironmentService();
         var historyPath = Path.Combine(
             Path.GetTempPath(),

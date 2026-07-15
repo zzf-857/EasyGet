@@ -7,6 +7,17 @@ namespace EasyGet.Tests;
 
 public class SettingsViewModelTests
 {
+    [Fact]
+    public void MainWindow_CloseFlowWaitsForPendingSettingsAndConfigSave()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath("MainWindow.xaml.cs"));
+
+        Assert.Contains("e.Cancel = true", source, StringComparison.Ordinal);
+        Assert.Contains("FlushPendingSaveAsync", source, StringComparison.Ordinal);
+        Assert.Contains("await _configService.SaveAsync()", source, StringComparison.Ordinal);
+        Assert.Contains("_closeCommitted = true", source, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("", true, "检测中")]
     [InlineData("正在安装 yt-dlp...", true, "准备安装")]
@@ -72,6 +83,44 @@ public class SettingsViewModelTests
         Assert.Equal(100, viewModel.AppUpdateProgress);
         Assert.Contains("已下载", viewModel.AppUpdateStatusMessage);
         Assert.True(viewModel.CanInstallAppUpdate);
+    }
+
+    [Fact]
+    public async Task InstallAppUpdateCommand_FlushesLatestSettingsBeforeLaunchingInstaller()
+    {
+        var config = CreateTempConfigService();
+        string? pathObservedAtLaunch = null;
+        var service = new FakeAppUpdateService
+        {
+            NextUpdate = new AppUpdateInfo
+            {
+                CurrentVersion = "1.0.0",
+                LatestVersion = "1.1.0",
+                IsUpdateAvailable = true,
+                InstallerFileName = "EasyGet-Setup-v1.1.0.exe",
+                InstallerDownloadUrl = new Uri("https://example.com/EasyGet-Setup-v1.1.0.exe")
+            },
+            DownloadedPath = @"C:\Temp\EasyGet-Setup-v1.1.0.exe",
+            LaunchInstallerHandler = _ =>
+            {
+                var json = File.ReadAllText(Path.Combine(config.ConfigDirectory, "config.json"));
+                using var document = System.Text.Json.JsonDocument.Parse(json);
+                pathObservedAtLaunch = document.RootElement
+                    .GetProperty("defaultDownloadPath")
+                    .GetString();
+                return true;
+            }
+        };
+        var viewModel = CreateViewModel(config, service);
+        await viewModel.CheckAppUpdateCommand.ExecuteAsync(null);
+        await viewModel.DownloadAppUpdateCommand.ExecuteAsync(null);
+        var expectedPath = Path.Combine(config.ConfigDirectory, "updated-downloads");
+        viewModel.DefaultDownloadPath = expectedPath;
+
+        await viewModel.InstallAppUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(expectedPath, pathObservedAtLaunch);
+        Assert.Contains("安装程序已启动", viewModel.AppUpdateStatusMessage, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -254,6 +303,24 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public async Task RapidDownloadPathChanges_FlushPersistsLatestPathAcrossReload()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var firstPath = Path.Combine(config.ConfigDirectory, "first-download-path");
+        var expectedPath = Path.Combine(config.ConfigDirectory, "latest-download-path");
+
+        viewModel.DefaultDownloadPath = firstPath;
+        viewModel.DefaultDownloadPath = expectedPath;
+
+        Assert.True(await viewModel.FlushPendingSaveAsync());
+        var reloaded = new ConfigService(config.ConfigDirectory);
+        await reloaded.LoadAsync();
+        Assert.Equal(expectedPath, reloaded.Config.DefaultDownloadPath);
+        Assert.Equal("设置已保存", viewModel.SettingsSaveStatusMessage);
+    }
+
+    [Fact]
     public async Task SaveSettingsCommand_PersistsDouyinTemplatesAndSyncsNormalizedValues()
     {
         var config = CreateTempConfigService();
@@ -412,23 +479,18 @@ public class SettingsViewModelTests
     }
 
     [Fact]
-    public async Task DouyinLiveRecordingOptionsChange_AutoSavesSettings()
+    public async Task RapidSettingChanges_FlushPendingSavePersistsLatestValues()
     {
         var config = CreateTempConfigService();
         var viewModel = CreateViewModel(config, new FakeAppUpdateService());
-        var saveCount = 0;
         var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        viewModel.SettingsSaved += () =>
-        {
-            saveCount++;
-            if (saveCount >= 3)
-                saved.TrySetResult();
-        };
+        viewModel.SettingsSaved += () => saved.TrySetResult();
 
         SetViewModelInt(viewModel, "DouyinLiveMaxDurationSeconds", 1800);
         SetViewModelInt(viewModel, "DouyinLiveChunkSize", 131072);
         SetViewModelInt(viewModel, "DouyinLiveIdleTimeoutSeconds", 45);
 
+        Assert.True(await viewModel.FlushPendingSaveAsync());
         var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
         Assert.Same(saved.Task, completed);
         AssertAppConfigInt(config.Config, "DouyinLiveMaxDurationSeconds", 1800);
@@ -445,7 +507,7 @@ public class SettingsViewModelTests
                 "抖音 sidecar 可用 · 已检查 3 个模块",
                 ["config", "auth.cookie_manager", "core.api_client"],
                 []));
-        var viewModel = CreateViewModel(new ConfigService(), new FakeAppUpdateService(), health);
+        var viewModel = CreateViewModel(new TestConfigService(), new FakeAppUpdateService(), health);
 
         await viewModel.CheckDouyinSidecarHealthCommand.ExecuteAsync(null);
 
@@ -466,7 +528,7 @@ public class SettingsViewModelTests
                 ["config", "core.api_client"],
                 ["config"],
                 "import self-test failed"));
-        var viewModel = CreateViewModel(new ConfigService(), new FakeAppUpdateService(), health);
+        var viewModel = CreateViewModel(new TestConfigService(), new FakeAppUpdateService(), health);
 
         await viewModel.CheckDouyinSidecarHealthCommand.ExecuteAsync(null);
 
@@ -478,7 +540,7 @@ public class SettingsViewModelTests
     }
 
     private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)
-        => CreateViewModel(new ConfigService(), appUpdateService);
+        => CreateViewModel(new TestConfigService(), appUpdateService);
 
     private static SettingsViewModel CreateViewModel(
         ConfigService config,
@@ -604,6 +666,7 @@ public class SettingsViewModelTests
         public AppUpdateInfo NextUpdate { get; init; } = new();
 
         public string DownloadedPath { get; init; } = "";
+        public Func<string, bool>? LaunchInstallerHandler { get; init; }
 
         public Task<AppUpdateInfo> CheckLatestAsync(CancellationToken ct = default)
             => Task.FromResult(NextUpdate);
@@ -617,7 +680,8 @@ public class SettingsViewModelTests
             return Task.FromResult(DownloadedPath);
         }
 
-        public bool LaunchInstaller(string installerPath) => true;
+        public bool LaunchInstaller(string installerPath)
+            => LaunchInstallerHandler?.Invoke(installerPath) ?? true;
     }
 
     private sealed class FakeDouyinSidecarHealthService(DouyinSidecarHealthResult result)

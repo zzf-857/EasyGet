@@ -21,7 +21,7 @@ public partial class App : System.Windows.Application
         // 注册全局异常捕获
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
             LogCrash(args.ExceptionObject as Exception, "AppDomain.UnhandledException");
-        
+
         DispatcherUnhandledException += (s, args) =>
         {
             LogCrash(args.Exception, "DispatcherUnhandledException");
@@ -35,7 +35,7 @@ public partial class App : System.Windows.Application
             DateTime.UtcNow,
             TimeSpan.FromDays(1));
 
-        try 
+        try
         {
             var services = new ServiceCollection();
 
@@ -44,6 +44,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
             services.AddSingleton<IBrowserProfileDiscoveryService, BrowserProfileDiscoveryService>();
+            services.AddSingleton<IDefaultBrowserLauncher, DefaultBrowserLauncher>();
             services.AddSingleton<PlatformCookieVault>(provider =>
                 new PlatformCookieVault(
                     provider.GetRequiredService<ConfigService>().ConfigDirectory));

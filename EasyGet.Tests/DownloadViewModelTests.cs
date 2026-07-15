@@ -370,7 +370,7 @@ public class DownloadViewModelTests
 
     private static DownloadContext CreateDownloadContext(Action<ProcessStartInfo>? startProcess = null)
     {
-        var configService = new ConfigService();
+        var configService = new TestConfigService();
         var dbPath = Path.Combine(
             Path.GetTempPath(),
             "EasyGetTests",
