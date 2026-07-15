@@ -615,6 +615,9 @@ public class ReleaseScriptTests
         Assert.Contains("ForEach-Object { $_.Version }", workflow, StringComparison.Ordinal);
         Assert.Contains("Version mismatch", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet test", workflow, StringComparison.Ordinal);
+        Assert.Contains("actions/setup-python@v6", workflow, StringComparison.Ordinal);
+        Assert.Contains("python-version: '3.12'", workflow, StringComparison.Ordinal);
+        Assert.Contains("pyinstaller==6.19.0", workflow, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("build-installer.ps1", workflow, StringComparison.Ordinal);
         Assert.Contains("EasyGet-Setup-v$version.exe", workflow, StringComparison.Ordinal);
         Assert.Contains("EasyGet-Setup-${{ github.ref_name }}.exe", workflow, StringComparison.Ordinal);
