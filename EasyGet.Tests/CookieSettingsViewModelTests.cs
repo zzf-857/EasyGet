@@ -318,6 +318,8 @@ public sealed class CookieSettingsViewModelTests
         };
 
         await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+        if (viewModel.SaveSettingsCommand.ExecutionTask is { } pendingSave)
+            await pendingSave;
 
         Assert.Equal("", config.Config.CookieContent);
         Assert.Equal("", config.Config.LegacyCookiePlatform);
