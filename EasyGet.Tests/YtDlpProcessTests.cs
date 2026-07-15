@@ -62,21 +62,26 @@ public class YtDlpProcessTests
     [Fact]
     public async Task RunProcessAsync_KillsProcessWhenCancellationIsRequested()
     {
+        var startedPath = Path.Combine(Path.GetTempPath(), $"easyget-ytdlp-started-{Guid.NewGuid():N}.txt");
         var markerPath = Path.Combine(Path.GetTempPath(), $"easyget-ytdlp-cancel-{Guid.NewGuid():N}.txt");
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var cts = new CancellationTokenSource();
 
         try
         {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                YtDlpService.RunProcessAsync(
-                    "powershell",
-                    [
-                        "-NoProfile",
-                        "-Command",
-                        $"Start-Sleep -Milliseconds 800; Set-Content -Path '{markerPath}' -Value completed"
-                    ],
-                    TimeSpan.FromSeconds(5),
-                    cts.Token));
+            var runTask = YtDlpService.RunProcessAsync(
+                "powershell",
+                [
+                    "-NoProfile",
+                    "-Command",
+                    $"Set-Content -LiteralPath '{startedPath}' -Value started; "
+                    + $"Start-Sleep -Seconds 30; Set-Content -LiteralPath '{markerPath}' -Value completed"
+                ],
+                TimeSpan.FromSeconds(35),
+                cts.Token);
+            await WaitForFileAsync(startedPath, TimeSpan.FromSeconds(10));
+            cts.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
 
             await Task.Delay(1200);
 
@@ -84,9 +89,20 @@ public class YtDlpProcessTests
         }
         finally
         {
+            if (File.Exists(startedPath))
+                File.Delete(startedPath);
             if (File.Exists(markerPath))
                 File.Delete(markerPath);
         }
+    }
+
+    private static async Task WaitForFileAsync(string path, TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (!File.Exists(path) && DateTime.UtcNow < deadline)
+            await Task.Delay(25);
+
+        Assert.True(File.Exists(path), $"Process did not create its start marker: {path}");
     }
 
     [Fact]
