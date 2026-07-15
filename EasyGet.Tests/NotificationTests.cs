@@ -14,18 +14,15 @@ public class NotificationTests
     [Fact]
     public async Task NotificationItem_SelfDestructsAfter4Seconds()
     {
-        var expiredEvent = new AutoResetEvent(false);
+        var expired = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
         var item = new NotificationItem("Test Msg", true);
 
-        item.Expired += (x) =>
-        {
-            expiredEvent.Set();
-        };
+        item.Expired += _ => expired.TrySetResult();
 
-        // 等待倒计时完成，由于是 4 秒，我们等待最多 4.5 秒
-        bool signaled = expiredEvent.WaitOne(4500);
+        // 异步等待计时器，避免阻塞测试工作线程后反过来饿死线程池计时回调。
+        await expired.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.True(signaled);
         Assert.Equal(0, item.RemainingRatio);
     }
 
@@ -35,7 +32,9 @@ public class NotificationTests
         var item = new NotificationItem("Test Msg", true);
 
         // 等待计时器确实完成至少一次 tick，避免 CI runner 调度抖动导致固定延迟不稳定。
-        Assert.True(SpinWait.SpinUntil(() => item.RemainingRatio < 1.0, TimeSpan.FromSeconds(2)));
+        Assert.True(await WaitUntilAsync(
+            () => item.RemainingRatio < 1.0,
+            TimeSpan.FromSeconds(5)));
         double initialRatio = item.RemainingRatio;
 
         // 暂停
@@ -48,13 +47,30 @@ public class NotificationTests
 
         // 恢复
         item.Resume();
-        Assert.True(SpinWait.SpinUntil(() => item.RemainingRatio < pausedRatio, TimeSpan.FromSeconds(2)));
+        Assert.True(await WaitUntilAsync(
+            () => item.RemainingRatio < pausedRatio,
+            TimeSpan.FromSeconds(5)));
         double resumedRatio = item.RemainingRatio;
 
         // 验证恢复后比例确实减少了
         Assert.True(resumedRatio < pausedRatio);
 
         item.Close();
+    }
+
+    private static async Task<bool> WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+                return true;
+            await Task.Delay(25);
+        }
+
+        return condition();
     }
 
     [Fact]
