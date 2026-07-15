@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.1 - 2026-07-16
+
+### Fixes
+- Changed platform login to open the Windows default browser, while keeping an explicit EasyGet compatibility login that stores platform-scoped cookies in the encrypted vault.
+- Removed automatic managed-login popups from download attempts and prioritized the last successful browser profile, then the system-default browser and recent profiles.
+- Made settings persistence latest-wins and flush pending changes before app shutdown or update installation, so custom download paths survive restarts and upgrades.
+- Added serialized, cross-process, atomic config writes with on-disk flushing, validation, safe backups, and recovery from corrupt or legacy-overwritten primary configs.
+- Clear EasyGet login data without affecting the user's system-browser session, and isolate tests from the real `%LocalAppData%\EasyGet` configuration.
+
+### User Experience
+- Added separate “Browser Login” and “Compatibility Login” actions with truthful status messages and visible settings-save feedback.
+
+### Tests
+- Added regression coverage for default-browser launching, explicit compatibility login, cookie strategy ordering, encrypted vault cleanup, rapid settings changes, update-time flushing, concurrent config saves, and backup recovery.
+- Verified 835 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.2.0 - 2026-07-16
 
 ### Features
