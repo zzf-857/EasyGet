@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0 - 2026-07-16
+
+### Features
+- Added native recognition and download support for public `yangshipin.cn/video/home?vid=...` pages.
+- Resolve each short-lived Yangshipin MP4 address immediately before download through a hidden Edge/Chrome session instead of persisting expiring signatures.
+- Added resumable HTTP downloads with progress, proxy, referer, strict host validation, unique output names, and platform auto-categorization.
+
+### Optimizations
+- Coalesced concurrent metadata requests for the same canonical video so batch imports share one hidden-browser capture and size probe.
+
+### Security
+- Disabled automatic media redirects and now revalidate every redirect target against the HTTPS Yangshipin/CCTV MP4 boundary.
+
+### Tests
+- Added URL spoofing guards, dynamic DOM parsing, stable metadata caching, concurrent request coalescing, redirect validation, expired-link refresh, request-header/range-resume, and yt-dlp gateway routing coverage.
+- Verified the live sample metadata against the downloaded media: title, 7,284-second duration, and 2,455,784,251-byte size all match.
+
 ## 1.1.8 - 2026-07-02
 
 ### Optimizations

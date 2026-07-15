@@ -65,6 +65,7 @@ public partial class App : System.Windows.Application
                     provider.GetRequiredService<ICookieHealthStore>(),
                     provider.GetRequiredService<IManagedLoginSessionService>(),
                     CookieFileLease.DefaultTemporaryDirectory));
+            services.AddSingleton<IYangshipinDownloadService, YangshipinDownloadService>();
             services.AddSingleton<YtDlpService>();
             services.AddSingleton<M3u8DownloadService>();
             services.AddSingleton<TelegramDownloadService>();

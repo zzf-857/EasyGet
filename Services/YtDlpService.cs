@@ -42,12 +42,14 @@ public partial class YtDlpService
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
     private readonly CookieAcquisitionCoordinator _cookieCoordinator;
+    private readonly IYangshipinDownloadService _yangshipinDownloadService;
 
     public YtDlpService(ConfigService configService, EnvironmentService envService)
         : this(
             configService,
             envService,
-            CreateDefaultCookieCoordinator(configService))
+            CreateDefaultCookieCoordinator(configService),
+            new YangshipinDownloadService(configService))
     {
     }
 
@@ -55,13 +57,28 @@ public partial class YtDlpService
         ConfigService configService,
         EnvironmentService envService,
         CookieAcquisitionCoordinator cookieCoordinator)
+        : this(
+            configService,
+            envService,
+            cookieCoordinator,
+            new YangshipinDownloadService(configService))
+    {
+    }
+
+    public YtDlpService(
+        ConfigService configService,
+        EnvironmentService envService,
+        CookieAcquisitionCoordinator cookieCoordinator,
+        IYangshipinDownloadService yangshipinDownloadService)
     {
         ArgumentNullException.ThrowIfNull(configService);
         ArgumentNullException.ThrowIfNull(envService);
         ArgumentNullException.ThrowIfNull(cookieCoordinator);
+        ArgumentNullException.ThrowIfNull(yangshipinDownloadService);
         _configService = configService;
         _envService = envService;
         _cookieCoordinator = cookieCoordinator;
+        _yangshipinDownloadService = yangshipinDownloadService;
     }
 
     private static CookieAcquisitionCoordinator CreateDefaultCookieCoordinator(ConfigService configService)
@@ -93,6 +110,9 @@ public partial class YtDlpService
 
     public async Task<VideoInfo?> GetVideoInfoAsync(string url, CancellationToken ct = default)
     {
+        if (YangshipinUrlParser.IsYangshipinVideoUrl(url))
+            return await _yangshipinDownloadService.GetVideoInfoAsync(url, ct);
+
         if (M3u8DownloadService.IsM3u8Url(url))
         {
             var title = "M3U8_Video";
@@ -448,6 +468,16 @@ public partial class YtDlpService
         Action<string>? logCallback = null,
         CancellationToken ct = default)
     {
+        if (YangshipinUrlParser.IsYangshipinVideoUrl(task.Url))
+        {
+            await _yangshipinDownloadService.DownloadAsync(
+                task,
+                progress,
+                logCallback,
+                ct);
+            return;
+        }
+
         task.Status = DownloadStatus.Downloading;
 
         IReadOnlyList<CookieAttempt> attempts;
