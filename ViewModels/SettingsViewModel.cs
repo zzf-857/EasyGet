@@ -11,6 +11,8 @@ namespace EasyGet.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
     private const int AutoSaveDebounceMilliseconds = 150;
+    private static readonly TimeSpan BrowserLoginDetectionTimeout = TimeSpan.FromMinutes(3);
+    private static readonly TimeSpan BrowserLoginDetectionInterval = TimeSpan.FromSeconds(2);
 
     private static readonly IReadOnlyDictionary<string, string> DouyinTemplatePreviewValues =
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -42,6 +44,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly ICookieHealthStore _cookieHealthStore;
     private readonly IManagedLoginSessionService _managedLogin;
     private readonly IDefaultBrowserLauncher _defaultBrowserLauncher;
+    private readonly IBrowserCookieLoginDetector _browserLoginDetector;
     private readonly CookieAcquisitionCoordinator? _cookieCoordinator;
     private readonly PlatformCookieVault _cookieVault;
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
@@ -50,6 +53,7 @@ public partial class SettingsViewModel : ObservableObject
     private Task _pendingAutoSaveTask = Task.CompletedTask;
     private long _autoSaveRequestedVersion;
     private long _autoSavePersistedVersion;
+    private int _lastDiscoveredBrowserProfileCount;
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
     private bool _isInitializing;
@@ -238,7 +242,8 @@ public partial class SettingsViewModel : ObservableObject
         IManagedLoginSessionService? managedLogin = null,
         CookieAcquisitionCoordinator? cookieCoordinator = null,
         PlatformCookieVault? cookieVault = null,
-        IDefaultBrowserLauncher? defaultBrowserLauncher = null)
+        IDefaultBrowserLauncher? defaultBrowserLauncher = null,
+        IBrowserCookieLoginDetector? browserLoginDetector = null)
     {
         _configService = configService;
         _envService = envService;
@@ -250,6 +255,7 @@ public partial class SettingsViewModel : ObservableObject
         _cookieHealthStore = cookieHealthStore ?? new CookieHealthStore(configService.ConfigDirectory);
         _managedLogin = managedLogin ?? new EmptyManagedLoginSessionService();
         _defaultBrowserLauncher = defaultBrowserLauncher ?? new DefaultBrowserLauncher();
+        _browserLoginDetector = browserLoginDetector ?? new BrowserCookieLoginDetector();
         _cookieCoordinator = cookieCoordinator;
         _cookieVault = cookieVault ?? new PlatformCookieVault(configService.ConfigDirectory);
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
@@ -325,7 +331,7 @@ public partial class SettingsViewModel : ObservableObject
 
         RefreshEnvironmentStatus();
         _ = RefreshTgStatusAsync();
-        _ = RefreshCookieStatus();
+        _ = RefreshCookieStatus(CancellationToken.None);
     }
 
     public void RefreshEnvironmentStatus()
@@ -338,7 +344,7 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task RefreshCookieStatus()
+    private async Task RefreshCookieStatus(CancellationToken cancellationToken)
     {
         if (IsRefreshingCookieStatus)
             return;
@@ -346,12 +352,18 @@ public partial class SettingsViewModel : ObservableObject
         IsRefreshingCookieStatus = true;
         try
         {
-            var profiles = await Task.Run(_cookieProfiles.Discover);
+            var profiles = await Task.Run(_cookieProfiles.Discover, cancellationToken);
+            var platforms = MediaPlatformResolver.KnownPlatforms;
+            var detection = await _browserLoginDetector.DetectAsync(
+                profiles,
+                platforms,
+                cancellationToken);
             var health = _cookieHealthStore.Snapshot();
+            _lastDiscoveredBrowserProfileCount = profiles.Count;
             CookiePlatformStatuses.Clear();
             var verifiedPlatforms = 0;
 
-            foreach (var platform in MediaPlatformResolver.KnownPlatforms)
+            foreach (var platform in platforms)
             {
                 var successful = health
                     .Where(record => string.Equals(
@@ -371,6 +383,10 @@ public partial class SettingsViewModel : ObservableObject
                     StorageKey = platform.StorageKey,
                     DisplayName = platform.DisplayName
                 };
+                var browserLoginDetected = detection.TryGetProfile(
+                    platform.StorageKey,
+                    out var detectedProfile);
+                item.IsDetected = browserLoginDetected;
                 if (successful is not null)
                 {
                     verifiedPlatforms++;
@@ -378,11 +394,19 @@ public partial class SettingsViewModel : ObservableObject
                     item.NeedsLogin = false;
                     item.StatusText = $"最近验证可用 · {DescribeCookieSource(successful.Source)}";
                 }
-                else if (profiles.Count > 0)
+                else if (browserLoginDetected)
                 {
                     item.IsAvailable = false;
                     item.NeedsLogin = false;
-                    item.StatusText = $"已发现 {profiles.Count} 个浏览器配置，下载时自动尝试";
+                    item.StatusText = $"已检测到 {detectedProfile.BrowserName} 登录状态 · 下载时自动读取 Cookie";
+                }
+                else if (profiles.Count > 0)
+                {
+                    item.IsAvailable = false;
+                    item.NeedsLogin = detection.ReadableProfileCount > 0;
+                    item.StatusText = detection.ReadableProfileCount > 0
+                        ? "未检测到该平台登录 Cookie · 可点击浏览器登录"
+                        : "浏览器配置已发现，但登录状态暂时无法读取 · 下载时仍会自动尝试";
                 }
                 else
                 {
@@ -394,9 +418,14 @@ public partial class SettingsViewModel : ObservableObject
                 CookiePlatformStatuses.Add(item);
             }
 
-            CookieStatusSummary = profiles.Count == 0
-                ? $"未发现受支持浏览器配置 · {verifiedPlatforms} 个平台近期验证可用"
-                : $"已发现 {profiles.Count} 个浏览器配置 · {verifiedPlatforms} 个平台近期验证可用";
+            UpdateCookieStatusSummary(
+                profiles.Count,
+                detection.AuthenticatedProfiles.Count,
+                verifiedPlatforms);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            CookieStatusSummary = "登录状态检测已取消";
         }
         catch (Exception)
         {
@@ -406,6 +435,16 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsRefreshingCookieStatus = false;
         }
+    }
+
+    private void UpdateCookieStatusSummary(
+        int profileCount,
+        int detectedPlatformCount,
+        int verifiedPlatformCount)
+    {
+        CookieStatusSummary = profileCount == 0
+            ? $"未发现受支持浏览器配置 · 检测到 {detectedPlatformCount} 个平台登录 · {verifiedPlatformCount} 个平台近期下载验证"
+            : $"发现 {profileCount} 个浏览器配置 · 检测到 {detectedPlatformCount} 个平台登录 · {verifiedPlatformCount} 个平台近期下载验证";
     }
 
     private static string DescribeCookieSource(CookieSourceKind source)
@@ -436,24 +475,102 @@ public partial class SettingsViewModel : ObservableObject
 
         item.IsOperating = true;
         item.StatusText = "正在打开系统默认浏览器...";
+        var browserOpened = false;
         try
         {
             await _defaultBrowserLauncher.OpenAsync(platform.LoginUri, cancellationToken);
-            item.StatusText = "已打开系统默认浏览器；完成登录后直接重试下载";
+            browserOpened = true;
+            item.IsAvailable = false;
+            item.IsDetected = false;
+            item.NeedsLogin = false;
+            item.StatusText = "已打开系统默认浏览器 · 正在等待并自动检测登录（最多 3 分钟）";
+
+            var waitResult = await WaitForBrowserLoginAsync(platform, cancellationToken);
+            _lastDiscoveredBrowserProfileCount = Math.Max(
+                _lastDiscoveredBrowserProfileCount,
+                waitResult.DiscoveredProfileCount);
+            if (waitResult.Profile is not null)
+            {
+                item.IsDetected = true;
+                item.NeedsLogin = false;
+                item.StatusText = $"已检测到 {waitResult.Profile.BrowserName} 登录状态 · 下载时将优先读取此配置";
+                UpdateCookieStatusSummary(
+                    _lastDiscoveredBrowserProfileCount,
+                    CookiePlatformStatuses.Count(status => status.IsDetected),
+                    CookiePlatformStatuses.Count(status => status.IsAvailable));
+                return;
+            }
+
+            item.IsDetected = false;
+            item.NeedsLogin = waitResult.AnyReadableProfile;
+            item.StatusText = waitResult.AnyReadableProfile
+                ? "暂未检测到该平台登录 Cookie · 完成登录后点击上方“刷新”重新检测"
+                : "浏览器已打开，但 Cookie 暂时无法读取 · 完成登录后可直接下载或点击“刷新”";
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            item.StatusText = "打开浏览器操作已取消";
+            item.StatusText = browserOpened
+                ? "系统浏览器登录检测已取消 · 已完成的浏览器登录不受影响"
+                : "打开浏览器操作已取消";
         }
         catch (Exception)
         {
-            item.StatusText = "无法打开系统默认浏览器，请检查 Windows 默认应用设置";
+            item.StatusText = browserOpened
+                ? "系统浏览器已打开，但自动检测失败 · 完成登录后点击上方“刷新”"
+                : "无法打开系统默认浏览器，请检查 Windows 默认应用设置";
         }
         finally
         {
             item.IsOperating = false;
         }
     }
+
+    private async Task<BrowserLoginWaitResult> WaitForBrowserLoginAsync(
+        MediaPlatformDefinition platform,
+        CancellationToken cancellationToken)
+    {
+        var deadlineUtc = DateTime.UtcNow + BrowserLoginDetectionTimeout;
+        var discoveredProfileCount = 0;
+        var anyReadableProfile = false;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var profiles = await Task.Run(_cookieProfiles.Discover, cancellationToken);
+            discoveredProfileCount = Math.Max(discoveredProfileCount, profiles.Count);
+            var detection = await _browserLoginDetector.DetectAsync(
+                profiles,
+                [platform],
+                cancellationToken);
+            anyReadableProfile |= detection.ReadableProfileCount > 0;
+            if (detection.TryGetProfile(platform.StorageKey, out var profile))
+            {
+                return new BrowserLoginWaitResult(
+                    profile,
+                    discoveredProfileCount,
+                    anyReadableProfile);
+            }
+
+            var remaining = deadlineUtc - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                break;
+            await Task.Delay(
+                remaining < BrowserLoginDetectionInterval
+                    ? remaining
+                    : BrowserLoginDetectionInterval,
+                cancellationToken);
+        }
+        while (DateTime.UtcNow < deadlineUtc);
+
+        return new BrowserLoginWaitResult(
+            null,
+            discoveredProfileCount,
+            anyReadableProfile);
+    }
+
+    private sealed record BrowserLoginWaitResult(
+        BrowserProfile? Profile,
+        int DiscoveredProfileCount,
+        bool AnyReadableProfile);
 
     [RelayCommand]
     private async Task CompatibleLoginPlatform(

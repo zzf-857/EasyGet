@@ -10,6 +10,7 @@ public sealed partial class CookiePlatformStatusItem : ObservableObject
 
     [ObservableProperty] private string _statusText = "尚未检测";
     [ObservableProperty] private bool _isAvailable;
+    [ObservableProperty] private bool _isDetected;
     [ObservableProperty] private bool _needsLogin;
     [ObservableProperty] private bool _isOperating;
 }

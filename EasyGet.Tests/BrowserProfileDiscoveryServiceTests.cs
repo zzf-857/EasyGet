@@ -107,6 +107,31 @@ public sealed class BrowserProfileDiscoveryServiceTests
     }
 
     [Fact]
+    public void Discover_UsesWalTimestampForRecentChromiumCookieActivity()
+    {
+        using var root = new TestDirectory();
+        root.Touch("Local/Google/Chrome/User Data/Default/Network/Cookies");
+        root.Touch("Local/Google/Chrome/User Data/Default/Network/Cookies-wal");
+        var databasePath = root.Path(
+            "Local",
+            "Google",
+            "Chrome",
+            "User Data",
+            "Default",
+            "Network",
+            "Cookies");
+        var walPath = $"{databasePath}-wal";
+        var databaseTime = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var walTime = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(databasePath, databaseTime);
+        File.SetLastWriteTimeUtc(walPath, walTime);
+
+        var profile = Assert.Single(CreateService(root).Discover());
+
+        Assert.Equal(walTime, profile.LastActivityUtc);
+    }
+
+    [Fact]
     public void Discover_SurvivesDefaultBrowserLookupFailure()
     {
         using var root = new TestDirectory();

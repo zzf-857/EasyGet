@@ -73,6 +73,7 @@ public sealed class CookieAcquisitionCoordinator
     private readonly ConfigService _config;
     private readonly PlatformCookieVault _vault;
     private readonly IBrowserProfileDiscoveryService _profiles;
+    private readonly IBrowserCookieLoginDetector _browserLoginDetector;
     private readonly ICookieHealthStore _health;
     private readonly IManagedLoginSessionService _managedLogin;
     private readonly string _temporaryDirectory;
@@ -85,7 +86,8 @@ public sealed class CookieAcquisitionCoordinator
         IBrowserProfileDiscoveryService profiles,
         ICookieHealthStore health,
         IManagedLoginSessionService managedLogin,
-        string temporaryDirectory)
+        string temporaryDirectory,
+        IBrowserCookieLoginDetector? browserLoginDetector = null)
     {
         ArgumentNullException.ThrowIfNull(config);
         ArgumentNullException.ThrowIfNull(vault);
@@ -97,6 +99,7 @@ public sealed class CookieAcquisitionCoordinator
         _config = config;
         _vault = vault;
         _profiles = profiles;
+        _browserLoginDetector = browserLoginDetector ?? new BrowserCookieLoginDetector();
         _health = health;
         _managedLogin = managedLogin;
         _temporaryDirectory = temporaryDirectory;
@@ -141,8 +144,36 @@ public sealed class CookieAcquisitionCoordinator
                 group => group.Max(record => record.LastSuccessUtc!.Value),
                 StringComparer.Ordinal);
 
-        attempts.AddRange(_profiles.Discover()
-            .OrderByDescending(profile => successfulProfiles.GetValueOrDefault(profile.StableId))
+        var profiles = _profiles.Discover();
+        BrowserProfile? detectedProfile = null;
+        if (profiles.Count > 0)
+        {
+            try
+            {
+                var detection = await _browserLoginDetector.DetectAsync(
+                    profiles,
+                    [platform],
+                    cancellationToken);
+                detection.TryGetProfile(platform.StorageKey, out detectedProfile!);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[CookieCoordinator] Browser login detection failed: {ex.Message}");
+            }
+        }
+
+        attempts.AddRange(profiles
+            .OrderByDescending(profile => detectedProfile is not null
+                                           && string.Equals(
+                                               profile.StableId,
+                                               detectedProfile.StableId,
+                                               StringComparison.Ordinal))
+            .ThenByDescending(profile => successfulProfiles.GetValueOrDefault(profile.StableId))
             .ThenByDescending(profile => profile.IsDefaultBrowser)
             .ThenByDescending(profile => profile.LastActivityUtc)
             .ThenBy(profile => profile.BrowserName, StringComparer.Ordinal)

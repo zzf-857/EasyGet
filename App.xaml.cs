@@ -44,6 +44,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
             services.AddSingleton<IBrowserProfileDiscoveryService, BrowserProfileDiscoveryService>();
+            services.AddSingleton<IBrowserCookieLoginDetector, BrowserCookieLoginDetector>();
             services.AddSingleton<IDefaultBrowserLauncher, DefaultBrowserLauncher>();
             services.AddSingleton<PlatformCookieVault>(provider =>
                 new PlatformCookieVault(
@@ -65,7 +66,8 @@ public partial class App : System.Windows.Application
                     provider.GetRequiredService<IBrowserProfileDiscoveryService>(),
                     provider.GetRequiredService<ICookieHealthStore>(),
                     provider.GetRequiredService<IManagedLoginSessionService>(),
-                    CookieFileLease.DefaultTemporaryDirectory));
+                    CookieFileLease.DefaultTemporaryDirectory,
+                    provider.GetRequiredService<IBrowserCookieLoginDetector>()));
             services.AddSingleton<IYangshipinDownloadService, YangshipinDownloadService>();
             services.AddSingleton<YtDlpService>();
             services.AddSingleton<M3u8DownloadService>();

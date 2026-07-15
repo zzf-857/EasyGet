@@ -57,6 +57,48 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
+    public async Task RefreshCookieStatusAsync_DistinguishesDetectedLoginFromDownloadVerified()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var profile = new BrowserProfile(
+            "edge",
+            "Edge",
+            "Default",
+            @"C:\Profiles\Edge\Default",
+            DateTime.UtcNow,
+            IsDefaultBrowser: true);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([profile]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            browserLoginDetector: new StaticBrowserCookieLoginDetector(
+                "youtube",
+                profile));
+
+        await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+
+        var youtube = viewModel.CookiePlatformStatuses.Single(item =>
+            item.PlatformId == "youtube");
+        Assert.True(youtube.IsDetected);
+        Assert.False(youtube.IsAvailable);
+        Assert.False(youtube.NeedsLogin);
+        Assert.Contains("已检测到 Edge 登录状态", youtube.StatusText, StringComparison.Ordinal);
+        Assert.Contains("检测到 1 个平台登录", viewModel.CookieStatusSummary, StringComparison.Ordinal);
+        Assert.Contains("0 个平台近期下载验证", viewModel.CookieStatusSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RefreshCookieStatusAsync_DoesNotExposeDiscoveryExceptionDetails()
     {
         using var root = new TestDirectory();
@@ -85,7 +127,7 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
-    public async Task LoginPlatformAsync_OpensDefaultBrowserWithoutManagedSessionOrFakeSuccess()
+    public async Task LoginPlatformAsync_OpensDefaultBrowserAndDetectsMatchingBrowserSession()
     {
         using var root = new TestDirectory();
         var config = new ConfigService(root.Path("config"));
@@ -99,6 +141,13 @@ public sealed class CookieSettingsViewModelTests
         var managed = new RecordingManagedLoginSessionService(
             [new BrowserCookie(".youtube.com", "/", "SID", "value", true, 0)]);
         var browserLauncher = new RecordingDefaultBrowserLauncher();
+        var detectedProfile = new BrowserProfile(
+            "edge",
+            "Edge",
+            "Default",
+            @"C:\Profiles\Edge\Default",
+            DateTime.UtcNow,
+            IsDefaultBrowser: true);
         var viewModel = new SettingsViewModel(
             config,
             environment,
@@ -107,7 +156,10 @@ public sealed class CookieSettingsViewModelTests
             cookieProfiles: new StaticBrowserProfiles([]),
             cookieHealthStore: health,
             managedLogin: managed,
-            defaultBrowserLauncher: browserLauncher);
+            defaultBrowserLauncher: browserLauncher,
+            browserLoginDetector: new StaticBrowserCookieLoginDetector(
+                "youtube",
+                detectedProfile));
         await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
         var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
 
@@ -119,8 +171,9 @@ public sealed class CookieSettingsViewModelTests
             MediaPlatformResolver.KnownPlatforms.Single(platform => platform.Id == "youtube").LoginUri,
             Assert.Single(browserLauncher.OpenedUris));
         Assert.False(item.IsAvailable);
-        Assert.Contains("系统默认浏览器", item.StatusText, StringComparison.Ordinal);
-        Assert.Contains("重试下载", item.StatusText, StringComparison.Ordinal);
+        Assert.True(item.IsDetected);
+        Assert.Contains("Edge", item.StatusText, StringComparison.Ordinal);
+        Assert.Contains("优先读取", item.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -154,6 +207,45 @@ public sealed class CookieSettingsViewModelTests
         Assert.Contains("无法打开系统默认浏览器", item.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("SecretBrowser", item.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("secret-value", item.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoginPlatformAsync_WhenDetectionFailsDoesNotClaimBrowserLaunchFailed()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var browserLauncher = new RecordingDefaultBrowserLauncher();
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            defaultBrowserLauncher: browserLauncher,
+            browserLoginDetector: new ThrowingBrowserCookieLoginDetector());
+        var platform = MediaPlatformResolver.KnownPlatforms.Single(definition =>
+            definition.Id == "youtube");
+        var item = new EasyGet.Models.CookiePlatformStatusItem
+        {
+            PlatformId = platform.Id,
+            StorageKey = platform.StorageKey,
+            DisplayName = platform.DisplayName
+        };
+
+        await viewModel.LoginPlatformCommand.ExecuteAsync(item);
+
+        Assert.Single(browserLauncher.OpenedUris);
+        Assert.Contains("系统浏览器已打开", item.StatusText, StringComparison.Ordinal);
+        Assert.Contains("自动检测失败", item.StatusText, StringComparison.Ordinal);
+        Assert.DoesNotContain("无法打开系统默认浏览器", item.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -725,6 +817,40 @@ public sealed class CookieSettingsViewModelTests
     {
         public Task OpenAsync(Uri uri, CancellationToken cancellationToken = default)
             => Task.FromException(new IOException(message));
+    }
+
+    private sealed class StaticBrowserCookieLoginDetector(
+        string platformStorageKey,
+        BrowserProfile profile) : IBrowserCookieLoginDetector
+    {
+        public Task<BrowserCookieLoginDetection> DetectAsync(
+            IReadOnlyList<BrowserProfile> profiles,
+            IReadOnlyList<MediaPlatformDefinition> platforms,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyDictionary<string, BrowserProfile> matches = platforms.Any(platform =>
+                string.Equals(
+                    platform.StorageKey,
+                    platformStorageKey,
+                    StringComparison.Ordinal))
+                ? new Dictionary<string, BrowserProfile>(StringComparer.Ordinal)
+                {
+                    [platformStorageKey] = profile
+                }
+                : new Dictionary<string, BrowserProfile>(StringComparer.Ordinal);
+            return Task.FromResult(new BrowserCookieLoginDetection(matches, 1, 0));
+        }
+    }
+
+    private sealed class ThrowingBrowserCookieLoginDetector : IBrowserCookieLoginDetector
+    {
+        public Task<BrowserCookieLoginDetection> DetectAsync(
+            IReadOnlyList<BrowserProfile> profiles,
+            IReadOnlyList<MediaPlatformDefinition> platforms,
+            CancellationToken cancellationToken)
+            => Task.FromException<BrowserCookieLoginDetection>(
+                new IOException("Cookie database probe failed"));
     }
 
     private sealed class StaticCookieHealthStore(IReadOnlyList<CookieHealthRecord> records)

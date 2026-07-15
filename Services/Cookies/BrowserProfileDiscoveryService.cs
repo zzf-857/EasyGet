@@ -180,6 +180,12 @@ public sealed class BrowserProfileDiscoveryService : IBrowserProfileDiscoverySer
             if (!TryGetLastWriteTimeUtc(cookieDatabase, out var writeTimeUtc))
                 continue;
 
+            if (TryGetLastWriteTimeUtc($"{cookieDatabase}-wal", out var walWriteTimeUtc)
+                && walWriteTimeUtc > writeTimeUtc)
+            {
+                writeTimeUtc = walWriteTimeUtc;
+            }
+
             if (!found || writeTimeUtc > lastActivityUtc)
                 lastActivityUtc = writeTimeUtc;
             found = true;

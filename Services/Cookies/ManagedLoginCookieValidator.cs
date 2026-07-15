@@ -40,30 +40,68 @@ internal static class ManagedLoginCookieValidator
             return false;
 
         var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        KnownAuthenticationCookies.TryGetValue(platform.Id, out var knownNames);
         foreach (var cookie in cookies)
         {
-            if (string.IsNullOrWhiteSpace(cookie.Name)
-                || string.IsNullOrEmpty(cookie.Value)
-                || (cookie.ExpiresUnix > 0 && cookie.ExpiresUnix <= nowUnix)
-                || !platform.CookieDomains.Any(domain =>
-                    MediaPlatformResolver.HostMatches(cookie.Domain.Trim().TrimStart('.'), domain)))
+            if (string.IsNullOrEmpty(cookie.Value)
+                || !IsAuthenticatedCookieMetadata(
+                    platform,
+                    cookie.Domain,
+                    cookie.Name,
+                    cookie.ExpiresUnix,
+                    nowUnix))
             {
                 continue;
             }
-
-            if (knownNames is not null)
-            {
-                if (knownNames.Contains(cookie.Name))
-                    return true;
-                continue;
-            }
-
-            if (LooksLikeAuthenticationCookie(cookie.Name))
-                return true;
+            return true;
         }
 
         return false;
+    }
+
+    public static bool IsAuthenticatedCookieMetadata(
+        MediaPlatformDefinition platform,
+        string domain,
+        string name,
+        long expiresUnix)
+        => IsAuthenticatedCookieMetadata(
+            platform,
+            domain,
+            name,
+            expiresUnix,
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+
+    public static IReadOnlyList<string> GetKnownAuthenticationCookieNames(
+        MediaPlatformDefinition platform)
+    {
+        ArgumentNullException.ThrowIfNull(platform);
+        return KnownAuthenticationCookies.TryGetValue(platform.Id, out var names)
+            ? names.ToArray()
+            : [];
+    }
+
+    private static bool IsAuthenticatedCookieMetadata(
+        MediaPlatformDefinition platform,
+        string domain,
+        string name,
+        long expiresUnix,
+        long nowUnix)
+    {
+        ArgumentNullException.ThrowIfNull(platform);
+        if (string.IsNullOrWhiteSpace(name)
+            || string.IsNullOrWhiteSpace(domain)
+            || (expiresUnix > 0 && expiresUnix <= nowUnix)
+            || !platform.CookieDomains.Any(allowedDomain =>
+                MediaPlatformResolver.HostMatches(
+                    domain.Trim().TrimStart('.'),
+                    allowedDomain)))
+        {
+            return false;
+        }
+
+        if (KnownAuthenticationCookies.TryGetValue(platform.Id, out var knownNames))
+            return knownNames.Contains(name);
+
+        return LooksLikeAuthenticationCookie(name);
     }
 
     private static HashSet<string> Names(params string[] names)

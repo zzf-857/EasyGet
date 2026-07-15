@@ -77,6 +77,39 @@ public sealed class CookieAcquisitionCoordinatorTests
     }
 
     [Fact]
+    public async Task BuildAttemptsAsync_PrioritizesProfileWithDetectedPlatformLogin()
+    {
+        var defaultBrowser = new BrowserProfile(
+            "chrome",
+            "Chrome",
+            "Default",
+            @"C:\Profiles\DefaultBrowser",
+            DateTime.UtcNow,
+            IsDefaultBrowser: true);
+        var detectedBrowser = new BrowserProfile(
+            "firefox",
+            "Firefox",
+            "default-release",
+            @"C:\Profiles\DetectedBrowser",
+            DateTime.UtcNow.AddDays(-1));
+        await using var fixture = await CoordinatorFixture.CreateAsync(
+            profiles: [defaultBrowser, detectedBrowser],
+            browserLoginDetector: new StaticBrowserCookieLoginDetector(
+                "youtube",
+                detectedBrowser));
+
+        var attempts = await fixture.Coordinator.BuildAttemptsAsync(
+            "https://youtube.com/watch?v=1",
+            CancellationToken.None);
+
+        var browsers = attempts
+            .Where(attempt => attempt.Source == CookieSourceKind.Browser)
+            .Select(attempt => attempt.BrowserProfile!)
+            .ToArray();
+        Assert.Equal([detectedBrowser, defaultBrowser], browsers);
+    }
+
+    [Fact]
     public async Task BuildAttemptsAsync_WhenSmartModeIsDisabledUsesAnonymousOnly()
     {
         await using var fixture = await CoordinatorFixture.CreateAsync(
@@ -741,7 +774,8 @@ public sealed class CookieAcquisitionCoordinatorTests
             IReadOnlyList<BrowserProfile>? profiles = null,
             IReadOnlyList<CookieHealthRecord>? healthRecords = null,
             IManagedLoginSessionService? managedLogin = null,
-            ICookieHealthStore? healthStore = null)
+            ICookieHealthStore? healthStore = null,
+            IBrowserCookieLoginDetector? browserLoginDetector = null)
         {
             var root = new TestDirectory();
             try
@@ -758,7 +792,8 @@ public sealed class CookieAcquisitionCoordinatorTests
                     new StaticBrowserProfiles(profiles ?? []),
                     healthStore ?? new InMemoryCookieHealthStore(healthRecords ?? []),
                     managedLogin ?? new EmptyManagedLoginSessionService(),
-                    root.Path("temp-cookies"));
+                    root.Path("temp-cookies"),
+                    browserLoginDetector);
                 return new CoordinatorFixture(root, config, vault, coordinator);
             }
             catch
@@ -779,6 +814,25 @@ public sealed class CookieAcquisitionCoordinatorTests
         : IBrowserProfileDiscoveryService
     {
         public IReadOnlyList<BrowserProfile> Discover() => profiles;
+    }
+
+    private sealed class StaticBrowserCookieLoginDetector(
+        string platformStorageKey,
+        BrowserProfile profile) : IBrowserCookieLoginDetector
+    {
+        public Task<BrowserCookieLoginDetection> DetectAsync(
+            IReadOnlyList<BrowserProfile> profiles,
+            IReadOnlyList<MediaPlatformDefinition> platforms,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            IReadOnlyDictionary<string, BrowserProfile> matches =
+                new Dictionary<string, BrowserProfile>(StringComparer.Ordinal)
+                {
+                    [platformStorageKey] = profile
+                };
+            return Task.FromResult(new BrowserCookieLoginDetection(matches, 1, 0));
+        }
     }
 
     private sealed class InMemoryCookieHealthStore(
