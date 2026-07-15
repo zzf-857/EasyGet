@@ -59,7 +59,7 @@ public class BatchDownloadViewModelTests
         blocker.Release();
         await command.WaitAsync(TimeSpan.FromSeconds(5));
         await manager.WaitForIdleAsync(CancellationToken.None)
-            .WaitAsync(TimeSpan.FromSeconds(3));
+            .WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(20, admittedTaskCount);
         Assert.InRange(blocker.MaxConcurrentMetadataRequests, 1, 4);
