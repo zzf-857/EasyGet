@@ -53,6 +53,30 @@ public partial class HistoryView : System.Windows.Controls.UserControl
         _observedViewModel = null;
     }
 
+    private void HistoryView_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not HistoryViewModel vm || NewFolderPopup.IsOpen)
+            return;
+
+        if (e.Key == Key.Escape && vm.ClearSelectionCommand.CanExecute(null))
+        {
+            vm.ClearSelectionCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.A
+            || Keyboard.Modifiers != ModifierKeys.Control
+            || IsTextEntryElement(e.OriginalSource as DependencyObject)
+            || !vm.HasDisplayedHistoryCards)
+        {
+            return;
+        }
+
+        vm.SelectAllVisibleCommand.Execute(null);
+        e.Handled = true;
+    }
+
     private void ObserveViewModel(HistoryViewModel viewModel)
     {
         if (ReferenceEquals(_observedViewModel, viewModel))
@@ -271,6 +295,17 @@ public partial class HistoryView : System.Windows.Controls.UserControl
         for (var current = source; current is not null; current = GetVisualOrLogicalParent(current))
         {
             if (current is ButtonBase)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsTextEntryElement(DependencyObject? source)
+    {
+        for (var current = source; current is not null; current = GetVisualOrLogicalParent(current))
+        {
+            if (current is TextBoxBase or PasswordBox or ComboBox)
                 return true;
         }
 

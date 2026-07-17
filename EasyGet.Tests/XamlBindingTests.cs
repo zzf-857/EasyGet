@@ -645,6 +645,59 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewUsesReversibleSelectionLeadingGroupCheckboxAndUpwardFolderPicker()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        Assert.True(
+            source.Split("ToggleSelectAllVisibleCommand", StringSplitOptions.None).Length >= 3,
+            "Both the workspace and floating toolbar should expose the reversible select-all action.");
+        Assert.Contains("SelectAllVisibleActionText", source, StringComparison.Ordinal);
+        Assert.Contains("Content=\"清除选择\"", source, StringComparison.Ordinal);
+
+        var targetFolderPicker = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "ComboBox"
+            && element.Attribute("ItemsSource")?.Value == "{Binding HistoryFolders}"
+            && element.Attribute("SelectedItem")?.Value == "{Binding BulkTargetFolder}");
+        Assert.NotNull(targetFolderPicker);
+        Assert.Contains(targetFolderPicker!.Attributes(), attribute =>
+            attribute.Name.LocalName == "PopupPlacement.Placement" && attribute.Value == "Top");
+        Assert.Contains(targetFolderPicker.Attributes(), attribute =>
+            attribute.Name.LocalName == "PopupPlacement.VerticalOffset" && attribute.Value == "-8");
+        Assert.Equal("{Binding HasHistoryFolders}", targetFolderPicker.Attribute("IsEnabled")?.Value);
+        Assert.Equal("220", targetFolderPicker.Attribute("MaxDropDownHeight")?.Value);
+        Assert.Contains("BulkTargetFolderPlaceholderText", source, StringComparison.Ordinal);
+
+        var batchSelection = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "CheckBox"
+            && element.Attribute("Command")?.Value?.Contains(
+                "SelectHistoryGroupCommand",
+                StringComparison.Ordinal) == true);
+        Assert.NotNull(batchSelection);
+        Assert.Contains("CircularCheckBox", batchSelection!.Attribute("Style")?.Value ?? "");
+        Assert.Equal("True", batchSelection.Attribute("IsThreeState")?.Value);
+        Assert.Equal("{Binding SelectionState, Mode=OneWay}", batchSelection.Attribute("IsChecked")?.Value);
+
+        var batchActionPanel = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "StackPanel"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "BatchActionPanel"));
+        Assert.NotNull(batchActionPanel);
+        Assert.DoesNotContain(batchActionPanel!.Descendants().Attributes("Command"), attribute =>
+            attribute.Value.Contains("SelectHistoryGroupCommand", StringComparison.Ordinal));
+
+        Assert.DoesNotContain(document.Descendants(), element =>
+            element.Name.LocalName == "DoubleAnimation"
+            && element.Attribute("Storyboard.TargetName")?.Value is "FolderTranslate" or "BatchTranslate");
+        Assert.Contains("PreviewKeyDown=\"HistoryView_PreviewKeyDown\"", source, StringComparison.Ordinal);
+        Assert.Contains("Key.Escape", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ModifierKeys.Control", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HistoryViewUsesPixelVirtualizationAndUnifiedWorkspaceFolderCards()
     {
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
@@ -654,7 +707,8 @@ public class XamlBindingTests
         Assert.Contains("ItemsSource=\"{Binding BatchFolderCards}\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ItemsSource=\"{Binding FolderCards}\"", source, StringComparison.Ordinal);
         Assert.Contains("Text=\"整理与批量管理\"", source, StringComparison.Ordinal);
-        Assert.Contains("AutomationProperties.Name=\"全选当前目录\"", source, StringComparison.Ordinal);
+        Assert.Contains("ToggleSelectAllVisibleCommand", source, StringComparison.Ordinal);
+        Assert.Contains("SelectAllVisibleActionText", source, StringComparison.Ordinal);
         Assert.Contains("DataContext.SelectBatchFolderCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<TextBlock Text=\"批量整理\"", source, StringComparison.Ordinal);
         Assert.Contains("<WrapPanel/>", source, StringComparison.Ordinal);

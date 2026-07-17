@@ -74,6 +74,24 @@ public partial class HistoryViewModel : ObservableObject
     public bool ShouldShowFolderOnlyHint => HasVisibleHistory && !HasDisplayedHistoryCards;
     public bool CanCreateFolder => !string.IsNullOrWhiteSpace(NewFolderName);
     public string SelectionSummaryText => $"已选择 {SelectedCount} 项";
+    public bool AreAllVisibleItemsSelected
+    {
+        get
+        {
+            var items = GetCurrentLocationItems().ToList();
+            return items.Count > 0 && items.All(item => item.IsSelected);
+        }
+    }
+    public string SelectAllVisibleActionText
+        => AreAllVisibleItemsSelected ? "取消全选" : "全选当前";
+    public string SelectAllVisibleActionGlyph
+        => AreAllVisibleItemsSelected ? "\uE711" : "\uE73A";
+    public string SelectAllVisibleActionDescription
+        => AreAllVisibleItemsSelected
+            ? "取消选择当前目录中的全部历史记录"
+            : "选择当前目录中的全部历史记录";
+    public string BulkTargetFolderPlaceholderText
+        => HasHistoryFolders ? "选择目标文件夹" : "请先新建整理文件夹";
     public string SelectedFolderTitle
         => !string.IsNullOrWhiteSpace(SelectedBatchKey)
             ? BatchFolderCards.FirstOrDefault(group => group.Key == SelectedBatchKey)?.Name ?? "批量文件夹"
@@ -317,6 +335,7 @@ public partial class HistoryViewModel : ObservableObject
             OnPropertyChanged(nameof(HasWorkspaceFolders));
             OnPropertyChanged(nameof(WorkspaceSummaryText));
             OnPropertyChanged(nameof(SelectedFolderTitle));
+            OnPropertyChanged(nameof(BulkTargetFolderPlaceholderText));
             ClearSelection();
             RebuildHistoryGroups();
         }
@@ -434,6 +453,7 @@ public partial class HistoryViewModel : ObservableObject
         OnPropertyChanged(nameof(WorkspaceSummaryText));
         OnPropertyChanged(nameof(HasDisplayedHistoryCards));
         OnPropertyChanged(nameof(ShouldShowFolderOnlyHint));
+        NotifyVisibleSelectionState();
         NotifyLocationState();
     }
 
@@ -519,12 +539,23 @@ public partial class HistoryViewModel : ObservableObject
     private void RefreshSelectionState()
     {
         SelectedCount = HistoryItems.Count(item => item.IsSelected);
+        foreach (var group in BatchFolderCards.Concat(HistoryGroups).Distinct())
+            group.NotifySelectionStateChanged();
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionSummaryText));
+        NotifyVisibleSelectionState();
         MoveSelectedToFolderCommand.NotifyCanExecuteChanged();
         RemoveSelectedFromFolderCommand.NotifyCanExecuteChanged();
         DeleteSelectedCommand.NotifyCanExecuteChanged();
         ClearSelectionCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyVisibleSelectionState()
+    {
+        OnPropertyChanged(nameof(AreAllVisibleItemsSelected));
+        OnPropertyChanged(nameof(SelectAllVisibleActionText));
+        OnPropertyChanged(nameof(SelectAllVisibleActionGlyph));
+        OnPropertyChanged(nameof(SelectAllVisibleActionDescription));
     }
 
     private static string ResolveCommonOutputDirectory(IReadOnlyList<DownloadHistory> items)
@@ -720,12 +751,19 @@ public partial class HistoryViewModel : ObservableObject
 
     [RelayCommand]
     private void SelectAllVisible()
+        => SetVisibleSelection(true);
+
+    [RelayCommand]
+    private void ToggleSelectAllVisible()
+        => SetVisibleSelection(!AreAllVisibleItemsSelected);
+
+    private void SetVisibleSelection(bool isSelected)
     {
         _suppressSelectionRefresh = true;
         try
         {
             foreach (var item in GetCurrentLocationItems())
-                item.IsSelected = true;
+                item.IsSelected = isSelected;
         }
         finally
         {

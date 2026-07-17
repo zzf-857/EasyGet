@@ -748,9 +748,23 @@ public class HistoryViewModelTests
             Assert.True(standalone.IsExpanded);
             Assert.Contains("2 个项目", batch.SummaryText, StringComparison.Ordinal);
 
-            viewModel.SelectAllVisibleCommand.Execute(null);
+            Assert.False(viewModel.AreAllVisibleItemsSelected);
+            Assert.Equal("全选当前", viewModel.SelectAllVisibleActionText);
+            viewModel.ToggleSelectAllVisibleCommand.Execute(null);
             Assert.Equal(1, viewModel.SelectedCount);
-            viewModel.ClearSelectionCommand.Execute(null);
+            Assert.True(viewModel.AreAllVisibleItemsSelected);
+            Assert.Equal("取消全选", viewModel.SelectAllVisibleActionText);
+            viewModel.ToggleSelectAllVisibleCommand.Execute(null);
+            Assert.Equal(0, viewModel.SelectedCount);
+            Assert.False(viewModel.AreAllVisibleItemsSelected);
+
+            Assert.False(batch.SelectionState);
+            batch.Items[0].IsSelected = true;
+            Assert.Null(batch.SelectionState);
+            viewModel.SelectHistoryGroupCommand.Execute(batch);
+            Assert.True(batch.SelectionState);
+            viewModel.SelectHistoryGroupCommand.Execute(batch);
+            Assert.False(batch.SelectionState);
 
             viewModel.SelectBatchFolderCommand.Execute(batch);
             Assert.Equal(batch.Key, viewModel.SelectedBatchKey);
@@ -760,9 +774,11 @@ public class HistoryViewModelTests
             Assert.True(openedBatch.IsBatch);
             Assert.True(openedBatch.IsExpanded);
             Assert.Equal(2, openedBatchRow.Items.Count);
-            viewModel.SelectAllVisibleCommand.Execute(null);
+            viewModel.ToggleSelectAllVisibleCommand.Execute(null);
             Assert.Equal(2, viewModel.SelectedCount);
-            viewModel.ClearSelectionCommand.Execute(null);
+            Assert.True(viewModel.AreAllVisibleItemsSelected);
+            viewModel.ToggleSelectAllVisibleCommand.Execute(null);
+            Assert.Equal(0, viewModel.SelectedCount);
 
             viewModel.ReturnToHistoryRootCommand.Execute(null);
             Assert.Null(viewModel.SelectedBatchKey);

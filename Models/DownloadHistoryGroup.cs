@@ -24,6 +24,24 @@ public partial class DownloadHistoryGroup : ObservableObject
 
     public string ExpandGlyph => IsExpanded ? "▾" : "▸";
     public int ItemCount => Items.Count;
+    public bool? SelectionState
+    {
+        get
+        {
+            var selectedCount = Items.Count(item => item.IsSelected);
+            if (selectedCount == 0)
+                return false;
+            return selectedCount == Items.Count ? true : null;
+        }
+    }
+    public string SelectionActionText
+        => SelectionState == true ? "取消选择整组" : "选择整组";
+
+    public void NotifySelectionStateChanged()
+    {
+        OnPropertyChanged(nameof(SelectionState));
+        OnPropertyChanged(nameof(SelectionActionText));
+    }
 
     public string SummaryText
     {

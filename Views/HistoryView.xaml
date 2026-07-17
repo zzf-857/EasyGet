@@ -5,7 +5,8 @@
              Background="Transparent"
              behaviors:Motion.PageEnter="True"
              Loaded="HistoryView_Loaded"
-             Unloaded="HistoryView_Unloaded">
+             Unloaded="HistoryView_Unloaded"
+             PreviewKeyDown="HistoryView_PreviewKeyDown">
 
     <Grid Margin="30,20,30,28">
         <Grid.RowDefinitions>
@@ -215,16 +216,17 @@
                         </ToggleButton>
                         <Button Style="{StaticResource SurfaceButton}"
                                 Margin="8,0,0,0"
-                                Padding="13,8"
-                                IsEnabled="{Binding HasDisplayedHistoryCards}"
-                                Command="{Binding SelectAllVisibleCommand}"
-                                ToolTip="选择当前目录中的全部历史记录"
-                                AutomationProperties.Name="全选当前目录">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE73A;" Style="{StaticResource IconGlyph}" Margin="0,0,6,0"/>
-                                <TextBlock Text="全选当前"/>
-                            </StackPanel>
-                        </Button>
+                                 Padding="13,8"
+                                 IsEnabled="{Binding HasDisplayedHistoryCards}"
+                                 Command="{Binding ToggleSelectAllVisibleCommand}"
+                                 ToolTip="{Binding SelectAllVisibleActionDescription}"
+                                 AutomationProperties.Name="{Binding SelectAllVisibleActionDescription}">
+                             <StackPanel Orientation="Horizontal">
+                                 <TextBlock Text="{Binding SelectAllVisibleActionGlyph}"
+                                            Style="{StaticResource IconGlyph}" Margin="0,0,6,0"/>
+                                 <TextBlock Text="{Binding SelectAllVisibleActionText}"/>
+                             </StackPanel>
+                         </Button>
                     </StackPanel>
 
                     <Popup x:Name="NewFolderPopup"
@@ -334,14 +336,10 @@
                                                 Style="{StaticResource FinderFolderBorder}"
                                                 Effect="{StaticResource HoverShadow}"
                                                 Opacity="0"/>
-                                        <Border x:Name="FolderCard"
-                                                AllowDrop="True"
-                                                DragOver="HistoryFolder_DragOver"
-                                                Drop="HistoryFolder_Drop"
-                                                RenderTransformOrigin="0.5,0.5">
-                                            <Border.RenderTransform>
-                                                <TranslateTransform x:Name="FolderTranslate" Y="0"/>
-                                            </Border.RenderTransform>
+                                         <Border x:Name="FolderCard"
+                                                 AllowDrop="True"
+                                                 DragOver="HistoryFolder_DragOver"
+                                                 Drop="HistoryFolder_Drop">
                                             <Border.Style>
                                                 <Style TargetType="Border" BasedOn="{StaticResource FinderFolderBorder}">
                                                     <Style.Triggers>
@@ -488,11 +486,6 @@
                                             <Trigger.EnterActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="FolderTranslate"
-                                                                         Storyboard.TargetProperty="Y"
-                                                                         To="-3"
-                                                                         Duration="{StaticResource MotionDurationFast}"
-                                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
                                                         <DoubleAnimation Storyboard.TargetName="FolderShadow"
                                                                          Storyboard.TargetProperty="Opacity"
                                                                          To="0.8"
@@ -504,11 +497,6 @@
                                             <Trigger.ExitActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="FolderTranslate"
-                                                                         Storyboard.TargetProperty="Y"
-                                                                         To="0"
-                                                                         Duration="{StaticResource MotionDurationMedium}"
-                                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
                                                         <DoubleAnimation Storyboard.TargetName="FolderShadow"
                                                                          Storyboard.TargetProperty="Opacity"
                                                                          To="0"
@@ -517,10 +505,14 @@
                                                     </Storyboard>
                                                 </BeginStoryboard>
                                             </Trigger.ExitActions>
-                                            <Setter TargetName="FolderCountBadge" Property="Visibility" Value="Collapsed"/>
-                                            <Setter TargetName="FolderActionPanel" Property="Visibility" Value="Visible"/>
-                                        </Trigger>
-                                    </DataTemplate.Triggers>
+                                             <Setter TargetName="FolderCountBadge" Property="Visibility" Value="Collapsed"/>
+                                             <Setter TargetName="FolderActionPanel" Property="Visibility" Value="Visible"/>
+                                         </Trigger>
+                                         <Trigger SourceName="FolderCard" Property="IsKeyboardFocusWithin" Value="True">
+                                             <Setter TargetName="FolderCountBadge" Property="Visibility" Value="Collapsed"/>
+                                             <Setter TargetName="FolderActionPanel" Property="Visibility" Value="Visible"/>
+                                         </Trigger>
+                                     </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
@@ -551,11 +543,7 @@
                                                 Style="{StaticResource FinderFolderBorder}"
                                                 Effect="{StaticResource HoverShadow}"
                                                 Opacity="0"/>
-                                        <Border x:Name="BatchFolderCard"
-                                                RenderTransformOrigin="0.5,0.5">
-                                            <Border.RenderTransform>
-                                                <TranslateTransform x:Name="BatchTranslate" Y="0"/>
-                                            </Border.RenderTransform>
+                                        <Border x:Name="BatchFolderCard">
                                             <Border.Style>
                                                 <Style TargetType="Border" BasedOn="{StaticResource FinderFolderBorder}">
                                                     <Style.Triggers>
@@ -567,9 +555,25 @@
                                                 </Style>
                                             </Border.Style>
                                             <Grid>
-                                                <Button Background="Transparent"
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="42"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <CheckBox Grid.Column="0"
+                                                          Panel.ZIndex="20"
+                                                          Style="{StaticResource CircularCheckBox}"
+                                                          IsThreeState="True"
+                                                          IsChecked="{Binding SelectionState, Mode=OneWay}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center"
+                                                          Command="{Binding DataContext.SelectHistoryGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                          CommandParameter="{Binding}"
+                                                          ToolTip="{Binding SelectionActionText}"
+                                                          AutomationProperties.Name="{Binding SelectionActionText}"/>
+                                                <Button Grid.Column="1"
+                                                        Background="Transparent"
                                                         BorderThickness="0"
-                                                        Padding="14,12"
+                                                        Padding="0,12,12,12"
                                                         Cursor="Hand"
                                                         HorizontalContentAlignment="Stretch"
                                                         Command="{Binding DataContext.SelectBatchFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -603,13 +607,13 @@
                                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding Name}"
                                                                        Style="{StaticResource TextBodyStrong}"
-                                                                       MaxWidth="224"
+                                                                       MaxWidth="180"
                                                                        MaxHeight="40"
                                                                        TextWrapping="Wrap"
                                                                        TextTrimming="CharacterEllipsis"/>
                                                             <TextBlock Text="{Binding SummaryText, Mode=OneWay}"
                                                                        Style="{StaticResource TextCaption}"
-                                                                       MaxWidth="224"
+                                                                       MaxWidth="180"
                                                                        Margin="0,4,0,0"
                                                                        TextTrimming="CharacterEllipsis"/>
                                                         </StackPanel>
@@ -627,6 +631,7 @@
                                                 </Button>
 
                                                 <StackPanel x:Name="BatchActionPanel"
+                                                            Grid.Column="1"
                                                             Panel.ZIndex="10"
                                                             Orientation="Horizontal"
                                                             HorizontalAlignment="Right"
@@ -635,14 +640,6 @@
                                                             Visibility="Collapsed">
                                                     <Button Style="{StaticResource ToolbarIconButton}"
                                                             Width="30" Height="30"
-                                                            Command="{Binding DataContext.SelectHistoryGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}"
-                                                            ToolTip="选择整组"
-                                                            AutomationProperties.Name="选择整组">
-                                                        <TextBlock Text="&#xE73A;" Style="{StaticResource IconGlyph}"/>
-                                                    </Button>
-                                                    <Button Style="{StaticResource ToolbarIconButton}"
-                                                            Width="30" Height="30" Margin="5,0,0,0"
                                                             Command="{Binding DataContext.OpenDirectoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding Directory}"
                                                             ToolTip="打开本地文件夹"
@@ -667,11 +664,6 @@
                                             <Trigger.EnterActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="BatchTranslate"
-                                                                         Storyboard.TargetProperty="Y"
-                                                                         To="-3"
-                                                                         Duration="{StaticResource MotionDurationFast}"
-                                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
                                                         <DoubleAnimation Storyboard.TargetName="BatchShadow"
                                                                          Storyboard.TargetProperty="Opacity"
                                                                          To="0.8"
@@ -683,11 +675,6 @@
                                             <Trigger.ExitActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="BatchTranslate"
-                                                                         Storyboard.TargetProperty="Y"
-                                                                         To="0"
-                                                                         Duration="{StaticResource MotionDurationMedium}"
-                                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
                                                         <DoubleAnimation Storyboard.TargetName="BatchShadow"
                                                                          Storyboard.TargetProperty="Opacity"
                                                                          To="0"
@@ -696,6 +683,10 @@
                                                     </Storyboard>
                                                 </BeginStoryboard>
                                             </Trigger.ExitActions>
+                                            <Setter TargetName="BatchCountBadge" Property="Visibility" Value="Collapsed"/>
+                                            <Setter TargetName="BatchActionPanel" Property="Visibility" Value="Visible"/>
+                                        </Trigger>
+                                        <Trigger SourceName="BatchFolderCard" Property="IsKeyboardFocusWithin" Value="True">
                                             <Setter TargetName="BatchCountBadge" Property="Visibility" Value="Collapsed"/>
                                             <Setter TargetName="BatchActionPanel" Property="Visibility" Value="Visible"/>
                                         </Trigger>
@@ -1111,10 +1102,16 @@
                                Style="{StaticResource TextBodyStrong}" VerticalAlignment="Center"/>
                     <Button Style="{StaticResource SurfaceButton}"
                             Padding="9,5" Margin="9,0,0,0"
-                            Command="{Binding SelectAllVisibleCommand}" Content="全选"/>
+                            Command="{Binding ToggleSelectAllVisibleCommand}"
+                            Content="{Binding SelectAllVisibleActionText}"
+                            ToolTip="{Binding SelectAllVisibleActionDescription}"
+                            AutomationProperties.Name="{Binding SelectAllVisibleActionDescription}"/>
                     <Button Style="{StaticResource SurfaceButton}"
                             Padding="9,5" Margin="6,0,0,0"
-                            Command="{Binding ClearSelectionCommand}" Content="取消"/>
+                            Command="{Binding ClearSelectionCommand}"
+                            Content="清除选择"
+                            ToolTip="清除当前选择并退出批量操作"
+                            AutomationProperties.Name="清除选择"/>
 
                     <Border Width="1" Height="24" Background="{StaticResource BorderPrimaryBrush}"
                             Margin="12,0"/>
@@ -1124,8 +1121,12 @@
                                   ItemsSource="{Binding HistoryFolders}"
                                   DisplayMemberPath="Name"
                                   SelectedItem="{Binding BulkTargetFolder}"
-                                  ToolTip="选择目标整理文件夹"/>
-                        <TextBlock Text="选择目标文件夹"
+                                  IsEnabled="{Binding HasHistoryFolders}"
+                                  MaxDropDownHeight="220"
+                                  behaviors:PopupPlacement.Placement="Top"
+                                  behaviors:PopupPlacement.VerticalOffset="-8"
+                                  AutomationProperties.Name="{Binding BulkTargetFolderPlaceholderText}"/>
+                        <TextBlock Text="{Binding BulkTargetFolderPlaceholderText}"
                                    Margin="12,0"
                                    VerticalAlignment="Center"
                                    IsHitTestVisible="False">

@@ -324,6 +324,7 @@ public class ThemeStyleTests
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == "Cursor"
             && element.Attribute("Value")?.Value == "Arrow");
+
     }
 
     [Fact]
@@ -355,6 +356,24 @@ public class ThemeStyleTests
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == "Cursor"
             && element.Attribute("Value")?.Value == "Arrow");
+
+        var popup = style.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Popup"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "Popup"));
+        Assert.NotNull(popup);
+        Assert.Contains("PopupPlacement.Placement", popup!.Attribute("Placement")?.Value ?? "");
+        Assert.Contains("PopupPlacement.VerticalOffset", popup.Attribute("VerticalOffset")?.Value ?? "");
+
+        var openArrowSetter = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("TargetName")?.Value == "Arrow"
+            && element.Attribute("Property")?.Value == "RenderTransform");
+        Assert.NotNull(openArrowSetter);
+        Assert.Contains(openArrowSetter!.Descendants(), element =>
+            element.Name.LocalName == "RotateTransform"
+            && element.Attribute("Angle")?.Value == "180");
     }
 
     [Fact]
