@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using EasyGet.Models;
 using EasyGet.ViewModels;
@@ -11,6 +12,7 @@ public partial class HistoryView : System.Windows.Controls.UserControl
 {
     private const string HistoryItemsDataFormat = "EasyGet.HistoryItems";
     private Point _historyDragStart;
+    private HistoryViewModel? _observedViewModel;
 
     public HistoryView()
     {
@@ -21,8 +23,64 @@ public partial class HistoryView : System.Windows.Controls.UserControl
     {
         if (DataContext is HistoryViewModel vm)
         {
+            ObserveViewModel(vm);
             await vm.LoadHistory();
+            ScrollHistoryToTop();
         }
+    }
+
+    private void HistoryView_Unloaded(object sender, RoutedEventArgs e)
+    {
+        if (_observedViewModel is not null)
+            _observedViewModel.PropertyChanged -= HistoryViewModel_PropertyChanged;
+        _observedViewModel = null;
+    }
+
+    private void ObserveViewModel(HistoryViewModel viewModel)
+    {
+        if (ReferenceEquals(_observedViewModel, viewModel))
+            return;
+
+        if (_observedViewModel is not null)
+            _observedViewModel.PropertyChanged -= HistoryViewModel_PropertyChanged;
+        _observedViewModel = viewModel;
+        _observedViewModel.PropertyChanged += HistoryViewModel_PropertyChanged;
+    }
+
+    private void HistoryViewModel_PropertyChanged(
+        object? sender,
+        System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(HistoryViewModel.SelectedFolderId)
+            or nameof(HistoryViewModel.SelectedBatchKey)
+            or nameof(HistoryViewModel.SelectedMediaFilter)
+            or nameof(HistoryViewModel.SearchKeyword))
+        {
+            ScrollHistoryToTop();
+        }
+    }
+
+    private void ScrollHistoryToTop()
+    {
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.ContextIdle,
+            new Action(() => FindVisualChild<ScrollViewer>(HistoryList)?.ScrollToTop()));
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match)
+                return match;
+            var descendant = FindVisualChild<T>(child);
+            if (descendant is not null)
+                return descendant;
+        }
+
+        return null;
     }
 
     private void HistoryCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)

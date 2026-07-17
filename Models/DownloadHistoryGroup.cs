@@ -19,6 +19,9 @@ public partial class DownloadHistoryGroup : ObservableObject
     [NotifyPropertyChangedFor(nameof(ExpandGlyph))]
     private bool _isExpanded;
 
+    [ObservableProperty]
+    private bool _isSelected;
+
     public string ExpandGlyph => IsExpanded ? "▾" : "▸";
     public int ItemCount => Items.Count;
 

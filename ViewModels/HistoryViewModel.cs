@@ -22,6 +22,7 @@ public partial class HistoryViewModel : ObservableObject
     private CancellationTokenSource? _searchCts;
     private int _historyLoadRequestVersion;
     private bool _suppressSelectionRefresh;
+    private bool _suppressLocationRefresh;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
@@ -38,6 +39,13 @@ public partial class HistoryViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(SelectedFolderTitle))]
     private long? _selectedFolderId;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
+    [NotifyPropertyChangedFor(nameof(IsAtHistoryRoot))]
+    [NotifyPropertyChangedFor(nameof(HasActiveLocation))]
+    [NotifyPropertyChangedFor(nameof(SelectedFolderTitle))]
+    private string? _selectedBatchKey;
+
     [ObservableProperty] private bool _isLoadingHistory;
     [ObservableProperty] private int _visibleHistoryCount;
     [ObservableProperty] private int _unfiledHistoryCount;
@@ -48,21 +56,33 @@ public partial class HistoryViewModel : ObservableObject
     public bool IsSearchOrFilterActive
         => !string.IsNullOrEmpty(SearchKeyword)
            || SelectedMediaFilter != "全部"
-           || SelectedFolderId is not null;
+           || SelectedFolderId is not null
+           || !string.IsNullOrWhiteSpace(SelectedBatchKey);
 
     public bool IsShowingAllFolders => SelectedFolderId is null;
     public bool IsShowingUnfiled => SelectedFolderId == 0;
+    public bool IsAtHistoryRoot => SelectedFolderId is null && string.IsNullOrWhiteSpace(SelectedBatchKey);
+    public bool HasActiveLocation => !IsAtHistoryRoot;
     public bool HasSelection => SelectedCount > 0;
     public bool HasVisibleHistory => VisibleHistoryCount > 0;
     public bool HasHistoryFolders => HistoryFolders.Count > 0;
+    public bool HasBatchFolders => BatchFolderCards.Count > 0;
+    public bool HasWorkspaceFolders => HistoryFolders.Count > 0 || BatchFolderCards.Count > 0;
+    public bool HasDisplayedHistoryCards => HistoryGroups.Count > 0;
+    public bool ShouldShowFolderOnlyHint => HasVisibleHistory && !HasDisplayedHistoryCards;
     public bool CanCreateFolder => !string.IsNullOrWhiteSpace(NewFolderName);
     public string SelectionSummaryText => $"已选择 {SelectedCount} 项";
-    public string SelectedFolderTitle => SelectedFolderId switch
-    {
-        null => "全部记录",
-        0 => "未整理",
-        _ => HistoryFolders.FirstOrDefault(folder => folder.Id == SelectedFolderId)?.Name ?? "整理文件夹"
-    };
+    public string SelectedFolderTitle
+        => !string.IsNullOrWhiteSpace(SelectedBatchKey)
+            ? BatchFolderCards.FirstOrDefault(group => group.Key == SelectedBatchKey)?.Name ?? "批量文件夹"
+            : SelectedFolderId switch
+            {
+                null => "历史首页",
+                0 => "未整理",
+                _ => HistoryFolders.FirstOrDefault(folder => folder.Id == SelectedFolderId)?.Name ?? "整理文件夹"
+            };
+    public string WorkspaceSummaryText
+        => $"{HistoryFolders.Count} 个自定义文件夹 · {BatchFolderCards.Count} 个批量文件夹";
 
     [ObservableProperty] private int _totalHistoryCount;
     [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
@@ -76,12 +96,24 @@ public partial class HistoryViewModel : ObservableObject
 
     partial void OnSelectedFolderIdChanged(long? value)
     {
-        var selectedCardId = value ?? -1;
-        foreach (var folder in FolderCards)
-            folder.IsSelected = selectedCardId == folder.Id;
+        ClearSelectedBatchWithoutRefresh();
+        foreach (var folder in HistoryFolders)
+            folder.IsSelected = value == folder.Id;
         ClearSelection();
         RebuildHistoryGroups();
-        OnPropertyChanged(nameof(SelectedFolderTitle));
+        NotifyLocationState();
+    }
+
+    partial void OnSelectedBatchKeyChanged(string? value)
+    {
+        if (_suppressLocationRefresh)
+            return;
+
+        foreach (var group in BatchFolderCards)
+            group.IsSelected = string.Equals(value, group.Key, StringComparison.Ordinal);
+        ClearSelection();
+        RebuildHistoryGroups();
+        NotifyLocationState();
     }
 
     partial void OnSearchKeywordChanged(string value)
@@ -118,8 +150,8 @@ public partial class HistoryViewModel : ObservableObject
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
     public ObservableCollection<DownloadHistoryGroup> HistoryGroups { get; } = [];
+    public ObservableCollection<DownloadHistoryGroup> BatchFolderCards { get; } = [];
     public ObservableCollection<HistoryFolder> HistoryFolders { get; } = [];
-    public ObservableCollection<HistoryFolder> FolderCards { get; } = [];
 
     public event Action<string, bool>? RequestShowNotification;
 
@@ -263,28 +295,10 @@ public partial class HistoryViewModel : ObservableObject
             }
 
             HistoryFolders.Clear();
-            FolderCards.Clear();
-            FolderCards.Add(new HistoryFolder
-            {
-                Id = -1,
-                Name = "全部记录",
-                ItemCount = totalCount,
-                IsSystemFolder = true,
-                IsSelected = SelectedFolderId is null
-            });
-            FolderCards.Add(new HistoryFolder
-            {
-                Id = 0,
-                Name = "未整理",
-                ItemCount = unfiledCount,
-                IsSystemFolder = true,
-                IsSelected = SelectedFolderId == 0
-            });
             foreach (var folder in folders)
             {
                 folder.IsSelected = folder.Id == SelectedFolderId;
                 HistoryFolders.Add(folder);
-                FolderCards.Add(folder);
             }
 
             if (BulkTargetFolder is not null)
@@ -297,6 +311,8 @@ public partial class HistoryViewModel : ObservableObject
                 SelectedFolderId = null;
 
             OnPropertyChanged(nameof(HasHistoryFolders));
+            OnPropertyChanged(nameof(HasWorkspaceFolders));
+            OnPropertyChanged(nameof(WorkspaceSummaryText));
             OnPropertyChanged(nameof(SelectedFolderTitle));
             ClearSelection();
             RebuildHistoryGroups();
@@ -315,15 +331,12 @@ public partial class HistoryViewModel : ObservableObject
 
     private void RebuildHistoryGroups()
     {
-        var previousExpansion = HistoryGroups
-            .ToDictionary(group => group.Key, group => group.IsExpanded, StringComparer.Ordinal);
         HistoryGroups.Clear();
+        BatchFolderCards.Clear();
 
         var visibleItems = HistoryItems
             .Where(MatchesSelectedFolder)
             .ToList();
-        VisibleHistoryCount = visibleItems.Count;
-        OnPropertyChanged(nameof(HasVisibleHistory));
 
         var groupsByKey = new Dictionary<string, List<DownloadHistory>>(StringComparer.Ordinal);
         var legacyGroupNames = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -374,7 +387,7 @@ public partial class HistoryViewModel : ObservableObject
                 ? ResolveBatchName(first, inferredCollectionTitle)
                 : inferredCollectionTitle
                     ?? legacyGroupNames.GetValueOrDefault(key, first.Title);
-            HistoryGroups.Add(new DownloadHistoryGroup
+            var group = new DownloadHistoryGroup
             {
                 Key = key,
                 BatchId = first.BatchId,
@@ -384,20 +397,75 @@ public partial class HistoryViewModel : ObservableObject
                     : ResolveCommonOutputDirectory(items),
                 IsBatch = isBatch,
                 Items = items,
-                IsExpanded = previousExpansion.TryGetValue(key, out var expanded)
-                    ? expanded
-                    : !isBatch
-            });
+                IsExpanded = !isBatch,
+                IsSelected = string.Equals(SelectedBatchKey, key, StringComparison.Ordinal)
+            };
+
+            if (isBatch)
+                BatchFolderCards.Add(group);
+            else
+                HistoryGroups.Add(group);
         }
+
+        var selectedBatch = string.IsNullOrWhiteSpace(SelectedBatchKey)
+            ? null
+            : BatchFolderCards.FirstOrDefault(group => group.Key == SelectedBatchKey);
+        if (selectedBatch is not null)
+        {
+            selectedBatch.IsExpanded = true;
+            HistoryGroups.Clear();
+            HistoryGroups.Add(selectedBatch);
+            VisibleHistoryCount = selectedBatch.ItemCount;
+        }
+        else
+        {
+            ClearSelectedBatchWithoutRefresh();
+            VisibleHistoryCount = visibleItems.Count;
+        }
+
+        OnPropertyChanged(nameof(HasVisibleHistory));
+        OnPropertyChanged(nameof(HasBatchFolders));
+        OnPropertyChanged(nameof(HasWorkspaceFolders));
+        OnPropertyChanged(nameof(WorkspaceSummaryText));
+        OnPropertyChanged(nameof(HasDisplayedHistoryCards));
+        OnPropertyChanged(nameof(ShouldShowFolderOnlyHint));
+        NotifyLocationState();
     }
 
     private bool MatchesSelectedFolder(DownloadHistory item)
         => SelectedFolderId switch
         {
-            null => true,
+            null => item.FolderId == 0 || !string.IsNullOrWhiteSpace(SearchKeyword),
             0 => item.FolderId == 0,
             var folderId => item.FolderId == folderId
         };
+
+    private IEnumerable<DownloadHistory> GetCurrentLocationItems()
+        => HistoryGroups.SelectMany(group => group.Items);
+
+    private void NotifyLocationState()
+    {
+        OnPropertyChanged(nameof(IsAtHistoryRoot));
+        OnPropertyChanged(nameof(HasActiveLocation));
+        OnPropertyChanged(nameof(SelectedFolderTitle));
+        OnPropertyChanged(nameof(IsSearchOrFilterActive));
+    }
+
+    private void ClearSelectedBatchWithoutRefresh()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedBatchKey))
+            return;
+
+        _suppressLocationRefresh = true;
+        try
+        {
+            SelectedBatchKey = null;
+        }
+        finally
+        {
+            _suppressLocationRefresh = false;
+        }
+    }
 
     private void OnHistoryItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
@@ -509,7 +577,27 @@ public partial class HistoryViewModel : ObservableObject
     private void SelectFolder(HistoryFolder? folder)
     {
         if (folder is not null)
-            SelectedFolderId = folder.Id < 0 ? null : folder.Id;
+            SelectedFolderId = SelectedFolderId == folder.Id ? null : folder.Id;
+    }
+
+    [RelayCommand]
+    private void SelectBatchFolder(DownloadHistoryGroup? group)
+    {
+        if (group is null || !group.IsBatch)
+            return;
+
+        SelectedBatchKey = string.Equals(SelectedBatchKey, group.Key, StringComparison.Ordinal)
+            ? null
+            : group.Key;
+    }
+
+    [RelayCommand]
+    private void ReturnToHistoryRoot()
+    {
+        if (SelectedBatchKey is not null)
+            SelectedBatchKey = null;
+        if (SelectedFolderId is not null)
+            SelectedFolderId = null;
     }
 
     [RelayCommand(CanExecute = nameof(CanCreateFolder))]
@@ -605,7 +693,7 @@ public partial class HistoryViewModel : ObservableObject
         _suppressSelectionRefresh = true;
         try
         {
-            foreach (var item in HistoryItems.Where(MatchesSelectedFolder))
+            foreach (var item in GetCurrentLocationItems())
                 item.IsSelected = true;
         }
         finally
@@ -697,10 +785,18 @@ public partial class HistoryViewModel : ObservableObject
 
         await _historyService.MoveToFolderAsync(historyIds, folderId);
         var destinationName = folderId == 0
-            ? "未整理"
+            ? "历史首页"
             : HistoryFolders.FirstOrDefault(folder => folder.Id == folderId)?.Name ?? "整理文件夹";
         await LoadHistory();
-        SelectedFolderId = folderId == 0 ? 0 : folderId;
+        if (folderId == 0)
+        {
+            SelectedBatchKey = null;
+            SelectedFolderId = null;
+        }
+        else
+        {
+            SelectedFolderId = folderId;
+        }
         RequestShowNotification?.Invoke(
             $"已将 {historyIds.Count} 项整理到“{destinationName}”（本地文件未移动）",
             true);
@@ -721,14 +817,21 @@ public partial class HistoryViewModel : ObservableObject
         await _historyService.ClearAllAsync();
         UnsubscribeHistoryItems();
         HistoryItems.Clear();
+        ReturnToHistoryRoot();
         HistoryGroups.Clear();
+        BatchFolderCards.Clear();
         TotalHistoryCount = 0;
         VisibleHistoryCount = 0;
         UnfiledHistoryCount = 0;
-        foreach (var folder in FolderCards)
+        foreach (var folder in HistoryFolders)
             folder.ItemCount = 0;
         ClearSelection();
         OnPropertyChanged(nameof(HasVisibleHistory));
+        OnPropertyChanged(nameof(HasBatchFolders));
+        OnPropertyChanged(nameof(HasWorkspaceFolders));
+        OnPropertyChanged(nameof(WorkspaceSummaryText));
+        OnPropertyChanged(nameof(HasDisplayedHistoryCards));
+        OnPropertyChanged(nameof(ShouldShowFolderOnlyHint));
     }
 
     /// <summary>
@@ -739,6 +842,7 @@ public partial class HistoryViewModel : ObservableObject
     {
         SearchKeyword = "";
         SelectedMediaFilter = "全部";
+        SelectedBatchKey = null;
         SelectedFolderId = null;
         await LoadHistory();
     }

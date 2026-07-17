@@ -552,7 +552,7 @@ public class XamlBindingTests
         Assert.Contains("MoveSelectedToFolderCommand", source, StringComparison.Ordinal);
         Assert.Contains("RemoveSelectedFromFolderCommand", source, StringComparison.Ordinal);
         Assert.Contains("DeleteSelectedCommand", source, StringComparison.Ordinal);
-        Assert.Contains("Visibility=\"{Binding HasVisibleHistory", source, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding HasSelection", source, StringComparison.Ordinal);
         Assert.Contains("IsSelected, Mode=TwoWay", source, StringComparison.Ordinal);
         Assert.Contains("HistoryFolder_Drop", source, StringComparison.Ordinal);
         Assert.Contains("HistoryCard_PreviewMouseMove", source, StringComparison.Ordinal);
@@ -565,16 +565,26 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void HistoryViewUsesPixelScrollingAndResponsiveFolderCards()
+    public void HistoryViewUsesPixelScrollingAndUnifiedWorkspaceFolderCards()
     {
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
 
-        Assert.Contains("ItemsSource=\"{Binding FolderCards}\"", source, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding HistoryFolders}\"", source, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding BatchFolderCards}\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ItemsSource=\"{Binding FolderCards}\"", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"整理与批量管理\"", source, StringComparison.Ordinal);
+        Assert.Contains("AutomationProperties.Name=\"全选当前目录\"", source, StringComparison.Ordinal);
+        Assert.Contains("DataContext.SelectBatchFolderCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<TextBlock Text=\"批量整理\"", source, StringComparison.Ordinal);
         Assert.Contains("<WrapPanel/>", source, StringComparison.Ordinal);
         Assert.Contains("ScrollViewer.CanContentScroll=\"False\"", source, StringComparison.Ordinal);
         Assert.Contains("ScrollViewer.IsDeferredScrollingEnabled=\"False\"", source, StringComparison.Ordinal);
         Assert.Contains("ScrollViewer.PanningMode=\"VerticalOnly\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("HorizontalScrollBarVisibility=\"Auto\"", source, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"HistoryList\"", source, StringComparison.Ordinal);
+        Assert.Contains("ScrollHistoryToTop", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("ScrollToTop()", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]

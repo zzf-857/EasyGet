@@ -20,11 +20,10 @@ public class HistoryViewModelTests
             var folder = await service.CreateFolderAsync("课程");
             var viewModel = new HistoryViewModel(service);
             await viewModel.LoadHistory();
-            Assert.Equal([-1, 0, folder.Id], viewModel.FolderCards.Select(item => item.Id).ToArray());
-            Assert.True(viewModel.FolderCards[0].IsSelected);
-            Assert.True(viewModel.FolderCards[0].IsSystemFolder);
-            Assert.False(viewModel.FolderCards[0].CanAcceptDrop);
-            Assert.True(viewModel.FolderCards[1].CanAcceptDrop);
+            var workspaceFolder = Assert.Single(viewModel.HistoryFolders);
+            Assert.Equal(folder.Id, workspaceFolder.Id);
+            Assert.True(workspaceFolder.CanAcceptDrop);
+            Assert.Empty(viewModel.BatchFolderCards);
             var originalTarget = Assert.Single(viewModel.HistoryFolders);
             viewModel.BulkTargetFolder = originalTarget;
 
@@ -66,10 +65,15 @@ public class HistoryViewModelTests
             Assert.Equal("稍后观看", viewModel.SelectedFolderTitle);
             Assert.Equal(folder.Id, Assert.Single(viewModel.HistoryItems, item => item.Title == first.Title).FolderId);
 
+            viewModel.ReturnToHistoryRootCommand.Execute(null);
+            Assert.Equal(1, viewModel.VisibleHistoryCount);
+            Assert.DoesNotContain(viewModel.HistoryGroups.SelectMany(group => group.Items), item => item.FolderId == folder.Id);
+            viewModel.SelectFolderCommand.Execute(Assert.Single(viewModel.HistoryFolders));
+
             var movedId = Assert.Single(viewModel.HistoryItems, item => item.Title == first.Title).Id;
             await viewModel.MoveItemsToFolderAsync([movedId], 0);
 
-            Assert.Equal(0, viewModel.SelectedFolderId);
+            Assert.Null(viewModel.SelectedFolderId);
             Assert.Equal(2, viewModel.UnfiledHistoryCount);
             Assert.All(viewModel.HistoryItems, item => Assert.Equal(0, item.FolderId));
         }
@@ -689,6 +693,8 @@ public class HistoryViewModelTests
         Assert.Contains("OpenSourceUrlCommand", commandProperties);
         Assert.Contains("DeleteItemCommand", commandProperties);
         Assert.Contains("ToggleHistoryGroupCommand", commandProperties);
+        Assert.Contains("SelectBatchFolderCommand", commandProperties);
+        Assert.Contains("ReturnToHistoryRootCommand", commandProperties);
         Assert.Contains("OpenDirectoryCommand", commandProperties);
         Assert.Contains("DeleteBatchCommand", commandProperties);
     }
@@ -732,20 +738,47 @@ public class HistoryViewModelTests
             await viewModel.LoadHistory();
 
             Assert.Equal(3, viewModel.HistoryItems.Count);
-            Assert.Equal(2, viewModel.HistoryGroups.Count);
-            var batch = Assert.Single(viewModel.HistoryGroups, group => group.IsBatch);
-            var standalone = Assert.Single(viewModel.HistoryGroups, group => !group.IsBatch);
+            var batch = Assert.Single(viewModel.BatchFolderCards);
+            var standalone = Assert.Single(viewModel.HistoryGroups);
+            Assert.False(standalone.IsBatch);
             Assert.Equal(2, batch.ItemCount);
             Assert.False(batch.IsExpanded);
             Assert.True(standalone.IsExpanded);
             Assert.Contains("2 个项目", batch.SummaryText, StringComparison.Ordinal);
 
-            viewModel.ToggleHistoryGroupCommand.Execute(batch);
-            Assert.True(batch.IsExpanded);
+            viewModel.SelectAllVisibleCommand.Execute(null);
+            Assert.Equal(1, viewModel.SelectedCount);
+            viewModel.ClearSelectionCommand.Execute(null);
 
-            await viewModel.DeleteBatchCommand.ExecuteAsync(batch);
+            viewModel.SelectBatchFolderCommand.Execute(batch);
+            Assert.Equal(batch.Key, viewModel.SelectedBatchKey);
+            Assert.Equal(2, viewModel.VisibleHistoryCount);
+            var openedBatch = Assert.Single(viewModel.HistoryGroups);
+            Assert.True(openedBatch.IsBatch);
+            Assert.True(openedBatch.IsExpanded);
+            viewModel.SelectAllVisibleCommand.Execute(null);
+            Assert.Equal(2, viewModel.SelectedCount);
+            viewModel.ClearSelectionCommand.Execute(null);
+
+            viewModel.ReturnToHistoryRootCommand.Execute(null);
+            Assert.Null(viewModel.SelectedBatchKey);
+            Assert.Equal(3, viewModel.VisibleHistoryCount);
+            Assert.False(Assert.Single(viewModel.HistoryGroups).IsBatch);
+
+            viewModel.SelectBatchFolderCommand.Execute(Assert.Single(viewModel.BatchFolderCards));
+            openedBatch = Assert.Single(viewModel.HistoryGroups);
+
+            await viewModel.MoveItemsToFolderAsync([openedBatch.Items[0].Id], 0);
+            Assert.Null(viewModel.SelectedBatchKey);
+            Assert.True(viewModel.IsAtHistoryRoot);
+            viewModel.SelectBatchFolderCommand.Execute(Assert.Single(viewModel.BatchFolderCards));
+            openedBatch = Assert.Single(viewModel.HistoryGroups);
+
+            await viewModel.DeleteBatchCommand.ExecuteAsync(openedBatch);
             Assert.Single(viewModel.HistoryItems);
             Assert.Single(viewModel.HistoryGroups);
+            Assert.Empty(viewModel.BatchFolderCards);
+            Assert.Null(viewModel.SelectedBatchKey);
             Assert.Single(await service.GetAllAsync());
         }
         finally
@@ -781,11 +814,12 @@ public class HistoryViewModelTests
             };
             await viewModel.LoadHistory();
 
-            var group = Assert.Single(viewModel.HistoryGroups);
+            var group = Assert.Single(viewModel.BatchFolderCards);
             Assert.True(group.IsBatch);
             Assert.Equal(2, group.ItemCount);
             Assert.Equal(collectionTitle, group.Name);
             Assert.False(group.IsExpanded);
+            Assert.Empty(viewModel.HistoryGroups);
 
             await viewModel.DeleteBatchCommand.ExecuteAsync(group);
             Assert.Empty(viewModel.HistoryItems);
@@ -1140,13 +1174,15 @@ public class HistoryViewModelTests
             };
             await viewModel.LoadHistory();
             Assert.Single(viewModel.HistoryItems);
-            Assert.All(viewModel.FolderCards, folder => Assert.Equal(1, folder.ItemCount));
+            Assert.Empty(viewModel.HistoryFolders);
+            Assert.Empty(viewModel.BatchFolderCards);
 
             await viewModel.ClearAllCommand.ExecuteAsync(null);
 
             Assert.Empty(viewModel.HistoryItems);
             Assert.Equal(0, viewModel.TotalHistoryCount);
-            Assert.All(viewModel.FolderCards, folder => Assert.Equal(0, folder.ItemCount));
+            Assert.Empty(viewModel.HistoryFolders);
+            Assert.Empty(viewModel.BatchFolderCards);
         }
         finally
         {

@@ -9,25 +9,9 @@ public partial class HistoryFolder : ObservableObject
 {
     public long Id { get; init; }
 
-    /// <summary>内置入口（全部记录/未整理）不允许重命名或删除。</summary>
-    public bool IsSystemFolder { get; init; }
-
-    public bool CanManage => !IsSystemFolder;
-    public bool CanAcceptDrop => Id >= 0;
-
-    public string IconGlyph => Id switch
-    {
-        -1 => "\uE8B7",
-        0 => "\uE838",
-        _ => "\uE8B7"
-    };
-
-    public string Caption => Id switch
-    {
-        -1 => "完整资料库",
-        0 => "等待归类",
-        _ => "自定义整理"
-    };
+    public bool CanAcceptDrop => Id > 0;
+    public string IconGlyph => "\uE8B7";
+    public string Caption => "自定义整理";
 
     [ObservableProperty]
     private string _name = "";
