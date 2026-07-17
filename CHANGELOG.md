@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.3.2 - 2026-07-17
+
+### History Workspace
+- Removed the redundant all-records and unfiled folder cards and combined folder creation and batch organization into one workspace panel.
+- Moved “select all current” beside the create-folder action and scoped it to records actually displayed in the current directory.
+- Promoted imported playlists and download batches into large, responsive folder cards with two-line titles, counts, size/date summaries, group selection, local-folder access, and deletion actions.
+- Added direct folder navigation with a clear return-to-history-home action while keeping organized records out of the loose home grid.
+
+### Interaction Polish
+- Reset the history list to the top after entering or leaving folders, changing media filters, or starting a new search.
+- Added a bounded scrolling folder area for large libraries, an automatic-folder empty hint, selected-folder styling, and safe title truncation in narrow layouts.
+- Kept the contextual bulk toolbar hidden until records are selected and renamed the remove action to the clearer “move back home”.
+
+### Tests
+- Added regression coverage for automatic batch-folder discovery, folder navigation, root visibility, current-directory selection scope, return-home behavior, scroll reset, and the unified workspace layout.
+- Verified 904 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.3.1 - 2026-07-17
 
 ### Download History
