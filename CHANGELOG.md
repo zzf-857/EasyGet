@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.3 - 2026-07-17
+
+### Apple-inspired Visual System
+- Rebuilt the dark semantic palette around neutral layered materials, Apple system blue, softer dividers, restrained elevation, and clearer text contrast.
+- Preserved the legacy `Indigo` theme key while transparently migrating its appearance to the new system-blue default, so existing user settings do not reset.
+- Refined shared buttons, text fields, segmented controls, scrollbars, window controls, notifications, and the source-list sidebar with consistent radii and short spatial motion.
+
+### Download History
+- Reorganized the page into a compact title area, centered search toolbar, one coherent folder workspace, and a four-column responsive media library.
+- Replaced the permanent folder-name input with a focused creation popover and kept “select all current” directly beside it.
+- Added Finder-style custom and automatic folder cards, circular selectors, lighter media cards, hover quick actions, and a bottom floating contextual toolbar that no longer reflows the grid.
+
+### Interaction and Reliability
+- Added subtle lift, fade, and directory-transition animations without blurring card text or thumbnails.
+- Added a delayed scroll-position safeguard so opening history through navigation or keyboard shortcuts consistently starts at the top.
+- Kept drag-and-drop organization, rename, folder navigation, batch actions, selection scope, and download-history persistence unchanged beneath the redesigned surface.
+
+### Tests
+- Added regression coverage for the new semantic styles, creation popover, floating selection toolbar, card motion, and scroll-reset behavior.
+- Verified 914 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.3.2 - 2026-07-17
 
 ### History Workspace
