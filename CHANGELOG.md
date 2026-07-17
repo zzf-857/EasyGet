@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.2.4 - 2026-07-17
+
+### Batch Organization
+- Create one dedicated root folder for every multi-link batch or imported playlist before downloads start.
+- Name Bilibili multipart folders with the shared BV identifier, while mixed-platform batches use a timestamped batch folder.
+- Persist batch identity, display name, and root directory in SQLite without discarding or rewriting existing history.
+- Collapse each new batch into one history group with actions to expand items, open the batch folder, or remove the whole group of history records without deleting downloaded files.
+- Automatically group legacy Bilibili `?p=` history entries by BV identifier so existing multipart downloads are less cluttered after upgrading.
+
+### Performance
+- Raised the supported simultaneous-download range from 1–8 to 1–12.
+- Added a shared per-task connection budget for yt-dlp, native M3U8, and the Douyin sidecar; eight or more tasks automatically use at most four fragment connections each.
+- Migrate only the untouched legacy `3 tasks / 8 fragments` profile to a hardware-aware recommendation; user-customized concurrency settings remain unchanged.
+- On the reported i5-14600KF / 32 GB / 1 Gbps system, verified 12 simultaneous Bilibili downloads complete without HTTP 412/429 errors; 10 tasks is the recommended everyday setting.
+
+### Tests
+- Added batch-folder naming, collision handling, history migration/grouping, configuration migration, and shared concurrency-policy coverage.
+- Verified 874 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.2.3 - 2026-07-17
 
 ### Fixes
