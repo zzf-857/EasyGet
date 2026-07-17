@@ -579,17 +579,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         return null;
     }
 
-    public Func<string, string, bool>? ConfirmFunc { get; set; } = (msg, title) =>
-    {
-        if (System.Windows.Application.Current == null)
-            return true; // 单测默认返回 true
-        var result = System.Windows.MessageBox.Show(
-            msg,
-            title,
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-        return result == System.Windows.MessageBoxResult.Yes;
-    };
+    public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
 
     [RelayCommand(CanExecute = nameof(CanStopAll))]
     private void CancelAll()

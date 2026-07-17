@@ -20,6 +20,11 @@ public class HistoryViewModelTests
             var folder = await service.CreateFolderAsync("课程");
             var viewModel = new HistoryViewModel(service);
             await viewModel.LoadHistory();
+            Assert.Equal([-1, 0, folder.Id], viewModel.FolderCards.Select(item => item.Id).ToArray());
+            Assert.True(viewModel.FolderCards[0].IsSelected);
+            Assert.True(viewModel.FolderCards[0].IsSystemFolder);
+            Assert.False(viewModel.FolderCards[0].CanAcceptDrop);
+            Assert.True(viewModel.FolderCards[1].CanAcceptDrop);
             var originalTarget = Assert.Single(viewModel.HistoryFolders);
             viewModel.BulkTargetFolder = originalTarget;
 
@@ -1135,11 +1140,13 @@ public class HistoryViewModelTests
             };
             await viewModel.LoadHistory();
             Assert.Single(viewModel.HistoryItems);
+            Assert.All(viewModel.FolderCards, folder => Assert.Equal(1, folder.ItemCount));
 
             await viewModel.ClearAllCommand.ExecuteAsync(null);
 
             Assert.Empty(viewModel.HistoryItems);
             Assert.Equal(0, viewModel.TotalHistoryCount);
+            Assert.All(viewModel.FolderCards, folder => Assert.Equal(0, folder.ItemCount));
         }
         finally
         {

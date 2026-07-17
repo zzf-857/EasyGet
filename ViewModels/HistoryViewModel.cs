@@ -76,8 +76,9 @@ public partial class HistoryViewModel : ObservableObject
 
     partial void OnSelectedFolderIdChanged(long? value)
     {
-        foreach (var folder in HistoryFolders)
-            folder.IsSelected = value == folder.Id;
+        var selectedCardId = value ?? -1;
+        foreach (var folder in FolderCards)
+            folder.IsSelected = selectedCardId == folder.Id;
         ClearSelection();
         RebuildHistoryGroups();
         OnPropertyChanged(nameof(SelectedFolderTitle));
@@ -118,6 +119,7 @@ public partial class HistoryViewModel : ObservableObject
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
     public ObservableCollection<DownloadHistoryGroup> HistoryGroups { get; } = [];
     public ObservableCollection<HistoryFolder> HistoryFolders { get; } = [];
+    public ObservableCollection<HistoryFolder> FolderCards { get; } = [];
 
     public event Action<string, bool>? RequestShowNotification;
 
@@ -261,10 +263,28 @@ public partial class HistoryViewModel : ObservableObject
             }
 
             HistoryFolders.Clear();
+            FolderCards.Clear();
+            FolderCards.Add(new HistoryFolder
+            {
+                Id = -1,
+                Name = "全部记录",
+                ItemCount = totalCount,
+                IsSystemFolder = true,
+                IsSelected = SelectedFolderId is null
+            });
+            FolderCards.Add(new HistoryFolder
+            {
+                Id = 0,
+                Name = "未整理",
+                ItemCount = unfiledCount,
+                IsSystemFolder = true,
+                IsSelected = SelectedFolderId == 0
+            });
             foreach (var folder in folders)
             {
                 folder.IsSelected = folder.Id == SelectedFolderId;
                 HistoryFolders.Add(folder);
+                FolderCards.Add(folder);
             }
 
             if (BulkTargetFolder is not null)
@@ -489,7 +509,7 @@ public partial class HistoryViewModel : ObservableObject
     private void SelectFolder(HistoryFolder? folder)
     {
         if (folder is not null)
-            SelectedFolderId = folder.Id;
+            SelectedFolderId = folder.Id < 0 ? null : folder.Id;
     }
 
     [RelayCommand(CanExecute = nameof(CanCreateFolder))]
@@ -686,17 +706,7 @@ public partial class HistoryViewModel : ObservableObject
             true);
     }
 
-    public Func<string, string, bool>? ConfirmFunc { get; set; } = (msg, title) =>
-    {
-        if (System.Windows.Application.Current == null)
-            return true; // 单测默认返回 true
-        var result = System.Windows.MessageBox.Show(
-            msg,
-            title,
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Warning);
-        return result == System.Windows.MessageBoxResult.Yes;
-    };
+    public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
 
     /// <summary>
     /// 清空全部历史
@@ -715,7 +725,7 @@ public partial class HistoryViewModel : ObservableObject
         TotalHistoryCount = 0;
         VisibleHistoryCount = 0;
         UnfiledHistoryCount = 0;
-        foreach (var folder in HistoryFolders)
+        foreach (var folder in FolderCards)
             folder.ItemCount = 0;
         ClearSelection();
         OnPropertyChanged(nameof(HasVisibleHistory));

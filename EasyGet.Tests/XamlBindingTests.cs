@@ -565,6 +565,38 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewUsesPixelScrollingAndResponsiveFolderCards()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+
+        Assert.Contains("ItemsSource=\"{Binding FolderCards}\"", source, StringComparison.Ordinal);
+        Assert.Contains("<WrapPanel/>", source, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.CanContentScroll=\"False\"", source, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.IsDeferredScrollingEnabled=\"False\"", source, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.PanningMode=\"VerticalOnly\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("HorizontalScrollBarVisibility=\"Auto\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfirmationDialogUsesEasyGetThemeInsteadOfNativeHistoryMessageBoxes()
+    {
+        var dialog = File.ReadAllText(GetViewPath("ConfirmationDialog.xaml"));
+        var historyViewModel = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("ViewModels", "HistoryViewModel.cs")));
+        var batchViewModel = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("ViewModels", "BatchDownloadViewModel.cs")));
+
+        Assert.Contains("WindowStyle=\"None\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("AllowsTransparency=\"True\"", dialog, StringComparison.Ordinal);
+        Assert.Contains("BgSurfaceHighBrush", dialog, StringComparison.Ordinal);
+        Assert.Contains("ConfirmText", dialog, StringComparison.Ordinal);
+        Assert.Contains("ConfirmationDialogService.Show", historyViewModel, StringComparison.Ordinal);
+        Assert.Contains("ConfirmationDialogService.Show", batchViewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageBox.Show", historyViewModel, StringComparison.Ordinal);
+        Assert.DoesNotContain("MessageBox.Show", batchViewModel, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BatchDownloadViewShowsAggregateProgressFiltersAndQueueCleanupActions()
     {
         var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));

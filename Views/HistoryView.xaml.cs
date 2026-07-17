@@ -59,7 +59,11 @@ public partial class HistoryView : System.Windows.Controls.UserControl
 
     private void HistoryFolder_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(HistoryItemsDataFormat)
+        var canAcceptDrop = sender is FrameworkElement
+        {
+            DataContext: HistoryFolder { CanAcceptDrop: true }
+        };
+        e.Effects = e.Data.GetDataPresent(HistoryItemsDataFormat) && canAcceptDrop
             ? DragDropEffects.Move
             : DragDropEffects.None;
         e.Handled = true;

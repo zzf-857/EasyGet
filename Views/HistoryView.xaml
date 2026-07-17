@@ -179,284 +179,402 @@
             </Border>
         </Grid>
 
-        <StackPanel Grid.Row="2" Margin="0,0,0,18">
-            <Grid Margin="0,0,0,10">
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="整理文件夹" Style="{StaticResource TextCardTitle}"/>
-                    <TextBlock Text="  ·  仅整理历史记录，不移动本地文件"
-                               Style="{StaticResource TextCaption}"
-                               VerticalAlignment="Center"/>
-                </StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Grid Width="190">
-                        <TextBox MaxLength="40"
-                                 Style="{StaticResource DarkTextBox}"
-                                 Text="{Binding NewFolderName, UpdateSourceTrigger=PropertyChanged}"
-                                 ToolTip="输入新的整理文件夹名称"
-                                 AutomationProperties.Name="新整理文件夹名称">
-                            <TextBox.InputBindings>
-                                <KeyBinding Key="Enter" Command="{Binding CreateFolderCommand}"/>
-                            </TextBox.InputBindings>
-                        </TextBox>
-                        <TextBlock Text="文件夹名称"
-                                   Margin="11,0,0,0"
-                                   VerticalAlignment="Center"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding NewFolderName}" Value="">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding NewFolderName}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Grid>
+        <Border Grid.Row="2"
+                Style="{StaticResource ToolPanelBorder}"
+                Padding="18,16"
+                Margin="0,0,0,16">
+            <StackPanel>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="38" Height="38"
+                                Background="{DynamicResource AccentContainerBrush}"
+                                CornerRadius="10"
+                                Margin="0,0,12,0">
+                            <TextBlock Text="&#xE8B7;"
+                                       Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeLarge}"
+                                       Foreground="{DynamicResource AccentBrush}"/>
+                        </Border>
+                        <StackPanel>
+                            <TextBlock Text="整理空间" Style="{StaticResource TextCardTitle}"/>
+                            <TextBlock Text="拖动历史卡片完成归类 · 只整理记录，不移动本地文件"
+                                       Style="{StaticResource TextCaption}"
+                                       Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid Width="220">
+                            <TextBox MaxLength="40"
+                                     Style="{StaticResource DarkTextBox}"
+                                     Text="{Binding NewFolderName, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="输入新的整理文件夹名称"
+                                     AutomationProperties.Name="新整理文件夹名称">
+                                <TextBox.InputBindings>
+                                    <KeyBinding Key="Enter" Command="{Binding CreateFolderCommand}"/>
+                                </TextBox.InputBindings>
+                            </TextBox>
+                            <TextBlock Text="输入文件夹名称"
+                                       Margin="12,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding NewFolderName}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding NewFolderName}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                        <Button Style="{StaticResource AccentButton}"
+                                Margin="8,0,0,0"
+                                Padding="14,8"
+                                Command="{Binding CreateFolderCommand}"
+                                ToolTip="创建整理文件夹"
+                                AutomationProperties.Name="创建整理文件夹">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}" Margin="0,0,6,0"/>
+                                <TextBlock Text="新建"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <Border Height="1"
+                        Background="{StaticResource BorderSubtleBrush}"
+                        Margin="0,14,0,14"/>
+
+                <ItemsControl ItemsSource="{Binding FolderCards}"
+                              HorizontalContentAlignment="Stretch">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="Margin" Value="0,0,10,10"/>
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border x:Name="FolderCard"
+                                    Width="208"
+                                    Height="78"
+                                    AllowDrop="True"
+                                    DragOver="HistoryFolder_DragOver"
+                                    Drop="HistoryFolder_Drop">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+                                        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Setter Property="CornerRadius" Value="11"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
+                                            </Trigger>
+                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                <Setter Property="BorderThickness" Value="2"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+
+                                <Grid>
+                                    <Button Background="Transparent"
+                                            BorderThickness="0"
+                                            Padding="12,10"
+                                            Cursor="Hand"
+                                            HorizontalContentAlignment="Stretch"
+                                            Command="{Binding DataContext.SelectFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="打开此整理视图；也可把历史卡片拖到这里">
+                                        <Button.Template>
+                                            <ControlTemplate TargetType="Button">
+                                                <Border Background="{TemplateBinding Background}"
+                                                        CornerRadius="10">
+                                                    <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                                      HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                                      VerticalAlignment="Center"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Button.Template>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="36" Height="36"
+                                                    CornerRadius="9"
+                                                    Background="{StaticResource BgSurfaceHighestBrush}"
+                                                    Margin="0,0,10,0">
+                                                <TextBlock Text="{Binding IconGlyph, Mode=OneWay}"
+                                                           Style="{StaticResource IconGlyph}"
+                                                           FontSize="{StaticResource IconSizeBody}"
+                                                           Foreground="{DynamicResource AccentBrush}"/>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}"
+                                                           Style="{StaticResource TextBodyStrong}"
+                                                           MaxWidth="102"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Caption, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"
+                                                           Margin="0,2,0,0"/>
+                                            </StackPanel>
+                                            <Border x:Name="FolderCountBadge"
+                                                    Grid.Column="2"
+                                                    Background="{StaticResource BgSurfaceBrush}"
+                                                    CornerRadius="8"
+                                                    Padding="7,3"
+                                                    VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding ItemCount, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"
+                                                           FontFamily="{StaticResource FontFamilyMono}"/>
+                                            </Border>
+                                        </Grid>
+                                    </Button>
+
+                                    <StackPanel x:Name="FolderActionPanel"
+                                                Panel.ZIndex="10"
+                                                Orientation="Horizontal"
+                                                HorizontalAlignment="Right"
+                                                VerticalAlignment="Center"
+                                                Margin="0,0,10,0"
+                                                Visibility="Collapsed">
+                                        <Button Style="{StaticResource SurfaceButton}"
+                                                Width="30" Height="30" Padding="0"
+                                                Command="{Binding DataContext.BeginRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="重命名文件夹">
+                                            <TextBlock Text="&#xE70F;" Style="{StaticResource IconGlyph}"/>
+                                        </Button>
+                                        <Button Style="{StaticResource SurfaceButton}"
+                                                Width="30" Height="30" Padding="0" Margin="5,0,0,0"
+                                                Command="{Binding DataContext.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="删除整理文件夹">
+                                            <TextBlock Text="&#xE74D;"
+                                                       Style="{StaticResource IconGlyph}"
+                                                       Foreground="{StaticResource ErrorBrush}"/>
+                                        </Button>
+                                    </StackPanel>
+
+                                    <Border Panel.ZIndex="20"
+                                            Background="{StaticResource BgSurfaceHighestBrush}"
+                                            BorderBrush="{DynamicResource AccentBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="9">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRenaming}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Style="{StaticResource DarkTextBox}"
+                                                     MaxLength="40"
+                                                     Padding="9,6"
+                                                     Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                                     IsVisibleChanged="FolderRenameTextBox_IsVisibleChanged"
+                                                     PreviewKeyDown="FolderRenameTextBox_PreviewKeyDown"/>
+                                            <Button Grid.Column="1"
+                                                    Style="{StaticResource AccentButton}"
+                                                    Width="30" Padding="0" Margin="5,0,0,0"
+                                                    Command="{Binding DataContext.SaveRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="保存名称">
+                                                <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"/>
+                                            </Button>
+                                            <Button Grid.Column="2"
+                                                    Style="{StaticResource SurfaceButton}"
+                                                    Width="30" Padding="0" Margin="4,0,0,0"
+                                                    Command="{Binding DataContext.CancelRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="取消重命名">
+                                                <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"/>
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </Border>
+                            <DataTemplate.Triggers>
+                                <Trigger SourceName="FolderCard" Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="FolderCountBadge" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="FolderActionPanel" Property="Visibility" Value="Visible"/>
+                                </Trigger>
+                                <DataTrigger Binding="{Binding IsSystemFolder}" Value="True">
+                                    <Setter TargetName="FolderCountBadge" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="FolderActionPanel" Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <Grid Grid.Row="3"
+              Margin="0,0,0,14"
+              Visibility="{Binding HasVisibleHistory, Converter={StaticResource BoolToVisibility}}">
+            <Border Padding="12,8">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource ToolPanelBorder}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasSelection}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="30" Height="30"
+                                Background="{StaticResource BgSurfaceHighestBrush}"
+                                CornerRadius="8"
+                                Margin="0,0,9,0">
+                            <TextBlock Text="&#xE762;"
+                                       Style="{StaticResource IconGlyph}"
+                                       Foreground="{DynamicResource AccentBrush}"/>
+                        </Border>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="批量整理" Style="{StaticResource TextBodyStrong}"/>
+                            <TextBlock Text="勾选卡片、选择整组，或直接全选当前视图"
+                                       Style="{StaticResource TextCaption}"/>
+                        </StackPanel>
+                    </StackPanel>
                     <Button Style="{StaticResource SurfaceButton}"
-                            Margin="8,0,0,0"
-                            Padding="12,7"
-                            Command="{Binding CreateFolderCommand}"
-                            ToolTip="创建整理文件夹"
-                            AutomationProperties.Name="创建整理文件夹">
+                            HorizontalAlignment="Right"
+                            Padding="12,6"
+                            Command="{Binding SelectAllVisibleCommand}"
+                            ToolTip="选择当前视图中的全部历史记录">
                         <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE710;" Style="{StaticResource IconGlyph}" Margin="0,0,5,0"/>
-                            <TextBlock Text="新建文件夹"/>
+                            <TextBlock Text="&#xE73A;" Style="{StaticResource IconGlyph}" Margin="0,0,6,0"/>
+                            <TextBlock Text="全选当前"/>
                         </StackPanel>
                     </Button>
-                </StackPanel>
-            </Grid>
+                </Grid>
+            </Border>
 
-            <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Disabled">
-                <StackPanel Orientation="Horizontal">
-                    <Button Width="180"
-                            MinHeight="66"
-                            Margin="0,0,10,0"
-                            Padding="12,9"
-                            HorizontalContentAlignment="Stretch"
-                            Command="{Binding ShowAllFoldersCommand}"
-                            ToolTip="显示所有历史记录">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsShowingAllFolders}" Value="True">
-                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                        <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="&#xE8B7;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeLarge}" Foreground="{DynamicResource AccentBrush}"
-                                       Margin="0,0,10,0" VerticalAlignment="Center"/>
-                            <StackPanel Grid.Column="1">
-                                <TextBlock Text="全部记录" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Style="{StaticResource TextCaption}" Margin="0,3,0,0">
-                                    <Run Text="{Binding TotalHistoryCount, Mode=OneWay}"/>
-                                    <Run Text=" 个项目"/>
-                                </TextBlock>
-                            </StackPanel>
+            <Border Padding="12,8"
+                    Background="{DynamicResource AccentContainerBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    Visibility="{Binding HasSelection, Converter={StaticResource BoolToVisibility}}">
+                <Border.Style>
+                    <Style TargetType="Border" BasedOn="{StaticResource ToolPanelBorder}"/>
+                </Border.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="30" Height="30"
+                                Background="{DynamicResource AccentBrush}"
+                                CornerRadius="8"
+                                Margin="0,0,9,0">
+                            <TextBlock Text="&#xE73E;"
+                                       Style="{StaticResource IconGlyph}"
+                                       Foreground="{StaticResource BgPrimaryBrush}"/>
+                        </Border>
+                        <TextBlock Text="{Binding SelectionSummaryText, Mode=OneWay}"
+                                   Style="{StaticResource TextBodyStrong}"
+                                   VerticalAlignment="Center"/>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Padding="9,5" Margin="10,0,0,0"
+                                Command="{Binding SelectAllVisibleCommand}"
+                                Content="全选"/>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Padding="9,5" Margin="6,0,0,0"
+                                Command="{Binding ClearSelectionCommand}"
+                                Content="取消"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Grid Width="165">
+                            <ComboBox Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding HistoryFolders}"
+                                      DisplayMemberPath="Name"
+                                      SelectedItem="{Binding BulkTargetFolder}"
+                                      ToolTip="选择目标整理文件夹"/>
+                            <TextBlock Text="选择目标文件夹"
+                                       Margin="12,0"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding BulkTargetFolder}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
                         </Grid>
-                    </Button>
-
-                    <Border Width="180"
-                            MinHeight="66"
-                            Margin="0,0,10,0"
-                            AllowDrop="True"
-                            Tag="0"
-                            DragOver="HistoryFolder_DragOver"
-                            Drop="HistoryFolder_Drop">
-                        <Button Padding="12,9"
-                                HorizontalContentAlignment="Stretch"
-                                Command="{Binding ShowUnfiledCommand}"
-                                ToolTip="显示未放入整理文件夹的记录；也可将记录拖到这里移出文件夹">
-                            <Button.Style>
-                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsShowingUnfiled}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                            <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}"
-                                           FontSize="{StaticResource IconSizeLarge}" Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                <StackPanel Grid.Column="1">
-                                    <TextBlock Text="未整理" Style="{StaticResource TextBodyStrong}"/>
-                                    <TextBlock Style="{StaticResource TextCaption}" Margin="0,3,0,0">
-                                        <Run Text="{Binding UnfiledHistoryCount, Mode=OneWay}"/>
-                                        <Run Text=" 个项目"/>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Grid>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Padding="10,6" Margin="6,0,0,0"
+                                Command="{Binding MoveSelectedToFolderCommand}"
+                                ToolTip="移动到选择的整理文件夹">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8DE;" Style="{StaticResource IconGlyph}" Margin="0,0,5,0"/>
+                                <TextBlock Text="移动"/>
+                            </StackPanel>
                         </Button>
-                    </Border>
-
-                    <ItemsControl ItemsSource="{Binding HistoryFolders}">
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <StackPanel Orientation="Horizontal"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemContainerStyle>
-                            <Style TargetType="ContentPresenter">
-                                <Setter Property="Margin" Value="0,0,10,0"/>
-                            </Style>
-                        </ItemsControl.ItemContainerStyle>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Width="220"
-                                        MinHeight="66"
-                                        AllowDrop="True"
-                                        DragOver="HistoryFolder_DragOver"
-                                        Drop="HistoryFolder_Drop">
-                                    <Grid>
-                                        <Button Padding="12,9"
-                                                HorizontalContentAlignment="Stretch"
-                                                Command="{Binding DataContext.SelectFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                CommandParameter="{Binding}"
-                                                ToolTip="打开整理文件夹；可将选中的历史拖放到这里">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                            <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Text="&#xE8B7;" Style="{StaticResource IconGlyph}"
-                                                           FontSize="{StaticResource IconSizeLarge}" Foreground="{DynamicResource AccentBrush}"
-                                                           Margin="0,0,10,0" VerticalAlignment="Center"/>
-                                                <StackPanel Grid.Column="1">
-                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource TextBodyStrong}"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                    <TextBlock Text="{Binding ItemCountText, Mode=OneWay}"
-                                                               Style="{StaticResource TextCaption}" Margin="0,3,0,0"/>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="8,0,0,0">
-                                                    <Button Style="{StaticResource SurfaceButton}" Width="28" Height="28" Padding="0"
-                                                            Command="{Binding DataContext.BeginRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}" ToolTip="重命名">
-                                                        <TextBlock Text="&#xE70F;" Style="{StaticResource IconGlyph}"/>
-                                                    </Button>
-                                                    <Button Style="{StaticResource SurfaceButton}" Width="28" Height="28" Padding="0" Margin="4,0,0,0"
-                                                            Command="{Binding DataContext.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                            CommandParameter="{Binding}" ToolTip="删除整理文件夹">
-                                                        <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"/>
-                                                    </Button>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Button>
-
-                                        <Border Background="{StaticResource BgSurfaceHighBrush}"
-                                                BorderBrush="{DynamicResource AccentBrush}"
-                                                BorderThickness="1"
-                                                CornerRadius="8"
-                                                Padding="8">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsRenaming}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                 <TextBox Style="{StaticResource DarkTextBox}"
-                                                          MaxLength="40"
-                                                          Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
-                                                          IsVisibleChanged="FolderRenameTextBox_IsVisibleChanged"
-                                                          PreviewKeyDown="FolderRenameTextBox_PreviewKeyDown"/>
-                                                <Button Grid.Column="1" Style="{StaticResource SurfaceButton}" Width="30" Padding="0" Margin="5,0,0,0"
-                                                        Command="{Binding DataContext.SaveRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding}" ToolTip="保存名称">
-                                                    <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"/>
-                                                </Button>
-                                                <Button Grid.Column="2" Style="{StaticResource SurfaceButton}" Width="30" Padding="0" Margin="4,0,0,0"
-                                                        Command="{Binding DataContext.CancelRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding}" ToolTip="取消重命名">
-                                                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"/>
-                                                </Button>
-                                            </Grid>
-                                        </Border>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </ScrollViewer>
-        </StackPanel>
-
-        <Border Grid.Row="3"
-                Style="{StaticResource ToolPanelBorder}"
-                Padding="12,9"
-                Margin="0,0,0,14"
-                Visibility="{Binding HasVisibleHistory, Converter={StaticResource BoolToVisibility}}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}"
-                               Foreground="{DynamicResource AccentBrush}" Margin="0,0,7,0"/>
-                    <TextBlock Text="{Binding SelectionSummaryText, Mode=OneWay}"
-                               Style="{StaticResource TextBodyStrong}"/>
-                    <Button Style="{StaticResource SurfaceButton}" Padding="9,5" Margin="10,0,0,0"
-                            Command="{Binding SelectAllVisibleCommand}" Content="全选当前"/>
-                    <Button Style="{StaticResource SurfaceButton}" Padding="9,5" Margin="6,0,0,0"
-                            Command="{Binding ClearSelectionCommand}" Content="取消选择"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <ComboBox Width="180"
-                              Style="{StaticResource DarkComboBox}"
-                              ItemsSource="{Binding HistoryFolders}"
-                              DisplayMemberPath="Name"
-                              SelectedItem="{Binding BulkTargetFolder}"
-                              ToolTip="选择目标整理文件夹"/>
-                    <Button Style="{StaticResource SurfaceButton}" Padding="10,6" Margin="6,0,0,0"
-                            Command="{Binding MoveSelectedToFolderCommand}" Content="移动到文件夹"/>
-                    <Button Style="{StaticResource SurfaceButton}" Padding="10,6" Margin="6,0,0,0"
-                            Command="{Binding RemoveSelectedFromFolderCommand}" Content="移出文件夹"/>
-                    <Button Style="{StaticResource SurfaceButton}" Padding="10,6" Margin="6,0,0,0"
-                            Command="{Binding DeleteSelectedCommand}" Content="删除选中记录"/>
-                </StackPanel>
-            </Grid>
-        </Border>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Padding="10,6" Margin="6,0,0,0"
+                                Command="{Binding RemoveSelectedFromFolderCommand}"
+                                ToolTip="移回未整理">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE8DA;" Style="{StaticResource IconGlyph}" Margin="0,0,5,0"/>
+                                <TextBlock Text="移出"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource SurfaceButton}"
+                                Padding="10,6" Margin="6,0,0,0"
+                                Command="{Binding DeleteSelectedCommand}"
+                                ToolTip="仅删除选中历史记录，不删除本地文件">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;"
+                                           Style="{StaticResource IconGlyph}"
+                                           Foreground="{StaticResource ErrorBrush}"
+                                           Margin="0,0,5,0"/>
+                                <TextBlock Text="删除"/>
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
 
         <Grid Grid.Row="4">
             <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,40,0,80">
@@ -519,7 +637,11 @@
             <ListBox ItemsSource="{Binding HistoryGroups}"
                      Background="Transparent"
                      BorderThickness="0"
-                     ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.CanContentScroll="False"
+                     ScrollViewer.IsDeferredScrollingEnabled="False"
+                     ScrollViewer.PanningMode="VerticalOnly">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
                         <StackPanel/>
