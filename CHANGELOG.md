@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.2.3 - 2026-07-17
+
+### Fixes
+- Fixed the batch queue crash caused by WPF `Run.Text` attempting a default two-way binding to the read-only `DownloadTask.StatusText` property.
+- Made every display-only inline `Run` binding explicitly one-way, including batch status/progress and single-download clipboard/progress output.
+- Deduplicated identical handled UI exception dialogs for one minute, preventing one malformed item template from opening a modal error window for every queued task.
+- Changed handled dispatcher failures from the misleading “Application Crashed” message to a truthful recoverable UI error notice, while continuing to write diagnostic logs safely.
+
+### Batch Downloads
+- Added a regression scenario with all 85 `?p=` parts of the reported Bilibili video to verify every distinct part enters the queue before metadata resolution completes.
+
+### Tests
+- Added binding-mode and concurrent exception-throttling coverage.
+- Verified 852 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.2.2 - 2026-07-16
 
 ### Fixes
