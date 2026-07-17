@@ -43,6 +43,7 @@ public class BatchDownloadViewModelTests
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
         var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
         var blocker = new BlockingYtDlpDownloadService();
         var manager = new DownloadManager(blocker, history, config);
         var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
@@ -65,6 +66,23 @@ public class BatchDownloadViewModelTests
         Assert.Equal(85, admittedTaskCount);
         Assert.Equal(85, manager.Tasks.Select(task => task.Url).Distinct().Count());
         Assert.InRange(blocker.MaxConcurrentMetadataRequests, 1, 4);
+        var batchId = Assert.Single(manager.Tasks.Select(task => task.BatchId).Distinct());
+        var batchDirectory = Assert.Single(manager.Tasks.Select(task => task.BatchDirectory).Distinct());
+        Assert.False(string.IsNullOrWhiteSpace(batchId));
+        Assert.Contains("Bilibili合集_BV1ddN76xEQY", batchDirectory, StringComparison.Ordinal);
+        Assert.True(Directory.Exists(batchDirectory));
+        Assert.All(manager.Tasks, task => Assert.StartsWith(
+            batchDirectory,
+            task.OutputDirectory,
+            StringComparison.OrdinalIgnoreCase));
+
+        var savedHistory = await history.GetAllAsync();
+        Assert.Equal(85, savedHistory.Count);
+        Assert.All(savedHistory, item =>
+        {
+            Assert.Equal(batchId, item.BatchId);
+            Assert.Equal(batchDirectory, item.BatchDirectory);
+        });
     }
 
     [Fact]
@@ -73,6 +91,7 @@ public class BatchDownloadViewModelTests
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
         var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
         var service = new BlockingYtDlpDownloadService();
         service.Release();
         var manager = new DownloadManager(service, history, config);
@@ -98,6 +117,10 @@ public class BatchDownloadViewModelTests
             task.Url,
             "https://example.com/new",
             StringComparison.OrdinalIgnoreCase));
+        var newTasks = manager.Tasks.Where(task => task.Url != "https://example.com/already").ToList();
+        Assert.Equal(2, newTasks.Count);
+        Assert.Single(newTasks.Select(task => task.BatchId).Distinct());
+        Assert.Single(newTasks.Select(task => task.BatchDirectory).Distinct());
     }
 
     [Fact]

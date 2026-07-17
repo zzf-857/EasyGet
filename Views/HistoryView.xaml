@@ -212,19 +212,20 @@
                 </StackPanel>
             </Grid>
 
-            <ListBox ItemsSource="{Binding HistoryItems}"
+            <ListBox ItemsSource="{Binding HistoryGroups}"
                      Background="Transparent"
                      BorderThickness="0"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <WrapPanel/>
+                        <StackPanel/>
                     </ItemsPanelTemplate>
                 </ListBox.ItemsPanel>
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
                         <Setter Property="Padding" Value="0"/>
-                        <Setter Property="Margin" Value="0,0,22,22"/>
+                        <Setter Property="Margin" Value="0,0,0,22"/>
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                         <Setter Property="Template">
                             <Setter.Value>
                                 <ControlTemplate TargetType="ListBoxItem">
@@ -236,6 +237,110 @@
                 </ListBox.ItemContainerStyle>
                 <ListBox.ItemTemplate>
                     <DataTemplate>
+                        <StackPanel>
+                            <Border Style="{StaticResource ToolPanelBorder}"
+                                    Padding="10"
+                                    Margin="0,0,0,12"
+                                    Visibility="{Binding IsBatch, Converter={StaticResource BoolToVisibility}}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Button Grid.Column="0"
+                                            Style="{StaticResource SurfaceButton}"
+                                            Padding="10,8"
+                                            HorizontalContentAlignment="Stretch"
+                                            Command="{Binding DataContext.ToggleHistoryGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="展开或收起这个批次"
+                                            AutomationProperties.Name="展开或收起批次">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0"
+                                                       Text="&#xE8B7;"
+                                                       Style="{StaticResource IconGlyph}"
+                                                       FontSize="{StaticResource IconSizeLarge}"
+                                                       Foreground="{DynamicResource AccentBrush}"
+                                                       Margin="0,0,12,0"
+                                                       VerticalAlignment="Center"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Name}"
+                                                           Style="{StaticResource TextBodyStrong}"
+                                                           TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding SummaryText, Mode=OneWay}"
+                                                           Style="{StaticResource TextCaption}"
+                                                           Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{Binding ExpandGlyph, Mode=OneWay}"
+                                                       Style="{StaticResource TextBodyStrong}"
+                                                       FontSize="{StaticResource IconSizeBody}"
+                                                       Margin="14,0,4,0"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Button>
+
+                                    <Button Grid.Column="1"
+                                            Style="{StaticResource SurfaceButton}"
+                                            Width="40"
+                                            Height="40"
+                                            Padding="0"
+                                            Margin="10,0,0,0"
+                                            Command="{Binding DataContext.OpenDirectoryCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding Directory}"
+                                            ToolTip="打开批次文件夹"
+                                            AutomationProperties.Name="打开批次文件夹">
+                                        <TextBlock Text="&#xE838;"
+                                                   Style="{StaticResource IconGlyph}"
+                                                   FontSize="{StaticResource IconSizeBody}"/>
+                                    </Button>
+                                    <Button Grid.Column="2"
+                                            Style="{StaticResource SurfaceButton}"
+                                            Width="40"
+                                            Height="40"
+                                            Padding="0"
+                                            Margin="8,0,0,0"
+                                            Command="{Binding DataContext.DeleteBatchCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="删除整组历史记录"
+                                            AutomationProperties.Name="删除整组历史记录">
+                                        <TextBlock Text="&#xE74D;"
+                                                   Style="{StaticResource IconGlyph}"
+                                                   FontSize="{StaticResource IconSizeBody}"/>
+                                    </Button>
+                                </Grid>
+                            </Border>
+
+                            <ItemsControl ItemsSource="{Binding Items}">
+                                <ItemsControl.Style>
+                                    <Style TargetType="ItemsControl">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ItemsControl.Style>
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemContainerStyle>
+                                    <Style TargetType="ContentPresenter">
+                                        <Setter Property="Margin" Value="0,0,22,0"/>
+                                    </Style>
+                                </ItemsControl.ItemContainerStyle>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
                         <Border x:Name="HistoryCard"
                                 Style="{StaticResource ToolPanelBorder}"
                                 Width="286"
@@ -455,6 +560,10 @@
                                 <Setter TargetName="HoverOverlay" Property="IsHitTestVisible" Value="True"/>
                             </Trigger>
                         </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>

@@ -8,11 +8,11 @@ namespace EasyGet.Models;
 /// </summary>
 public class AppConfig
 {
-    public const int CurrentConfigVersion = 2;
+    public const int CurrentConfigVersion = 3;
     public const int MinConcurrentFragments = 1;
     public const int MaxConcurrentFragments = 32;
     public const int MinConcurrentDownloadLimit = 1;
-    public const int MaxConcurrentDownloadLimit = 8;
+    public const int MaxConcurrentDownloadLimit = 12;
     public const string DefaultDouyinTemplate = "{date}_{title}_{id}";
     public const int MaxDouyinCommentPageSize = 20;
     public const int DefaultDouyinLiveChunkSize = 65536;
@@ -35,13 +35,18 @@ public class AppConfig
     public string DefaultSubtitle { get; set; } = "none";
 
     /// <summary>yt-dlp 并发分片数</summary>
-    public int ConcurrentFragments { get; set; } = Math.Clamp(
-        Environment.ProcessorCount,
-        MinConcurrentFragments,
-        MaxConcurrentFragments);
+    public int ConcurrentFragments { get; set; } = GetDefaultConcurrentFragments();
 
     /// <summary>批量下载同时任务数</summary>
-    public int MaxConcurrentDownloads { get; set; } = 3;
+    public int MaxConcurrentDownloads { get; set; } = GetDefaultConcurrentDownloadLimit();
+
+    internal static int GetDefaultConcurrentDownloadLimit()
+        => Math.Clamp(Environment.ProcessorCount / 2, 3, 10);
+
+    internal static int GetDefaultConcurrentFragments()
+        => GetDefaultConcurrentDownloadLimit() >= 8
+            ? 4
+            : Math.Clamp(Environment.ProcessorCount, 4, 8);
 
     /// <summary>是否启用代理</summary>
     public bool UseProxy { get; set; } = false;

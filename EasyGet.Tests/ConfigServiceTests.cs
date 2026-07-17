@@ -64,7 +64,10 @@ public class ConfigServiceTests
 
         Assert.Equal(expectedPath, service.Config.DefaultDownloadPath);
         var restoredPrimary = await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json"));
-        Assert.Contains("\"configVersion\": 2", restoredPrimary, StringComparison.Ordinal);
+        Assert.Contains(
+            $"\"configVersion\": {AppConfig.CurrentConfigVersion}",
+            restoredPrimary,
+            StringComparison.Ordinal);
         Assert.Contains("preserved-user-path", restoredPrimary, StringComparison.Ordinal);
     }
 
@@ -383,6 +386,50 @@ public class ConfigServiceTests
 
         Assert.Equal(AppConfig.MinConcurrentFragments, config.ConcurrentFragments);
         Assert.Equal(AppConfig.MaxConcurrentDownloadLimit, config.MaxConcurrentDownloads);
+    }
+
+    [Fact]
+    public async Task LoadAsync_MigratesUntouchedVersion2ConcurrencyDefaults()
+    {
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(_tempDir, "config.json"),
+            """
+            {
+              "configVersion": 2,
+              "maxConcurrentDownloads": 3,
+              "concurrentFragments": 8
+            }
+            """);
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+
+        Assert.Equal(AppConfig.CurrentConfigVersion, service.Config.ConfigVersion);
+        Assert.Equal(AppConfig.GetDefaultConcurrentDownloadLimit(), service.Config.MaxConcurrentDownloads);
+        Assert.Equal(AppConfig.GetDefaultConcurrentFragments(), service.Config.ConcurrentFragments);
+    }
+
+    [Fact]
+    public async Task LoadAsync_PreservesCustomizedVersion2ConcurrencyValues()
+    {
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(_tempDir, "config.json"),
+            """
+            {
+              "configVersion": 2,
+              "maxConcurrentDownloads": 4,
+              "concurrentFragments": 7
+            }
+            """);
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+
+        Assert.Equal(AppConfig.CurrentConfigVersion, service.Config.ConfigVersion);
+        Assert.Equal(4, service.Config.MaxConcurrentDownloads);
+        Assert.Equal(7, service.Config.ConcurrentFragments);
     }
 
     [Fact]

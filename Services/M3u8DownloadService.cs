@@ -153,7 +153,9 @@ public class M3u8DownloadService
                 }
             }, ct);
 
-            var maxParallelSegments = ResolveSegmentConcurrency(_configService.Config.ConcurrentFragments);
+            var maxParallelSegments = ResolveSegmentConcurrency(
+                _configService.Config.ConcurrentFragments,
+                _configService.Config.MaxConcurrentDownloads);
             logCallback?.Invoke($"[m3u8] 分片下载并发数: {maxParallelSegments}");
             failedIndices = (await DownloadSegmentsWithWorkersAsync(
                 segments,
@@ -373,6 +375,13 @@ public class M3u8DownloadService
             Math.Max(configuredFragments, DefaultSegmentConcurrency),
             AppConfig.MinConcurrentFragments,
             AppConfig.MaxConcurrentFragments);
+
+    internal static int ResolveSegmentConcurrency(
+        int configuredFragments,
+        int maxConcurrentDownloads)
+        => DownloadConcurrencyPolicy.ResolvePerTaskConnections(
+            ResolveSegmentConcurrency(configuredFragments),
+            maxConcurrentDownloads);
 
     internal static async Task<IReadOnlyList<int>> RetryFailedSegmentsAsync(
         IReadOnlyList<int> failedIndices,

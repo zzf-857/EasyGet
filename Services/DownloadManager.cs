@@ -497,6 +497,9 @@ public class DownloadManager : IDisposable
                 Quality = task.Quality,
                 FileSize = task.FileSize,
                 FilePath = task.OutputFilePath,
+                BatchId = task.BatchId,
+                BatchName = task.BatchName,
+                BatchDirectory = task.BatchDirectory,
                 AttachmentFilePaths = GetAttachmentFilePathsForHistory(task),
                 ThumbnailUrl = task.ThumbnailUrl,
                 DownloadTime = DateTime.Now

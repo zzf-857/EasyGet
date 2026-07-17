@@ -618,6 +618,138 @@ public class HistoryViewModelTests
         Assert.Contains("PreviewFileCommand", commandProperties);
         Assert.Contains("OpenSourceUrlCommand", commandProperties);
         Assert.Contains("DeleteItemCommand", commandProperties);
+        Assert.Contains("ToggleHistoryGroupCommand", commandProperties);
+        Assert.Contains("OpenDirectoryCommand", commandProperties);
+        Assert.Contains("DeleteBatchCommand", commandProperties);
+    }
+
+    [Fact]
+    public async Task LoadHistory_GroupsBatchItemsCollapsedAndKeepsStandaloneExpanded()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            for (var index = 1; index <= 2; index++)
+            {
+                await service.AddAsync(new DownloadHistory
+                {
+                    Url = $"https://example.com/collection/{index}",
+                    Title = $"collection item {index}",
+                    Format = "mp4",
+                    FileSize = 1024 * index,
+                    FilePath = $@"D:\Videos\collection\{index}.mp4",
+                    BatchId = "batch-history-1",
+                    BatchName = "示例合集 · 2026-07-17 12:00",
+                    BatchDirectory = @"D:\Videos\collection",
+                    DownloadTime = new DateTime(2026, 7, 17, 12, 0, index)
+                });
+            }
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/single",
+                Title = "standalone item",
+                Format = "mp4",
+                FilePath = @"D:\Videos\single.mp4",
+                DownloadTime = new DateTime(2026, 7, 17, 11, 0, 0)
+            });
+
+            var viewModel = new HistoryViewModel(service)
+            {
+                ConfirmFunc = (_, _) => true
+            };
+            await viewModel.LoadHistory();
+
+            Assert.Equal(3, viewModel.HistoryItems.Count);
+            Assert.Equal(2, viewModel.HistoryGroups.Count);
+            var batch = Assert.Single(viewModel.HistoryGroups, group => group.IsBatch);
+            var standalone = Assert.Single(viewModel.HistoryGroups, group => !group.IsBatch);
+            Assert.Equal(2, batch.ItemCount);
+            Assert.False(batch.IsExpanded);
+            Assert.True(standalone.IsExpanded);
+            Assert.Contains("2 个项目", batch.SummaryText, StringComparison.Ordinal);
+
+            viewModel.ToggleHistoryGroupCommand.Execute(batch);
+            Assert.True(batch.IsExpanded);
+
+            await viewModel.DeleteBatchCommand.ExecuteAsync(batch);
+            Assert.Single(viewModel.HistoryItems);
+            Assert.Single(viewModel.HistoryGroups);
+            Assert.Single(await service.GetAllAsync());
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task LoadHistory_GroupsLegacyBilibiliPartsWithoutBatchColumns()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            for (var part = 1; part <= 2; part++)
+            {
+                await service.AddAsync(new DownloadHistory
+                {
+                    Url = $"https://www.bilibili.com/video/BV1ddN76xEQY/?p={part}",
+                    Title = $"legacy part {part}",
+                    Format = "mp4",
+                    FilePath = $@"D:\Videos\legacy-{part}.mp4",
+                    DownloadTime = new DateTime(2026, 7, 16, 12, 0, part)
+                });
+            }
+
+            var viewModel = new HistoryViewModel(service)
+            {
+                ConfirmFunc = (_, _) => true
+            };
+            await viewModel.LoadHistory();
+
+            var group = Assert.Single(viewModel.HistoryGroups);
+            Assert.True(group.IsBatch);
+            Assert.Equal(2, group.ItemCount);
+            Assert.Contains("Bilibili 合集 · BV1ddN76xEQY", group.Name, StringComparison.Ordinal);
+            Assert.False(group.IsExpanded);
+
+            await viewModel.DeleteBatchCommand.ExecuteAsync(group);
+            Assert.Empty(viewModel.HistoryItems);
+            Assert.Empty(await service.GetAllAsync());
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task OpenDirectoryCommand_OpensExistingBatchDirectory()
+    {
+        var dbPath = CreateTempDatabasePath();
+        var directory = Path.Combine(Path.GetTempPath(), $"easyget-history-batch-{Guid.NewGuid():N}");
+        var startedProcesses = new List<ProcessStartInfo>();
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            using var service = new HistoryService(dbPath);
+            var viewModel = new HistoryViewModel(service, startedProcesses.Add);
+
+            await viewModel.OpenDirectoryCommand.ExecuteAsync(directory);
+
+            var startInfo = Assert.Single(startedProcesses);
+            Assert.Equal(directory, startInfo.FileName);
+            Assert.True(startInfo.UseShellExecute);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+            TryDeleteDirectory(directory);
+        }
     }
 
     [Fact]

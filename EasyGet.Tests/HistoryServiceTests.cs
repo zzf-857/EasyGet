@@ -9,6 +9,49 @@ namespace EasyGet.Tests;
 public class HistoryServiceTests
 {
     [Fact]
+    public async Task BatchFields_RoundTripSearchAndDeleteAsOneGroup()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            for (var index = 1; index <= 2; index++)
+            {
+                await service.AddAsync(new DownloadHistory
+                {
+                    Url = $"https://example.com/video/{index}",
+                    Title = $"part {index}",
+                    Platform = "Example",
+                    Format = "mp4",
+                    Quality = "best",
+                    FilePath = $@"D:\Videos\batch\{index}.mp4",
+                    BatchId = "batch-001",
+                    BatchName = "测试合集 · 2026-07-17 12:00",
+                    BatchDirectory = @"D:\Videos\batch",
+                    DownloadTime = new DateTime(2026, 7, 17, 12, 0, index)
+                });
+            }
+
+            var saved = await service.GetAllAsync("测试合集");
+            Assert.Equal(2, saved.Count);
+            Assert.All(saved, item =>
+            {
+                Assert.Equal("batch-001", item.BatchId);
+                Assert.Equal("测试合集 · 2026-07-17 12:00", item.BatchName);
+                Assert.Equal(@"D:\Videos\batch", item.BatchDirectory);
+            });
+
+            await service.DeleteBatchAsync("batch-001");
+            Assert.Empty(await service.GetAllAsync());
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task GetAllAsync_RoundTripsDownloadTimeAcrossCultureChanges()
     {
         var originalCulture = CultureInfo.CurrentCulture;
@@ -133,6 +176,9 @@ public class HistoryServiceTests
             Assert.Equal("", history.Quality);
             Assert.Equal("", history.FilePath);
             Assert.Equal("", history.ThumbnailUrl);
+            Assert.Equal("", history.BatchId);
+            Assert.Equal("", history.BatchName);
+            Assert.Equal("", history.BatchDirectory);
         }
         finally
         {

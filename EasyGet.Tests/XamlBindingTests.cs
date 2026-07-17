@@ -96,6 +96,18 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewGroupsBatchDownloadsWithFolderAndGroupActions()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+
+        Assert.Contains("ItemsSource=\"{Binding HistoryGroups}\"", source, StringComparison.Ordinal);
+        Assert.Contains("ToggleHistoryGroupCommand", source, StringComparison.Ordinal);
+        Assert.Contains("OpenDirectoryCommand", source, StringComparison.Ordinal);
+        Assert.Contains("DeleteBatchCommand", source, StringComparison.Ordinal);
+        Assert.Contains("Binding IsExpanded", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HistoryViewQuickActionsUseAvailableFilePath()
     {
         var document = XDocument.Load(GetViewPath("HistoryView.xaml"));

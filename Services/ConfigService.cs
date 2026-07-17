@@ -662,6 +662,7 @@ public class ConfigService
     private static void NormalizeDownloadOptions(AppConfig config)
     {
         var defaults = new AppConfig();
+        var sourceConfigVersion = config.ConfigVersion;
 
         config.DefaultDownloadPath = string.IsNullOrWhiteSpace(config.DefaultDownloadPath)
             ? defaults.DefaultDownloadPath
@@ -672,9 +673,15 @@ public class ConfigService
         config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
         config.ProxyAddress = config.ProxyAddress?.Trim() ?? "";
         config.CookieContent ??= "";
-        config.ConfigVersion = config.ConfigVersion is > 0 and <= AppConfig.CurrentConfigVersion
-            ? config.ConfigVersion
-            : AppConfig.CurrentConfigVersion;
+        if (sourceConfigVersion < 3
+            && config.MaxConcurrentDownloads == 3
+            && config.ConcurrentFragments == 8)
+        {
+            // v1.2.3 及更早版本的原始默认值。只迁移未调整过的组合，保留用户自定义值。
+            config.MaxConcurrentDownloads = AppConfig.GetDefaultConcurrentDownloadLimit();
+            config.ConcurrentFragments = AppConfig.GetDefaultConcurrentFragments();
+        }
+        config.ConfigVersion = AppConfig.CurrentConfigVersion;
         config.LegacyCookiePlatform = NormalizeLegacyCookiePlatform(
             config.LegacyCookiePlatform);
         config.DouyinMode = NormalizeDouyinMode(config.DouyinMode, defaults.DouyinMode);

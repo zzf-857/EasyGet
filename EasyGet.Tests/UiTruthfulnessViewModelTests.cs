@@ -37,9 +37,13 @@ public class UiTruthfulnessViewModelTests
         configService.Config.UseProxy = false;
         configService.Config.ProxyAddress = "socks5://127.0.0.1:7890";
         configService.Config.ConcurrentFragments = 8;
+        configService.Config.MaxConcurrentDownloads = 3;
 
         Assert.Equal("未启用", DownloadViewModel.DescribeProxyStatus(configService.Config));
         Assert.Equal("8 分片", DownloadViewModel.DescribeConcurrentFragments(configService.Config));
+
+        configService.Config.MaxConcurrentDownloads = 10;
+        Assert.Equal("4 分片（智能限流）", DownloadViewModel.DescribeConcurrentFragments(configService.Config));
 
         configService.Config.UseProxy = true;
 

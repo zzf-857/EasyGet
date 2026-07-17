@@ -67,6 +67,7 @@ public partial class HistoryViewModel : ObservableObject
 
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
+    public ObservableCollection<DownloadHistoryGroup> HistoryGroups { get; } = [];
 
     public HistoryViewModel(HistoryService historyService)
         : this(historyService, new ConfigService(), StartProcess)
@@ -187,6 +188,120 @@ public partial class HistoryViewModel : ObservableObject
             result.Item.DouyinManifestSummaryText = result.DouyinManifestSummary.SummaryText;
             HistoryItems.Add(result.Item);
         }
+
+        RebuildHistoryGroups();
+    }
+
+    private void RebuildHistoryGroups()
+    {
+        var previousExpansion = HistoryGroups
+            .ToDictionary(group => group.Key, group => group.IsExpanded, StringComparer.Ordinal);
+        HistoryGroups.Clear();
+
+        var groupsByKey = new Dictionary<string, List<DownloadHistory>>(StringComparer.Ordinal);
+        var legacyGroupNames = new Dictionary<string, string>(StringComparer.Ordinal);
+        var orderedKeys = new List<string>();
+        foreach (var item in HistoryItems)
+        {
+            string key;
+            if (item.IsBatchHistory)
+            {
+                key = $"batch:{item.BatchId}";
+            }
+            else if (BatchDownloadOrganizer.TryDescribeCollectionUrl(
+                         item.Url,
+                         out var legacyCollectionKey,
+                         out var legacyDisplayName))
+            {
+                key = $"legacy:{legacyCollectionKey}";
+                legacyGroupNames[key] = legacyDisplayName;
+            }
+            else
+            {
+                key = $"item:{item.Id}";
+            }
+            if (!groupsByKey.TryGetValue(key, out var groupItems))
+            {
+                groupItems = [];
+                groupsByKey.Add(key, groupItems);
+                orderedKeys.Add(key);
+            }
+            groupItems.Add(item);
+        }
+
+        foreach (var key in orderedKeys)
+        {
+            var items = groupsByKey[key];
+            var first = items[0];
+            var isLegacyCollection = key.StartsWith("legacy:", StringComparison.Ordinal);
+            var isBatch = first.IsBatchHistory || (isLegacyCollection && items.Count > 1);
+            var name = first.IsBatchHistory
+                ? ResolveBatchName(first)
+                : legacyGroupNames.GetValueOrDefault(key, first.Title);
+            HistoryGroups.Add(new DownloadHistoryGroup
+            {
+                Key = key,
+                BatchId = first.BatchId,
+                Name = name,
+                Directory = first.IsBatchHistory
+                    ? first.BatchDirectory
+                    : ResolveCommonOutputDirectory(items),
+                IsBatch = isBatch,
+                Items = items,
+                IsExpanded = previousExpansion.TryGetValue(key, out var expanded)
+                    ? expanded
+                    : !isBatch
+            });
+        }
+    }
+
+    private static string ResolveCommonOutputDirectory(IReadOnlyList<DownloadHistory> items)
+    {
+        var directories = items
+            .Select(item => TryGetParentDirectory(item.FilePath))
+            .Where(directory => !string.IsNullOrWhiteSpace(directory))
+            .Distinct(OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal)
+            .ToList();
+        return directories.Count == 1 ? directories[0] : "";
+    }
+
+    private static string TryGetParentDirectory(string? filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+            return "";
+
+        try
+        {
+            return Path.GetDirectoryName(filePath) ?? "";
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return "";
+        }
+    }
+
+    private static string ResolveBatchName(DownloadHistory history)
+    {
+        if (!string.IsNullOrWhiteSpace(history.BatchName))
+            return history.BatchName;
+
+        if (!string.IsNullOrWhiteSpace(history.BatchDirectory))
+        {
+            try
+            {
+                var directoryName = Path.GetFileName(
+                    history.BatchDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (!string.IsNullOrWhiteSpace(directoryName))
+                    return directoryName;
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+            }
+        }
+
+        return "批量下载";
     }
 
     [RelayCommand]
@@ -223,6 +338,7 @@ public partial class HistoryViewModel : ObservableObject
         }
         await _historyService.ClearAllAsync();
         HistoryItems.Clear();
+        HistoryGroups.Clear();
         TotalHistoryCount = 0;
     }
 
@@ -246,7 +362,70 @@ public partial class HistoryViewModel : ObservableObject
         await _historyService.DeleteAsync(id);
         var item = HistoryItems.FirstOrDefault(h => h.Id == id);
         if (item != null) HistoryItems.Remove(item);
+        RebuildHistoryGroups();
         if (TotalHistoryCount > 0) TotalHistoryCount--;
+    }
+
+    [RelayCommand]
+    private void ToggleHistoryGroup(DownloadHistoryGroup? group)
+    {
+        if (group is not null && group.IsBatch)
+            group.IsExpanded = !group.IsExpanded;
+    }
+
+    [RelayCommand]
+    private async Task DeleteBatch(DownloadHistoryGroup? group)
+    {
+        if (group is null || !group.IsBatch)
+            return;
+
+        if (ConfirmFunc != null
+            && !ConfirmFunc(
+                $"确定删除“{group.Name}”的 {group.ItemCount} 条历史记录吗？不会删除已经下载的文件。",
+                "确认删除批次记录"))
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(group.BatchId))
+        {
+            await _historyService.DeleteBatchAsync(group.BatchId);
+        }
+        else
+        {
+            foreach (var item in group.Items)
+                await _historyService.DeleteAsync(item.Id);
+        }
+        var removedIds = group.Items.Select(item => item.Id).ToHashSet();
+        foreach (var item in HistoryItems.Where(item => removedIds.Contains(item.Id)).ToList())
+            HistoryItems.Remove(item);
+        TotalHistoryCount = Math.Max(0, TotalHistoryCount - removedIds.Count);
+        RebuildHistoryGroups();
+    }
+
+    [RelayCommand]
+    private async Task OpenDirectory(string directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+            return;
+
+        await Task.Run(() =>
+        {
+            try
+            {
+                if (!Directory.Exists(directory))
+                    return;
+
+                _startProcess(new ProcessStartInfo
+                {
+                    FileName = directory,
+                    UseShellExecute = true
+                });
+            }
+            catch
+            {
+            }
+        });
     }
 
     /// <summary>

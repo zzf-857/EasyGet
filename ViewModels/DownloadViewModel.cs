@@ -514,7 +514,14 @@ public partial class DownloadViewModel : ObservableObject
     }
 
     internal static string DescribeConcurrentFragments(AppConfig config)
-        => $"{config.ConcurrentFragments} 分片";
+    {
+        var effective = YtDlpService.ResolveConcurrentFragments(
+            config.ConcurrentFragments,
+            config.MaxConcurrentDownloads);
+        return effective == config.ConcurrentFragments
+            ? $"{effective} 分片"
+            : $"{effective} 分片（智能限流）";
+    }
 
     private static string FormatDuration(double seconds)
     {

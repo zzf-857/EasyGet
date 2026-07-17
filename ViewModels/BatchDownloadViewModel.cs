@@ -20,6 +20,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly YtDlpService _ytDlpService;
     private readonly Action<ProcessStartInfo> _startProcess;
+    private string _pendingCollectionSourceUrl = "";
 
     [ObservableProperty] private string _urlsText = "";
     [ObservableProperty] private string _selectedFormat = "mp4";
@@ -137,45 +138,70 @@ public partial class BatchDownloadViewModel : ObservableObject
             return;
 
         IsDownloading = true;
-
-        var knownUrls = new HashSet<string>(
-            _downloadManager.Tasks.Select(task => task.Url),
-            StringComparer.OrdinalIgnoreCase);
-        var urls = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                           .Select(line => DownloadViewModel.ExtractUrl(line))
-                           .Where(u => u != null)
-                           .Cast<string>()
-                           .Where(knownUrls.Add)
-                           .ToList();
-
-        var format = SelectedFormat switch
+        try
         {
-            "mp3 (仅音频)" => "mp3",
-            _ => SelectedFormat
-        };
+            var knownUrls = new HashSet<string>(
+                _downloadManager.Tasks.Select(task => task.Url),
+                StringComparer.OrdinalIgnoreCase);
+            var urls = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                               .Select(line => DownloadViewModel.ExtractUrl(line))
+                               .Where(u => u != null)
+                               .Cast<string>()
+                               .Where(knownUrls.Add)
+                               .ToList();
 
-        var quality = SelectedQuality switch
-        {
-            "最高画质" => "best",
-            "1080p" => "1080",
-            "720p" => "720",
-            "480p" => "480",
-            _ => "best"
-        };
+            if (urls.Count == 0)
+                return;
 
-        foreach (var url in urls)
-        {
-            var task = new DownloadTask
+            var batch = BatchDownloadOrganizer.Create(
+                _configService.Config.DefaultDownloadPath,
+                urls,
+                _pendingCollectionSourceUrl);
+            var outputDirectory = batch?.Directory
+                ?? _configService.Config.DefaultDownloadPath;
+
+            var format = SelectedFormat switch
             {
-                Url = url,
-                Format = format,
-                Quality = quality,
-                OutputDirectory = _configService.Config.DefaultDownloadPath
+                "mp3 (仅音频)" => "mp3",
+                _ => SelectedFormat
             };
-            await _downloadManager.EnqueueAsync(task);
-        }
 
-        IsDownloading = false;
+            var quality = SelectedQuality switch
+            {
+                "最高画质" => "best",
+                "1080p" => "1080",
+                "720p" => "720",
+                "480p" => "480",
+                _ => "best"
+            };
+
+            foreach (var url in urls)
+            {
+                var task = new DownloadTask
+                {
+                    Url = url,
+                    Format = format,
+                    Quality = quality,
+                    OutputDirectory = outputDirectory,
+                    BatchId = batch?.Id ?? "",
+                    BatchName = batch?.Name ?? "",
+                    BatchDirectory = batch?.Directory ?? ""
+                };
+                await _downloadManager.EnqueueAsync(task);
+            }
+
+            if (batch is not null)
+            {
+                RequestShowNotification?.Invoke(
+                    $"已创建独立目录：{Path.GetFileName(batch.Directory)}",
+                    true);
+            }
+        }
+        finally
+        {
+            _pendingCollectionSourceUrl = "";
+            IsDownloading = false;
+        }
     }
 
     [RelayCommand]
@@ -187,11 +213,13 @@ public partial class BatchDownloadViewModel : ObservableObject
         IsImportingPlaylist = true;
         try
         {
-            var urls = await _ytDlpService.GetPlaylistUrlsAsync(PlaylistUrl);
+            var sourceUrl = PlaylistUrl.Trim();
+            var urls = await _ytDlpService.GetPlaylistUrlsAsync(sourceUrl);
             if (urls.Count > 0)
             {
                 var newText = string.Join("\n", urls);
                 UrlsText = string.IsNullOrEmpty(UrlsText) ? newText : UrlsText + "\n" + newText;
+                _pendingCollectionSourceUrl = sourceUrl;
                 PlaylistUrl = "";
             }
         }

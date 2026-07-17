@@ -96,6 +96,23 @@ public class M3u8DownloadServiceTests
         Assert.Equal(expected, M3u8DownloadService.ResolveSegmentConcurrency(configuredFragments));
     }
 
+    [Theory]
+    [InlineData(8, 3, 16)]
+    [InlineData(24, 6, 24)]
+    [InlineData(8, 8, 4)]
+    [InlineData(24, 12, 4)]
+    public void ResolveSegmentConcurrency_HighTaskConcurrencyUsesSharedConnectionBudget(
+        int configuredFragments,
+        int maxConcurrentDownloads,
+        int expected)
+    {
+        Assert.Equal(
+            expected,
+            M3u8DownloadService.ResolveSegmentConcurrency(
+                configuredFragments,
+                maxConcurrentDownloads));
+    }
+
     [Fact]
     public async Task RetryFailedSegmentsAsync_UsesConfiguredParallelism()
     {

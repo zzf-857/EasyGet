@@ -99,8 +99,8 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _defaultDownloadPath = "";
     [ObservableProperty] private string _defaultFormat = "mp4";
     [ObservableProperty] private string _defaultQuality = "最高画质";
-    [ObservableProperty] private int _maxConcurrentDownloads = 3;
-    [ObservableProperty] private int _concurrentFragments = 8;
+    [ObservableProperty] private int _maxConcurrentDownloads = AppConfig.GetDefaultConcurrentDownloadLimit();
+    [ObservableProperty] private int _concurrentFragments = AppConfig.GetDefaultConcurrentFragments();
     [ObservableProperty] private string _settingsSaveStatusMessage = "";
 
     [ObservableProperty] private bool _useProxy;

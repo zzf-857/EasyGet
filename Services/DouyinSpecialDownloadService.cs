@@ -1351,10 +1351,9 @@ internal sealed record DouyinSidecarRequest(
         var proxy = config is { UseProxy: true }
             ? NormalizeText(config.ProxyAddress)
             : "";
-        var threadCount = Math.Clamp(
+        var threadCount = DownloadConcurrencyPolicy.ResolvePerTaskConnections(
             config?.ConcurrentFragments ?? 3,
-            AppConfig.MinConcurrentFragments,
-            AppConfig.MaxConcurrentFragments);
+            config?.MaxConcurrentDownloads ?? 3);
         var commentPageSize = Math.Clamp(
             config?.DouyinCommentPageSize ?? AppConfig.MaxDouyinCommentPageSize,
             1,

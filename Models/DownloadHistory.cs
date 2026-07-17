@@ -32,6 +32,17 @@ public partial class DownloadHistory : ObservableObject
     /// <summary>输出文件路径</summary>
     public string FilePath { get; set; } = "";
 
+    /// <summary>批量/合集任务的稳定批次 ID；旧记录和单条下载为空</summary>
+    public string BatchId { get; set; } = "";
+
+    /// <summary>批量/合集任务名称</summary>
+    public string BatchName { get; set; } = "";
+
+    /// <summary>批量/合集任务根目录</summary>
+    public string BatchDirectory { get; set; } = "";
+
+    public bool IsBatchHistory => !string.IsNullOrWhiteSpace(BatchId);
+
     private List<string> _attachmentFilePaths = [];
 
     /// <summary>主文件之外的附属文件路径</summary>

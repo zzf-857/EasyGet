@@ -767,7 +767,10 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="并发分片数" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="yt-dlp 多线程下载分片数" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                                <TextBlock Text="单任务分片数；8 个以上并发任务时自动限制为 4，避免连接竞争"
+                                           Style="{StaticResource TextBody}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
                             </StackPanel>
                             <TextBox Grid.Column="1"
                                      Style="{StaticResource DarkTextBox}"
@@ -801,7 +804,10 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel>
                                 <TextBlock Text="同时下载任务数" Style="{StaticResource TextBodyStrong}"/>
-                                <TextBlock Text="批量下载时的并发上限" Style="{StaticResource TextBody}" Margin="0,4,0,0"/>
+                                <TextBlock Text="允许 1–12；高性能电脑建议 10，平台风控严格时建议 4–6"
+                                           Style="{StaticResource TextBody}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,4,0,0"/>
                             </StackPanel>
                             <TextBox Grid.Column="1"
                                      Style="{StaticResource DarkTextBox}"

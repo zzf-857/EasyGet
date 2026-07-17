@@ -11,7 +11,7 @@ namespace EasyGet.Services;
 /// </summary>
 public class HistoryService : IDisposable
 {
-    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url";
+    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory";
 
     private readonly SqliteConnection _connection;
 
@@ -53,7 +53,10 @@ public class HistoryService : IDisposable
                 file_path TEXT NOT NULL DEFAULT '',
                 attachment_file_paths TEXT NOT NULL DEFAULT '[]',
                 download_time TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                thumbnail_url TEXT NOT NULL DEFAULT ''
+                thumbnail_url TEXT NOT NULL DEFAULT '',
+                batch_id TEXT NOT NULL DEFAULT '',
+                batch_name TEXT NOT NULL DEFAULT '',
+                batch_directory TEXT NOT NULL DEFAULT ''
             )
             """;
         cmd.ExecuteNonQuery();
@@ -66,6 +69,10 @@ public class HistoryService : IDisposable
             alter.ExecuteNonQuery();
         }
         catch { /* 列已存在，忽略 */ }
+
+        EnsureTextColumn("batch_id");
+        EnsureTextColumn("batch_name");
+        EnsureTextColumn("batch_directory");
 
         try
         {
@@ -81,6 +88,27 @@ public class HistoryService : IDisposable
             ON download_history (download_time DESC)
             """;
         index.ExecuteNonQuery();
+
+        using var batchIndex = _connection.CreateCommand();
+        batchIndex.CommandText = """
+            CREATE INDEX IF NOT EXISTS idx_download_history_batch_id
+            ON download_history (batch_id)
+            """;
+        batchIndex.ExecuteNonQuery();
+    }
+
+    private void EnsureTextColumn(string columnName)
+    {
+        try
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE download_history ADD COLUMN {columnName} TEXT NOT NULL DEFAULT ''";
+            alter.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // 旧库升级时列已存在即可继续；后续查询会再次验证数据库结构。
+        }
     }
 
     /// <summary>
@@ -90,8 +118,8 @@ public class HistoryService : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url)
-            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl)
+            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory)
+            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl, $batchId, $batchName, $batchDirectory)
             """;
         cmd.Parameters.AddWithValue("$url", NormalizeHistoryText(history.Url));
         cmd.Parameters.AddWithValue("$title", NormalizeHistoryText(history.Title));
@@ -105,6 +133,9 @@ public class HistoryService : IDisposable
             "$downloadTime",
             history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
         cmd.Parameters.AddWithValue("$thumbnailUrl", NormalizeHistoryText(history.ThumbnailUrl));
+        cmd.Parameters.AddWithValue("$batchId", NormalizeHistoryText(history.BatchId));
+        cmd.Parameters.AddWithValue("$batchName", NormalizeHistoryText(history.BatchName));
+        cmd.Parameters.AddWithValue("$batchDirectory", NormalizeHistoryText(history.BatchDirectory));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -119,7 +150,10 @@ public class HistoryService : IDisposable
         {
             cmd.CommandText = $"""
                 SELECT {HistoryColumns} FROM download_history
-                WHERE title LIKE $keyword OR url LIKE $keyword OR platform LIKE $keyword
+                WHERE title LIKE $keyword
+                   OR url LIKE $keyword
+                   OR platform LIKE $keyword
+                   OR batch_name LIKE $keyword
                 ORDER BY download_time DESC
                 """;
             cmd.Parameters.AddWithValue("$keyword", $"%{searchKeyword}%");
@@ -148,7 +182,10 @@ public class HistoryService : IDisposable
                 FilePath = ReadString(reader, "file_path"),
                 AttachmentFilePaths = DeserializeAttachmentFilePaths(ReadString(reader, "attachment_file_paths")),
                 DownloadTime = ParseDownloadTime(ReadString(reader, "download_time")),
-                ThumbnailUrl = thumbnailUrl
+                ThumbnailUrl = thumbnailUrl,
+                BatchId = ReadString(reader, "batch_id"),
+                BatchName = ReadString(reader, "batch_name"),
+                BatchDirectory = ReadString(reader, "batch_directory")
             });
         }
 
@@ -264,6 +301,18 @@ public class HistoryService : IDisposable
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
         cmd.Parameters.AddWithValue("$id", id);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>删除同一批量/合集任务的全部历史记录</summary>
+    public async Task DeleteBatchAsync(string batchId)
+    {
+        if (string.IsNullOrWhiteSpace(batchId))
+            return;
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM download_history WHERE batch_id = $batchId";
+        cmd.Parameters.AddWithValue("$batchId", batchId.Trim());
         await cmd.ExecuteNonQueryAsync();
     }
 

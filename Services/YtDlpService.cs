@@ -694,10 +694,9 @@ public partial class YtDlpService
         AddDownloadThroughputArgs(args);
         AddNetworkReliabilityArgs(args);
 
-        var fragments = Math.Clamp(
+        var fragments = ResolveConcurrentFragments(
             _configService.Config.ConcurrentFragments,
-            AppConfig.MinConcurrentFragments,
-            AppConfig.MaxConcurrentFragments);
+            _configService.Config.MaxConcurrentDownloads);
         if (fragments > 1)
         {
             args.Add("--concurrent-fragments");
@@ -733,6 +732,13 @@ public partial class YtDlpService
         args.Add(task.Url);
         return args;
     }
+
+    internal static int ResolveConcurrentFragments(
+        int configuredFragments,
+        int maxConcurrentDownloads)
+        => DownloadConcurrencyPolicy.ResolvePerTaskConnections(
+            configuredFragments,
+            maxConcurrentDownloads);
 
     internal static void AddAria2cArgs(List<string> args, bool useAria2c, string? aria2cPath, int splitCount = 16)
     {

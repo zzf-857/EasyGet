@@ -674,6 +674,7 @@ public class DouyinSpecialDownloadServiceTests
             DouyinDownloadJson = true
         };
         config.ConcurrentFragments = 7;
+        config.MaxConcurrentDownloads = 3;
         SetAppConfigString(config, "DouyinStartTime", " 2024-01-01 ");
         SetAppConfigString(config, "DouyinEndTime", " 2024-01-31 ");
         SetAppConfigBool(config, "DouyinDownloadComments", value: true);
@@ -730,10 +731,12 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Theory]
-    [InlineData(0, AppConfig.MinConcurrentFragments)]
-    [InlineData(AppConfig.MaxConcurrentFragments + 5, AppConfig.MaxConcurrentFragments)]
+    [InlineData(0, 3, AppConfig.MinConcurrentFragments)]
+    [InlineData(AppConfig.MaxConcurrentFragments + 5, 3, AppConfig.MaxConcurrentFragments)]
+    [InlineData(7, 10, 4)]
     public async Task DownloadAsync_WithAppConfig_ClampsThreadCountForSidecarRequest(
         int concurrentFragments,
+        int maxConcurrentDownloads,
         int expectedThreadCount)
     {
         var runner = new CapturingSidecarRunner(
@@ -746,7 +749,8 @@ public class DouyinSpecialDownloadServiceTests
         };
         var config = new AppConfig
         {
-            ConcurrentFragments = concurrentFragments
+            ConcurrentFragments = concurrentFragments,
+            MaxConcurrentDownloads = maxConcurrentDownloads
         };
 
         await InvokeConfigDownloadAsync(service, task, config);
