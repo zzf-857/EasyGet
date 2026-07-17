@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.3.4 - 2026-07-17
+
+### Download History Selection
+- Made the entire non-action area of every history card toggle selection, so users no longer need to target the small circular selector.
+- Kept the circular selector fully functional while preventing its click from bubbling into a second card-level toggle.
+- Excluded preview, folder, source-link, and delete controls from card selection and protected drag-to-folder gestures from being misread as clicks.
+- Ignored the second half of a double-click so a rapid click does not immediately undo the intended selection.
+
+### Tests
+- Added regression coverage for whole-card selection, nested action isolation, and drag-state protection.
+- Verified 915 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.3.3 - 2026-07-17
 
 ### Apple-inspired Visual System
