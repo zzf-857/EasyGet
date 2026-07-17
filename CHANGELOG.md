@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.5 - 2026-07-17
+
+### Download History Performance
+- Replaced the eager history-card wrap panel with a recycling, pixel-scrolling virtualized row layout so large playlists only create cards near the viewport.
+- Added responsive row regrouping for window-size changes while preserving smooth continuous scrolling.
+- Skipped full-content transition animation for large folders to keep directory entry responsive.
+
+### Selection and Layout Fixes
+- Replaced the layout-changing selected border with a non-interactive overlay ring that stays aligned with the card frame.
+- Removed hover translation that displaced the visual card from its interaction area and added a safe top inset so first-row outlines and shadows are not clipped.
+- Tightened the transition between the folder workspace and media grid, removed raw file-path tooltips, and avoided unwanted focus outlines after whole-card selection.
+
+### Tests
+- Added regression coverage for 75-item virtualized folders, responsive row grouping, recycling configuration, large-folder animation guards, and stable selection geometry.
+- Verified 917 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.3.4 - 2026-07-17
 
 ### Download History Selection
