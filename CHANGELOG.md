@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.5 - 2026-07-17
+
+### Playlist Organization
+- Read the platform's real playlist title during import and use it as the dedicated download folder and history-group name.
+- Keep playlist files directly inside that folder even when automatic platform categorization is enabled.
+- Remove the repeated collection title and `p01`/`p02` markers from each filename while preserving the platform-provided episode number and title.
+- Reuse the same folder and stable history group when the same playlist is downloaded again.
+- Recover real collection names from older Bilibili multipart history entries where possible.
+
+### Compatibility
+- Fetch playlist root metadata and entry URLs in one flat JSON pass while retaining EasyGet's automatic Cookie strategy fallback.
+
+### Tests
+- Added real-title parsing, filename cleanup, direct-folder output, stable grouping, playlist metadata, and legacy-history regression coverage.
+- Verified 882 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.2.4 - 2026-07-17
 
 ### Batch Organization
