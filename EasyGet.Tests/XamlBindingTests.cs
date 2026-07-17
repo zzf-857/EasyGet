@@ -56,6 +56,28 @@ public class XamlBindingTests
             $"BatchDownloadView should use ToolPanelBorder for URL input and queue panels. Found {styledPanels.Count}.");
     }
 
+    [Theory]
+    [InlineData("DownloadView.xaml")]
+    [InlineData("BatchDownloadView.xaml")]
+    [InlineData("HistoryView.xaml")]
+    [InlineData("SettingsView.xaml")]
+    public void InlineRunOutputBindingsAreExplicitlyOneWay(string viewFileName)
+    {
+        var document = XDocument.Load(GetViewPath(viewFileName));
+        var unsafeBindings = document
+            .Descendants()
+            .Where(element => element.Name.LocalName == "Run")
+            .Select(element => element.Attribute("Text")?.Value ?? "")
+            .Where(value => value.StartsWith("{Binding ", StringComparison.Ordinal))
+            .Where(value => !value.Contains("Mode=OneWay", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.True(
+            unsafeBindings.Count == 0,
+            $"Run.Text binds two-way by default. Output bindings in {viewFileName} must declare Mode=OneWay: "
+                + string.Join("; ", unsafeBindings));
+    }
+
     [Fact]
     public void HistoryViewUsesModernToolPanelStyleForHistoryCards()
     {
@@ -637,7 +659,8 @@ public class XamlBindingTests
         var subStyle = subtitle.Attribute("Style")?.Value ?? "";
         Assert.True(subFontSize == "14" || subStyle.Contains("TextBodyStrong", StringComparison.Ordinal) || subStyle.Contains("TextBody", StringComparison.Ordinal));
         var subForeground = subtitle.Attribute("Foreground")?.Value ?? "";
-        Assert.True(subForeground.Contains("TextSecondaryBrush", StringComparison.Ordinal) 
+        Assert.True(
+            subForeground.Contains("TextSecondaryBrush", StringComparison.Ordinal)
             || subStyle.Contains("TextBodyStrong", StringComparison.Ordinal)
             || subStyle.Contains("TextBody", StringComparison.Ordinal));
     }

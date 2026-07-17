@@ -38,7 +38,7 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
-    public async Task StartBatchDownload_AddsAllTasksBeforeMetadataResolutionCompletes()
+    public async Task StartBatchDownload_AddsAllBilibiliPartsBeforeMetadataResolutionCompletes()
     {
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
@@ -50,7 +50,8 @@ public class BatchDownloadViewModelTests
         {
             UrlsText = string.Join(
                 '\n',
-                Enumerable.Range(1, 20).Select(i => $"https://x.com/user/status/{i}"))
+                Enumerable.Range(1, 85).Select(i =>
+                    $"https://www.bilibili.com/video/BV1ddN76xEQY/?p={i}"))
         };
 
         var command = viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
@@ -61,7 +62,8 @@ public class BatchDownloadViewModelTests
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal(20, admittedTaskCount);
+        Assert.Equal(85, admittedTaskCount);
+        Assert.Equal(85, manager.Tasks.Select(task => task.Url).Distinct().Count());
         Assert.InRange(blocker.MaxConcurrentMetadataRequests, 1, 4);
     }
 
@@ -104,7 +106,10 @@ public class BatchDownloadViewModelTests
         var xaml = File.ReadAllText(
             TestRepositoryPaths.GetViewPath("BatchDownloadView.xaml"));
 
-        Assert.Contains("Text=\"{Binding StatusText}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "Text=\"{Binding StatusText, Mode=OneWay}\"",
+            xaml,
+            StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding DisplayTitle}\"", xaml, StringComparison.Ordinal);
     }
 

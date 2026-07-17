@@ -44,7 +44,7 @@
                                            FontSize="{StaticResource IconSizeBody}" Foreground="{DynamicResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                                 <TextBlock Grid.Column="1" VerticalAlignment="Center" Style="{StaticResource TextBody}" TextTrimming="CharacterEllipsis">
                                     <Run Text="检测到剪贴板链接: " Foreground="{StaticResource TextSecondaryBrush}"/>
-                                    <Run Text="{Binding ClipboardPromptUrl}" Foreground="{DynamicResource AccentBrush}" FontWeight="{StaticResource FontWeightSemiBold}"/>
+                                    <Run Text="{Binding ClipboardPromptUrl, Mode=OneWay}" Foreground="{DynamicResource AccentBrush}" FontWeight="{StaticResource FontWeightSemiBold}"/>
                                     <Run Text="，点击直接解析" Foreground="{StaticResource TextSecondaryBrush}"/>
                                 </TextBlock>
                                 <Button Grid.Column="2" Style="{StaticResource SurfaceButton}" Padding="6,3" FontSize="{StaticResource FontSizeCaption}"
@@ -468,7 +468,7 @@
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
-                                <Run Text="{Binding CurrentTask.Progress, StringFormat={}{0:F1}, FallbackValue='0'}"/>
+                                <Run Text="{Binding CurrentTask.Progress, StringFormat={}{0:F1}, FallbackValue='0', Mode=OneWay}"/>
                                 <Run Text="%"/>
                             </TextBlock>
                             <ProgressBar Grid.Row="1"

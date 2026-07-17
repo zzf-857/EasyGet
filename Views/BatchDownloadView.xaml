@@ -350,7 +350,7 @@
                                                 </DockPanel>
                                                 <Grid Margin="0,6,0,4">
                                                     <TextBlock Style="{StaticResource TextCaption}">
-                                                        <Run Text="{Binding StatusText}"/>
+                                                        <Run Text="{Binding StatusText, Mode=OneWay}"/>
                                                         <Run Text=" · "/>
                                                         <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
                                                     </TextBlock>
@@ -358,7 +358,7 @@
                                                                Style="{StaticResource TextCaption}" 
                                                                FontFamily="{StaticResource FontFamilyMono}"
                                                                Foreground="{DynamicResource AccentBrush}">
-                                                        <Run Text="{Binding Progress, StringFormat={}{0:F0}}"/>
+                                                        <Run Text="{Binding Progress, StringFormat={}{0:F0}, Mode=OneWay}"/>
                                                         <Run Text="% · "/>
                                                         <Run Text="{Binding SpeedText, Mode=OneWay}"/>
                                                     </TextBlock>
