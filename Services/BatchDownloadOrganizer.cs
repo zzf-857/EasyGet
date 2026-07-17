@@ -1,4 +1,5 @@
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,42 +8,79 @@ namespace EasyGet.Services;
 internal sealed record DownloadBatchContext(
     string Id,
     string Name,
-    string Directory);
+    string Directory,
+    string CollectionTitle);
 
 /// <summary>
 /// 为批量和合集下载创建稳定、可读且不会覆盖已有内容的根目录。
 /// </summary>
 internal static partial class BatchDownloadOrganizer
 {
-    private const int MaxFolderSegmentLength = 96;
+    private const int MaxFolderSegmentLength = 120;
 
     internal static DownloadBatchContext? Create(
         string baseOutputDirectory,
         IReadOnlyCollection<string> urls,
         string? collectionSourceUrl = null,
-        DateTime? now = null)
+        DateTime? now = null,
+        string? collectionTitle = null)
     {
         ArgumentNullException.ThrowIfNull(urls);
         if (urls.Count == 0
-            || (urls.Count == 1 && string.IsNullOrWhiteSpace(collectionSourceUrl)))
+            || (urls.Count == 1
+                && string.IsNullOrWhiteSpace(collectionSourceUrl)
+                && string.IsNullOrWhiteSpace(collectionTitle)))
         {
             return null;
         }
 
         var timestamp = now ?? DateTime.Now;
+        var actualCollectionTitle = (collectionTitle ?? "").Trim();
         var descriptor = Describe(urls, collectionSourceUrl);
         var folderStem = SanitizeFolderSegment(
-            $"{descriptor.FolderPrefix}_{timestamp:yyyyMMdd_HHmmss}");
+            actualCollectionTitle.Length > 0
+                ? actualCollectionTitle
+                : $"{descriptor.FolderPrefix}_{timestamp:yyyyMMdd_HHmmss}");
         var baseDirectory = Path.GetFullPath(baseOutputDirectory);
         Directory.CreateDirectory(baseDirectory);
 
-        var batchDirectory = GetUniqueDirectory(baseDirectory, folderStem);
+        var batchDirectory = actualCollectionTitle.Length > 0
+            ? Path.Combine(baseDirectory, folderStem)
+            : GetUniqueDirectory(baseDirectory, folderStem);
         Directory.CreateDirectory(batchDirectory);
 
         return new DownloadBatchContext(
-            Guid.NewGuid().ToString("N"),
-            $"{descriptor.DisplayName} · {timestamp:yyyy-MM-dd HH:mm}",
-            batchDirectory);
+            CreateBatchId(collectionSourceUrl, actualCollectionTitle),
+            actualCollectionTitle.Length > 0
+                ? actualCollectionTitle
+                : $"{descriptor.DisplayName} · {timestamp:yyyy-MM-dd HH:mm}",
+            batchDirectory,
+            actualCollectionTitle);
+    }
+
+    private static string CreateBatchId(string? collectionSourceUrl, string collectionTitle)
+    {
+        string identity;
+        if (!string.IsNullOrWhiteSpace(collectionSourceUrl)
+            && TryDescribeCollectionUrl(collectionSourceUrl, out var collectionKey, out _))
+        {
+            identity = collectionKey;
+        }
+        else if (!string.IsNullOrWhiteSpace(collectionSourceUrl))
+        {
+            identity = collectionSourceUrl.Trim();
+        }
+        else if (!string.IsNullOrWhiteSpace(collectionTitle))
+        {
+            identity = collectionTitle.Trim();
+        }
+        else
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+
+        var digest = SHA256.HashData(Encoding.UTF8.GetBytes(identity));
+        return $"collection-{Convert.ToHexString(digest)[..20].ToLowerInvariant()}";
     }
 
     private static BatchDescriptor Describe(

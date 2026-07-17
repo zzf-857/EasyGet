@@ -67,4 +67,38 @@ public class BatchDownloadOrganizerTests
             Path.GetFileName(batch!.Directory),
             StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Create_ActualPlaylistTitle_UsesStableHumanReadableFolder()
+    {
+        using var root = new TestDirectory();
+        var output = root.Path("downloads");
+        const string title = "【大模型RAG】2026年系统教程！全程干货！";
+        var urls = new[]
+        {
+            "https://www.bilibili.com/video/BV1ddN76xEQY/?p=1",
+            "https://www.bilibili.com/video/BV1ddN76xEQY/?p=2"
+        };
+
+        var first = BatchDownloadOrganizer.Create(
+            output,
+            urls,
+            "https://www.bilibili.com/video/BV1ddN76xEQY/",
+            new DateTime(2026, 7, 17, 12, 0, 0),
+            title);
+        var second = BatchDownloadOrganizer.Create(
+            output,
+            urls,
+            "https://www.bilibili.com/video/BV1ddN76xEQY/",
+            new DateTime(2026, 7, 18, 12, 0, 0),
+            title);
+
+        Assert.NotNull(first);
+        Assert.NotNull(second);
+        Assert.Equal(title, first!.Name);
+        Assert.Equal(title, first.CollectionTitle);
+        Assert.Equal(title, Path.GetFileName(first.Directory));
+        Assert.Equal(first.Directory, second!.Directory);
+        Assert.Equal(first.Id, second.Id);
+    }
 }

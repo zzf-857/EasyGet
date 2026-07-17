@@ -578,20 +578,30 @@ public class DownloadManager : IDisposable
 
     private void ApplyVideoInfoMetadata(DownloadTask task, VideoInfo info)
     {
-        task.Title = info.Title;
+        task.Title = string.IsNullOrWhiteSpace(task.CollectionTitle)
+            ? info.Title
+            : CollectionNamingService.BuildItemTitle(
+                info.Title,
+                task.CollectionTitle,
+                task.CollectionItemIndex,
+                task.CollectionItemCount);
         task.Platform = info.Platform;
         task.Duration = info.Duration;
         task.ThumbnailUrl = info.Thumbnail;
         task.FileSize = info.FileSize;
-        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {info.Title}");
+        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {task.Title}");
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 平台: {info.Platform} | 时长: {task.DurationText}");
         ApplyAutoCategorization(task, info.Platform);
     }
 
     private void ApplyAutoCategorization(DownloadTask task, string platform)
     {
-        if (!_configService.Config.AutoCategorizeByPlatform || string.IsNullOrEmpty(platform))
+        if (!_configService.Config.AutoCategorizeByPlatform
+            || string.IsNullOrEmpty(platform)
+            || !string.IsNullOrWhiteSpace(task.CollectionTitle))
+        {
             return;
+        }
 
         var folderName = MapPlatformToFolderName(platform);
         task.OutputDirectory = System.IO.Path.Combine(task.OutputDirectory, folderName);

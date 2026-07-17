@@ -21,6 +21,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly YtDlpService _ytDlpService;
     private readonly Action<ProcessStartInfo> _startProcess;
     private string _pendingCollectionSourceUrl = "";
+    private string _pendingCollectionTitle = "";
 
     [ObservableProperty] private string _urlsText = "";
     [ObservableProperty] private string _selectedFormat = "mp4";
@@ -156,7 +157,8 @@ public partial class BatchDownloadViewModel : ObservableObject
             var batch = BatchDownloadOrganizer.Create(
                 _configService.Config.DefaultDownloadPath,
                 urls,
-                _pendingCollectionSourceUrl);
+                _pendingCollectionSourceUrl,
+                collectionTitle: _pendingCollectionTitle);
             var outputDirectory = batch?.Directory
                 ?? _configService.Config.DefaultDownloadPath;
 
@@ -175,17 +177,20 @@ public partial class BatchDownloadViewModel : ObservableObject
                 _ => "best"
             };
 
-            foreach (var url in urls)
+            for (var index = 0; index < urls.Count; index++)
             {
                 var task = new DownloadTask
                 {
-                    Url = url,
+                    Url = urls[index],
                     Format = format,
                     Quality = quality,
                     OutputDirectory = outputDirectory,
                     BatchId = batch?.Id ?? "",
                     BatchName = batch?.Name ?? "",
-                    BatchDirectory = batch?.Directory ?? ""
+                    BatchDirectory = batch?.Directory ?? "",
+                    CollectionTitle = batch?.CollectionTitle ?? "",
+                    CollectionItemIndex = batch is null ? 0 : index + 1,
+                    CollectionItemCount = batch is null ? 0 : urls.Count
                 };
                 await _downloadManager.EnqueueAsync(task);
             }
@@ -200,6 +205,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         finally
         {
             _pendingCollectionSourceUrl = "";
+            _pendingCollectionTitle = "";
             IsDownloading = false;
         }
     }
@@ -214,19 +220,29 @@ public partial class BatchDownloadViewModel : ObservableObject
         try
         {
             var sourceUrl = PlaylistUrl.Trim();
-            var urls = await _ytDlpService.GetPlaylistUrlsAsync(sourceUrl);
-            if (urls.Count > 0)
-            {
-                var newText = string.Join("\n", urls);
-                UrlsText = string.IsNullOrEmpty(UrlsText) ? newText : UrlsText + "\n" + newText;
-                _pendingCollectionSourceUrl = sourceUrl;
+            var playlist = await _ytDlpService.GetPlaylistInfoAsync(sourceUrl);
+            if (ApplyPlaylistImport(playlist, sourceUrl))
                 PlaylistUrl = "";
-            }
         }
         finally
         {
             IsImportingPlaylist = false;
         }
+    }
+
+    internal bool ApplyPlaylistImport(PlaylistInfo playlist, string? fallbackSourceUrl = null)
+    {
+        ArgumentNullException.ThrowIfNull(playlist);
+        if (playlist.Urls.Count == 0)
+            return false;
+
+        var newText = string.Join("\n", playlist.Urls);
+        UrlsText = string.IsNullOrEmpty(UrlsText) ? newText : UrlsText + "\n" + newText;
+        _pendingCollectionSourceUrl = string.IsNullOrWhiteSpace(playlist.SourceUrl)
+            ? fallbackSourceUrl?.Trim() ?? ""
+            : playlist.SourceUrl.Trim();
+        _pendingCollectionTitle = playlist.Title.Trim();
+        return true;
     }
 
     [RelayCommand]

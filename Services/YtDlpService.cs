@@ -18,6 +18,13 @@ public class VideoInfo
     public string Url { get; set; } = "";
 }
 
+public class PlaylistInfo
+{
+    public string Title { get; set; } = "";
+    public string SourceUrl { get; set; } = "";
+    public List<string> Urls { get; set; } = [];
+}
+
 public class DownloadProgress
 {
     public double Percent { get; set; }
@@ -353,8 +360,11 @@ public partial class YtDlpService
     }
 
     public async Task<List<string>> GetPlaylistUrlsAsync(string url, CancellationToken ct = default)
+        => (await GetPlaylistInfoAsync(url, ct)).Urls;
+
+    public async Task<PlaylistInfo> GetPlaylistInfoAsync(string url, CancellationToken ct = default)
     {
-        var urls = new List<string>();
+        var empty = new PlaylistInfo { SourceUrl = url };
 
         try
         {
@@ -385,7 +395,7 @@ public partial class YtDlpService
                 }
 
                 await using var cookieArgumentLease = cookieArguments;
-                var args = BuildPlaylistBaseArgs();
+                var args = BuildPlaylistInfoBaseArgs();
 
                 AddSiteCompatibilityArgs(args, url);
                 AddProxyArgs(args);
@@ -395,25 +405,21 @@ public partial class YtDlpService
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
                 if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
-                    var attemptUrls = new List<string>();
                     foreach (var line in EnumerateProcessLines(result.StandardOutput))
                     {
                         try
                         {
-                            var videoUrl = ExtractPlaylistUrlFromJson(line);
-                            if (!string.IsNullOrWhiteSpace(videoUrl))
-                                attemptUrls.Add(videoUrl);
+                            var playlist = ParsePlaylistInfoJson(line, url);
+                            if (playlist.Urls.Count == 0)
+                                continue;
+
+                            await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
+                            return playlist;
                         }
                         catch
                         {
                             // ignore non-json lines
                         }
-                    }
-
-                    if (attemptUrls.Count > 0)
-                    {
-                        await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
-                        return attemptUrls;
                     }
                 }
 
@@ -431,17 +437,46 @@ public partial class YtDlpService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[YtDlpService] GetPlaylistUrls failed: {ex.Message}");
+            Debug.WriteLine($"[YtDlpService] GetPlaylistInfo failed: {ex.Message}");
         }
 
-        return urls;
+        return empty;
+    }
+
+    internal static PlaylistInfo ParsePlaylistInfoJson(string json, string sourceUrl)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var urls = new List<string>();
+        var knownUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (root.TryGetProperty("entries", out var entries)
+            && entries.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var entry in entries.EnumerateArray())
+            {
+                var videoUrl = ExtractPlaylistUrl(entry);
+                if (!string.IsNullOrWhiteSpace(videoUrl) && knownUrls.Add(videoUrl))
+                    urls.Add(videoUrl);
+            }
+        }
+
+        return new PlaylistInfo
+        {
+            Title = NormalizeMetadataTitle(GetOptionalString(root, "title")),
+            SourceUrl = sourceUrl,
+            Urls = urls
+        };
     }
 
     internal static string ExtractPlaylistUrlFromJson(string json)
     {
         using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        return ExtractPlaylistUrl(doc.RootElement);
+    }
 
+    private static string ExtractPlaylistUrl(JsonElement root)
+    {
         var videoUrl = GetOptionalString(root, "url");
         if (string.IsNullOrWhiteSpace(videoUrl))
             return GetOptionalString(root, "webpage_url");
@@ -809,6 +844,19 @@ public partial class YtDlpService
         {
             "--flat-playlist",
             "--dump-json",
+            "--no-warnings"
+        };
+
+        AddNetworkReliabilityArgs(args);
+        return args;
+    }
+
+    internal static List<string> BuildPlaylistInfoBaseArgs()
+    {
+        var args = new List<string>
+        {
+            "--flat-playlist",
+            "--dump-single-json",
             "--no-warnings"
         };
 

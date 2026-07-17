@@ -235,9 +235,17 @@ public partial class HistoryViewModel : ObservableObject
             var first = items[0];
             var isLegacyCollection = key.StartsWith("legacy:", StringComparison.Ordinal);
             var isBatch = first.IsBatchHistory || (isLegacyCollection && items.Count > 1);
+            var inferredCollectionTitle = items
+                .Select(item => CollectionNamingService.TryExtractCollectionTitle(
+                    item.Title,
+                    out var title)
+                    ? title
+                    : "")
+                .FirstOrDefault(title => !string.IsNullOrWhiteSpace(title));
             var name = first.IsBatchHistory
-                ? ResolveBatchName(first)
-                : legacyGroupNames.GetValueOrDefault(key, first.Title);
+                ? ResolveBatchName(first, inferredCollectionTitle)
+                : inferredCollectionTitle
+                    ?? legacyGroupNames.GetValueOrDefault(key, first.Title);
             HistoryGroups.Add(new DownloadHistoryGroup
             {
                 Key = key,
@@ -282,10 +290,19 @@ public partial class HistoryViewModel : ObservableObject
         }
     }
 
-    private static string ResolveBatchName(DownloadHistory history)
+    private static string ResolveBatchName(
+        DownloadHistory history,
+        string? inferredCollectionTitle)
     {
-        if (!string.IsNullOrWhiteSpace(history.BatchName))
+        if (!string.IsNullOrWhiteSpace(history.BatchName)
+            && (!history.BatchName.StartsWith("Bilibili 合集 ·", StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(inferredCollectionTitle)))
+        {
             return history.BatchName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(inferredCollectionTitle))
+            return inferredCollectionTitle;
 
         if (!string.IsNullOrWhiteSpace(history.BatchDirectory))
         {

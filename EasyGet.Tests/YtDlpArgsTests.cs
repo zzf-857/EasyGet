@@ -110,6 +110,17 @@ public class YtDlpArgsTests
     }
 
     [Fact]
+    public void BuildPlaylistInfoBaseArgs_UsesSingleRootJsonForPlaylistTitle()
+    {
+        var args = YtDlpService.BuildPlaylistInfoBaseArgs();
+
+        Assert.Contains("--flat-playlist", args);
+        Assert.Contains("--dump-single-json", args);
+        Assert.DoesNotContain("--dump-json", args);
+        AssertOptionValue(args, "--retries", "20");
+    }
+
+    [Fact]
     public void AddSiteCompatibilityArgs_AddsBilibiliBrowserHeaders()
     {
         var args = new List<string>();

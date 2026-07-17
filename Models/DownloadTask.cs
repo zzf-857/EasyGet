@@ -73,6 +73,15 @@ public partial class DownloadTask : ObservableObject
     /// <summary>批量/合集任务的根目录（平台自动归类目录的上一级）</summary>
     public string BatchDirectory { get; set; } = "";
 
+    /// <summary>平台返回的真实合集标题；普通批量任务为空</summary>
+    public string CollectionTitle { get; set; } = "";
+
+    /// <summary>合集中的一基序号</summary>
+    public int CollectionItemIndex { get; set; }
+
+    /// <summary>合集总项目数</summary>
+    public int CollectionItemCount { get; set; }
+
     /// <summary>输出文件路径</summary>
     [ObservableProperty] private string _outputFilePath = "";
 

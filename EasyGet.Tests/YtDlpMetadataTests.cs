@@ -46,6 +46,32 @@ public class YtDlpMetadataTests
     }
 
     [Fact]
+    public void ParsePlaylistInfoJson_ReadsRootTitleAndEntryUrls()
+    {
+        const string json = """
+            {
+              "title": "真实合集标题",
+              "entries": [
+                { "url": "https://www.bilibili.com/video/BV1test?p=1" },
+                { "url": "abc123XYZ09", "ie_key": "Youtube" },
+                { "url": "https://www.bilibili.com/video/BV1test?p=1" }
+              ]
+            }
+            """;
+
+        var info = YtDlpService.ParsePlaylistInfoJson(json, "https://example.test/playlist");
+
+        Assert.Equal("真实合集标题", info.Title);
+        Assert.Equal("https://example.test/playlist", info.SourceUrl);
+        Assert.Equal(
+            [
+                "https://www.bilibili.com/video/BV1test?p=1",
+                "https://www.youtube.com/watch?v=abc123XYZ09"
+            ],
+            info.Urls);
+    }
+
+    [Fact]
     public void ParseVideoInfoJson_IgnoresNonStringMetadataFields()
     {
         const string json = """

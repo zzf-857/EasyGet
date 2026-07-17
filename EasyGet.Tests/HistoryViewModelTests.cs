@@ -692,12 +692,13 @@ public class HistoryViewModelTests
         try
         {
             using var service = new HistoryService(dbPath);
+            const string collectionTitle = "【大模型RAG】2026年系统教程！全程干货！";
             for (var part = 1; part <= 2; part++)
             {
                 await service.AddAsync(new DownloadHistory
                 {
                     Url = $"https://www.bilibili.com/video/BV1ddN76xEQY/?p={part}",
-                    Title = $"legacy part {part}",
+                    Title = $"{collectionTitle} p{part:D2} {part - 1:D2}. legacy part {part}",
                     Format = "mp4",
                     FilePath = $@"D:\Videos\legacy-{part}.mp4",
                     DownloadTime = new DateTime(2026, 7, 16, 12, 0, part)
@@ -713,7 +714,7 @@ public class HistoryViewModelTests
             var group = Assert.Single(viewModel.HistoryGroups);
             Assert.True(group.IsBatch);
             Assert.Equal(2, group.ItemCount);
-            Assert.Contains("Bilibili 合集 · BV1ddN76xEQY", group.Name, StringComparison.Ordinal);
+            Assert.Equal(collectionTitle, group.Name);
             Assert.False(group.IsExpanded);
 
             await viewModel.DeleteBatchCommand.ExecuteAsync(group);

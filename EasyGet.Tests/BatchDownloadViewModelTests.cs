@@ -124,6 +124,54 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
+    public async Task ImportedPlaylist_UsesActualTitleForFolderAndCollectionTasks()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        const string collectionTitle = "【大模型RAG】2026年系统教程！全程干货！";
+        var service = new BlockingYtDlpDownloadService();
+        service.MetadataPlatform = "Bilibili";
+        service.MetadataTitleFactory = url => url.Contains("p=1", StringComparison.Ordinal)
+            ? $"{collectionTitle} p01 00.【指南】完整路径"
+            : $"{collectionTitle} p02 01.环境安装";
+        service.Release();
+        var manager = new DownloadManager(service, history, config);
+        var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp);
+        var playlist = new PlaylistInfo
+        {
+            Title = collectionTitle,
+            SourceUrl = "https://www.bilibili.com/video/BV1ddN76xEQY/",
+            Urls =
+            [
+                "https://www.bilibili.com/video/BV1ddN76xEQY/?p=1",
+                "https://www.bilibili.com/video/BV1ddN76xEQY/?p=2"
+            ]
+        };
+
+        Assert.True(viewModel.ApplyPlaylistImport(playlist));
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(2, manager.Tasks.Count);
+        Assert.All(manager.Tasks, task =>
+        {
+            Assert.Equal(collectionTitle, task.CollectionTitle);
+            Assert.Equal(collectionTitle, task.BatchName);
+            Assert.Equal(collectionTitle, Path.GetFileName(task.BatchDirectory));
+            Assert.Equal(task.BatchDirectory, task.OutputDirectory);
+            Assert.Equal(2, task.CollectionItemCount);
+        });
+        Assert.Equal([1, 2], manager.Tasks.Select(task => task.CollectionItemIndex).ToArray());
+        Assert.Equal(
+            ["00.【指南】完整路径", "01.环境安装"],
+            manager.Tasks.Select(task => task.Title).ToArray());
+    }
+
+    [Fact]
     public void BatchDownloadXaml_ShowsTaskStatusTextIncludingAuthenticationPhase()
     {
         var xaml = File.ReadAllText(
@@ -399,6 +447,8 @@ public class BatchDownloadViewModelTests
         public Task FirstMetadataRequest => _first.Task;
         public int MaxConcurrentMetadataRequests => Volatile.Read(
             ref _maxConcurrentMetadataRequests);
+        public Func<string, string> MetadataTitleFactory { get; set; } = url => url;
+        public string MetadataPlatform { get; set; } = "Twitter";
 
         public async Task<VideoInfo?> GetVideoInfoAsync(
             string url,
@@ -410,7 +460,11 @@ public class BatchDownloadViewModelTests
             try
             {
                 await _release.Task.WaitAsync(cancellationToken);
-                return new VideoInfo { Title = url, Platform = "Twitter" };
+                return new VideoInfo
+                {
+                    Title = MetadataTitleFactory(url),
+                    Platform = MetadataPlatform
+                };
             }
             finally
             {
