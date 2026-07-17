@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using EasyGet.Models;
 using EasyGet.ViewModels;
@@ -13,10 +14,20 @@ public partial class HistoryView : System.Windows.Controls.UserControl
     private const string HistoryItemsDataFormat = "EasyGet.HistoryItems";
     private Point _historyDragStart;
     private HistoryViewModel? _observedViewModel;
+    private readonly DispatcherTimer _scrollResetTimer;
 
     public HistoryView()
     {
         InitializeComponent();
+        _scrollResetTimer = new DispatcherTimer(DispatcherPriority.ContextIdle, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(140)
+        };
+        _scrollResetTimer.Tick += (_, _) =>
+        {
+            _scrollResetTimer.Stop();
+            FindVisualChild<ScrollViewer>(HistoryList)?.ScrollToTop();
+        };
     }
 
     private async void HistoryView_Loaded(object sender, System.Windows.RoutedEventArgs e)
@@ -31,6 +42,7 @@ public partial class HistoryView : System.Windows.Controls.UserControl
 
     private void HistoryView_Unloaded(object sender, RoutedEventArgs e)
     {
+        _scrollResetTimer.Stop();
         if (_observedViewModel is not null)
             _observedViewModel.PropertyChanged -= HistoryViewModel_PropertyChanged;
         _observedViewModel = null;
@@ -57,14 +69,103 @@ public partial class HistoryView : System.Windows.Controls.UserControl
             or nameof(HistoryViewModel.SearchKeyword))
         {
             ScrollHistoryToTop();
+
+            if (e.PropertyName is not nameof(HistoryViewModel.SearchKeyword))
+                AnimateContentTransition();
         }
     }
 
     private void ScrollHistoryToTop()
     {
+        _scrollResetTimer.Stop();
+        _scrollResetTimer.Start();
         Dispatcher.BeginInvoke(
             DispatcherPriority.ContextIdle,
             new Action(() => FindVisualChild<ScrollViewer>(HistoryList)?.ScrollToTop()));
+    }
+
+    private void AnimateContentTransition()
+    {
+        Dispatcher.BeginInvoke(
+            DispatcherPriority.Render,
+            new Action(() =>
+            {
+                var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+                HistoryContentHost.BeginAnimation(
+                    OpacityProperty,
+                    new DoubleAnimation(0.58, 1, TimeSpan.FromMilliseconds(220))
+                    {
+                        EasingFunction = easing
+                    });
+                HistoryContentTranslate.BeginAnimation(
+                    TranslateTransform.YProperty,
+                    new DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(220))
+                    {
+                        EasingFunction = easing
+                    });
+            }));
+    }
+
+    private void NewFolderPopup_Opened(object? sender, EventArgs e)
+    {
+        NewFolderTextBox.Dispatcher.BeginInvoke(
+            DispatcherPriority.Input,
+            new Action(() =>
+            {
+                NewFolderTextBox.Focus();
+                NewFolderTextBox.SelectAll();
+            }));
+    }
+
+    private void NewFolderToggle_Checked(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized)
+            return;
+        NewFolderPopup.IsOpen = true;
+    }
+
+    private void NewFolderToggle_Unchecked(object sender, RoutedEventArgs e)
+    {
+        if (!IsInitialized)
+            return;
+        NewFolderPopup.IsOpen = false;
+    }
+
+    private void NewFolderPopup_Closed(object? sender, EventArgs e)
+    {
+        if (!IsInitialized)
+            return;
+        NewFolderToggle.IsChecked = false;
+    }
+
+    private void CancelNewFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        NewFolderToggle.IsChecked = false;
+    }
+
+    private void CreateFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        NewFolderToggle.IsChecked = false;
+    }
+
+    private void NewFolderTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (DataContext is not HistoryViewModel vm)
+            return;
+
+        if (e.Key == Key.Escape)
+        {
+            NewFolderToggle.IsChecked = false;
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter || !vm.CreateFolderCommand.CanExecute(null))
+            return;
+
+        vm.CreateFolderCommand.Execute(null);
+        NewFolderToggle.IsChecked = false;
+        e.Handled = true;
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent)

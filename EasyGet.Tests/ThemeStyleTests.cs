@@ -8,7 +8,7 @@ namespace EasyGet.Tests;
 public class ThemeStyleTests
 {
     [Fact]
-    public void ToolPanelBorderStyleUsesStitchGlassPanelTreatment()
+    public void ToolPanelBorderStyleUsesAppleElevatedSurfaceTreatment()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -23,7 +23,7 @@ public class ThemeStyleTests
         Assert.NotNull(style);
 
         AssertStyleSetter(style!, "Background", "{StaticResource BgSurfaceBrush}");
-        AssertStyleSetter(style, "BorderBrush", "{StaticResource BorderPrimaryBrush}");
+        AssertStyleSetter(style, "BorderBrush", "{StaticResource BorderSubtleBrush}");
         AssertStyleSetter(style, "BorderThickness", "1");
         AssertStyleSetter(style, "SnapsToDevicePixels", "True");
 
@@ -35,43 +35,43 @@ public class ThemeStyleTests
             ?.Attribute("Value")?.Value;
 
         Assert.True(double.TryParse(cornerRadius, out var radius), "ToolPanelBorder must set a numeric CornerRadius.");
-        Assert.InRange(radius, 8, 12);
+        Assert.InRange(radius, 12, 16);
     }
 
     [Fact]
-    public void ThemeColorTokensFollowStitchEasyGetDarkPalette()
+    public void ThemeColorTokensFollowAppleInspiredDarkPalette()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
 
-        AssertColor(document, "BgPrimary", "#131313");
-        AssertColor(document, "BgSidebar", "#1B1B1C");
-        AssertColor(document, "BgSurface", "#202020");
-        AssertColor(document, "BgSurfaceHigh", "#2A2A2A");
-        AssertColor(document, "BgSurfaceHighest", "#353535");
-        AssertColor(document, "TextPrimary", "#E5E2E1");
-        AssertColor(document, "TextSecondary", "#BDC8CF");
-        AssertColor(document, "TextMuted", "#889299");
-        AssertColor(document, "BorderPrimary", "#3E484E");
-        AssertColor(document, "BorderSubtle", "#2A3338");
-        AssertColor(document, "Accent", "#818CF8");
-        AssertColor(document, "Success", "#6CCB77");
-        AssertColor(document, "Warning", "#FFB955");
-        AssertColor(document, "Error", "#FFB4AB");
+        AssertColor(document, "BgPrimary", "#0D0D0F");
+        AssertColor(document, "BgSidebar", "#171719");
+        AssertColor(document, "BgSurface", "#1C1C1E");
+        AssertColor(document, "BgSurfaceHigh", "#242426");
+        AssertColor(document, "BgSurfaceHighest", "#2C2C2E");
+        AssertColor(document, "TextPrimary", "#F5F5F7");
+        AssertColor(document, "TextSecondary", "#C7C7CC");
+        AssertColor(document, "TextMuted", "#8E8E93");
+        AssertColor(document, "BorderPrimary", "#3A3A3C");
+        AssertColor(document, "BorderSubtle", "#2A2A2D");
+        AssertColor(document, "Accent", "#0A84FF");
+        AssertColor(document, "Success", "#30D158");
+        AssertColor(document, "Warning", "#FFD60A");
+        AssertColor(document, "Error", "#FF6961");
 
-        AssertColor(document, "AccentContainer", "#1E1F35");
-        AssertColor(document, "SuccessContainer", "#2D4A2D");
-        AssertColor(document, "ErrorContainer", "#4A1E1E");
-        AssertColor(document, "Scrim", "#66000000");
-        AssertColor(document, "ScrimLight", "#99FFFFFF");
-        AssertColor(document, "ScrimHeavy", "#99000000");
-        AssertColor(document, "ScrimOverlay", "#AA101416");
-        AssertColor(document, "BgConsole", "#0E0E0E");
-        AssertColor(document, "WindowCloseHover", "#4A1515");
-        AssertColor(document, "WindowClosePressed", "#5A1A1A");
-        AssertColor(document, "AccentGradientStart", "#818CF8");
-        AssertColor(document, "AccentGradientEnd", "#C084FC");
-        AssertColor(document, "ToggleTrack", "#313244");
-        AssertColor(document, "ToggleThumb", "#585B70");
+        AssertColor(document, "AccentContainer", "#112A43");
+        AssertColor(document, "SuccessContainer", "#153A22");
+        AssertColor(document, "ErrorContainer", "#421E1E");
+        AssertColor(document, "Scrim", "#52000000");
+        AssertColor(document, "ScrimLight", "#8AFFFFFF");
+        AssertColor(document, "ScrimHeavy", "#B3000000");
+        AssertColor(document, "ScrimOverlay", "#B8171719");
+        AssertColor(document, "BgConsole", "#09090A");
+        AssertColor(document, "WindowCloseHover", "#492020");
+        AssertColor(document, "WindowClosePressed", "#602727");
+        AssertColor(document, "AccentGradientStart", "#0A84FF");
+        AssertColor(document, "AccentGradientEnd", "#64D2FF");
+        AssertColor(document, "ToggleTrack", "#3A3A3C");
+        AssertColor(document, "ToggleThumb", "#F2F2F7");
     }
 
     [Fact]
@@ -105,6 +105,14 @@ public class ThemeStyleTests
     [InlineData("TextCaption")]
     [InlineData("TextMono")]
     [InlineData("IconGlyph")]
+    [InlineData("SearchFieldBorder")]
+    [InlineData("FinderFolderBorder")]
+    [InlineData("MediaCardBorder")]
+    [InlineData("PopoverBorder")]
+    [InlineData("FloatingActionBar")]
+    [InlineData("ToolbarIconButton")]
+    [InlineData("ToolbarToggleButton")]
+    [InlineData("CircularCheckBox")]
     public void ThemeDefinesNamedStyles(string styleKey)
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
@@ -198,13 +206,14 @@ public class ThemeStyleTests
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "Duration"
             && element.Attribute(x + "Key")?.Value == "MotionDurationFast"
-            && element.Value.Trim() == "0:0:0.15");
+            && element.Value.Trim() == "0:0:0.14");
     }
 
     [Theory]
     [InlineData("AccentButton")]
     [InlineData("SurfaceButton")]
     [InlineData("NavRadioButton")]
+    [InlineData("ToolbarToggleButton")]
     public void InteractiveStylesUseMotionStoryboards(string styleKey)
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));

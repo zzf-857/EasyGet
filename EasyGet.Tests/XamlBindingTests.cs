@@ -101,7 +101,7 @@ public class XamlBindingTests
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
 
         Assert.Contains("ItemsSource=\"{Binding HistoryGroups}\"", source, StringComparison.Ordinal);
-        Assert.Contains("ToggleHistoryGroupCommand", source, StringComparison.Ordinal);
+        Assert.Contains("SelectBatchFolderCommand", source, StringComparison.Ordinal);
         Assert.Contains("OpenDirectoryCommand", source, StringComparison.Ordinal);
         Assert.Contains("DeleteBatchCommand", source, StringComparison.Ordinal);
         Assert.Contains("Binding IsExpanded", source, StringComparison.Ordinal);
@@ -188,7 +188,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void MainWindowUsesStitchBrandSidebarAndTopAppBar()
+    public void MainWindowUsesAppleInspiredSourceListAndCompactTitleBar()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
 
@@ -198,14 +198,14 @@ public class XamlBindingTests
             .ToList();
 
         Assert.NotEmpty(columns);
-        Assert.Equal("240", columns[0].Attribute("Width")?.Value);
+        Assert.Equal("216", columns[0].Attribute("Width")?.Value);
 
         var rows = document
             .Descendants()
             .Where(element => element.Name.LocalName == "RowDefinition")
             .ToList();
 
-        Assert.Contains(rows, row => row.Attribute("Height")?.Value == "48");
+        Assert.Contains(rows, row => row.Attribute("Height")?.Value == "46");
         Assert.Equal("None", document.Root?.Attribute("WindowStyle")?.Value);
 
         var logoMark = document
@@ -217,8 +217,8 @@ public class XamlBindingTests
                     && attribute.Value == "SidebarLogoMark"));
 
         Assert.NotNull(logoMark);
-        Assert.Equal("40", logoMark!.Attribute("Width")?.Value);
-        Assert.Equal("40", logoMark.Attribute("Height")?.Value);
+        Assert.Equal("36", logoMark!.Attribute("Width")?.Value);
+        Assert.Equal("36", logoMark.Attribute("Height")?.Value);
 
         Assert.Contains(
             document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
@@ -237,7 +237,7 @@ public class XamlBindingTests
         Assert.All(navItems, item =>
         {
             var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
-            Assert.True(textBlocks.Count >= 2, "Stitch sidebar items should include an icon and a visible text label.");
+            Assert.True(textBlocks.Count >= 2, "Sidebar items should include an icon and a visible text label.");
             Assert.Contains(textBlocks, textBlock =>
                 (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
                 || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
@@ -245,9 +245,10 @@ public class XamlBindingTests
                 (textBlock.Attribute("Text")?.Value ?? "") == item.Attribute("ToolTip")?.Value);
         });
 
-        Assert.Contains(document.Descendants(), element =>
+        Assert.DoesNotContain(document.Descendants(), element =>
             element.Name.LocalName == "ContentControl"
             && (element.Attribute("Content")?.Value ?? "").Contains("CurrentPageTitle", StringComparison.Ordinal));
+        Assert.Contains(document.Descendants().Attributes("Text"), attribute => attribute.Value == "媒体工具");
     }
 
     [Fact]
@@ -260,7 +261,7 @@ public class XamlBindingTests
             .FirstOrDefault(element =>
                 element.Name.LocalName == "DockPanel"
                 && element.Attribute("LastChildFill") is not null
-                && element.Attribute("Margin")?.Value == "14,16");
+                && element.Attribute("Margin")?.Value == "12,14");
 
         Assert.NotNull(sidebarDockPanel);
         Assert.Equal("False", sidebarDockPanel!.Attribute("LastChildFill")?.Value);
@@ -565,6 +566,32 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewUsesPopoverCreationAndFloatingContextualSelectionBar()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        var newFolderPopup = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Popup"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "NewFolderPopup"));
+
+        Assert.NotNull(newFolderPopup);
+        Assert.Equal("Fade", newFolderPopup!.Attribute("PopupAnimation")?.Value);
+        Assert.Contains("NewFolderToggle_Checked", source, StringComparison.Ordinal);
+        Assert.Contains("NewFolderToggle_Unchecked", source, StringComparison.Ordinal);
+        Assert.Contains("NewFolderPopup_Closed", source, StringComparison.Ordinal);
+        Assert.Contains("PopoverBorder", source, StringComparison.Ordinal);
+        Assert.Contains("FloatingActionBar", source, StringComparison.Ordinal);
+        Assert.Contains("CircularCheckBox", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryContentTranslate", source, StringComparison.Ordinal);
+        Assert.Contains("AnimateContentTransition", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("_scrollResetTimer", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HistoryViewUsesPixelScrollingAndUnifiedWorkspaceFolderCards()
     {
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
@@ -635,10 +662,8 @@ public class XamlBindingTests
                     && attribute.Value == "HistorySearchBox"));
 
         Assert.NotNull(searchBox);
-        Assert.True(
-            int.TryParse(searchBox!.Attribute("MinWidth")?.Value, out var minWidth)
-            && minWidth >= 520,
-            "History search field should keep a wide, stable pill shape even when the query is empty.");
+        Assert.Equal("520", searchBox!.Attribute("MaxWidth")?.Value);
+        Assert.Contains("SearchFieldBorder", searchBox.Attribute("Style")?.Value ?? "");
     }
 
     [Fact]
@@ -652,21 +677,16 @@ public class XamlBindingTests
             && element.Attribute("Property")?.Value == "IsMouseOver"
             && element.Attribute("Value")?.Value == "True");
         Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "BlurEffect"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "ThumbnailBlur"));
-        Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "TranslateTransform"
             && element.Attributes().Any(attribute =>
                 attribute.Name.LocalName == "Name"
-                && attribute.Value == "HoverOverlayTranslate")
-            && element.Attribute("Y")?.Value == "6");
+                && attribute.Value == "CardTranslate")
+            && element.Attribute("Y")?.Value == "0");
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "Setter"
             && element.Attribute("TargetName")?.Value == "HoverOverlay"
-            && element.Attribute("Property")?.Value == "Opacity"
-            && element.Attribute("Value")?.Value == "1");
+            && element.Attribute("Property")?.Value == "IsHitTestVisible"
+            && element.Attribute("Value")?.Value == "True");
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "DoubleAnimation"
             && element.Attribute("Storyboard.TargetName")?.Value == "HoverOverlay"
@@ -675,14 +695,14 @@ public class XamlBindingTests
             && element.Attribute("Duration")?.Value?.Contains("MotionDurationFast", StringComparison.Ordinal) == true);
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetName")?.Value == "ThumbnailBlur"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Radius"
-            && element.Attribute("To")?.Value == "7");
+            && element.Attribute("Storyboard.TargetName")?.Value == "CardTranslate"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Y"
+            && element.Attribute("To")?.Value == "-4");
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetName")?.Value == "HoverOverlayTranslate"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Y"
-            && element.Attribute("To")?.Value == "0");
+            && element.Attribute("Storyboard.TargetName")?.Value == "CardShadow"
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity"
+            && element.Attribute("To")?.Value == "0.85");
 
         var commands = document.Descendants()
             .Attributes("Command")

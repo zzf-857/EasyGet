@@ -14,9 +14,9 @@
 
         Title="EasyGet"
 
-        Width="1280" Height="800"
+        Width="1360" Height="840"
 
-        MinWidth="1040" MinHeight="640"
+        MinWidth="1080" MinHeight="680"
 
         WindowStartupLocation="CenterScreen"
 
@@ -94,7 +94,7 @@
 
         <Grid.ColumnDefinitions>
 
-            <ColumnDefinition Width="240"/>
+            <ColumnDefinition Width="216"/>
 
             <ColumnDefinition Width="*"/>
 
@@ -102,7 +102,7 @@
 
 
 
-        <!-- Stitch-style brand sidebar -->
+        <!-- Calm, material sidebar inspired by macOS source lists -->
 
         <Border Grid.Column="0"
 
@@ -112,19 +112,19 @@
 
                 BorderThickness="0,0,1,0">
 
-            <DockPanel LastChildFill="False" Margin="14,16">
+            <DockPanel LastChildFill="False" Margin="12,14">
 
                 <StackPanel DockPanel.Dock="Top">
 
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,30">
+                    <StackPanel Orientation="Horizontal" Margin="6,2,0,28">
 
                         <Border x:Name="SidebarLogoMark"
-                                Width="40" Height="40"
+                                Width="36" Height="36"
                                 ToolTip="EasyGet"
                                 AutomationProperties.Name="EasyGet">
                             <Image Source="/Assets/app.png"
-                                   Width="40"
-                                   Height="40"
+                                   Width="36"
+                                   Height="36"
                                    Stretch="Uniform"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center"
@@ -132,7 +132,7 @@
                                    RenderOptions.BitmapScalingMode="HighQuality"/>
                         </Border>
 
-                        <StackPanel Margin="12,1,0,0" VerticalAlignment="Center">
+                        <StackPanel Margin="10,0,0,0" VerticalAlignment="Center">
 
                             <TextBlock Text="EasyGet"
 
@@ -149,6 +149,11 @@
  
 
                     <StackPanel>
+
+                        <TextBlock Text="媒体工具"
+                                   Style="{StaticResource TextCaption}"
+                                   FontWeight="{StaticResource FontWeightSemiBold}"
+                                   Margin="12,0,0,9"/>
 
                         <RadioButton Style="{StaticResource NavRadioButton}"
 
@@ -186,7 +191,7 @@
 
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=OneWay}"
 
-                                     Margin="0,8,0,0">
+                                     Margin="0,4,0,0">
 
                             <StackPanel Orientation="Horizontal">
 
@@ -212,7 +217,7 @@
 
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}"
 
-                                     Margin="0,8,0,0">
+                                     Margin="0,4,0,0">
 
                             <StackPanel Orientation="Horizontal">
 
@@ -238,7 +243,7 @@
 
                                      IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}"
 
-                                     Margin="0,8,0,0">
+                                     Margin="0,4,0,0">
 
                             <StackPanel Orientation="Horizontal">
 
@@ -268,7 +273,7 @@
 
             <Grid.RowDefinitions>
 
-                <RowDefinition Height="48"/>
+                <RowDefinition Height="46"/>
 
                 <RowDefinition Height="*"/>
 
@@ -289,28 +294,6 @@
                     MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
 
                 <Grid>
-
-                    <ContentControl Content="{Binding CurrentPageTitle}"
-
-                                    VerticalAlignment="Center"
-
-                                    Margin="20,0,0,0">
-
-                        <ContentControl.ContentTemplate>
-
-                            <DataTemplate>
-
-                                <TextBlock Text="{Binding}"
-
-                                           Style="{StaticResource TextSection}"/>
-
-                            </DataTemplate>
-
-                        </ContentControl.ContentTemplate>
-
-                    </ContentControl>
-
- 
 
                     <StackPanel Orientation="Horizontal"
 
@@ -376,7 +359,7 @@
 
                               HorizontalAlignment="Right" VerticalAlignment="Bottom"
 
-                              Margin="24" SnapsToDevicePixels="True">
+                              Margin="24,24,24,22" SnapsToDevicePixels="True">
 
                     <ItemsControl.ItemsPanel>
 
@@ -398,7 +381,7 @@
 
                                   Margin="0,8,0,0"
 
-                                  Width="360"
+                                  Width="348"
 
                                   Cursor="Hand"
 
@@ -416,7 +399,7 @@
 
                                 <!-- Shadow Layer (R1 模糊治理) -->
 
-                                <Border CornerRadius="10"
+                                <Border CornerRadius="14"
 
                                         Background="{Binding ElementName=ToastCard, Path=Background}"
 
@@ -428,7 +411,7 @@
 
                                 <Border x:Name="ToastCard"
 
-                                        CornerRadius="10" Padding="0"
+                                        CornerRadius="14" Padding="0"
 
                                         ClipToBounds="True">
 
@@ -464,7 +447,7 @@
 
                                         
 
-                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="20,14">
+                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="18,15">
 
                                             <TextBlock VerticalAlignment="Center" Margin="0,0,12,0">
 

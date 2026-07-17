@@ -18,7 +18,8 @@ public static class ThemeManager
 {
     public static readonly List<ThemePalette> Palettes = new()
     {
-        new ThemePalette { Name = "Indigo", DisplayName = "星空靛蓝 (默认)", AccentColor = "#818CF8", AccentContainerColor = "#1E1F35", GradientStartColor = "#818CF8", GradientEndColor = "#C084FC" },
+        // Keep the legacy "Indigo" key so existing user configuration migrates without reset.
+        new ThemePalette { Name = "Indigo", DisplayName = "系统蓝 (默认)", AccentColor = "#0A84FF", AccentContainerColor = "#112A43", GradientStartColor = "#0A84FF", GradientEndColor = "#64D2FF" },
         new ThemePalette { Name = "Teal", DisplayName = "极光青", AccentColor = "#2DD4BF", AccentContainerColor = "#0D2D27", GradientStartColor = "#2DD4BF", GradientEndColor = "#34D399" },
         new ThemePalette { Name = "Rose", DisplayName = "玫瑰粉", AccentColor = "#FB7185", AccentContainerColor = "#3C161E", GradientStartColor = "#FB7185", GradientEndColor = "#F43F5E" },
         new ThemePalette { Name = "Amber", DisplayName = "琥珀金", AccentColor = "#FBBF24", AccentContainerColor = "#382A0F", GradientStartColor = "#FBBF24", GradientEndColor = "#F97316" },
