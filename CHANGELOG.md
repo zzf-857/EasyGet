@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.6 - 2026-07-18
+
+### Download History Selection
+- Made “select all current” reversible in both the workspace header and floating toolbar, with clear “cancel select all” and “clear selection” states.
+- Added Ctrl+A to select the current directory and Escape to leave selection mode without intercepting text-entry controls.
+- Moved batch-folder selection to a persistent leading checkbox and added unchecked, partial, and fully selected states.
+
+### Bulk Organization Interaction
+- Made the bottom target-folder picker open upward with a matching chevron, bounded height, stronger contrast, and popup elevation.
+- Added an explicit “create an organization folder first” empty state instead of presenting an apparently unresponsive empty picker.
+- Exposed folder actions during keyboard focus as well as pointer hover and removed visual lift that displaced folder hit areas.
+
+### Tests
+- Added regression coverage for reversible selection, tri-state batch selection, upward popup placement, empty-folder guidance, keyboard shortcuts, and stable folder-card geometry.
+- Verified 918 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.3.5 - 2026-07-17
 
 ### Download History Performance
