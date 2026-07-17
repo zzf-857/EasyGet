@@ -41,6 +41,23 @@ public partial class DownloadHistory : ObservableObject
     /// <summary>批量/合集任务根目录</summary>
     public string BatchDirectory { get; set; } = "";
 
+    /// <summary>历史资料库中的自定义整理文件夹 ID；0 表示未整理</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsOrganized))]
+    private long _folderId;
+
+    /// <summary>当前是否被批量选中（仅用于界面，不持久化）</summary>
+    [ObservableProperty]
+    private bool _isSelected;
+
+    /// <summary>当前整理文件夹名称（仅用于界面，不持久化）</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOrganizerFolder))]
+    private string _organizerFolderName = "";
+
+    public bool IsOrganized => FolderId > 0;
+    public bool HasOrganizerFolder => !string.IsNullOrWhiteSpace(OrganizerFolderName);
+
     public bool IsBatchHistory => !string.IsNullOrWhiteSpace(BatchId);
 
     private List<string> _attachmentFilePaths = [];

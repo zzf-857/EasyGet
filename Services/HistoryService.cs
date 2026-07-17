@@ -11,7 +11,7 @@ namespace EasyGet.Services;
 /// </summary>
 public class HistoryService : IDisposable
 {
-    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory";
+    private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id";
 
     private readonly SqliteConnection _connection;
 
@@ -56,7 +56,8 @@ public class HistoryService : IDisposable
                 thumbnail_url TEXT NOT NULL DEFAULT '',
                 batch_id TEXT NOT NULL DEFAULT '',
                 batch_name TEXT NOT NULL DEFAULT '',
-                batch_directory TEXT NOT NULL DEFAULT ''
+                batch_directory TEXT NOT NULL DEFAULT '',
+                folder_id INTEGER NOT NULL DEFAULT 0
             )
             """;
         cmd.ExecuteNonQuery();
@@ -73,6 +74,7 @@ public class HistoryService : IDisposable
         EnsureTextColumn("batch_id");
         EnsureTextColumn("batch_name");
         EnsureTextColumn("batch_directory");
+        EnsureIntegerColumn("folder_id");
 
         try
         {
@@ -95,6 +97,30 @@ public class HistoryService : IDisposable
             ON download_history (batch_id)
             """;
         batchIndex.ExecuteNonQuery();
+
+        using var folderTable = _connection.CreateCommand();
+        folderTable.CommandText = """
+            CREATE TABLE IF NOT EXISTS history_folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL COLLATE NOCASE,
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            )
+            """;
+        folderTable.ExecuteNonQuery();
+
+        using var folderNameIndex = _connection.CreateCommand();
+        folderNameIndex.CommandText = """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_history_folders_name
+            ON history_folders (name COLLATE NOCASE)
+            """;
+        folderNameIndex.ExecuteNonQuery();
+
+        using var historyFolderIndex = _connection.CreateCommand();
+        historyFolderIndex.CommandText = """
+            CREATE INDEX IF NOT EXISTS idx_download_history_folder_id
+            ON download_history (folder_id)
+            """;
+        historyFolderIndex.ExecuteNonQuery();
     }
 
     private void EnsureTextColumn(string columnName)
@@ -111,6 +137,20 @@ public class HistoryService : IDisposable
         }
     }
 
+    private void EnsureIntegerColumn(string columnName)
+    {
+        try
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE download_history ADD COLUMN {columnName} INTEGER NOT NULL DEFAULT 0";
+            alter.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // 旧库升级时列已存在即可继续。
+        }
+    }
+
     /// <summary>
     /// 添加下载记录
     /// </summary>
@@ -118,8 +158,8 @@ public class HistoryService : IDisposable
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = """
-            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory)
-            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl, $batchId, $batchName, $batchDirectory)
+            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id)
+            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl, $batchId, $batchName, $batchDirectory, $folderId)
             """;
         cmd.Parameters.AddWithValue("$url", NormalizeHistoryText(history.Url));
         cmd.Parameters.AddWithValue("$title", NormalizeHistoryText(history.Title));
@@ -136,6 +176,7 @@ public class HistoryService : IDisposable
         cmd.Parameters.AddWithValue("$batchId", NormalizeHistoryText(history.BatchId));
         cmd.Parameters.AddWithValue("$batchName", NormalizeHistoryText(history.BatchName));
         cmd.Parameters.AddWithValue("$batchDirectory", NormalizeHistoryText(history.BatchDirectory));
+        cmd.Parameters.AddWithValue("$folderId", Math.Max(0, history.FolderId));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -185,7 +226,8 @@ public class HistoryService : IDisposable
                 ThumbnailUrl = thumbnailUrl,
                 BatchId = ReadString(reader, "batch_id"),
                 BatchName = ReadString(reader, "batch_name"),
-                BatchDirectory = ReadString(reader, "batch_directory")
+                BatchDirectory = ReadString(reader, "batch_directory"),
+                FolderId = ReadNonNegativeInt64(reader, "folder_id")
             });
         }
 
@@ -302,6 +344,172 @@ public class HistoryService : IDisposable
         cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
         cmd.Parameters.AddWithValue("$id", id);
         await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task<int> GetCountAsync()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM download_history";
+        var result = await cmd.ExecuteScalarAsync();
+        return result is long count ? (int)Math.Min(int.MaxValue, Math.Max(0, count)) : 0;
+    }
+
+    public async Task<int> GetUnfiledCountAsync()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM download_history WHERE folder_id = 0";
+        var result = await cmd.ExecuteScalarAsync();
+        return result is long count ? (int)Math.Min(int.MaxValue, Math.Max(0, count)) : 0;
+    }
+
+    public async Task<List<HistoryFolder>> GetFoldersAsync()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT f.id, f.name, f.created_at, COUNT(h.id) AS item_count
+            FROM history_folders f
+            LEFT JOIN download_history h ON h.folder_id = f.id
+            GROUP BY f.id, f.name, f.created_at
+            ORDER BY f.created_at ASC, f.id ASC
+            """;
+
+        var folders = new List<HistoryFolder>();
+        using var reader = await cmd.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            folders.Add(new HistoryFolder
+            {
+                Id = ReadNonNegativeInt64(reader, "id"),
+                Name = ReadString(reader, "name"),
+                CreatedAt = ParseDownloadTime(ReadString(reader, "created_at")),
+                ItemCount = (int)Math.Min(int.MaxValue, ReadNonNegativeInt64(reader, "item_count"))
+            });
+        }
+
+        return folders;
+    }
+
+    public async Task<HistoryFolder> CreateFolderAsync(string name)
+    {
+        var normalizedName = NormalizeFolderName(name);
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO history_folders (name, created_at)
+            VALUES ($name, $createdAt);
+            SELECT last_insert_rowid();
+            """;
+        var createdAt = DateTime.Now;
+        cmd.Parameters.AddWithValue("$name", normalizedName);
+        cmd.Parameters.AddWithValue(
+            "$createdAt",
+            createdAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+        var result = await cmd.ExecuteScalarAsync();
+        var id = result is long value ? value : Convert.ToInt64(result, CultureInfo.InvariantCulture);
+        return new HistoryFolder { Id = id, Name = normalizedName, CreatedAt = createdAt };
+    }
+
+    public async Task RenameFolderAsync(long folderId, string name)
+    {
+        if (folderId <= 0)
+            return;
+
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "UPDATE history_folders SET name = $name WHERE id = $id";
+        cmd.Parameters.AddWithValue("$name", NormalizeFolderName(name));
+        cmd.Parameters.AddWithValue("$id", folderId);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    public async Task DeleteFolderAsync(long folderId)
+    {
+        if (folderId <= 0)
+            return;
+
+        using var transaction = _connection.BeginTransaction();
+        using (var unfile = _connection.CreateCommand())
+        {
+            unfile.Transaction = transaction;
+            unfile.CommandText = "UPDATE download_history SET folder_id = 0 WHERE folder_id = $id";
+            unfile.Parameters.AddWithValue("$id", folderId);
+            await unfile.ExecuteNonQueryAsync();
+        }
+
+        using (var delete = _connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM history_folders WHERE id = $id";
+            delete.Parameters.AddWithValue("$id", folderId);
+            await delete.ExecuteNonQueryAsync();
+        }
+
+        transaction.Commit();
+    }
+
+    public async Task MoveToFolderAsync(IEnumerable<long> historyIds, long folderId)
+    {
+        var ids = NormalizeHistoryIds(historyIds);
+        if (ids.Count == 0 || folderId < 0)
+            return;
+
+        if (folderId > 0 && !await FolderExistsAsync(folderId))
+            throw new InvalidOperationException("目标整理文件夹不存在。");
+
+        using var transaction = _connection.BeginTransaction();
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "UPDATE download_history SET folder_id = $folderId WHERE id = $id";
+        var folderParameter = cmd.Parameters.Add("$folderId", SqliteType.Integer);
+        var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
+        folderParameter.Value = folderId;
+        foreach (var id in ids)
+        {
+            idParameter.Value = id;
+            await cmd.ExecuteNonQueryAsync();
+        }
+        transaction.Commit();
+    }
+
+    public async Task DeleteManyAsync(IEnumerable<long> historyIds)
+    {
+        var ids = NormalizeHistoryIds(historyIds);
+        if (ids.Count == 0)
+            return;
+
+        using var transaction = _connection.BeginTransaction();
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
+        var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
+        foreach (var id in ids)
+        {
+            idParameter.Value = id;
+            await cmd.ExecuteNonQueryAsync();
+        }
+        transaction.Commit();
+    }
+
+    private async Task<bool> FolderExistsAsync(long folderId)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM history_folders WHERE id = $id LIMIT 1";
+        cmd.Parameters.AddWithValue("$id", folderId);
+        return await cmd.ExecuteScalarAsync() is not null;
+    }
+
+    private static List<long> NormalizeHistoryIds(IEnumerable<long> historyIds)
+        => historyIds
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+    private static string NormalizeFolderName(string? value)
+    {
+        var name = (value ?? "").Trim();
+        if (name.Length == 0)
+            throw new ArgumentException("文件夹名称不能为空。", nameof(value));
+        if (name.Length > 40)
+            throw new ArgumentException("文件夹名称不能超过 40 个字符。", nameof(value));
+        return name;
     }
 
     /// <summary>删除同一批量/合集任务的全部历史记录</summary>

@@ -8,6 +8,24 @@ namespace EasyGet.Tests;
 
 public class DownloadViewModelTests
 {
+    [Fact]
+    public void ParseCommand_IsEnabledOnlyForAValidUrlOutsideParsingState()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+
+        Assert.False(viewModel.ParseCommand.CanExecute(null));
+
+        viewModel.Url = "不是链接";
+        Assert.False(viewModel.ParseCommand.CanExecute(null));
+
+        viewModel.Url = "https://example.com/video";
+        Assert.True(viewModel.ParseCommand.CanExecute(null));
+
+        viewModel.PageState = DownloadPageState.Parsing;
+        Assert.False(viewModel.ParseCommand.CanExecute(null));
+    }
+
     [Theory]
     [InlineData("https://youtu.be/abc123，", "https://youtu.be/abc123")]
     [InlineData("https://www.youtube.com/watch?v=abc123。", "https://www.youtube.com/watch?v=abc123")]

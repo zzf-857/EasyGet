@@ -12,6 +12,44 @@ namespace EasyGet.Tests;
 
 public class BatchDownloadViewModelTests
 {
+    [Fact]
+    public void QueueSummary_FiltersFinishedTasksAndTracksAggregateProgress()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp);
+        manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://example.com/done",
+            Status = DownloadStatus.Completed,
+            Progress = 100,
+            Speed = 4096
+        });
+        manager.Tasks.Add(new DownloadTask { Url = "https://example.com/running", Status = DownloadStatus.Downloading, Progress = 40, Speed = 1024 });
+        manager.Tasks.Add(new DownloadTask { Url = "https://example.com/failed", Status = DownloadStatus.Failed, Progress = 20 });
+
+        Assert.Equal(3, viewModel.TotalTaskCount);
+        Assert.Equal(1, viewModel.CompletedTaskCount);
+        Assert.Equal(1, viewModel.FailedTaskCount);
+        Assert.Equal(2, viewModel.FinishedTaskCount);
+        Assert.Equal(1, viewModel.RemainingTaskCount);
+        Assert.Single(viewModel.VisibleQueueTasks);
+        Assert.Equal("https://example.com/running", viewModel.VisibleQueueTasks[0].Url);
+        Assert.Equal(160d / 3d, viewModel.OverallProgress, precision: 6);
+        Assert.Equal(1024, viewModel.AggregateSpeed);
+        Assert.Contains("已完成 1/3", viewModel.QueueSummaryText, StringComparison.Ordinal);
+
+        viewModel.SetQueueFilterCommand.Execute("已结束");
+        Assert.Equal(2, viewModel.VisibleQueueTasks.Count);
+
+        viewModel.ClearFinishedCommand.Execute(null);
+        Assert.Single(manager.Tasks);
+        Assert.Equal(0, viewModel.FinishedTaskCount);
+    }
+
     private static string CreateTempDatabasePath()
         => TestTempPaths.CreateSqliteDatabasePath("easyget-batch-vm");
 
@@ -108,6 +146,8 @@ public class BatchDownloadViewModelTests
             ])
         };
 
+        Assert.Equal(3, viewModel.LinkCount);
+
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(3));
@@ -169,6 +209,92 @@ public class BatchDownloadViewModelTests
         Assert.Equal(
             ["00.【指南】完整路径", "01.环境安装"],
             manager.Tasks.Select(task => task.Title).ToArray());
+        Assert.Equal("", viewModel.UrlsText);
+    }
+
+    [Fact]
+    public async Task ImportedPlaylist_WhenOneEntryAlreadyExists_KeepsOriginalEpisodeIndexes()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        var service = new BlockingYtDlpDownloadService
+        {
+            MetadataPlatform = "Bilibili"
+        };
+        service.Release();
+        var manager = new DownloadManager(service, history, config);
+        var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp);
+        const string firstUrl = "https://www.bilibili.com/video/BV1ddN76xEQY/?p=1";
+        manager.Tasks.Add(new DownloadTask { Url = firstUrl, Status = DownloadStatus.Completed });
+        var playlist = new PlaylistInfo
+        {
+            Title = "RAG 系列课程",
+            SourceUrl = "https://www.bilibili.com/video/BV1ddN76xEQY/",
+            Urls =
+            [
+                firstUrl,
+                "https://www.bilibili.com/video/BV1ddN76xEQY/?p=2",
+                "https://www.bilibili.com/video/BV1ddN76xEQY/?p=3"
+            ]
+        };
+
+        Assert.True(viewModel.ApplyPlaylistImport(playlist));
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+
+        var newTasks = manager.Tasks.Where(task => task.Url != firstUrl).ToList();
+        Assert.Equal(2, newTasks.Count);
+        Assert.Equal([2, 3], newTasks.Select(task => task.CollectionItemIndex).ToArray());
+        Assert.All(newTasks, task =>
+        {
+            Assert.Equal(3, task.CollectionItemCount);
+            Assert.Equal("RAG 系列课程", task.CollectionTitle);
+            Assert.Equal("RAG 系列课程", task.BatchName);
+        });
+    }
+
+    [Fact]
+    public void CancelTask_DuringMerge_CancelsInsteadOfRemovingQueueEntry()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp);
+        using var cts = new CancellationTokenSource();
+        var task = new DownloadTask
+        {
+            Url = "https://example.com/merging",
+            Status = DownloadStatus.Merging,
+            Cts = cts
+        };
+        manager.Tasks.Add(task);
+
+        viewModel.CancelTaskCommand.Execute(task.Id);
+
+        Assert.True(cts.IsCancellationRequested);
+        Assert.Contains(task, manager.Tasks);
+    }
+
+    [Fact]
+    public void TerminalTaskStatus_ClearsStaleSpeedAndEta()
+    {
+        var task = new DownloadTask
+        {
+            Status = DownloadStatus.Downloading,
+            Speed = 2048,
+            Eta = 30
+        };
+
+        task.Status = DownloadStatus.Completed;
+
+        Assert.Equal(0, task.Speed);
+        Assert.Equal(0, task.Eta);
     }
 
     [Fact]
@@ -185,7 +311,7 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
-    public void CancelAll_WhenConfirmed_CancelsAndClearsTasks()
+    public void CancelAll_WhenConfirmed_StopsUnfinishedAndKeepsFinishedTasksVisible()
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
@@ -211,8 +337,8 @@ public class BatchDownloadViewModelTests
             Assert.Contains(task1, manager.Tasks);
             Assert.True(cts1.IsCancellationRequested);
 
-            // 验证任务 2 (Failed) 已从列表中清除
-            Assert.DoesNotContain(task2, manager.Tasks);
+            // 已结束任务保留，交由“清理已结束”单独处理。
+            Assert.Contains(task2, manager.Tasks);
         }
         finally
         {
@@ -284,8 +410,8 @@ public class BatchDownloadViewModelTests
 
             // 验证 1 个无效行触发了通知提示，且由于有成功导入的链接，应当是 success: true
             Assert.NotNull(receivedMsg);
-            Assert.Contains("已导入 2 个链接", receivedMsg);
-            Assert.Contains("忽略了 1 行无效文本", receivedMsg);
+            Assert.Contains("新增 2 个链接", receivedMsg);
+            Assert.Contains("忽略 1 行无效文本", receivedMsg);
             Assert.True(receivedSuccess);
         }
         finally
@@ -295,7 +421,7 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
-    public void ImportText_WithOnlyValidUrls_ImportsAllAndDoesNotRaiseNotification()
+    public void ImportText_WithOnlyValidUrls_ImportsAllAndRaisesSuccessNotification()
     {
         var dbPath = CreateTempDatabasePath();
         using var history = new HistoryService(dbPath);
@@ -319,8 +445,8 @@ public class BatchDownloadViewModelTests
             Assert.Contains("https://example.com/video2", viewModel.UrlsText);
             Assert.Equal(2, viewModel.LinkCount);
 
-            // 验证没有触发忽略警告通知
-            Assert.Null(receivedMsg);
+            Assert.NotNull(receivedMsg);
+            Assert.Contains("新增 2 个链接", receivedMsg);
         }
         finally
         {
@@ -353,14 +479,36 @@ public class BatchDownloadViewModelTests
 
             Assert.Equal(0, viewModel.LinkCount);
             Assert.NotNull(receivedMsg);
-            Assert.Contains("已导入 0 个链接", receivedMsg);
-            Assert.Contains("忽略了 2 行", receivedMsg);
+            Assert.Contains("新增 0 个链接", receivedMsg);
+            Assert.Contains("忽略 2 行", receivedMsg);
             Assert.False(receivedSuccess);
         }
         finally
         {
             TryDeleteDatabase(dbPath);
         }
+    }
+
+    [Fact]
+    public void ImportText_DeduplicatesExistingAndNewLinksWithExplicitFeedback()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            UrlsText = "https://example.com/one"
+        };
+        string? notification = null;
+        viewModel.RequestShowNotification += (message, _) => notification = message;
+
+        viewModel.ImportText("https://example.com/one\nhttps://example.com/two\nhttps://example.com/two");
+
+        Assert.Equal(2, viewModel.LinkCount);
+        Assert.Equal(1, viewModel.UrlsText.Split('\n').Count(url => url.EndsWith("/two", StringComparison.Ordinal)));
+        Assert.Contains("跳过 2 个重复链接", notification, StringComparison.Ordinal);
     }
 
     [Fact]

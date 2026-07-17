@@ -9,6 +9,78 @@ namespace EasyGet.Tests;
 public class HistoryServiceTests
 {
     [Fact]
+    public async Task HistoryFolders_CreateRenameMoveAndDeleteWithoutChangingFilePaths()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/one",
+                Title = "one",
+                FilePath = @"D:\Videos\one.mp4"
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/two",
+                Title = "two",
+                FilePath = @"D:\Videos\two.mp4"
+            });
+            var history = await service.GetAllAsync();
+            var originalPaths = history.ToDictionary(item => item.Id, item => item.FilePath);
+
+            var folder = await service.CreateFolderAsync("课程资料");
+            await service.MoveToFolderAsync(history.Select(item => item.Id), folder.Id);
+
+            var moved = await service.GetAllAsync();
+            Assert.All(moved, item =>
+            {
+                Assert.Equal(folder.Id, item.FolderId);
+                Assert.Equal(originalPaths[item.Id], item.FilePath);
+            });
+            var savedFolder = Assert.Single(await service.GetFoldersAsync());
+            Assert.Equal("课程资料", savedFolder.Name);
+            Assert.Equal(2, savedFolder.ItemCount);
+
+            await service.RenameFolderAsync(folder.Id, "RAG 课程");
+            Assert.Equal("RAG 课程", Assert.Single(await service.GetFoldersAsync()).Name);
+
+            await service.DeleteFolderAsync(folder.Id);
+            Assert.Empty(await service.GetFoldersAsync());
+            Assert.All(await service.GetAllAsync(), item => Assert.Equal(0, item.FolderId));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task DeleteManyAsync_DeletesOnlySelectedHistoryRows()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            foreach (var title in new[] { "one", "two", "three" })
+                await service.AddAsync(new DownloadHistory { Url = $"https://example.com/{title}", Title = title });
+            var history = await service.GetAllAsync();
+
+            await service.DeleteManyAsync(history.Take(2).Select(item => item.Id));
+
+            Assert.Single(await service.GetAllAsync());
+            Assert.Equal(1, await service.GetCountAsync());
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task BatchFields_RoundTripSearchAndDeleteAsOneGroup()
     {
         var dbPath = CreateTempDatabasePath();

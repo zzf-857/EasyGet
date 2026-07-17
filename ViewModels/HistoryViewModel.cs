@@ -18,7 +18,10 @@ public partial class HistoryViewModel : ObservableObject
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly Action<ProcessStartInfo> _startProcess;
+    private readonly SemaphoreSlim _historyLoadSemaphore = new(1, 1);
     private CancellationTokenSource? _searchCts;
+    private int _historyLoadRequestVersion;
+    private bool _suppressSelectionRefresh;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
@@ -28,11 +31,57 @@ public partial class HistoryViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
     private string _selectedMediaFilter = "全部";
 
-    public bool IsSearchOrFilterActive => !string.IsNullOrEmpty(SearchKeyword) || SelectedMediaFilter != "全部";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
+    [NotifyPropertyChangedFor(nameof(IsShowingAllFolders))]
+    [NotifyPropertyChangedFor(nameof(IsShowingUnfiled))]
+    [NotifyPropertyChangedFor(nameof(SelectedFolderTitle))]
+    private long? _selectedFolderId;
+
+    [ObservableProperty] private bool _isLoadingHistory;
+    [ObservableProperty] private int _visibleHistoryCount;
+    [ObservableProperty] private int _unfiledHistoryCount;
+    [ObservableProperty] private int _selectedCount;
+    [ObservableProperty] private string _newFolderName = "";
+    [ObservableProperty] private HistoryFolder? _bulkTargetFolder;
+
+    public bool IsSearchOrFilterActive
+        => !string.IsNullOrEmpty(SearchKeyword)
+           || SelectedMediaFilter != "全部"
+           || SelectedFolderId is not null;
+
+    public bool IsShowingAllFolders => SelectedFolderId is null;
+    public bool IsShowingUnfiled => SelectedFolderId == 0;
+    public bool HasSelection => SelectedCount > 0;
+    public bool HasVisibleHistory => VisibleHistoryCount > 0;
+    public bool HasHistoryFolders => HistoryFolders.Count > 0;
+    public bool CanCreateFolder => !string.IsNullOrWhiteSpace(NewFolderName);
+    public string SelectionSummaryText => $"已选择 {SelectedCount} 项";
+    public string SelectedFolderTitle => SelectedFolderId switch
+    {
+        null => "全部记录",
+        0 => "未整理",
+        _ => HistoryFolders.FirstOrDefault(folder => folder.Id == SelectedFolderId)?.Name ?? "整理文件夹"
+    };
 
     [ObservableProperty] private int _totalHistoryCount;
     [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
     [ObservableProperty] private double _storageFreePercentage = 0;
+
+    partial void OnNewFolderNameChanged(string value)
+        => CreateFolderCommand.NotifyCanExecuteChanged();
+
+    partial void OnBulkTargetFolderChanged(HistoryFolder? value)
+        => MoveSelectedToFolderCommand.NotifyCanExecuteChanged();
+
+    partial void OnSelectedFolderIdChanged(long? value)
+    {
+        foreach (var folder in HistoryFolders)
+            folder.IsSelected = value == folder.Id;
+        ClearSelection();
+        RebuildHistoryGroups();
+        OnPropertyChanged(nameof(SelectedFolderTitle));
+    }
 
     partial void OnSearchKeywordChanged(string value)
     {
@@ -68,6 +117,9 @@ public partial class HistoryViewModel : ObservableObject
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
     public ObservableCollection<DownloadHistoryGroup> HistoryGroups { get; } = [];
+    public ObservableCollection<HistoryFolder> HistoryFolders { get; } = [];
+
+    public event Action<string, bool>? RequestShowNotification;
 
     public HistoryViewModel(HistoryService historyService)
         : this(historyService, new ConfigService(), StartProcess)
@@ -164,32 +216,81 @@ public partial class HistoryViewModel : ObservableObject
 
     private async Task LoadHistoryCore(string? searchKeyword, string mediaFilter)
     {
-        var items = await _historyService.GetAllAsync(searchKeyword);
-        TotalHistoryCount = items.Count;
-        var filteredItems = items
-            .Where(item => MatchesMediaFilter(item, mediaFilter))
-            .ToList();
-
-        var fileExistsResults = await Task.Run(() => filteredItems
-            .Select(item => new
-            {
-                Item = item,
-                AvailableFilePath = ResolveExistingHistoryPath(item),
-                DouyinManifestSummary = BuildDouyinManifestSummary(item)
-            })
-            .ToList());
-
-        HistoryItems.Clear();
-        foreach (var result in fileExistsResults)
+        var requestVersion = Interlocked.Increment(ref _historyLoadRequestVersion);
+        await _historyLoadSemaphore.WaitAsync();
+        IsLoadingHistory = true;
+        try
         {
-            result.Item.AvailableFilePath = result.AvailableFilePath;
-            result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
-            result.Item.DouyinManifestSummary = result.DouyinManifestSummary.Summary;
-            result.Item.DouyinManifestSummaryText = result.DouyinManifestSummary.SummaryText;
-            HistoryItems.Add(result.Item);
-        }
+            if (requestVersion != Volatile.Read(ref _historyLoadRequestVersion))
+                return;
 
-        RebuildHistoryGroups();
+            var totalCount = await _historyService.GetCountAsync();
+            var unfiledCount = await _historyService.GetUnfiledCountAsync();
+            var folders = await _historyService.GetFoldersAsync();
+            var items = await _historyService.GetAllAsync(searchKeyword);
+            var filteredItems = items
+                .Where(item => MatchesMediaFilter(item, mediaFilter))
+                .ToList();
+            var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
+
+            var fileExistsResults = await Task.Run(() => filteredItems
+                .Select(item => new
+                {
+                    Item = item,
+                    AvailableFilePath = ResolveExistingHistoryPath(item),
+                    DouyinManifestSummary = BuildDouyinManifestSummary(item)
+                })
+                .ToList());
+
+            if (requestVersion != Volatile.Read(ref _historyLoadRequestVersion))
+                return;
+
+            TotalHistoryCount = totalCount;
+            UnfiledHistoryCount = unfiledCount;
+            UnsubscribeHistoryItems();
+            HistoryItems.Clear();
+            foreach (var result in fileExistsResults)
+            {
+                result.Item.AvailableFilePath = result.AvailableFilePath;
+                result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
+                result.Item.DouyinManifestSummary = result.DouyinManifestSummary.Summary;
+                result.Item.DouyinManifestSummaryText = result.DouyinManifestSummary.SummaryText;
+                result.Item.OrganizerFolderName = folderNames.GetValueOrDefault(result.Item.FolderId, "");
+                result.Item.PropertyChanged += OnHistoryItemPropertyChanged;
+                HistoryItems.Add(result.Item);
+            }
+
+            HistoryFolders.Clear();
+            foreach (var folder in folders)
+            {
+                folder.IsSelected = folder.Id == SelectedFolderId;
+                HistoryFolders.Add(folder);
+            }
+
+            if (BulkTargetFolder is not null)
+            {
+                BulkTargetFolder = HistoryFolders.FirstOrDefault(
+                    folder => folder.Id == BulkTargetFolder.Id);
+            }
+
+            if (SelectedFolderId > 0 && HistoryFolders.All(folder => folder.Id != SelectedFolderId))
+                SelectedFolderId = null;
+
+            OnPropertyChanged(nameof(HasHistoryFolders));
+            OnPropertyChanged(nameof(SelectedFolderTitle));
+            ClearSelection();
+            RebuildHistoryGroups();
+        }
+        catch (Exception ex)
+        {
+            if (requestVersion == Volatile.Read(ref _historyLoadRequestVersion))
+                RequestShowNotification?.Invoke($"加载下载历史失败：{ex.Message}", false);
+        }
+        finally
+        {
+            IsLoadingHistory = false;
+            _historyLoadSemaphore.Release();
+        }
     }
 
     private void RebuildHistoryGroups()
@@ -198,10 +299,16 @@ public partial class HistoryViewModel : ObservableObject
             .ToDictionary(group => group.Key, group => group.IsExpanded, StringComparer.Ordinal);
         HistoryGroups.Clear();
 
+        var visibleItems = HistoryItems
+            .Where(MatchesSelectedFolder)
+            .ToList();
+        VisibleHistoryCount = visibleItems.Count;
+        OnPropertyChanged(nameof(HasVisibleHistory));
+
         var groupsByKey = new Dictionary<string, List<DownloadHistory>>(StringComparer.Ordinal);
         var legacyGroupNames = new Dictionary<string, string>(StringComparer.Ordinal);
         var orderedKeys = new List<string>();
-        foreach (var item in HistoryItems)
+        foreach (var item in visibleItems)
         {
             string key;
             if (item.IsBatchHistory)
@@ -218,7 +325,8 @@ public partial class HistoryViewModel : ObservableObject
             }
             else
             {
-                key = $"item:{item.Id}";
+                // 普通单条历史共用一个展示组，让 WrapPanel 能在同一行排列多张卡片。
+                key = "standalone";
             }
             if (!groupsByKey.TryGetValue(key, out var groupItems))
             {
@@ -261,6 +369,43 @@ public partial class HistoryViewModel : ObservableObject
                     : !isBatch
             });
         }
+    }
+
+    private bool MatchesSelectedFolder(DownloadHistory item)
+        => SelectedFolderId switch
+        {
+            null => true,
+            0 => item.FolderId == 0,
+            var folderId => item.FolderId == folderId
+        };
+
+    private void OnHistoryItemPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DownloadHistory.IsSelected))
+        {
+            if (!_suppressSelectionRefresh)
+                RefreshSelectionState();
+        }
+    }
+
+    private void UnsubscribeHistoryItems()
+    {
+        foreach (var item in HistoryItems)
+            item.PropertyChanged -= OnHistoryItemPropertyChanged;
+    }
+
+    private IReadOnlyList<DownloadHistory> GetSelectedItems()
+        => HistoryItems.Where(item => item.IsSelected).ToList();
+
+    private void RefreshSelectionState()
+    {
+        SelectedCount = HistoryItems.Count(item => item.IsSelected);
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionSummaryText));
+        MoveSelectedToFolderCommand.NotifyCanExecuteChanged();
+        RemoveSelectedFromFolderCommand.NotifyCanExecuteChanged();
+        DeleteSelectedCommand.NotifyCanExecuteChanged();
+        ClearSelectionCommand.NotifyCanExecuteChanged();
     }
 
     private static string ResolveCommonOutputDirectory(IReadOnlyList<DownloadHistory> items)
@@ -328,7 +473,217 @@ public partial class HistoryViewModel : ObservableObject
             filter = "全部";
 
         SelectedMediaFilter = filter;
+        ClearSelection();
         await LoadHistory();
+    }
+
+    [RelayCommand]
+    private void ShowAllFolders()
+        => SelectedFolderId = null;
+
+    [RelayCommand]
+    private void ShowUnfiled()
+        => SelectedFolderId = 0;
+
+    [RelayCommand]
+    private void SelectFolder(HistoryFolder? folder)
+    {
+        if (folder is not null)
+            SelectedFolderId = folder.Id;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanCreateFolder))]
+    private async Task CreateFolder()
+    {
+        try
+        {
+            var folder = await _historyService.CreateFolderAsync(NewFolderName);
+            NewFolderName = "";
+            await LoadHistory();
+            SelectedFolderId = folder.Id;
+            RequestShowNotification?.Invoke($"已创建整理文件夹“{folder.Name}”", true);
+        }
+        catch (Exception ex)
+        {
+            RequestShowNotification?.Invoke(
+                ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                    ? "已存在同名整理文件夹"
+                    : ex.Message,
+                false);
+        }
+    }
+
+    [RelayCommand]
+    private void BeginRenameFolder(HistoryFolder? folder)
+    {
+        if (folder is null)
+            return;
+
+        foreach (var item in HistoryFolders)
+            item.IsRenaming = false;
+        folder.EditName = folder.Name;
+        folder.IsRenaming = true;
+    }
+
+    [RelayCommand]
+    private void CancelRenameFolder(HistoryFolder? folder)
+    {
+        if (folder is not null)
+            folder.IsRenaming = false;
+    }
+
+    [RelayCommand]
+    private async Task SaveRenameFolder(HistoryFolder? folder)
+    {
+        if (folder is null)
+            return;
+
+        try
+        {
+            await _historyService.RenameFolderAsync(folder.Id, folder.EditName);
+            folder.Name = folder.EditName.Trim();
+            folder.IsRenaming = false;
+            foreach (var item in HistoryItems.Where(item => item.FolderId == folder.Id))
+                item.OrganizerFolderName = folder.Name;
+            OnPropertyChanged(nameof(SelectedFolderTitle));
+            RequestShowNotification?.Invoke("整理文件夹已重命名", true);
+        }
+        catch (Exception ex)
+        {
+            RequestShowNotification?.Invoke(
+                ex.Message.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+                    ? "已存在同名整理文件夹"
+                    : ex.Message,
+                false);
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteFolder(HistoryFolder? folder)
+    {
+        if (folder is null)
+            return;
+
+        if (ConfirmFunc != null
+            && !ConfirmFunc(
+                $"确定删除整理文件夹“{folder.Name}”吗？其中 {folder.ItemCount} 条历史会移回“未整理”，不会删除本地文件。",
+                "确认删除整理文件夹"))
+        {
+            return;
+        }
+
+        await _historyService.DeleteFolderAsync(folder.Id);
+        if (SelectedFolderId == folder.Id)
+            SelectedFolderId = null;
+        await LoadHistory();
+        RequestShowNotification?.Invoke("整理文件夹已删除，本地文件未受影响", true);
+    }
+
+    [RelayCommand]
+    private void SelectAllVisible()
+    {
+        _suppressSelectionRefresh = true;
+        try
+        {
+            foreach (var item in HistoryItems.Where(MatchesSelectedFolder))
+                item.IsSelected = true;
+        }
+        finally
+        {
+            _suppressSelectionRefresh = false;
+            RefreshSelectionState();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private void ClearSelection()
+    {
+        _suppressSelectionRefresh = true;
+        try
+        {
+            foreach (var item in HistoryItems.Where(item => item.IsSelected))
+                item.IsSelected = false;
+        }
+        finally
+        {
+            _suppressSelectionRefresh = false;
+            RefreshSelectionState();
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanMoveSelectedToFolder))]
+    private async Task MoveSelectedToFolder()
+    {
+        if (BulkTargetFolder is null)
+            return;
+
+        await MoveItemsToFolderAsync(
+            GetSelectedItems().Select(item => item.Id).ToList(),
+            BulkTargetFolder.Id);
+    }
+
+    private bool CanMoveSelectedToFolder()
+        => BulkTargetFolder is not null
+           && HistoryItems.Any(item => item.IsSelected && item.FolderId != BulkTargetFolder.Id);
+
+    [RelayCommand(CanExecute = nameof(CanRemoveSelectedFromFolder))]
+    private async Task RemoveSelectedFromFolder()
+        => await MoveItemsToFolderAsync(
+            GetSelectedItems().Select(item => item.Id).ToList(),
+            0);
+
+    private bool CanRemoveSelectedFromFolder()
+        => HistoryItems.Any(item => item.IsSelected && item.FolderId > 0);
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task DeleteSelected()
+    {
+        var selected = GetSelectedItems();
+        if (selected.Count == 0)
+            return;
+
+        if (ConfirmFunc != null
+            && !ConfirmFunc(
+                $"确定删除选中的 {selected.Count} 条历史记录吗？不会删除已经下载的本地文件。",
+                "确认批量删除历史"))
+        {
+            return;
+        }
+
+        await _historyService.DeleteManyAsync(selected.Select(item => item.Id));
+        await LoadHistory();
+        RequestShowNotification?.Invoke($"已删除 {selected.Count} 条历史记录，本地文件未受影响", true);
+    }
+
+    public IReadOnlyList<long> PrepareHistoryDrag(long itemId)
+    {
+        var item = HistoryItems.FirstOrDefault(candidate => candidate.Id == itemId);
+        if (item is null)
+            return [];
+
+        if (!item.IsSelected)
+        {
+            ClearSelection();
+            item.IsSelected = true;
+        }
+
+        return GetSelectedItems().Select(candidate => candidate.Id).ToList();
+    }
+
+    public async Task MoveItemsToFolderAsync(IReadOnlyCollection<long> historyIds, long folderId)
+    {
+        if (historyIds.Count == 0 || folderId < 0)
+            return;
+
+        await _historyService.MoveToFolderAsync(historyIds, folderId);
+        var destinationName = folderId == 0
+            ? "未整理"
+            : HistoryFolders.FirstOrDefault(folder => folder.Id == folderId)?.Name ?? "整理文件夹";
+        await LoadHistory();
+        SelectedFolderId = folderId == 0 ? 0 : folderId;
+        RequestShowNotification?.Invoke(
+            $"已将 {historyIds.Count} 项整理到“{destinationName}”（本地文件未移动）",
+            true);
     }
 
     public Func<string, string, bool>? ConfirmFunc { get; set; } = (msg, title) =>
@@ -354,9 +709,16 @@ public partial class HistoryViewModel : ObservableObject
             return;
         }
         await _historyService.ClearAllAsync();
+        UnsubscribeHistoryItems();
         HistoryItems.Clear();
         HistoryGroups.Clear();
         TotalHistoryCount = 0;
+        VisibleHistoryCount = 0;
+        UnfiledHistoryCount = 0;
+        foreach (var folder in HistoryFolders)
+            folder.ItemCount = 0;
+        ClearSelection();
+        OnPropertyChanged(nameof(HasVisibleHistory));
     }
 
     /// <summary>
@@ -367,6 +729,7 @@ public partial class HistoryViewModel : ObservableObject
     {
         SearchKeyword = "";
         SelectedMediaFilter = "全部";
+        SelectedFolderId = null;
         await LoadHistory();
     }
 
@@ -377,10 +740,7 @@ public partial class HistoryViewModel : ObservableObject
     private async Task DeleteItem(long id)
     {
         await _historyService.DeleteAsync(id);
-        var item = HistoryItems.FirstOrDefault(h => h.Id == id);
-        if (item != null) HistoryItems.Remove(item);
-        RebuildHistoryGroups();
-        if (TotalHistoryCount > 0) TotalHistoryCount--;
+        await LoadHistory();
     }
 
     [RelayCommand]
@@ -388,6 +748,26 @@ public partial class HistoryViewModel : ObservableObject
     {
         if (group is not null && group.IsBatch)
             group.IsExpanded = !group.IsExpanded;
+    }
+
+    [RelayCommand]
+    private void SelectHistoryGroup(DownloadHistoryGroup? group)
+    {
+        if (group is null)
+            return;
+
+        var shouldSelect = group.Items.Any(item => !item.IsSelected);
+        _suppressSelectionRefresh = true;
+        try
+        {
+            foreach (var item in group.Items)
+                item.IsSelected = shouldSelect;
+        }
+        finally
+        {
+            _suppressSelectionRefresh = false;
+            RefreshSelectionState();
+        }
     }
 
     [RelayCommand]
@@ -413,11 +793,7 @@ public partial class HistoryViewModel : ObservableObject
             foreach (var item in group.Items)
                 await _historyService.DeleteAsync(item.Id);
         }
-        var removedIds = group.Items.Select(item => item.Id).ToHashSet();
-        foreach (var item in HistoryItems.Where(item => removedIds.Contains(item.Id)).ToList())
-            HistoryItems.Remove(item);
-        TotalHistoryCount = Math.Max(0, TotalHistoryCount - removedIds.Count);
-        RebuildHistoryGroups();
+        await LoadHistory();
     }
 
     [RelayCommand]

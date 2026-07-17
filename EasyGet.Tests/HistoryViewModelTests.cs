@@ -10,6 +10,71 @@ namespace EasyGet.Tests;
 public class HistoryViewModelTests
 {
     [Fact]
+    public async Task ReloadHistory_RebindsBulkTargetToTheRefreshedFolderCollection()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory { Url = "https://example.com/one", Title = "one" });
+            var folder = await service.CreateFolderAsync("课程");
+            var viewModel = new HistoryViewModel(service);
+            await viewModel.LoadHistory();
+            var originalTarget = Assert.Single(viewModel.HistoryFolders);
+            viewModel.BulkTargetFolder = originalTarget;
+
+            await viewModel.LoadHistory();
+
+            var refreshedTarget = Assert.Single(viewModel.HistoryFolders);
+            Assert.NotSame(originalTarget, refreshedTarget);
+            Assert.Same(refreshedTarget, viewModel.BulkTargetFolder);
+            Assert.Equal(folder.Id, viewModel.BulkTargetFolder?.Id);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task HistoryWorkspace_SelectsAndMovesRecordsBetweenOrganizerFolders()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory { Url = "https://example.com/one", Title = "one" });
+            await service.AddAsync(new DownloadHistory { Url = "https://example.com/two", Title = "two" });
+            var folder = await service.CreateFolderAsync("稍后观看");
+            var viewModel = new HistoryViewModel(service);
+            await viewModel.LoadHistory();
+
+            var first = viewModel.HistoryItems[0];
+            var dragIds = viewModel.PrepareHistoryDrag(first.Id);
+            Assert.Single(dragIds);
+            Assert.Equal(1, viewModel.SelectedCount);
+
+            await viewModel.MoveItemsToFolderAsync(dragIds, folder.Id);
+
+            Assert.Equal(folder.Id, viewModel.SelectedFolderId);
+            Assert.Equal(1, viewModel.VisibleHistoryCount);
+            Assert.Equal("稍后观看", viewModel.SelectedFolderTitle);
+            Assert.Equal(folder.Id, Assert.Single(viewModel.HistoryItems, item => item.Title == first.Title).FolderId);
+
+            var movedId = Assert.Single(viewModel.HistoryItems, item => item.Title == first.Title).Id;
+            await viewModel.MoveItemsToFolderAsync([movedId], 0);
+
+            Assert.Equal(0, viewModel.SelectedFolderId);
+            Assert.Equal(2, viewModel.UnfiledHistoryCount);
+            Assert.All(viewModel.HistoryItems, item => Assert.Equal(0, item.FolderId));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task LoadHistory_FiltersAudioItemsWhenAudioFilterIsSelected()
     {
         var dbPath = CreateTempDatabasePath();

@@ -85,6 +85,7 @@ public partial class DownloadViewModel : ObservableObject
     public bool IsDownloadActive => PageState == DownloadPageState.Downloading;
     public bool IsCompleted => CurrentTask is not null && PageState == DownloadPageState.Completed;
     public bool IsTaskFailed => CurrentTask is not null && PageState == DownloadPageState.Failed;
+    public bool CanParse => !IsParsing && ExtractUrl(Url) is not null;
     public bool IsProgressCardVisible => CurrentTask is not null
         && PageState is DownloadPageState.Downloading or DownloadPageState.Completed or DownloadPageState.Failed;
     public string PreviewTitle => PreviewInfo?.Title ?? "";
@@ -150,7 +151,11 @@ public partial class DownloadViewModel : ObservableObject
                 PageState = DownloadPageState.Idle;
             }
         }
+        ParseCommand.NotifyCanExecuteChanged();
     }
+
+    partial void OnPageStateChanged(DownloadPageState value)
+        => ParseCommand.NotifyCanExecuteChanged();
 
     /// <summary>
     /// 初始化默认值
@@ -217,7 +222,7 @@ public partial class DownloadViewModel : ObservableObject
         }
     }
 
-    [RelayCommand(AllowConcurrentExecutions = true)]
+    [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanParse))]
     private async Task Parse()
     {
         if (IsParsing)

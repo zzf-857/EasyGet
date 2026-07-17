@@ -87,6 +87,25 @@
                                          Background="Transparent"
                                          Padding="0,16"
                                          VerticalContentAlignment="Center"/>
+                                <TextBlock Grid.Column="1"
+                                           Text="粘贴抖音、Bilibili、YouTube 等视频链接"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Url}" Value="">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Url}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                                 <Button Grid.Column="2"
                                         Style="{StaticResource SurfaceButton}"
                                         Margin="8,8,8,8"

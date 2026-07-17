@@ -78,6 +78,10 @@ public partial class MainViewModel : ObservableObject
         {
             ShowToast(msg, isSuccess);
         };
+        HistoryVM.RequestShowNotification += (msg, isSuccess) =>
+        {
+            ShowToast(msg, isSuccess);
+        };
     }
 
     public void ShowToast(string message, bool isSuccess)

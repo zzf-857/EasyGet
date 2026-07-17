@@ -112,6 +112,15 @@ public partial class DownloadTask : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private DownloadStatus _status = DownloadStatus.Waiting;
 
+    partial void OnStatusChanged(DownloadStatus value)
+    {
+        if (value == DownloadStatus.Downloading)
+            return;
+
+        Speed = 0;
+        Eta = 0;
+    }
+
     /// <summary>错误信息</summary>
     [ObservableProperty] private string _errorMessage = "";
 

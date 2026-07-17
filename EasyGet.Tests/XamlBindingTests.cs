@@ -444,7 +444,8 @@ public class XamlBindingTests
         Assert.Contains("开始批量下载", texts);
         Assert.Contains("下载队列", texts);
         Assert.Contains("暂停全部", texts);
-        Assert.Contains("取消全部", texts);
+        Assert.Contains("停止未完成", texts);
+        Assert.Contains("清理已结束", texts);
         Assert.DoesNotContain(texts, text => text.Contains("SERVER STATUS", StringComparison.Ordinal));
         Assert.DoesNotContain(texts, text => text.Contains("ACTIVE THREADS", StringComparison.Ordinal));
         Assert.DoesNotContain(texts, text => text.Contains("V1.0.8", StringComparison.Ordinal));
@@ -538,6 +539,44 @@ public class XamlBindingTests
             element.Name.LocalName == "Image"
             && element.Attributes("Source").Any(attribute =>
                 attribute.Value.Contains("ThumbnailUrl", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void HistoryViewExposesFolderWorkspaceSelectionAndDragDropActions()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        Assert.Contains("HistoryFolders", source, StringComparison.Ordinal);
+        Assert.Contains("CreateFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("MoveSelectedToFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RemoveSelectedFromFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("DeleteSelectedCommand", source, StringComparison.Ordinal);
+        Assert.Contains("Visibility=\"{Binding HasVisibleHistory", source, StringComparison.Ordinal);
+        Assert.Contains("IsSelected, Mode=TwoWay", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryFolder_Drop", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryCard_PreviewMouseMove", source, StringComparison.Ordinal);
+        Assert.Contains("FolderRenameTextBox_IsVisibleChanged", source, StringComparison.Ordinal);
+        Assert.Contains("FolderRenameTextBox_PreviewKeyDown", source, StringComparison.Ordinal);
+        Assert.Contains("DragDrop.DoDragDrop", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("textBox.SelectAll()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("本地文件未移动", File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("ViewModels", "HistoryViewModel.cs"))), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BatchDownloadViewShowsAggregateProgressFiltersAndQueueCleanupActions()
+    {
+        var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
+
+        Assert.Contains("OverallProgress", source, StringComparison.Ordinal);
+        Assert.Contains("QueueSummaryText", source, StringComparison.Ordinal);
+        Assert.Contains("VisibleQueueTasks", source, StringComparison.Ordinal);
+        Assert.Contains("SetQueueFilterCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RetryFailedCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ClearFinishedCommand", source, StringComparison.Ordinal);
+        Assert.Contains("AggregateSpeedText", source, StringComparison.Ordinal);
+        Assert.Contains("EtaText, Mode=OneWay", source, StringComparison.Ordinal);
     }
 
     [Fact]
