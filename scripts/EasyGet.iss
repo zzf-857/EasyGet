@@ -3,7 +3,7 @@
 
 #define MyAppName "EasyGet"
 #ifndef MyAppVersion
-#define MyAppVersion "1.3.0"
+#define MyAppVersion "1.3.1"
 #endif
 #define MyAppPublisher "zzf-857"
 #define MyAppURL "https://github.com/zzf-857/EasyGet"

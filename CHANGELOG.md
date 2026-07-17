@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.3.1 - 2026-07-17
+
+### Download History
+- Changed the history library from item-based logical scrolling to continuous pixel scrolling, so a mouse-wheel notch no longer jumps over an entire playlist or batch group.
+- Rebuilt the organization area as a responsive wrapping layout with unified cards for all records, unfiled records, and custom folders.
+- Added clearer selected states, count badges, concise folder descriptions, hover-only management actions, and an integrated folder-creation area.
+
+### Bulk Organization
+- Replaced the always-visible disabled controls with a calm selection prompt that expands into a contextual bulk toolbar only after records are selected.
+- Kept selection counts, move/remove/delete actions, folder targets, and select-all controls readable without horizontal overflow.
+- Kept folder counters synchronized after clearing the history library.
+
+### Dialogs
+- Replaced native Windows confirmation boxes in history and batch-download workflows with an EasyGet-themed modal dialog.
+- Added action-specific Chinese confirmation labels, clear destructive-action styling, and Escape/Enter keyboard handling.
+
+### Tests
+- Added regression coverage for pixel scrolling, responsive folder cards, built-in folder behavior, themed confirmations, and folder-count refreshes.
+- Verified 904 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.3.0 - 2026-07-17
 
 ### History Library
