@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.3.0 - 2026-07-17
+
+### History Library
+- Added persistent custom folders for organizing download history without moving or rewriting local video files.
+- Added folder counts, all/unfiled views, create/rename/delete actions, drag-and-drop organization, per-item checkboxes, whole-collection selection, and bulk move/remove/delete controls.
+- Kept imported playlists collapsed as named collections while restoring a compact multi-column grid for ordinary downloads.
+- Added automatic SQLite migration for existing history databases and preserved every existing file path.
+
+### Batch Download Experience
+- Added total, completed, active, remaining, failed, and cancelled task summaries with aggregate progress, live transfer speed, per-task ETA, and direct folder access.
+- Added active, failed, finished, and all-task filters plus pause all, resume all, retry failed, stop unfinished, and clear finished controls.
+- Defaulted the queue to unfinished work so large completed playlists no longer overwhelm the active download view.
+- Improved playlist import deduplication, preserved original episode indexes when some entries already exist, kept real playlist titles, and cleared successfully queued input automatically.
+
+### Interaction Fixes
+- Fixed merge-stage cancellation so stopping a task cancels the underlying work instead of only removing its card.
+- Excluded completed-task speed from the live aggregate and cleared stale speed/ETA when a task leaves the downloading state.
+- Added stable loading and empty states, keyboard-first folder renaming with automatic focus, truthful operation notifications, and a directly accessible “select all current” action.
+- Prevented stale concurrent history searches and repeated bulk queue refreshes from causing misleading results or unnecessary UI churn.
+- Disabled single-video parsing until the input contains a valid URL and added clear input guidance.
+
+### Tests
+- Added folder migration, persistence, drag/move, bulk selection, playlist indexing, 85-item admission, queue filtering, progress, cancellation, command-state, and XAML interaction regression coverage.
+- Verified 894 automated tests pass; 14 live or environment-dependent tests remain explicitly skipped.
+
 ## 1.2.5 - 2026-07-17
 
 ### Playlist Organization

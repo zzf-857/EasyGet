@@ -36,7 +36,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\publish-win-x64.ps
 构建安装包：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.2.0
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-installer.ps1 -Version 1.3.0
 ```
 
 `build-installer.ps1` 需要本机安装 Inno Setup 6，并会复用 `publish-win-x64.ps1` 先生成发布目录。
