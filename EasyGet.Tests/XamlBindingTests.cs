@@ -557,12 +557,29 @@ public class XamlBindingTests
         Assert.Contains("IsSelected, Mode=TwoWay", source, StringComparison.Ordinal);
         Assert.Contains("HistoryFolder_Drop", source, StringComparison.Ordinal);
         Assert.Contains("HistoryCard_PreviewMouseMove", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryCard_PreviewMouseLeftButtonUp", source, StringComparison.Ordinal);
         Assert.Contains("FolderRenameTextBox_IsVisibleChanged", source, StringComparison.Ordinal);
         Assert.Contains("FolderRenameTextBox_PreviewKeyDown", source, StringComparison.Ordinal);
         Assert.Contains("DragDrop.DoDragDrop", codeBehind, StringComparison.Ordinal);
         Assert.Contains("textBox.SelectAll()", codeBehind, StringComparison.Ordinal);
         Assert.Contains("本地文件未移动", File.ReadAllText(TestRepositoryPaths.GetRootPath(
             Path.Combine("ViewModels", "HistoryViewModel.cs"))), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HistoryViewCardSurfaceTogglesSelectionWithoutHijackingCardButtonsOrDrag()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        Assert.Contains(
+            "PreviewMouseLeftButtonUp=\"HistoryCard_PreviewMouseLeftButtonUp\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains("history.IsSelected = !history.IsSelected", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsInteractiveCardElement", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("current is ButtonBase", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("_historyDragWasInitiated", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]

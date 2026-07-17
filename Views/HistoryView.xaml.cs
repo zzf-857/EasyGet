@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -13,6 +14,8 @@ public partial class HistoryView : System.Windows.Controls.UserControl
 {
     private const string HistoryItemsDataFormat = "EasyGet.HistoryItems";
     private Point _historyDragStart;
+    private bool _historyDragCanStart;
+    private bool _historyDragWasInitiated;
     private HistoryViewModel? _observedViewModel;
     private readonly DispatcherTimer _scrollResetTimer;
 
@@ -187,11 +190,14 @@ public partial class HistoryView : System.Windows.Controls.UserControl
     private void HistoryCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         _historyDragStart = e.GetPosition(this);
+        _historyDragCanStart = !IsInteractiveCardElement(e.OriginalSource as DependencyObject);
+        _historyDragWasInitiated = false;
     }
 
     private void HistoryCard_PreviewMouseMove(object sender, MouseEventArgs e)
     {
-        if (e.LeftButton != MouseButtonState.Pressed
+        if (!_historyDragCanStart
+            || e.LeftButton != MouseButtonState.Pressed
             || sender is not FrameworkElement element
             || element.DataContext is not DownloadHistory history
             || DataContext is not HistoryViewModel vm)
@@ -212,8 +218,50 @@ public partial class HistoryView : System.Windows.Controls.UserControl
 
         var data = new DataObject();
         data.SetData(HistoryItemsDataFormat, ids);
+        _historyDragWasInitiated = true;
         DragDrop.DoDragDrop(element, data, DragDropEffects.Move);
         e.Handled = true;
+    }
+
+    private void HistoryCard_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var shouldToggle = _historyDragCanStart
+                           && !_historyDragWasInitiated
+                           && e.ClickCount == 1
+                           && !IsInteractiveCardElement(e.OriginalSource as DependencyObject);
+        _historyDragCanStart = false;
+
+        if (!shouldToggle
+            || sender is not FrameworkElement
+            {
+                DataContext: DownloadHistory history
+            } element)
+        {
+            return;
+        }
+
+        history.IsSelected = !history.IsSelected;
+        element.Focus();
+        e.Handled = true;
+    }
+
+    private static bool IsInteractiveCardElement(DependencyObject? source)
+    {
+        for (var current = source; current is not null; current = GetVisualOrLogicalParent(current))
+        {
+            if (current is ButtonBase)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static DependencyObject? GetVisualOrLogicalParent(DependencyObject current)
+    {
+        if (current is Visual || current is System.Windows.Media.Media3D.Visual3D)
+            return VisualTreeHelper.GetParent(current);
+
+        return LogicalTreeHelper.GetParent(current);
     }
 
     private void HistoryFolder_DragOver(object sender, DragEventArgs e)

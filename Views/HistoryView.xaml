@@ -886,7 +886,8 @@
                                                 ClipToBounds="True"
                                                 Cursor="Hand"
                                                 PreviewMouseLeftButtonDown="HistoryCard_PreviewMouseLeftButtonDown"
-                                                PreviewMouseMove="HistoryCard_PreviewMouseMove">
+                                                PreviewMouseMove="HistoryCard_PreviewMouseMove"
+                                                PreviewMouseLeftButtonUp="HistoryCard_PreviewMouseLeftButtonUp">
                                             <Border.Style>
                                                 <Style TargetType="Border" BasedOn="{StaticResource MediaCardBorder}">
                                                     <Style.Triggers>
