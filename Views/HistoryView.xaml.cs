@@ -13,6 +13,8 @@ namespace EasyGet.Views;
 public partial class HistoryView : System.Windows.Controls.UserControl
 {
     private const string HistoryItemsDataFormat = "EasyGet.HistoryItems";
+    private const double HistoryCardSlotWidth = 300;
+    private const int LargeFolderAnimationThreshold = 20;
     private Point _historyDragStart;
     private bool _historyDragCanStart;
     private bool _historyDragWasInitiated;
@@ -89,6 +91,15 @@ public partial class HistoryView : System.Windows.Controls.UserControl
 
     private void AnimateContentTransition()
     {
+        if (DataContext is HistoryViewModel { VisibleHistoryCount: > LargeFolderAnimationThreshold })
+        {
+            HistoryContentHost.BeginAnimation(OpacityProperty, null);
+            HistoryContentHost.Opacity = 1;
+            HistoryContentTranslate.BeginAnimation(TranslateTransform.YProperty, null);
+            HistoryContentTranslate.Y = 0;
+            return;
+        }
+
         Dispatcher.BeginInvoke(
             DispatcherPriority.Render,
             new Action(() =>
@@ -107,6 +118,17 @@ public partial class HistoryView : System.Windows.Controls.UserControl
                         EasingFunction = easing
                     });
             }));
+    }
+
+    private void HistoryList_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (DataContext is not HistoryViewModel vm || e.NewSize.Width <= 0)
+            return;
+
+        var columnCount = Math.Max(
+            1,
+            (int)Math.Floor((e.NewSize.Width + 16) / HistoryCardSlotWidth));
+        vm.SetHistoryCardColumnCount(columnCount);
     }
 
     private void NewFolderPopup_Opened(object? sender, EventArgs e)
@@ -241,7 +263,6 @@ public partial class HistoryView : System.Windows.Controls.UserControl
         }
 
         history.IsSelected = !history.IsSelected;
-        element.Focus();
         e.Handled = true;
     }
 

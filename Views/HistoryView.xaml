@@ -156,10 +156,11 @@
         </Border>
 
         <!-- One coherent workspace for both custom and automatic folders -->
-        <Border Grid.Row="2"
+        <Border x:Name="FolderWorkspacePanel"
+                Grid.Row="2"
                 Style="{StaticResource ToolPanelBorder}"
-                Padding="18,16"
-                Margin="0,0,0,16">
+                Padding="18,16,18,12"
+                Margin="0,0,0,12">
             <StackPanel>
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -540,7 +541,7 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemContainerStyle>
                                 <Style TargetType="ContentPresenter">
-                                    <Setter Property="Margin" Value="0,0,12,12"/>
+                                    <Setter Property="Margin" Value="0,0,12,0"/>
                                 </Style>
                             </ItemsControl.ItemContainerStyle>
                             <ItemsControl.ItemTemplate>
@@ -816,14 +817,21 @@
             </Border>
 
             <ListBox x:Name="HistoryList"
-                     ItemsSource="{Binding HistoryGroups}"
+                     ItemsSource="{Binding HistoryCardRows}"
                      Background="Transparent"
                      BorderThickness="0"
+                     Padding="0,12,0,0"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                      ScrollViewer.VerticalScrollBarVisibility="Auto"
-                     ScrollViewer.CanContentScroll="False"
+                     ScrollViewer.CanContentScroll="True"
                      ScrollViewer.IsDeferredScrollingEnabled="False"
-                     ScrollViewer.PanningMode="VerticalOnly">
+                     ScrollViewer.PanningMode="VerticalOnly"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.ScrollUnit="Pixel"
+                     VirtualizingPanel.CacheLength="0.2,0.5"
+                     VirtualizingPanel.CacheLengthUnit="Page"
+                     SizeChanged="HistoryList_SizeChanged">
                 <ListBox.Style>
                     <Style TargetType="ListBox">
                         <Setter Property="Margin" Value="0"/>
@@ -835,7 +843,7 @@
                     </Style>
                 </ListBox.Style>
                 <ListBox.ItemsPanel>
-                    <ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate>
+                    <ItemsPanelTemplate><VirtualizingStackPanel/></ItemsPanelTemplate>
                 </ListBox.ItemsPanel>
                 <ListBox.ItemContainerStyle>
                     <Style TargetType="ListBoxItem">
@@ -852,18 +860,8 @@
                 <ListBox.ItemTemplate>
                     <DataTemplate>
                         <ItemsControl ItemsSource="{Binding Items}">
-                            <ItemsControl.Style>
-                                <Style TargetType="ItemsControl">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsExpanded}" Value="False">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ItemsControl.Style>
                             <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemContainerStyle>
                                 <Style TargetType="ContentPresenter">
@@ -872,31 +870,21 @@
                             </ItemsControl.ItemContainerStyle>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Grid x:Name="HistoryCardRoot" Width="284" RenderTransformOrigin="0.5,0.5">
-                                        <Grid.RenderTransform>
-                                            <TranslateTransform x:Name="CardTranslate" Y="0"/>
-                                        </Grid.RenderTransform>
+                                    <Grid x:Name="HistoryCardRoot" Width="284">
                                         <Border x:Name="CardShadow"
                                                 Style="{StaticResource MediaCardBorder}"
                                                 Effect="{StaticResource HoverShadow}"
                                                 Opacity="0"/>
                                         <Border x:Name="HistoryCard"
                                                 Opacity="{Binding FileExists, Converter={StaticResource FileExistsToOpacity}}"
-                                                ToolTip="{Binding FilePath}"
+                                                AutomationProperties.HelpText="{Binding FilePath}"
                                                 ClipToBounds="True"
                                                 Cursor="Hand"
                                                 PreviewMouseLeftButtonDown="HistoryCard_PreviewMouseLeftButtonDown"
                                                 PreviewMouseMove="HistoryCard_PreviewMouseMove"
                                                 PreviewMouseLeftButtonUp="HistoryCard_PreviewMouseLeftButtonUp">
                                             <Border.Style>
-                                                <Style TargetType="Border" BasedOn="{StaticResource MediaCardBorder}">
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
-                                                            <Setter Property="BorderThickness" Value="2"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
+                                                <Style TargetType="Border" BasedOn="{StaticResource MediaCardBorder}"/>
                                             </Border.Style>
                                             <StackPanel>
                                                 <Border Height="160"
@@ -1051,17 +1039,22 @@
                                                 </StackPanel>
                                             </StackPanel>
                                         </Border>
+                                        <Border x:Name="SelectionRing"
+                                                Panel.ZIndex="20"
+                                                BorderBrush="{DynamicResource AccentBrush}"
+                                                BorderThickness="2"
+                                                CornerRadius="14"
+                                                IsHitTestVisible="False"
+                                                Opacity="0"/>
                                     </Grid>
                                     <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                            <Setter TargetName="SelectionRing" Property="Opacity" Value="1"/>
+                                        </DataTrigger>
                                         <Trigger SourceName="HistoryCard" Property="IsMouseOver" Value="True">
                                             <Trigger.EnterActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="CardTranslate"
-                                                                         Storyboard.TargetProperty="Y"
-                                                                         To="-4"
-                                                                         Duration="{StaticResource MotionDurationFast}"
-                                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
                                                         <DoubleAnimation Storyboard.TargetName="CardShadow"
                                                                          Storyboard.TargetProperty="Opacity"
                                                                          To="0.85"
@@ -1078,11 +1071,6 @@
                                             <Trigger.ExitActions>
                                                 <BeginStoryboard>
                                                     <Storyboard>
-                                                        <DoubleAnimation Storyboard.TargetName="CardTranslate"
-                                                                         Storyboard.TargetProperty="Y"
-                                                                         To="0"
-                                                                         Duration="{StaticResource MotionDurationMedium}"
-                                                                         EasingFunction="{StaticResource MotionEaseOut}"/>
                                                         <DoubleAnimation Storyboard.TargetName="CardShadow"
                                                                          Storyboard.TargetProperty="Opacity"
                                                                          To="0"

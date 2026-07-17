@@ -100,11 +100,10 @@ public class XamlBindingTests
     {
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
 
-        Assert.Contains("ItemsSource=\"{Binding HistoryGroups}\"", source, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding HistoryCardRows}\"", source, StringComparison.Ordinal);
         Assert.Contains("SelectBatchFolderCommand", source, StringComparison.Ordinal);
         Assert.Contains("OpenDirectoryCommand", source, StringComparison.Ordinal);
         Assert.Contains("DeleteBatchCommand", source, StringComparison.Ordinal);
-        Assert.Contains("Binding IsExpanded", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -583,6 +582,43 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void HistoryViewKeepsTheFolderToCardTransitionCompactAndHidesRawPathTooltips()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        var workspacePanel = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Border"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "FolderWorkspacePanel"));
+        Assert.NotNull(workspacePanel);
+        Assert.Equal("18,16,18,12", workspacePanel!.Attribute("Padding")?.Value);
+        Assert.Equal("0,0,0,12", workspacePanel.Attribute("Margin")?.Value);
+
+        var batchFolders = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "ItemsControl"
+            && element.Attribute("ItemsSource")?.Value == "{Binding BatchFolderCards}");
+        Assert.NotNull(batchFolders);
+        Assert.Contains(batchFolders!.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Margin"
+            && element.Attribute("Value")?.Value == "0,0,12,0");
+
+        var historyCard = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Border"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "HistoryCard"));
+        Assert.NotNull(historyCard);
+        Assert.Null(historyCard!.Attribute("ToolTip"));
+        Assert.Contains(historyCard.Attributes(), attribute =>
+            attribute.Name.LocalName == "AutomationProperties.HelpText"
+            && attribute.Value == "{Binding FilePath}");
+        Assert.DoesNotContain("element.Focus()", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void HistoryViewUsesPopoverCreationAndFloatingContextualSelectionBar()
     {
         var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
@@ -609,7 +645,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void HistoryViewUsesPixelScrollingAndUnifiedWorkspaceFolderCards()
+    public void HistoryViewUsesPixelVirtualizationAndUnifiedWorkspaceFolderCards()
     {
         var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
         var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
@@ -622,13 +658,21 @@ public class XamlBindingTests
         Assert.Contains("DataContext.SelectBatchFolderCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<TextBlock Text=\"批量整理\"", source, StringComparison.Ordinal);
         Assert.Contains("<WrapPanel/>", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.CanContentScroll=\"False\"", source, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding HistoryCardRows}\"", source, StringComparison.Ordinal);
+        Assert.Contains("ScrollViewer.CanContentScroll=\"True\"", source, StringComparison.Ordinal);
         Assert.Contains("ScrollViewer.IsDeferredScrollingEnabled=\"False\"", source, StringComparison.Ordinal);
         Assert.Contains("ScrollViewer.PanningMode=\"VerticalOnly\"", source, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", source, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", source, StringComparison.Ordinal);
+        Assert.Contains("VirtualizingPanel.ScrollUnit=\"Pixel\"", source, StringComparison.Ordinal);
+        Assert.Contains("<VirtualizingStackPanel/>", source, StringComparison.Ordinal);
+        Assert.Contains("SizeChanged=\"HistoryList_SizeChanged\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("HorizontalScrollBarVisibility=\"Auto\"", source, StringComparison.Ordinal);
         Assert.Contains("x:Name=\"HistoryList\"", source, StringComparison.Ordinal);
         Assert.Contains("ScrollHistoryToTop", codeBehind, StringComparison.Ordinal);
         Assert.Contains("ScrollToTop()", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("SetHistoryCardColumnCount", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("LargeFolderAnimationThreshold", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -693,12 +737,27 @@ public class XamlBindingTests
             && element.Attribute("SourceName")?.Value == "HistoryCard"
             && element.Attribute("Property")?.Value == "IsMouseOver"
             && element.Attribute("Value")?.Value == "True");
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "TranslateTransform"
+        var historyList = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "ListBox"
             && element.Attributes().Any(attribute =>
                 attribute.Name.LocalName == "Name"
-                && attribute.Value == "CardTranslate")
-            && element.Attribute("Y")?.Value == "0");
+                && attribute.Value == "HistoryList"));
+        Assert.NotNull(historyList);
+        Assert.Equal("0,12,0,0", historyList!.Attribute("Padding")?.Value);
+
+        var selectionRing = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Border"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name"
+                && attribute.Value == "SelectionRing"));
+        Assert.NotNull(selectionRing);
+        Assert.Equal("2", selectionRing!.Attribute("BorderThickness")?.Value);
+        Assert.Equal("False", selectionRing.Attribute("IsHitTestVisible")?.Value);
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("TargetName")?.Value == "SelectionRing"
+            && element.Attribute("Property")?.Value == "Opacity"
+            && element.Attribute("Value")?.Value == "1");
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "Setter"
             && element.Attribute("TargetName")?.Value == "HoverOverlay"
@@ -710,11 +769,10 @@ public class XamlBindingTests
             && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity"
             && element.Attribute("To")?.Value == "1"
             && element.Attribute("Duration")?.Value?.Contains("MotionDurationFast", StringComparison.Ordinal) == true);
-        Assert.Contains(document.Descendants(), element =>
+        Assert.DoesNotContain(document.Descendants(), element =>
             element.Name.LocalName == "DoubleAnimation"
             && element.Attribute("Storyboard.TargetName")?.Value == "CardTranslate"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Y"
-            && element.Attribute("To")?.Value == "-4");
+            && element.Attribute("Storyboard.TargetProperty")?.Value == "Y");
         Assert.Contains(document.Descendants(), element =>
             element.Name.LocalName == "DoubleAnimation"
             && element.Attribute("Storyboard.TargetName")?.Value == "CardShadow"

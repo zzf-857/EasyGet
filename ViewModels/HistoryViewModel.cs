@@ -14,6 +14,7 @@ namespace EasyGet.ViewModels;
 public partial class HistoryViewModel : ObservableObject
 {
     private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(300);
+    private const int DefaultHistoryCardColumnCount = 4;
 
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
@@ -23,6 +24,7 @@ public partial class HistoryViewModel : ObservableObject
     private int _historyLoadRequestVersion;
     private bool _suppressSelectionRefresh;
     private bool _suppressLocationRefresh;
+    private int _historyCardColumnCount = DefaultHistoryCardColumnCount;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
@@ -68,7 +70,7 @@ public partial class HistoryViewModel : ObservableObject
     public bool HasHistoryFolders => HistoryFolders.Count > 0;
     public bool HasBatchFolders => BatchFolderCards.Count > 0;
     public bool HasWorkspaceFolders => HistoryFolders.Count > 0 || BatchFolderCards.Count > 0;
-    public bool HasDisplayedHistoryCards => HistoryGroups.Count > 0;
+    public bool HasDisplayedHistoryCards => HistoryCardRows.Count > 0;
     public bool ShouldShowFolderOnlyHint => HasVisibleHistory && !HasDisplayedHistoryCards;
     public bool CanCreateFolder => !string.IsNullOrWhiteSpace(NewFolderName);
     public string SelectionSummaryText => $"已选择 {SelectedCount} 项";
@@ -150,6 +152,7 @@ public partial class HistoryViewModel : ObservableObject
     public string[] MediaFilterOptions { get; } = ["全部", "视频", "音频"];
     public ObservableCollection<DownloadHistory> HistoryItems { get; } = [];
     public ObservableCollection<DownloadHistoryGroup> HistoryGroups { get; } = [];
+    public ObservableCollection<HistoryCardRow> HistoryCardRows { get; } = [];
     public ObservableCollection<DownloadHistoryGroup> BatchFolderCards { get; } = [];
     public ObservableCollection<HistoryFolder> HistoryFolders { get; } = [];
 
@@ -423,6 +426,8 @@ public partial class HistoryViewModel : ObservableObject
             VisibleHistoryCount = visibleItems.Count;
         }
 
+        RebuildHistoryCardRows();
+
         OnPropertyChanged(nameof(HasVisibleHistory));
         OnPropertyChanged(nameof(HasBatchFolders));
         OnPropertyChanged(nameof(HasWorkspaceFolders));
@@ -442,6 +447,32 @@ public partial class HistoryViewModel : ObservableObject
 
     private IEnumerable<DownloadHistory> GetCurrentLocationItems()
         => HistoryGroups.SelectMany(group => group.Items);
+
+    public void SetHistoryCardColumnCount(int columnCount)
+    {
+        var normalized = Math.Clamp(columnCount, 1, 8);
+        if (_historyCardColumnCount == normalized)
+            return;
+
+        _historyCardColumnCount = normalized;
+        RebuildHistoryCardRows();
+    }
+
+    private void RebuildHistoryCardRows()
+    {
+        var displayedItems = GetCurrentLocationItems().ToList();
+        HistoryCardRows.Clear();
+        for (var index = 0; index < displayedItems.Count; index += _historyCardColumnCount)
+        {
+            HistoryCardRows.Add(new HistoryCardRow
+            {
+                Items = displayedItems
+                    .Skip(index)
+                    .Take(_historyCardColumnCount)
+                    .ToArray()
+            });
+        }
+    }
 
     private void NotifyLocationState()
     {
@@ -819,6 +850,7 @@ public partial class HistoryViewModel : ObservableObject
         HistoryItems.Clear();
         ReturnToHistoryRoot();
         HistoryGroups.Clear();
+        HistoryCardRows.Clear();
         BatchFolderCards.Clear();
         TotalHistoryCount = 0;
         VisibleHistoryCount = 0;

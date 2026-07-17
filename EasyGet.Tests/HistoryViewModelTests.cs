@@ -740,7 +740,9 @@ public class HistoryViewModelTests
             Assert.Equal(3, viewModel.HistoryItems.Count);
             var batch = Assert.Single(viewModel.BatchFolderCards);
             var standalone = Assert.Single(viewModel.HistoryGroups);
+            var standaloneRow = Assert.Single(viewModel.HistoryCardRows);
             Assert.False(standalone.IsBatch);
+            Assert.Single(standaloneRow.Items);
             Assert.Equal(2, batch.ItemCount);
             Assert.False(batch.IsExpanded);
             Assert.True(standalone.IsExpanded);
@@ -754,8 +756,10 @@ public class HistoryViewModelTests
             Assert.Equal(batch.Key, viewModel.SelectedBatchKey);
             Assert.Equal(2, viewModel.VisibleHistoryCount);
             var openedBatch = Assert.Single(viewModel.HistoryGroups);
+            var openedBatchRow = Assert.Single(viewModel.HistoryCardRows);
             Assert.True(openedBatch.IsBatch);
             Assert.True(openedBatch.IsExpanded);
+            Assert.Equal(2, openedBatchRow.Items.Count);
             viewModel.SelectAllVisibleCommand.Execute(null);
             Assert.Equal(2, viewModel.SelectedCount);
             viewModel.ClearSelectionCommand.Execute(null);
@@ -780,6 +784,51 @@ public class HistoryViewModelTests
             Assert.Empty(viewModel.BatchFolderCards);
             Assert.Null(viewModel.SelectedBatchKey);
             Assert.Single(await service.GetAllAsync());
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task OpenLargeBatch_BuildsVirtualizedResponsiveRowsInsteadOfOneHugeWrapPanel()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            for (var index = 1; index <= 75; index++)
+            {
+                await service.AddAsync(new DownloadHistory
+                {
+                    Url = $"https://example.com/large-batch/{index}",
+                    Title = $"large batch item {index:D2}",
+                    Format = "mp4",
+                    FilePath = $@"D:\Videos\large-batch\{index:D2}.mp4",
+                    BatchId = "large-batch-75",
+                    BatchName = "75 项性能测试合集",
+                    BatchDirectory = @"D:\Videos\large-batch",
+                    DownloadTime = new DateTime(2026, 7, 17, 12, 0, 0).AddSeconds(index)
+                });
+            }
+
+            var viewModel = new HistoryViewModel(service);
+            await viewModel.LoadHistory();
+
+            Assert.Empty(viewModel.HistoryCardRows);
+            viewModel.SelectBatchFolderCommand.Execute(Assert.Single(viewModel.BatchFolderCards));
+
+            Assert.Equal(19, viewModel.HistoryCardRows.Count);
+            Assert.All(viewModel.HistoryCardRows.Take(18), row => Assert.Equal(4, row.Items.Count));
+            Assert.Equal(3, viewModel.HistoryCardRows[^1].Items.Count);
+            Assert.Equal(75, viewModel.HistoryCardRows.SelectMany(row => row.Items).Count());
+
+            viewModel.SetHistoryCardColumnCount(3);
+            Assert.Equal(25, viewModel.HistoryCardRows.Count);
+            Assert.All(viewModel.HistoryCardRows, row => Assert.Equal(3, row.Items.Count));
+            Assert.Equal(75, viewModel.HistoryCardRows.SelectMany(row => row.Items).Count());
         }
         finally
         {
