@@ -12,6 +12,8 @@ namespace EasyGet;
 public partial class MainWindow : Window
 {
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    private const double MinimumVisibleTitleBarWidth = 96;
+    private const double MinimumVisibleTitleBarHeight = 24;
 
     private readonly MainViewModel _viewModel;
     private readonly ConfigService _configService;
@@ -220,13 +222,49 @@ public partial class MainWindow : Window
     private void RestoreWindowState()
     {
         var ws = _configService.Config.Window;
-        if (!double.IsNaN(ws.Left) && !double.IsNaN(ws.Top))
-        {
-            Left = ws.Left;
-            Top = ws.Top;
-        }
         if (ws.Width > 0) Width = ws.Width;
         if (ws.Height > 0) Height = ws.Height;
+
+        if (!double.IsNaN(ws.Left) && !double.IsNaN(ws.Top))
+        {
+            var requestedBounds = new Rect(ws.Left, ws.Top, Width, Height);
+            var virtualScreenBounds = new Rect(
+                SystemParameters.VirtualScreenLeft,
+                SystemParameters.VirtualScreenTop,
+                SystemParameters.VirtualScreenWidth,
+                SystemParameters.VirtualScreenHeight);
+            var restoredBounds = EnsureRestoredBoundsVisible(
+                requestedBounds,
+                virtualScreenBounds,
+                SystemParameters.WorkArea);
+            Left = restoredBounds.Left;
+            Top = restoredBounds.Top;
+        }
+    }
+
+    internal static Rect EnsureRestoredBoundsVisible(
+        Rect requestedBounds,
+        Rect virtualScreenBounds,
+        Rect fallbackWorkArea)
+    {
+        var titleBarBounds = new Rect(
+            requestedBounds.Left,
+            requestedBounds.Top,
+            requestedBounds.Width,
+            Math.Min(requestedBounds.Height, MinimumVisibleTitleBarHeight));
+        var visibleTitleBar = Rect.Intersect(titleBarBounds, virtualScreenBounds);
+        if (!visibleTitleBar.IsEmpty
+            && visibleTitleBar.Width >= MinimumVisibleTitleBarWidth
+            && visibleTitleBar.Height >= MinimumVisibleTitleBarHeight)
+        {
+            return requestedBounds;
+        }
+
+        var left = fallbackWorkArea.Left
+                   + Math.Max(0, (fallbackWorkArea.Width - requestedBounds.Width) / 2);
+        var top = fallbackWorkArea.Top
+                  + Math.Max(0, (fallbackWorkArea.Height - requestedBounds.Height) / 2);
+        return new Rect(left, top, requestedBounds.Width, requestedBounds.Height);
     }
 
     private void SaveWindowState()
