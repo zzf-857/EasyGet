@@ -51,9 +51,13 @@ internal static partial class ShareUrlExtractor
             '’');
     }
 
-    [GeneratedRegex(@"^https?://[^\s\u4e00-\u9fff]+")]
+    [GeneratedRegex(
+        @"^https?://[^\s\u4e00-\u9fff]+",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UrlAtStartRegex();
 
-    [GeneratedRegex(@"https?://[^\s\u4e00-\u9fff]+")]
+    [GeneratedRegex(
+        @"https?://[^\s\u4e00-\u9fff]+",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UrlRegex();
 }

@@ -10,6 +10,8 @@ public class TelegramDownloadServiceTests
     [Theory]
     [InlineData("https://t.me/durov/123")]
     [InlineData("http://T.ME/durov/123")]
+    [InlineData("https://www.t.me/durov/123")]
+    [InlineData("https://t.me/durov/123/")]
     [InlineData("tg://resolve?domain=durov&post=123")]
     [InlineData("https://t.me/c/1234567890/456")]
     [InlineData("tg://private?channel=1234567890&post=456")]
@@ -19,18 +21,10 @@ public class TelegramDownloadServiceTests
     }
 
     [Theory]
-    [InlineData("https://example.com/video.mp4")]
-    [InlineData("https://youtube.com/watch?v=123")]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void IsTelegramUrl_ReturnsFalseForOtherUrls(string url)
-    {
-        Assert.False(TelegramDownloadService.IsTelegramUrl(url));
-    }
-
-    [Theory]
     [InlineData("https://t.me/durov/123", "durov", 123, null)]
     [InlineData("https://t.me/durov/123-125", "durov", 123, 125)]
+    [InlineData("https://www.t.me/durov/123?single", "durov", 123, null)]
+    [InlineData("https://t.me/durov/123/", "durov", 123, null)]
     [InlineData("tg://resolve?domain=durov&post=123", "durov", 123, null)]
     [InlineData("https://t.me/c/1234567890/456", "-1001234567890", 456, null)]
     [InlineData("https://t.me/c/1234567890/456-460", "-1001234567890", 456, 460)]
@@ -47,12 +41,29 @@ public class TelegramDownloadServiceTests
 
     [Theory]
     [InlineData("https://example.com")]
+    [InlineData("https://telegram.me/durov/123")]
     [InlineData("https://t.me/durov")]
     [InlineData("https://t.me/c/1234567890")]
-    public void ParseTelegramLink_ReturnsNullForInvalidLinks(string link)
+    [InlineData("https://evil.example/path/t.me/durov/123")]
+    [InlineData("https://t.me.evil.example/durov/123")]
+    [InlineData("https://t.me@evil.example/durov/123")]
+    [InlineData("https://t.me/durov/123/extra")]
+    [InlineData("https://t.me/durov/not-a-number")]
+    [InlineData("https://t.me/durov/0")]
+    [InlineData("https://t.me/durov/2147483648")]
+    [InlineData("https://t.me/durov/125-123")]
+    [InlineData("tg://join?domain=durov&post=123")]
+    [InlineData("tg://resolve?domain=durov")]
+    [InlineData("tg://private?channel=1234567890")]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void TelegramUrlValidation_RejectsInvalidLinks(string? link)
     {
         var result = TelegramDownloadService.ParseTelegramLink(link);
+
         Assert.Null(result);
+        Assert.False(TelegramDownloadService.IsTelegramUrl(link));
     }
 
     [Theory]

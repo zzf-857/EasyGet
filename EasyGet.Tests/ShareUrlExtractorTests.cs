@@ -9,6 +9,7 @@ public class ShareUrlExtractorTests
     [InlineData("https://youtu.be/abc123，", "https://youtu.be/abc123")]
     [InlineData("https://www.youtube.com/watch?v=abc123。", "https://www.youtube.com/watch?v=abc123")]
     [InlineData("https://v.douyin.com/i6EpMYVJgA8/）", "https://v.douyin.com/i6EpMYVJgA8/")]
+    [InlineData("HTTPS://v.douyin.com/ABC/", "HTTPS://v.douyin.com/ABC/")]
     public void Extract_RemovesTrailingShareTextPunctuation(string input, string expected)
     {
         Assert.Equal(expected, ShareUrlExtractor.Extract(input));
@@ -20,6 +21,14 @@ public class ShareUrlExtractorTests
         var input = "复制打开： https://youtu.be/abc123，看看这个视频";
 
         Assert.Equal("https://youtu.be/abc123", ShareUrlExtractor.Extract(input));
+    }
+
+    [Fact]
+    public void Extract_ReturnsUppercaseUrlFromMixedShareText()
+    {
+        var input = "Watch this: HTTPS://www.tiktok.com/@user/video/123 now";
+
+        Assert.Equal("HTTPS://www.tiktok.com/@user/video/123", ShareUrlExtractor.Extract(input));
     }
 
     [Fact]

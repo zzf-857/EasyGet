@@ -6,7 +6,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyGet.Models;
@@ -26,47 +25,211 @@ public class TelegramDownloadService : IDisposable
         _configService = configService;
     }
 
-    public static bool IsTelegramUrl(string url)
+    public static bool IsTelegramUrl(string? url) => ParseTelegramLink(url) is not null;
+
+    public static (string chatTarget, int startId, int? endId)? ParseTelegramLink(string? link)
     {
-        if (string.IsNullOrWhiteSpace(url)) return false;
-        return url.Contains("t.me/", StringComparison.OrdinalIgnoreCase)
-            || url.Contains("tg://", StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(link)
+            || !Uri.TryCreate(link.Trim(), UriKind.Absolute, out var uri))
+        {
+            return null;
+        }
+
+        if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+            || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseHttpTelegramLink(uri);
+        }
+
+        return uri.Scheme.Equals("tg", StringComparison.OrdinalIgnoreCase)
+            ? ParseTgTelegramLink(uri)
+            : null;
     }
 
-    private static readonly Regex PrivateLinkRe = new(@"(?:t\.me/c/|tg://private\?channel=)(\d+)(?:/|&post=)(\d+)(?:[\s_\-]+(\d+))?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-    private static readonly Regex PublicLinkRe = new(@"(?:t\.me/|tg://resolve\?domain=)([a-zA-Z0-9_]+)(?:/|&post=)(\d+)(?:[\s_\-]+(\d+))?", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-
-    public static (string chatTarget, int startId, int? endId)? ParseTelegramLink(string link)
+    private static (string chatTarget, int startId, int? endId)? ParseHttpTelegramLink(Uri uri)
     {
-        link = link.Trim();
-        if (link.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        if (!IsTelegramHost(uri.Host)
+            || !string.IsNullOrEmpty(uri.UserInfo)
+            || !uri.IsDefaultPort)
         {
-            link = link.Split('?')[0];
-        }
-        
-        var privateMatch = PrivateLinkRe.Match(link);
-        if (privateMatch.Success)
-        {
-            var chatId = $"-100{privateMatch.Groups[1].Value}";
-            var startId = int.Parse(privateMatch.Groups[2].Value);
-            int? endId = privateMatch.Groups[3].Success ? int.Parse(privateMatch.Groups[3].Value) : null;
-            return (chatId, startId, endId);
+            return null;
         }
 
-        var publicMatch = PublicLinkRe.Match(link);
-        if (publicMatch.Success)
+        var normalizedPath = uri.AbsolutePath.TrimEnd('/');
+        var segments = normalizedPath.Split('/');
+        if (segments.Length == 3
+            && segments[0].Length == 0
+            && IsTelegramUsername(segments[1])
+            && !segments[1].Equals("c", StringComparison.OrdinalIgnoreCase)
+            && TryParseMessageRange(segments[2], out var publicStartId, out var publicEndId))
         {
-            var chatUsername = publicMatch.Groups[1].Value;
-            if (string.Equals(chatUsername, "c", StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-            var startId = int.Parse(publicMatch.Groups[2].Value);
-            int? endId = publicMatch.Groups[3].Success ? int.Parse(publicMatch.Groups[3].Value) : null;
-            return (chatUsername, startId, endId);
+            return (segments[1], publicStartId, publicEndId);
+        }
+
+        if (segments.Length == 4
+            && segments[0].Length == 0
+            && segments[1].Equals("c", StringComparison.OrdinalIgnoreCase)
+            && TryBuildPrivateChatTarget(segments[2], out var chatTarget)
+            && TryParseMessageRange(segments[3], out var privateStartId, out var privateEndId))
+        {
+            return (chatTarget, privateStartId, privateEndId);
         }
 
         return null;
+    }
+
+    private static (string chatTarget, int startId, int? endId)? ParseTgTelegramLink(Uri uri)
+    {
+        if (!string.IsNullOrEmpty(uri.UserInfo)
+            || !uri.IsDefaultPort
+            || uri.AbsolutePath != "/"
+            || !TryGetQueryParameter(uri, "post", out var post)
+            || !TryParseMessageRange(post, out var startId, out var endId))
+        {
+            return null;
+        }
+
+        if (uri.Host.Equals("resolve", StringComparison.OrdinalIgnoreCase)
+            && TryGetQueryParameter(uri, "domain", out var username)
+            && IsTelegramUsername(username)
+            && !username.Equals("c", StringComparison.OrdinalIgnoreCase))
+        {
+            return (username, startId, endId);
+        }
+
+        if (uri.Host.Equals("private", StringComparison.OrdinalIgnoreCase)
+            && TryGetQueryParameter(uri, "channel", out var channel)
+            && TryBuildPrivateChatTarget(channel, out var chatTarget))
+        {
+            return (chatTarget, startId, endId);
+        }
+
+        return null;
+    }
+
+    private static bool IsTelegramHost(string host)
+    {
+        return host.Equals("t.me", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("www.t.me", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTelegramUsername(string value)
+    {
+        if (value.Length == 0)
+            return false;
+
+        foreach (var character in value)
+        {
+            var isAsciiLetterOrDigit = character is >= 'a' and <= 'z'
+                or >= 'A' and <= 'Z'
+                or >= '0' and <= '9';
+            if (!isAsciiLetterOrDigit && character != '_')
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryBuildPrivateChatTarget(string channel, out string chatTarget)
+    {
+        chatTarget = "";
+        if (!TryParsePositiveLong(channel, out var channelId))
+            return false;
+
+        chatTarget = $"-100{channelId}";
+        return long.TryParse(chatTarget, out _);
+    }
+
+    private static bool TryParseMessageRange(string value, out int startId, out int? endId)
+    {
+        startId = 0;
+        endId = null;
+
+        var separatorIndex = value.IndexOfAny(['-', '_']);
+        var startText = separatorIndex >= 0 ? value[..separatorIndex] : value;
+        if (!TryParsePositiveInt(startText, out startId))
+            return false;
+
+        if (separatorIndex < 0)
+            return true;
+
+        var endText = value[(separatorIndex + 1)..];
+        if (!TryParsePositiveInt(endText, out var parsedEndId) || parsedEndId < startId)
+            return false;
+
+        endId = parsedEndId;
+        return true;
+    }
+
+    private static bool TryParsePositiveInt(string value, out int result)
+    {
+        result = 0;
+        return ContainsOnlyAsciiDigits(value)
+            && int.TryParse(value, out result)
+            && result > 0;
+    }
+
+    private static bool TryParsePositiveLong(string value, out long result)
+    {
+        result = 0;
+        return ContainsOnlyAsciiDigits(value)
+            && long.TryParse(value, out result)
+            && result > 0;
+    }
+
+    private static bool ContainsOnlyAsciiDigits(string value)
+    {
+        if (value.Length == 0)
+            return false;
+
+        foreach (var character in value)
+        {
+            if (character is < '0' or > '9')
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryGetQueryParameter(Uri uri, string parameterName, out string value)
+    {
+        value = "";
+        var found = false;
+        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var separatorIndex = pair.IndexOf('=');
+            var encodedName = separatorIndex >= 0 ? pair[..separatorIndex] : pair;
+            if (!TryDecodeQueryComponent(encodedName, out var name))
+                return false;
+
+            if (!name.Equals(parameterName, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            if (found || separatorIndex < 0
+                || !TryDecodeQueryComponent(pair[(separatorIndex + 1)..], out value))
+            {
+                value = "";
+                return false;
+            }
+
+            found = true;
+        }
+
+        return found;
+    }
+
+    private static bool TryDecodeQueryComponent(string value, out string decoded)
+    {
+        try
+        {
+            decoded = Uri.UnescapeDataString(value.Replace('+', ' '));
+            return true;
+        }
+        catch (UriFormatException)
+        {
+            decoded = "";
+            return false;
+        }
     }
 
     /// <summary>
