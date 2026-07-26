@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.8 - 2026-07-26
+
+### Window Stability
+- Restored saved window geometry before the first frame, eliminating the initial primary-monitor flash and delayed size jump.
+- Persisted native normal-window placement and validated it against real monitor work areas, including negative coordinates, offset layouts, taskbars, and gaps between displays.
+- Recovered windows after display, DPI, or work-area changes with debounced checks, bounded retries, and two-stage mixed-DPI resizing.
+- Kept a usable draggable title-bar area visible and fitted oversized windows when moving from a larger display to a smaller one.
+
+### Startup Reliability
+- Loaded configuration and the selected theme before constructing the main window, so startup services use saved settings instead of temporary defaults.
+- Unified configured and XAML window defaults and removed the obsolete MainViewModel configuration dependency.
+
+### Tests
+- Added regression coverage for disconnected monitors, negative-coordinate displays, offset-layout gaps, top taskbars, draggable-area boundaries, 150% DPI, oversized windows, startup ordering, native placement persistence, and hook cleanup.
+- Verified 970 automated tests pass; 1 live or environment-dependent test remains explicitly skipped.
+
 ## 1.3.7 - 2026-07-26
 
 ### Platform Download Reliability
