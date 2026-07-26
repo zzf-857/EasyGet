@@ -367,7 +367,7 @@ public partial class DownloadViewModel : ObservableObject
         };
 
         CurrentTask = task;
-        await _downloadManager.EnqueueAsync(task);
+        await _downloadManager.EnqueueAsync(task, PreviewInfo);
     }
 
     /// <summary>

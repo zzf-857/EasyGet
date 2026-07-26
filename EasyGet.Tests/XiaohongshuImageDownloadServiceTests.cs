@@ -15,6 +15,56 @@ namespace EasyGet.Tests;
 public class XiaohongshuImageDownloadServiceTests
 {
     [Fact]
+    public async Task GetImageNoteInfoAsync_PropagatesPreCancellation()
+    {
+        var service = new XiaohongshuImageDownloadService(new TestConfigService());
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.GetImageNoteInfoAsync(
+                "https://example.test/explore/abc123",
+                cancellation.Token));
+    }
+
+    [Fact]
+    public async Task GetImageNoteInfoAsync_PropagatesCancellationWhileRequestIsRunning()
+    {
+        using var server = new ConcurrentImageNoteServer(imageCount: 1, blockNoteResponse: true);
+        var service = new XiaohongshuImageDownloadService(new TestConfigService());
+        using var cancellation = new CancellationTokenSource();
+
+        var infoTask = service.GetImageNoteInfoAsync(server.NoteUrl, cancellation.Token);
+        await server.NoteRequestStarted.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => infoTask)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task GetVideoInfoAsync_PropagatesCancellationFromXiaohongshuFallback()
+    {
+        using var root = new TestDirectory();
+        using var server = new ConcurrentImageNoteServer(imageCount: 1, blockNoteResponse: true);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.SmartCookieEnabled = false;
+        var environment = new EnvironmentService();
+        environment.Status.YtDlpPath = root.Path("missing-test-yt-dlp.exe");
+        var service = new YtDlpService(config, environment);
+        using var cancellation = new CancellationTokenSource();
+
+        var infoTask = service.GetVideoInfoAsync(
+            $"{server.NoteUrl}?source=xiaohongshu.com",
+            cancellation.Token);
+        await server.NoteRequestStarted.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => infoTask)
+            .WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
     public async Task TryDownloadAsync_PropagatesCancellation()
     {
         using var root = new TestDirectory();
@@ -75,7 +125,7 @@ public class XiaohongshuImageDownloadServiceTests
             """;
 
         var noteData = XiaohongshuImageDownloadService.ExtractNoteDataFromJson(html, noteId);
-        
+
         Assert.NotNull(noteData);
         Assert.True(noteData.Value.TryGetProperty("title", out var titleProp));
         Assert.Equal("测试图文标题", titleProp.GetString());
@@ -179,15 +229,15 @@ public class XiaohongshuImageDownloadServiceTests
     {
         var configService = new TestConfigService();
         await configService.LoadAsync();
-        
+
         var service = new XiaohongshuImageDownloadService(configService);
         var url = "https://www.xiaohongshu.com/discovery/item/6a1d4bd30000000008024b72?source=webshare&xhsshare=pc_web&xsec_token=ABIb_Pvhngcei7NkLQkQ95_-UO3w49ylotO02t3FD-J-U=&xsec_source=pc_share";
-        
+
         var info = await service.GetImageNoteInfoAsync(url);
         Assert.NotNull(info);
         Assert.Contains("AI", info.Title);
         Assert.Equal("XiaoHongShu", info.Platform);
-        
+
         var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-xhs-live-test-{Guid.NewGuid():N}");
         var task = new DownloadTask
         {
@@ -195,7 +245,7 @@ public class XiaohongshuImageDownloadServiceTests
             Title = info.Title,
             OutputDirectory = tempDir
         };
-        
+
         try
         {
             var success = await service.TryDownloadAsync(task);
@@ -203,7 +253,7 @@ public class XiaohongshuImageDownloadServiceTests
             Assert.Equal(DownloadStatus.Completed, task.Status);
             Assert.True(task.Format == "jpg" || task.Format == "png" || task.Format == "webp");
             Assert.True(Directory.Exists(task.OutputDirectory));
-            
+
             var subfolder = Path.Combine(task.OutputDirectory, DownloadFileNameBuilder.SanitizeResolvedTitle(info.Title));
             Assert.True(Directory.Exists(subfolder));
             var files = Directory.GetFiles(subfolder);
@@ -228,17 +278,22 @@ public class XiaohongshuImageDownloadServiceTests
         private readonly CancellationTokenSource _cts = new();
         private readonly TaskCompletionSource _allImageRequestsStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _releaseImages = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _noteRequestStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _releaseNote = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly Task _serverTask;
         private readonly int _imageCount;
+        private readonly bool _blockNoteResponse;
         private int _startedImageRequests;
 
         public string BaseUrl { get; }
         public string NoteUrl => $"{BaseUrl}/explore/abc123";
         public Task AllImageRequestsStarted => _allImageRequestsStarted.Task;
+        public Task NoteRequestStarted => _noteRequestStarted.Task;
 
-        public ConcurrentImageNoteServer(int imageCount)
+        public ConcurrentImageNoteServer(int imageCount, bool blockNoteResponse = false)
         {
             _imageCount = imageCount;
+            _blockNoteResponse = blockNoteResponse;
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
 
@@ -276,6 +331,14 @@ public class XiaohongshuImageDownloadServiceTests
 
                 if (path.StartsWith("/explore/", StringComparison.OrdinalIgnoreCase))
                 {
+                    _noteRequestStarted.TrySetResult();
+                    if (_blockNoteResponse)
+                    {
+                        await _releaseNote.Task.WaitAsync(_cts.Token);
+                        if (_cts.IsCancellationRequested)
+                            return;
+                    }
+
                     await WriteTextResponseAsync(stream, BuildNoteHtml(), "text/html; charset=utf-8", _cts.Token);
                     return;
                 }
@@ -359,6 +422,7 @@ public class XiaohongshuImageDownloadServiceTests
         public void Dispose()
         {
             _cts.Cancel();
+            _releaseNote.TrySetResult();
             _releaseImages.TrySetResult();
             _listener.Stop();
 

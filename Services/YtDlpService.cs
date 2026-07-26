@@ -263,6 +263,10 @@ public partial class YtDlpService
                 if (info != null)
                     return info;
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 Debug.WriteLine($"[YtDlpService] Xiaohongshu image fallback failed: {ex.Message}");
@@ -684,7 +688,11 @@ public partial class YtDlpService
         }
 
         task.Status = DownloadStatus.Failed;
-        task.ErrorMessage = BuildDownloadFailureMessage(task.Url, allStderr.Count > 0 ? allStderr : lastStderr, lastExitCode);
+        task.ErrorMessage = BuildDownloadFailureMessageForAttempts(
+            task.Url,
+            allStderr,
+            lastStderr,
+            lastExitCode);
 
         logCallback?.Invoke($"[yt-dlp] failed (exit code: {lastExitCode})");
     }
@@ -1232,6 +1240,28 @@ public partial class YtDlpService
         return lastErrorLine is null
             ? $"yt-dlp exit code: {exitCode}"
             : RedactPotentialSensitiveText(lastErrorLine);
+    }
+
+    internal static string BuildDownloadFailureMessageForAttempts(
+        string url,
+        IReadOnlyList<string> allStderr,
+        IReadOnlyList<string> lastStderr,
+        int exitCode)
+    {
+        ArgumentNullException.ThrowIfNull(allStderr);
+        ArgumentNullException.ThrowIfNull(lastStderr);
+
+        var platform = MediaPlatformResolver.Resolve(url);
+        var terminalFailure = CookieFailureClassifier.Classify(platform.Id, lastStderr);
+        var terminalErrorIsDefinitive = terminalFailure.Category is
+            CookieFailureCategory.NetworkFailure
+            or CookieFailureCategory.RateLimited
+            or CookieFailureCategory.UnrelatedFailure;
+        var diagnosticLines = terminalErrorIsDefinitive || allStderr.Count == 0
+            ? lastStderr
+            : allStderr;
+
+        return BuildDownloadFailureMessage(url, diagnosticLines, exitCode);
     }
 
     private static string RedactPotentialSensitiveText(string text)

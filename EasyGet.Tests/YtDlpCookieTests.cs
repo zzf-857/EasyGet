@@ -458,6 +458,40 @@ public class YtDlpCookieTests
         Assert.DoesNotContain("登录", message);
     }
 
+    [Theory]
+    [InlineData("ERROR: Connection timed out")]
+    [InlineData("ERROR: Unsupported URL")]
+    public void BuildDownloadFailureMessageForAttempts_PrefersDefinitiveTerminalFailure(
+        string terminalError)
+    {
+        var message = YtDlpService.BuildDownloadFailureMessageForAttempts(
+            "https://www.douyin.com/video/7621772413184822582",
+            [
+                "ERROR: Fresh cookies (not necessarily logged in) are needed",
+                terminalError
+            ],
+            [terminalError],
+            1);
+
+        Assert.Contains(terminalError, message, StringComparison.Ordinal);
+        Assert.DoesNotContain("刚刷新", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessageForAttempts_PreservesAuthenticationCauseForCookieReadFailure()
+    {
+        var message = YtDlpService.BuildDownloadFailureMessageForAttempts(
+            "https://www.youtube.com/watch?v=wFbtM0sfcEw",
+            [
+                "ERROR: HTTP Error 403: Forbidden",
+                "ERROR: Failed to decrypt with DPAPI"
+            ],
+            ["ERROR: Failed to decrypt with DPAPI"],
+            1);
+
+        Assert.Contains("YouTube 下载被风控拦截", message, StringComparison.Ordinal);
+    }
+
     private static int CountOccurrences(string text, string value)
     {
         var count = 0;

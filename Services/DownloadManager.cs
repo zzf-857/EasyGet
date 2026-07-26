@@ -97,7 +97,7 @@ public class DownloadManager : IDisposable
     /// <summary>
     /// 添加并开始下载任务
     /// </summary>
-    public async Task EnqueueAsync(DownloadTask task)
+    public async Task EnqueueAsync(DownloadTask task, VideoInfo? resolvedInfo = null)
     {
         ObjectDisposedException.ThrowIf(
             Volatile.Read(ref _disposed) != 0,
@@ -105,11 +105,14 @@ public class DownloadManager : IDisposable
         var attempt = await BeginAttemptAsync(task);
 
         ObjectDisposedException.ThrowIf(
-            !StartEnqueuedAttempt(task, attempt),
+            !StartEnqueuedAttempt(task, attempt, resolvedInfo),
             this);
     }
 
-    private bool StartEnqueuedAttempt(DownloadTask task, DownloadAttempt attempt)
+    private bool StartEnqueuedAttempt(
+        DownloadTask task,
+        DownloadAttempt attempt,
+        VideoInfo? resolvedInfo = null)
     {
         if (Volatile.Read(ref _disposed) != 0)
         {
@@ -124,10 +127,18 @@ public class DownloadManager : IDisposable
 
             Tasks.Add(task);
 
-            // 先获取视频信息
-            task.Status = DownloadStatus.Resolving;
             RegisterActiveTask();
             attempt.MarkRegistered();
+
+            if (resolvedInfo is not null)
+            {
+                ApplyVideoInfoMetadata(task, resolvedInfo);
+                task.Status = DownloadStatus.Waiting;
+                _ = ProcessDownloadAsync(attempt);
+                return true;
+            }
+
+            task.Status = DownloadStatus.Resolving;
             LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 正在解析: {task.Url}");
 
             _ = QueueMetadataAsync(attempt);

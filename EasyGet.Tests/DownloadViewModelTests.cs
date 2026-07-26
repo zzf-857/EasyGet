@@ -109,6 +109,33 @@ public class DownloadViewModelTests
     }
 
     [Fact]
+    public async Task StartDownloadReusesResolvedPreviewWithoutRequestingMetadataAgain()
+    {
+        var downloadService = new CompletingDownloadService();
+        using var context = CreateDownloadContext(downloadService: downloadService);
+        var viewModel = context.ViewModel;
+        context.VideoInfoProvider.Enqueue(new VideoInfo
+        {
+            Title = "已解析标题",
+            Platform = "TikTok",
+            Duration = 42,
+            Url = "https://www.tiktok.com/@creator/video/7524567890123456789"
+        });
+        viewModel.Url = "https://www.tiktok.com/@creator/video/7524567890123456789";
+
+        await viewModel.ParseCommand.ExecuteAsync(null);
+        await viewModel.StartDownloadCommand.ExecuteAsync(null);
+        await context.Manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Single(context.VideoInfoProvider.Calls);
+        Assert.Equal(0, downloadService.MetadataCallCount);
+        Assert.Equal(1, downloadService.DownloadCallCount);
+        Assert.Equal("已解析标题", viewModel.CurrentTask?.Title);
+        Assert.Equal("TikTok", viewModel.CurrentTask?.Platform);
+    }
+
+    [Fact]
     public async Task ParseCommandShowsFailedStateWhenVideoInfoCannotBeResolved()
     {
         using var context = CreateDownloadContext();
@@ -278,7 +305,7 @@ public class DownloadViewModelTests
         Assert.Equal("https://new.com", viewModel.ClipboardPromptUrl);
 
         // Retrieve the private timer via reflection and shorten its interval
-        var timerField = typeof(DownloadViewModel).GetField("_clipboardPromptTimer", 
+        var timerField = typeof(DownloadViewModel).GetField("_clipboardPromptTimer",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.NotNull(timerField);
 
@@ -287,7 +314,7 @@ public class DownloadViewModelTests
 
         // Set interval to 50ms and wait for elapsed
         timer.Interval = 50;
-        
+
         // Wait up to 1 second for the background timer to trigger
         int elapsedMs = 0;
         while (viewModel.ShowClipboardPrompt && elapsedMs < 1000)
@@ -403,13 +430,18 @@ public class DownloadViewModelTests
 
     private static DownloadContext CreateDownloadContext(
         Action<ProcessStartInfo>? startProcess = null,
-        Func<string?>? readClipboardText = null)
+        Func<string?>? readClipboardText = null,
+        IYtDlpDownloadService? downloadService = null)
     {
         var root = new TestDirectory();
         var configService = new ConfigService(root.Path("config"));
         var historyService = new HistoryService(root.Path("history.db"));
-        var ytDlp = new YtDlpService(configService, new EnvironmentService());
-        var manager = new DownloadManager(ytDlp, historyService, configService);
+        var manager = downloadService is null
+            ? new DownloadManager(
+                new YtDlpService(configService, new EnvironmentService()),
+                historyService,
+                configService)
+            : new DownloadManager(downloadService, historyService, configService);
         var videoInfoProvider = new FakeVideoInfoProvider();
         var viewModel = startProcess is null && readClipboardText is null
             ? new DownloadViewModel(manager, configService, videoInfoProvider)
@@ -475,6 +507,31 @@ public class DownloadViewModelTests
         {
             Calls.Add(new VideoInfoCall(url, cancellationToken));
             return _responses.Dequeue().Task;
+        }
+    }
+
+    private sealed class CompletingDownloadService : IYtDlpDownloadService
+    {
+        public int MetadataCallCount { get; private set; }
+        public int DownloadCallCount { get; private set; }
+
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+        {
+            MetadataCallCount++;
+            return Task.FromResult<VideoInfo?>(null);
+        }
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            DownloadCallCount++;
+            task.Status = DownloadStatus.Completed;
+            return Task.CompletedTask;
         }
     }
 

@@ -124,6 +124,10 @@ public class XiaohongshuImageDownloadService
                 Url = finalUrl
             };
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[XhsImageDownload] GetImageNoteInfoAsync failed: {ex.Message}");
