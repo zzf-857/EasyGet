@@ -23,7 +23,7 @@ graph TD
 
 - `EasyGet-Setup-vX.Y.Z.exe`：安装版安装包。
 - `EasyGet-win-x64-Release.zip`：便携 zip。
-- `easyget-update.json`：版本、tag、资产名和大小的轻量 manifest。
+- `easyget-update.json`：版本、tag、资产名、大小和 SHA-256 的轻量 manifest。
 
 ## 本地构建
 
@@ -58,10 +58,11 @@ git push origin v1.2.0
 
 1. 打开 EasyGet 设置页。
 2. 在「版本与更新」点击「检查新版本」。
-3. 如果 GitHub 最新 Release 高于本地版本，点击「下载更新包」。
+3. 客户端读取最新 Release 的静态 `easyget-update.json`；如果版本高于本地版本，点击「下载更新包」。
 4. 下载完成后点击「安装更新」。
 5. EasyGet 会启动安装包并退出，安装器负责覆盖安装。
 
 当前实现不会静默安装，也不会在退出时自动替换文件；这是为了避免本地调试版或便携版被意外覆盖。
+检查更新不会调用 GitHub Releases REST API，因此不会占用匿名 API 的共享限额；安装包只有在大小和 SHA-256 均与清单一致后才会替换旧的下载文件。
 
 更新下载和安装器启动的诊断日志位于 `%LocalAppData%\EasyGet\logs\update.log`，用于排查 `.download` 临时文件、最终安装包、运行路径和版本号是否一致。

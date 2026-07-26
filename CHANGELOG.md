@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.3.9 - 2026-07-26
+
+### Update Reliability
+- Replaced the anonymous GitHub Releases API check with the static `easyget-update.json` Release asset, removing the shared hourly API rate-limit dependency.
+- Strictly validated the manifest version, tag, setup filename, size, and SHA-256 before exposing an update.
+- Verified installer length and SHA-256 while streaming to a temporary file, preserving any existing installer until the replacement passes every check.
+- Bounded manifest and installer sizes and stopped unknown-length responses as soon as they exceed the declared package size.
+
+### Installation Diagnostics
+- Read both 32-bit and 64-bit Windows uninstall registry views so Inno installations are recognized correctly on 64-bit systems.
+
+### Tests
+- Added regression coverage for static manifest requests, malformed metadata, canonical Release URLs, response-size limits, package hashes, temporary-file cleanup, and dual registry views.
+- Verified 985 automated tests pass; 1 live or environment-dependent test remains explicitly skipped.
+
 ## 1.3.8 - 2026-07-26
 
 ### Window Stability
