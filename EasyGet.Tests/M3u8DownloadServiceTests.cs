@@ -70,10 +70,29 @@ public class M3u8DownloadServiceTests
             segment0.ts
             """;
 
-        var ex = Assert.Throws<NotSupportedException>(() => 
+        var ex = Assert.Throws<NotSupportedException>(() =>
             M3u8DownloadService.ParseSegments(m3u8Content, m3u8Url));
 
         Assert.Contains("被加密", ex.Message);
+    }
+
+    [Fact]
+    public void ParseSegments_RejectsMasterPlaylistInsteadOfTreatingVariantsAsSegments()
+    {
+        const string m3u8Url = "https://example.com/path/master.m3u8";
+        const string m3u8Content = """
+            #EXTM3U
+            #EXT-X-STREAM-INF:BANDWIDTH=800000,RESOLUTION=640x360
+            low/index.m3u8
+            #EXT-X-STREAM-INF:BANDWIDTH=2400000,RESOLUTION=1920x1080
+            high/index.m3u8
+            """;
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            M3u8DownloadService.ParseSegments(m3u8Content, m3u8Url));
+
+        Assert.Contains("主播放列表", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("媒体播放列表", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -254,6 +273,45 @@ public class M3u8DownloadServiceTests
     }
 
     [Fact]
+    public async Task PeriodicProgressReporter_StopsReportingAfterCancellationIsAwaited()
+    {
+        var reportCount = 0;
+        var firstReport = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var progress = new InlineProgress<DownloadProgress>(_ =>
+        {
+            Interlocked.Increment(ref reportCount);
+            firstReport.TrySetResult();
+        });
+        using var cancellation = new CancellationTokenSource();
+        var reporterTask = M3u8DownloadService.RunPeriodicProgressReporterAsync(
+            () => new DownloadProgress(),
+            progress,
+            TimeSpan.FromMilliseconds(10),
+            cancellation.Token);
+
+        await firstReport.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => reporterTask);
+        var countAfterReporterStopped = Volatile.Read(ref reportCount);
+
+        await Task.Delay(50);
+
+        Assert.Equal(countAfterReporterStopped, Volatile.Read(ref reportCount));
+    }
+
+    [Fact]
+    public void DownloadAsync_CancelsAndAwaitsSpeedReporterBeforeLeavingSegmentPhase()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "M3u8DownloadService.cs")));
+
+        Assert.Contains("speedReportCancellation.Cancel();", source, StringComparison.Ordinal);
+        Assert.Contains("await speedReportTask;", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Task.Run(async () =>", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task RetryFailedSegmentsAsync_UsesConfiguredParallelism()
     {
         var failedIndices = new[] { 0, 1, 2 };
@@ -405,5 +463,10 @@ public class M3u8DownloadServiceTests
         Assert.Contains("ArrayPool<byte>.Shared.Rent(SegmentIoBufferSize)", source, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new byte[SegmentIoBufferSize]", source, StringComparison.Ordinal);
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

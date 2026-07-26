@@ -128,16 +128,12 @@ public class M3u8DownloadService
             long totalDownloadedBytes = 0;
             long lastReportedBytes = 0;
             long completedSegments = 0;
-            var failedIndices = new List<int>();
 
             var stopwatch = Stopwatch.StartNew();
-
-            // 启动测速后台 Task
-            var speedReportTask = Task.Run(async () =>
-            {
-                while (!ct.IsCancellationRequested && task.Status == DownloadStatus.Downloading)
+            using var speedReportCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            var speedReportTask = RunPeriodicProgressReporterAsync(
+                () =>
                 {
-                    await Task.Delay(1000, ct);
                     var currentBytes = Interlocked.Read(ref totalDownloadedBytes);
                     var speed = currentBytes - lastReportedBytes;
                     lastReportedBytes = currentBytes;
@@ -151,53 +147,27 @@ public class M3u8DownloadService
                         eta = averageSecondsPerSegment * (totalSegments - currentCompleted);
                     }
 
-                    progress?.Report(new DownloadProgress
+                    return new DownloadProgress
                     {
                         Percent = Math.Min(99.9, (double)currentCompleted / totalSegments * 100),
                         Speed = speed,
                         Eta = eta,
                         Downloaded = currentBytes,
                         Total = 0
-                    });
-                }
-            }, ct);
-
-            var maxParallelSegments = ResolveSegmentConcurrency(
-                _configService.Config.ConcurrentFragments,
-                _configService.Config.MaxConcurrentDownloads);
-            logCallback?.Invoke($"[m3u8] 分片下载并发数: {maxParallelSegments}");
-            failedIndices = (await DownloadSegmentsWithWorkersAsync(
-                segments,
-                maxParallelSegments,
-                (index, segUrl) => DownloadSegmentWithRetryAsync(
-                    httpClient,
-                    segUrl,
-                    index,
-                    tempDir,
-                    bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
-                    logCallback,
-                    ct),
-                _ =>
-                {
-                    Interlocked.Increment(ref completedSegments);
-                    var currentCompleted = Interlocked.Read(ref completedSegments);
-                    progress?.Report(new DownloadProgress
-                    {
-                        Percent = Math.Min(99.9, (double)currentCompleted / totalSegments * 100),
-                        Downloaded = Interlocked.Read(ref totalDownloadedBytes),
-                        Total = 0
-                    });
+                    };
                 },
-                ct)).ToList();
-            stopwatch.Stop();
+                progress,
+                TimeSpan.FromSeconds(1),
+                speedReportCancellation.Token);
 
-            // 3. 重试下载失败的分片
-            IReadOnlyList<int> stillFailed = failedIndices;
-            if (failedIndices.Count > 0)
+            IReadOnlyList<int> stillFailed = [];
+            try
             {
-                logCallback?.Invoke($"[m3u8] 警告: 有 {failedIndices.Count} 个分片下载失败。开始重试...");
-                stillFailed = await RetryFailedSegmentsAsync(
-                    failedIndices,
+                var maxParallelSegments = ResolveSegmentConcurrency(
+                    _configService.Config.ConcurrentFragments,
+                    _configService.Config.MaxConcurrentDownloads);
+                logCallback?.Invoke($"[m3u8] 分片下载并发数: {maxParallelSegments}");
+                var failedIndices = (await DownloadSegmentsWithWorkersAsync(
                     segments,
                     maxParallelSegments,
                     (index, segUrl) => DownloadSegmentWithRetryAsync(
@@ -208,10 +178,52 @@ public class M3u8DownloadService
                         bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
                         logCallback,
                         ct),
-                    _ => Interlocked.Increment(ref completedSegments),
-                    logCallback,
-                    ct);
+                    _ =>
+                    {
+                        Interlocked.Increment(ref completedSegments);
+                        var currentCompleted = Interlocked.Read(ref completedSegments);
+                        progress?.Report(new DownloadProgress
+                        {
+                            Percent = Math.Min(99.9, (double)currentCompleted / totalSegments * 100),
+                            Downloaded = Interlocked.Read(ref totalDownloadedBytes),
+                            Total = 0
+                        });
+                    },
+                    ct)).ToList();
 
+                // 3. 重试下载失败的分片
+                stillFailed = failedIndices;
+                if (failedIndices.Count > 0)
+                {
+                    logCallback?.Invoke($"[m3u8] 警告: 有 {failedIndices.Count} 个分片下载失败。开始重试...");
+                    stillFailed = await RetryFailedSegmentsAsync(
+                        failedIndices,
+                        segments,
+                        maxParallelSegments,
+                        (index, segUrl) => DownloadSegmentWithRetryAsync(
+                            httpClient,
+                            segUrl,
+                            index,
+                            tempDir,
+                            bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
+                            logCallback,
+                            ct),
+                        _ => Interlocked.Increment(ref completedSegments),
+                        logCallback,
+                        ct);
+                }
+            }
+            finally
+            {
+                stopwatch.Stop();
+                speedReportCancellation.Cancel();
+                try
+                {
+                    await speedReportTask;
+                }
+                catch (OperationCanceledException) when (speedReportCancellation.IsCancellationRequested)
+                {
+                }
             }
 
             EnsureSegmentsReadyForMerge(tempDir, totalSegments, stillFailed);
@@ -346,7 +358,13 @@ public class M3u8DownloadService
             if (trimmedLine.IsEmpty)
                 continue;
 
-            // 如果包含加密，抛出不支持的异常
+            // 主播放列表和加密媒体列表都不能按普通 TS 分片直接拼接。
+            if (trimmedLine.StartsWith("#EXT-X-STREAM-INF", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new NotSupportedException(
+                    "该 m3u8 是主播放列表，包含多个码率的子播放列表。请提供具体媒体播放列表链接后重试。");
+            }
+
             if (trimmedLine.StartsWith("#EXT-X-KEY", StringComparison.OrdinalIgnoreCase))
             {
                 throw new NotSupportedException("该 m3u8 视频流被加密，当前暂不支持下载。");
@@ -361,6 +379,24 @@ public class M3u8DownloadService
         }
 
         return segments;
+    }
+
+    internal static async Task RunPeriodicProgressReporterAsync(
+        Func<DownloadProgress> createReport,
+        IProgress<DownloadProgress>? progress,
+        TimeSpan interval,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(createReport);
+        if (interval <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(interval));
+
+        while (true)
+        {
+            await Task.Delay(interval, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(createReport());
+        }
     }
 
     private static IEnumerable<ReadOnlyMemory<char>> EnumeratePlaylistLines(string content)
