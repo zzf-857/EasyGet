@@ -39,15 +39,13 @@ public class DownloadManager : IDisposable
         HistoryService historyService,
         ConfigService configService,
         M3u8DownloadService? m3u8DownloadService = null,
-        TelegramDownloadService? telegramDownloadService = null,
-        IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
+        TelegramDownloadService? telegramDownloadService = null)
         : this(
             new YtDlpDownloadServiceAdapter(ytDlpService),
             historyService,
             configService,
             m3u8DownloadService,
-            telegramDownloadService,
-            douyinSpecialDownloadService)
+            telegramDownloadService)
     {
     }
 
@@ -56,8 +54,7 @@ public class DownloadManager : IDisposable
         HistoryService historyService,
         ConfigService configService,
         M3u8DownloadService? m3u8DownloadService = null,
-        TelegramDownloadService? telegramDownloadService = null,
-        IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
+        TelegramDownloadService? telegramDownloadService = null)
     {
         _ytDlpService = ytDlpService;
         _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());

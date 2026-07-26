@@ -1748,7 +1748,7 @@ public class UiTruthfulnessViewModelTests
 
     private static ViewModelContext CreateViewModelContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
-        var batchContext = CreateBatchContext(douyinSpecialDownloadService);
+        var batchContext = CreateBatchContext();
         var telegram = new TelegramDownloadService(batchContext.Config);
         var settings = new SettingsViewModel(
             batchContext.Config,
@@ -1814,7 +1814,7 @@ public class UiTruthfulnessViewModelTests
         }
     }
 
-    private static BatchContext CreateBatchContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
+    private static BatchContext CreateBatchContext()
     {
         var root = new TestDirectory();
         var config = new ConfigService(root.Path("config"));
@@ -1822,11 +1822,7 @@ public class UiTruthfulnessViewModelTests
         environment.Status.YtDlpPath = root.Path("missing-test-yt-dlp.exe");
         var history = new HistoryService(root.Path("history.db"));
         var ytDlp = new YtDlpService(config, environment);
-        var manager = new DownloadManager(
-            ytDlp,
-            history,
-            config,
-            douyinSpecialDownloadService: douyinSpecialDownloadService);
+        var manager = new DownloadManager(ytDlp, history, config);
         var batch = new BatchDownloadViewModel(manager, config, ytDlp);
 
         return new BatchContext(root, config, environment, history, ytDlp, manager, batch);
