@@ -31,6 +31,21 @@ public class DownloadManagerTests
         Assert.Equal("已解析标题", task.DisplayTitle);
     }
 
+    [Theory]
+    [InlineData(DownloadStatus.Downloading, DownloadStatus.Cancelled)]
+    [InlineData(DownloadStatus.Waiting, DownloadStatus.Cancelled)]
+    [InlineData(DownloadStatus.Paused, DownloadStatus.Paused)]
+    public void DownloadTask_MarkCancelledUnlessPausedPreservesPause(
+        DownloadStatus initialStatus,
+        DownloadStatus expectedStatus)
+    {
+        var task = new DownloadTask { Status = initialStatus };
+
+        task.MarkCancelledUnlessPaused();
+
+        Assert.Equal(expectedStatus, task.Status);
+    }
+
     [Fact]
     public async Task EnqueueAsync_MetadataWorkersContinueWhileDownloadsWaitForConcurrency()
     {
@@ -963,6 +978,47 @@ public class DownloadManagerTests
     }
 
     [Fact]
+    public async Task Pause_DownloadCancellationKeepsTaskPaused()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new ResumeBlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask { Url = "https://example.com/video" };
+
+        await manager.EnqueueAsync(task);
+        await service.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        manager.Pause(task.Id);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Paused, task.Status);
+    }
+
+    [Fact]
+    public void Cancel_PausedTaskMarksTaskCancelled()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        using var cancellation = new CancellationTokenSource();
+        using var manager = new DownloadManager(new FakeYtDlpDownloadService(), history, config);
+        var task = new DownloadTask
+        {
+            Url = "https://example.com/video",
+            Status = DownloadStatus.Paused,
+            Cts = cancellation
+        };
+        manager.Tasks.Add(task);
+
+        manager.Cancel(task.Id);
+
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.True(task.Cts.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task RetryAsync_ClearsDouyinTaskOutcomeAndEventLog()
     {
         var outputDir = CreateTempOutputDirectory();
@@ -1306,6 +1362,7 @@ public class DownloadManagerTests
             Action<string>? logCallback = null,
             CancellationToken cancellationToken = default)
         {
+            task.Status = DownloadStatus.Downloading;
             DownloadStarted.TrySetResult();
             await _release.Task.WaitAsync(cancellationToken);
             task.Status = DownloadStatus.Completed;

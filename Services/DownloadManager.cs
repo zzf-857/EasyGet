@@ -163,8 +163,7 @@ public class DownloadManager : IDisposable
         }
         catch (OperationCanceledException)
         {
-            if (task.Status != DownloadStatus.Paused)
-                task.Status = DownloadStatus.Cancelled;
+            task.MarkCancelledUnlessPaused();
             CompleteActiveTask();
             NotifyTaskFinished(task);
         }
@@ -195,8 +194,7 @@ public class DownloadManager : IDisposable
         }
         catch (OperationCanceledException)
         {
-            if (task.Status != DownloadStatus.Paused)
-                task.Status = DownloadStatus.Cancelled;
+            task.MarkCancelledUnlessPaused();
             CompleteActiveTask();
             NotifyTaskFinished(task);
             return;
@@ -224,9 +222,9 @@ public class DownloadManager : IDisposable
         }
         catch (OperationCanceledException)
         {
-            if (task.Status != DownloadStatus.Paused)
+            task.MarkCancelledUnlessPaused();
+            if (task.Status == DownloadStatus.Cancelled)
             {
-                task.Status = DownloadStatus.Cancelled;
                 LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
             }
             CompleteActiveTask();
@@ -246,9 +244,9 @@ public class DownloadManager : IDisposable
         }
         catch (OperationCanceledException)
         {
-            if (task.Status != DownloadStatus.Paused)
+            task.MarkCancelledUnlessPaused();
+            if (task.Status == DownloadStatus.Cancelled)
             {
-                task.Status = DownloadStatus.Cancelled;
                 LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
             }
             else
@@ -324,7 +322,7 @@ public class DownloadManager : IDisposable
             return;
 
         task.Cts?.Cancel();
-        if (task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving)
+        if (task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Paused)
             task.Status = DownloadStatus.Cancelled;
     }
 

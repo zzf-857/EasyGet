@@ -279,7 +279,7 @@ public class XiaohongshuImageDownloadService
         catch (OperationCanceledException)
         {
             logCallback?.Invoke("[xhs-image] 下载已取消。");
-            return false;
+            throw;
         }
         catch (Exception ex)
         {

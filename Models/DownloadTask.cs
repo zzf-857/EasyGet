@@ -121,6 +121,12 @@ public partial class DownloadTask : ObservableObject
         Eta = 0;
     }
 
+    internal void MarkCancelledUnlessPaused()
+    {
+        if (Status != DownloadStatus.Paused)
+            Status = DownloadStatus.Cancelled;
+    }
+
     /// <summary>错误信息</summary>
     [ObservableProperty] private string _errorMessage = "";
 

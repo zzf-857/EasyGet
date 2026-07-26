@@ -522,8 +522,8 @@ public partial class YtDlpService
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            task.Status = DownloadStatus.Cancelled;
-            return;
+            task.MarkCancelledUnlessPaused();
+            throw;
         }
         catch (Exception ex)
         {
@@ -550,8 +550,8 @@ public partial class YtDlpService
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                task.Status = DownloadStatus.Cancelled;
-                return;
+                task.MarkCancelledUnlessPaused();
+                throw;
             }
             catch (Exception ex)
             {
@@ -622,8 +622,8 @@ public partial class YtDlpService
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                task.Status = DownloadStatus.Cancelled;
-                return;
+                task.MarkCancelledUnlessPaused();
+                throw;
             }
             catch (TimeoutException ex)
             {

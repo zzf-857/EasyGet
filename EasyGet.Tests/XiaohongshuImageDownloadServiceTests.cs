@@ -14,6 +14,24 @@ namespace EasyGet.Tests;
 
 public class XiaohongshuImageDownloadServiceTests
 {
+    [Fact]
+    public async Task TryDownloadAsync_PropagatesCancellation()
+    {
+        using var root = new TestDirectory();
+        var service = new XiaohongshuImageDownloadService(
+            new ConfigService(root.Path("config")));
+        var task = new DownloadTask
+        {
+            Url = "https://example.test/explore/abc123",
+            OutputDirectory = root.Path("output")
+        };
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.TryDownloadAsync(task, ct: cancellation.Token));
+    }
+
     [Theory]
     [InlineData("https://www.xiaohongshu.com/discovery/item/6a1d4bd30000000008024b72?source=webshare", "6a1d4bd30000000008024b72")]
     [InlineData("https://www.xiaohongshu.com/explore/6a1d4bd30000000008024b72", "6a1d4bd30000000008024b72")]

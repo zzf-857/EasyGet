@@ -510,7 +510,7 @@ public class TelegramDownloadService : IDisposable
         }
         catch (OperationCanceledException)
         {
-            task.Status = DownloadStatus.Cancelled;
+            task.MarkCancelledUnlessPaused();
             logCallback?.Invoke("[Telegram] 提取任务已被用户取消。");
             throw;
         }
@@ -668,11 +668,13 @@ public class TelegramDownloadService : IDisposable
                     if (message.media is MessageMediaDocument mDoc && mDoc.document is Document d)
                     {
                         await _client!.DownloadFileAsync(d, fileStream, (PhotoSizeBase)null!, (bytes, total) => reportProgress(bytes, total));
+                        ct.ThrowIfCancellationRequested();
                     }
                     else if (message.media is MessageMediaPhoto mPhoto && mPhoto.photo is Photo p)
                     {
                         var largestSize = p.sizes[^1];
                         await _client!.DownloadFileAsync(p, fileStream, largestSize, (bytes, total) => reportProgress(bytes, total));
+                        ct.ThrowIfCancellationRequested();
                     }
                 }
 
@@ -680,6 +682,10 @@ public class TelegramDownloadService : IDisposable
             }
 
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {

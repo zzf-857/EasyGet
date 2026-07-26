@@ -99,6 +99,10 @@ public class M3u8DownloadService
             {
                 m3u8Content = await httpClient.GetStringAsync(task.Url, ct);
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 throw new Exception($"无法获取 m3u8 文件: {ex.Message}", ex);
@@ -258,6 +262,10 @@ public class M3u8DownloadService
                         File.Delete(outputTsPath);
                     }
                 }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     logCallback?.Invoke($"[m3u8] 使用 ffmpeg 封装 MP4 失败: {ex.Message}");
@@ -291,7 +299,7 @@ public class M3u8DownloadService
         }
         catch (OperationCanceledException)
         {
-            task.Status = DownloadStatus.Cancelled;
+            task.MarkCancelledUnlessPaused();
             logCallback?.Invoke("[m3u8] 任务已取消。");
             throw;
         }
@@ -518,6 +526,10 @@ public class M3u8DownloadService
                     }
 
                     return true; // 下载成功
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {

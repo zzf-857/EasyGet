@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using EasyGet.Models;
 using EasyGet.Services;
 using Xunit;
 
@@ -126,6 +127,26 @@ public class M3u8DownloadServiceTests
         Assert.NotEqual(first.TransportStreamPath, second.TransportStreamPath);
         Assert.Equal(outputDirectory, Path.GetDirectoryName(first.SegmentDirectory));
         Assert.Equal(outputDirectory, Path.GetDirectoryName(first.TransportStreamPath));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_PropagatesCancellationWhileLoadingPlaylist()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        var service = new M3u8DownloadService(config, new EnvironmentService());
+        var task = new DownloadTask
+        {
+            Url = "https://example.test/video.m3u8",
+            OutputDirectory = root.Path("output")
+        };
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            service.DownloadAsync(task, ct: cancellation.Token));
+
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
     }
 
     [Fact]
