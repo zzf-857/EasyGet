@@ -20,7 +20,6 @@ EasyGet 侧重点文件：
 - `F:\AI\AIMadeupTools\01_DesktopApps\EasyGet\Models\DownloadTask.cs`
 - `F:\AI\AIMadeupTools\01_DesktopApps\EasyGet\Services\DownloadManager.cs`
 - `F:\AI\AIMadeupTools\01_DesktopApps\EasyGet\Services\YtDlpService.cs`
-- `F:\AI\AIMadeupTools\01_DesktopApps\EasyGet\Services\DouyinBrowserDownloadService.cs`
 - `F:\AI\AIMadeupTools\01_DesktopApps\EasyGet\ViewModels\BatchDownloadViewModel.cs`
 - `F:\AI\AIMadeupTools\01_DesktopApps\EasyGet\ViewModels\SettingsViewModel.cs`
 
@@ -45,9 +44,9 @@ EasyGet 当前下载链路由 `Services\DownloadManager.cs` 管理队列、并�
 
 `Services\DouyinSpecialDownloadService.cs` 已新增 C# sidecar client 雏形，当前通过启动 Python 脚本、读取 stdout JSONL、映射 `progress` / `success` / `failed` / `cancelled` / `log` 事件来更新 `DownloadTask`。后续 Python sidecar 原型需要优先匹配这个 stdout JSONL 契约。
 
-`Services\YtDlpService.cs` 已经有抖音识别、Cookie 策略和失败后的 `DouyinBrowserDownloadService` 兜底。该兜底通过 Chrome/Edge CDP 捕获 mp4 响应，只适合单视频兜底，不覆盖图文和用户 post 批量。
+`Services\YtDlpService.cs` 是当前抖音单链接的生产下载入口，负责抖音识别、Cookie 策略和 yt-dlp 下载；独立的 Chrome/Edge CDP fallback 已不在生产链路中。
 
-`Services\DouyinBrowserDownloadService.cs` 当前只支持 mp4，依赖本机 Chrome/Edge，按单文件下载并回填 `DownloadTask`。它应保留为 fallback，而不是扩展成主引擎。
+历史页仍通过 `Services\DouyinManifestReader.cs` 读取既有 `download_manifest.jsonl`，因此精简单链接下载链路不会移除已有 manifest 的摘要和明细展示。
 
 第三方项目的 `core\downloader_base.py` 已经能够区分视频和图文，优先无水印视频源，图文优先无水印/原图字段，并写入 `download_manifest.jsonl`。`core\user_downloader.py` 和 `core\user_modes\post_strategy.py` 已经能做用户 post 批量、分页、数量限制、时间过滤、去重和 post 浏览器回补。`server\app.py` 已经证明可以通过 FastAPI 暴露后台 job，但 `server\jobs.py` 当前 job 状态只有 `pending/running/success/failed`，没有取消和事件流。
 
@@ -86,7 +85,7 @@ EasyGet 当前下载链路由 `Services\DownloadManager.cs` 管理队列、并�
 
 - Python sidecar 负责抖音专项能力，C# 保持 EasyGet 的任务队列、UI、历史、配置和兜底体验。
 - C# 侧只实现稳定契约：URL 分类、启动进程、读取 stdout JSONL、取消进程、日志事件/状态映射。
-- 保留 `YtDlpService` 和 `DouyinBrowserDownloadService` 作为降级路径。
+- 保留 `YtDlpService` 作为当前单链接下载和降级路径，并保留历史 manifest 读取能力。
 
 缺点：
 
@@ -153,7 +152,7 @@ flowchart LR
     Sidecar --> Core["douyin-downloader-promax core"]
     Core --> FS["输出文件 + download_manifest.jsonl"]
     DYC --> DM
-    YTDLP --> BrowserFallback["DouyinBrowserDownloadService fallback"]
+    YTDLP --> FS
 ```
 
 已完成/需对齐边界：
@@ -168,7 +167,7 @@ flowchart LR
 2. 先调用 `DouyinUrlParser.Parse()`；只用解析结果做路由判断，不在 parser 中做网络请求。
 3. `ShortLink`、`Video`、`Note`、`Gallery`、`Slides`、`User`、`Collection`、`Mix`、`Music` 进入抖音专项候选；短链展开由 Python sidecar 或现有下载器负责。
 4. `Live` 已能被 parser 识别，但当前不纳入专项下载；应给出“当前暂不支持”的明确提示。
-5. sidecar 脚本缺失、进程启动失败时，单视频回落到 `YtDlpService.DownloadAsync()` 和现有 `DouyinBrowserDownloadService`。
+5. sidecar 脚本缺失、进程启动失败时，单视频只回落到 `YtDlpService.DownloadAsync()`；不再启动独立浏览器捕获服务。
 6. 用户 post 批量和图文若 sidecar 不可用，应给出结构化错误，不静默回落到 yt-dlp。
 
 Task B 接线结果：
