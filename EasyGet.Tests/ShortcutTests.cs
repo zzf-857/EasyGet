@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Windows.Input;
 using System.Xml.Linq;
 using Xunit;
 
@@ -19,8 +20,29 @@ public class ShortcutTests
             .Select(e => e.Attribute("Text")?.Value ?? "")
             .ToList();
 
-        var containsShortcutsText = textBlocks.Any(t => t.Contains("键盘快捷键") && t.Contains("Ctrl+1~5"));
+        var containsShortcutsText = textBlocks.Any(t => t.Contains("键盘快捷键") && t.Contains("Ctrl+1~4"));
         Assert.True(containsShortcutsText, "SettingsView should contain keyboard shortcuts help text.");
+    }
+
+    [Theory]
+    [InlineData(Key.D1, "download")]
+    [InlineData(Key.D2, "batch")]
+    [InlineData(Key.D3, "history")]
+    [InlineData(Key.D4, "settings")]
+    [InlineData(Key.D5, null)]
+    public void NavigationShortcutsMatchVisiblePages(Key key, string? expectedPage)
+    {
+        Assert.Equal(expectedPage, MainWindow.ResolveNavigationShortcut(key));
+    }
+
+    [Fact]
+    public void DownloadViewUnsubscribesFromLogCollectionWhenUnloaded()
+    {
+        var code = File.ReadAllText(GetViewPath("DownloadView.xaml.cs"));
+
+        Assert.Contains("Unloaded += DownloadView_Unloaded", code, StringComparison.Ordinal);
+        Assert.Contains("CollectionChanged -= LogLines_CollectionChanged", code, StringComparison.Ordinal);
+        Assert.DoesNotContain("CollectionChanged += (_, _)", code, StringComparison.Ordinal);
     }
 
     [Fact]

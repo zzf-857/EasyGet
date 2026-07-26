@@ -83,22 +83,15 @@ public partial class MainWindow : Window
 
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        // 1. Ctrl + 1~5
-        if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is >= Key.D1 and <= Key.D5)
+        // 1. Ctrl + 1~4
+        var navigationPage = Keyboard.Modifiers == ModifierKeys.Control
+            ? ResolveNavigationShortcut(e.Key)
+            : null;
+        if (navigationPage is not null)
         {
-            int index = e.Key - Key.D1;
-            string page = index switch
+            if (_viewModel.NavigateCommand.CanExecute(navigationPage))
             {
-                0 => "download",
-                1 => "batch",
-                2 => "douyin",
-                3 => "history",
-                4 => "settings",
-                _ => "download"
-            };
-            if (_viewModel.NavigateCommand.CanExecute(page))
-            {
-                _viewModel.NavigateCommand.Execute(page);
+                _viewModel.NavigateCommand.Execute(navigationPage);
             }
             e.Handled = true;
             return;
@@ -171,6 +164,16 @@ public partial class MainWindow : Window
             }
         }
     }
+
+    internal static string? ResolveNavigationShortcut(Key key)
+        => key switch
+        {
+            Key.D1 => "download",
+            Key.D2 => "batch",
+            Key.D3 => "history",
+            Key.D4 => "settings",
+            _ => null
+        };
 
     private void MainWindow_Activated(object? sender, EventArgs e)
     {
