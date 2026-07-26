@@ -34,6 +34,14 @@ public class DownloadFileNameBuilderTests
     }
 
     [Fact]
+    public void SanitizeResolvedTitle_KeepsPercentSignsForDirectFileNames()
+    {
+        var fileName = DownloadFileNameBuilder.SanitizeResolvedTitle("100% BTC");
+
+        Assert.Equal("100% BTC", fileName);
+    }
+
+    [Fact]
     public void BuildOutputTemplate_FallsBackToMetadataTemplateWhenTitleMissing()
     {
         var template = DownloadFileNameBuilder.BuildOutputTemplate(

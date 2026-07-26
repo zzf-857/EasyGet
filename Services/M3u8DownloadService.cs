@@ -55,11 +55,15 @@ public class M3u8DownloadService
         logCallback?.Invoke($"[m3u8] 开始下载: {task.Url}");
 
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
-        var tempDir = Path.Combine(task.OutputDirectory, $"temp_segments_{timestamp}");
-        var outputTsPath = Path.Combine(task.OutputDirectory, $"temp_output_{timestamp}.ts");
+        var workingPaths = CreateWorkingPaths(task.OutputDirectory);
+        var tempDir = workingPaths.SegmentDirectory;
+        var outputTsPath = workingPaths.TransportStreamPath;
         
         // 最终输出视频文件
-        var finalName = string.IsNullOrWhiteSpace(task.Title) ? $"m3u8_{timestamp}" : task.Title;
+        var finalName = DownloadFileNameBuilder.SanitizeResolvedTitle(
+            string.IsNullOrWhiteSpace(task.Title)
+                ? $"m3u8_{timestamp}_{workingPaths.OperationId[..8]}"
+                : task.Title);
         if (!finalName.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
         {
             finalName += ".mp4";
@@ -382,6 +386,20 @@ public class M3u8DownloadService
         => DownloadConcurrencyPolicy.ResolvePerTaskConnections(
             ResolveSegmentConcurrency(configuredFragments),
             maxConcurrentDownloads);
+
+    internal static (
+        string OperationId,
+        string SegmentDirectory,
+        string TransportStreamPath) CreateWorkingPaths(string outputDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+
+        var operationId = Guid.NewGuid().ToString("N");
+        return (
+            operationId,
+            Path.Combine(outputDirectory, $"temp_segments_{operationId}"),
+            Path.Combine(outputDirectory, $"temp_output_{operationId}.ts"));
+    }
 
     internal static async Task<IReadOnlyList<int>> RetryFailedSegmentsAsync(
         IReadOnlyList<int> failedIndices,

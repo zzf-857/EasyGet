@@ -114,6 +114,21 @@ public class M3u8DownloadServiceTests
     }
 
     [Fact]
+    public void CreateWorkingPaths_UsesUniqueFilesForConcurrentDownloads()
+    {
+        var outputDirectory = Path.Combine(Path.GetTempPath(), "easyget-m3u8-output");
+
+        var first = M3u8DownloadService.CreateWorkingPaths(outputDirectory);
+        var second = M3u8DownloadService.CreateWorkingPaths(outputDirectory);
+
+        Assert.NotEqual(first.OperationId, second.OperationId);
+        Assert.NotEqual(first.SegmentDirectory, second.SegmentDirectory);
+        Assert.NotEqual(first.TransportStreamPath, second.TransportStreamPath);
+        Assert.Equal(outputDirectory, Path.GetDirectoryName(first.SegmentDirectory));
+        Assert.Equal(outputDirectory, Path.GetDirectoryName(first.TransportStreamPath));
+    }
+
+    [Fact]
     public async Task RetryFailedSegmentsAsync_UsesConfiguredParallelism()
     {
         var failedIndices = new[] { 0, 1, 2 };

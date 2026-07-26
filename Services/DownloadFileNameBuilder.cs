@@ -16,7 +16,7 @@ internal static class DownloadFileNameBuilder
     {
         var fileName = string.IsNullOrWhiteSpace(resolvedTitle)
             ? "%(title).150s.%(ext)s"
-            : $"{SanitizeResolvedTitle(resolvedTitle)}.%(ext)s";
+            : $"{EscapeYtDlpTemplate(SanitizeResolvedTitle(resolvedTitle))}.%(ext)s";
 
         return Path.Combine(outputDirectory, fileName);
     }
@@ -52,7 +52,6 @@ internal static class DownloadFileNameBuilder
                 "|" => "｜",
                 "?" => "？",
                 "*" => "＊",
-                "%" => "%%",
                 _ when Rune.IsControl(rune) => " ",
                 _ => text
             };
@@ -94,4 +93,7 @@ internal static class DownloadFileNameBuilder
             return false;
         }
     }
+
+    private static string EscapeYtDlpTemplate(string value)
+        => value.Replace("%", "%%", StringComparison.Ordinal);
 }

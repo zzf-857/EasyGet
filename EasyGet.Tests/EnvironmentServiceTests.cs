@@ -144,6 +144,33 @@ public class EnvironmentServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task RunCommandAsync_KillsProcessWhenCallerCancels()
+    {
+        var markerPath = Path.Combine(
+            Path.GetTempPath(),
+            $"easyget-cancelled-process-{Guid.NewGuid():N}.txt");
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+
+        try
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                EnvironmentService.RunCommandAsync(
+                    "powershell",
+                    $"-NoProfile -Command \"Start-Sleep -Seconds 2; Set-Content -LiteralPath '{markerPath}' -Value 'not-killed'\"",
+                    TimeSpan.FromSeconds(10),
+                    cancellation.Token));
+
+            await Task.Delay(TimeSpan.FromMilliseconds(2300));
+            Assert.False(File.Exists(markerPath));
+        }
+        finally
+        {
+            if (File.Exists(markerPath))
+                File.Delete(markerPath);
+        }
+    }
+
+    [Fact]
     public async Task DownloadFileAsync_RetriesTransientServerFailure()
     {
         Directory.CreateDirectory(_tempDir);

@@ -448,6 +448,12 @@ public class EnvironmentService
             await DrainProcessOutputAsync(stdoutTask, stderrTask);
             throw new TimeoutException($"命令执行超时: {fileName} {arguments}");
         }
+        catch (OperationCanceledException)
+        {
+            TryKill(process);
+            await DrainProcessOutputAsync(stdoutTask, stderrTask);
+            throw;
+        }
 
         var stdout = await stdoutTask;
         var stderr = await stderrTask;
