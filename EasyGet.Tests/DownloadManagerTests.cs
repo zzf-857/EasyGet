@@ -946,8 +946,8 @@ public class DownloadManagerTests
             new YtDlpService(configService, new EnvironmentService()),
             historyService,
             configService);
-        var semaphore = GetSemaphore(manager);
-        await semaphore.WaitAsync();
+        var downloadGate = GetDownloadGate(manager);
+        await downloadGate.WaitAsync();
 
         try
         {
@@ -973,7 +973,7 @@ public class DownloadManagerTests
         }
         finally
         {
-            semaphore.Release();
+            downloadGate.Release();
         }
     }
 
@@ -1072,14 +1072,14 @@ public class DownloadManagerTests
         method!.Invoke(null, [task, progress]);
     }
 
-    private static SemaphoreSlim GetSemaphore(DownloadManager manager)
+    private static DynamicConcurrencyGate GetDownloadGate(DownloadManager manager)
     {
         var field = typeof(DownloadManager).GetField(
-            "_semaphore",
+            "_downloadGate",
             BindingFlags.NonPublic | BindingFlags.Instance);
 
         Assert.NotNull(field);
-        return (SemaphoreSlim)field!.GetValue(manager)!;
+        return (DynamicConcurrencyGate)field!.GetValue(manager)!;
     }
 
     private static IReadOnlyList<string> GetStringListProperty(object instance, string propertyName)

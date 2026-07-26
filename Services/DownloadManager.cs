@@ -14,12 +14,10 @@ public class DownloadManager : IDisposable
     private readonly TelegramDownloadService _telegramDownloadService;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
-    private readonly SemaphoreSlim _semaphore;
+    private readonly DynamicConcurrencyGate _downloadGate;
     private readonly SemaphoreSlim _historyWriteSemaphore = new(1, 1);
     private readonly Channel<DownloadTask> _metadataQueue;
     private readonly Task[] _metadataWorkers;
-    private int _currentConcurrencyLimit;
-    private readonly object _concurrencyLock = new();
     private readonly object _idleLock = new();
     private int _activeTaskCount;
     private int _disposed;
@@ -66,8 +64,8 @@ public class DownloadManager : IDisposable
         _telegramDownloadService = telegramDownloadService ?? new TelegramDownloadService(configService);
         _historyService = historyService;
         _configService = configService;
-        _currentConcurrencyLimit = NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads);
-        _semaphore = new SemaphoreSlim(_currentConcurrencyLimit, 100);
+        _downloadGate = new DynamicConcurrencyGate(
+            NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads));
         _metadataQueue = Channel.CreateBounded<DownloadTask>(new BoundedChannelOptions(
             MetadataQueueCapacity)
         {
@@ -86,28 +84,7 @@ public class DownloadManager : IDisposable
     /// </summary>
     public void UpdateConcurrencyLimit(int maxConcurrent)
     {
-        maxConcurrent = NormalizeConcurrencyLimit(maxConcurrent);
-
-        lock (_concurrencyLock)
-        {
-            int diff = maxConcurrent - _currentConcurrencyLimit;
-            _currentConcurrencyLimit = maxConcurrent;
-            
-            if (diff > 0)
-            {
-                _semaphore.Release(diff);
-            }
-            else if (diff < 0)
-            {
-                Task.Run(async () =>
-                {
-                    for (int i = 0; i < -diff; i++)
-                    {
-                        await _semaphore.WaitAsync();
-                    }
-                });
-            }
-        }
+        _downloadGate.UpdateLimit(NormalizeConcurrencyLimit(maxConcurrent));
     }
 
     internal static int NormalizeConcurrencyLimit(int maxConcurrent)
@@ -218,7 +195,7 @@ public class DownloadManager : IDisposable
         // 等待并发位
         try
         {
-            await _semaphore.WaitAsync(task.Cts?.Token ?? CancellationToken.None);
+            await _downloadGate.WaitAsync(task.Cts?.Token ?? CancellationToken.None);
         }
         catch (OperationCanceledException)
         {
@@ -262,7 +239,7 @@ public class DownloadManager : IDisposable
         }
         finally
         {
-            _semaphore.Release();
+            _downloadGate.Release();
             CompleteActiveTask();
             NotifyTaskFinished(task);
         }
@@ -375,8 +352,6 @@ public class DownloadManager : IDisposable
         task.DownloadedSize = 0;
         task.ErrorMessage = "";
         ClearDouyinTaskAttemptState(task);
-        task.Cts = new CancellationTokenSource();
-
         // 从队列中移除再重新入队
         Tasks.Remove(task);
         await EnqueueAsync(task);
