@@ -30,7 +30,10 @@ public sealed class ManagedLoginWindowFactory : IManagedLoginWindowFactory
         string sessionDirectory,
         CancellationToken cancellationToken)
     {
-        var window = new ManagedLoginWindow(platform, sessionDirectory);
+        var window = new ManagedLoginWindow(platform, sessionDirectory)
+        {
+            Owner = Application.Current?.MainWindow
+        };
         try
         {
             await window.InitializeAsync(cancellationToken);

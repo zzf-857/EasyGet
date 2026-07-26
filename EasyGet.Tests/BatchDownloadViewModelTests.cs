@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyGet.Models;
@@ -509,6 +510,32 @@ public class BatchDownloadViewModelTests
         Assert.Equal(2, viewModel.LinkCount);
         Assert.Equal(1, viewModel.UrlsText.Split('\n').Count(url => url.EndsWith("/two", StringComparison.Ordinal)));
         Assert.Contains("跳过 2 个重复链接", notification, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PasteUrlsCommand_WhenClipboardIsBusy_LeavesCurrentUrlsUnchanged()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            () => throw new COMException("Clipboard is busy"))
+        {
+            UrlsText = "https://example.com/current"
+        };
+
+        var exception = Record.Exception(() =>
+            viewModel.PasteUrlsCommand.Execute(null));
+
+        Assert.Null(exception);
+        Assert.Equal("https://example.com/current", viewModel.UrlsText);
+        Assert.Equal(1, viewModel.LinkCount);
     }
 
     [Fact]

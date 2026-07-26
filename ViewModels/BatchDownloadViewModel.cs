@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -20,6 +21,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly YtDlpService _ytDlpService;
     private readonly Action<ProcessStartInfo> _startProcess;
+    private readonly Func<string?> _readClipboardText;
     private readonly HashSet<DownloadTask> _trackedQueueTasks = [];
     private readonly object _queueStateLock = new();
     private volatile bool _suppressQueueRefresh;
@@ -135,12 +137,14 @@ public partial class BatchDownloadViewModel : ObservableObject
         DownloadManager downloadManager,
         ConfigService configService,
         YtDlpService ytDlpService,
-        Action<ProcessStartInfo> startProcess)
+        Action<ProcessStartInfo> startProcess,
+        Func<string?>? readClipboardText = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _ytDlpService = ytDlpService;
         _startProcess = startProcess;
+        _readClipboardText = readClipboardText ?? ReadClipboardText;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
         SynchronizeQueueSubscriptions();
         RefreshQueueState();
@@ -287,12 +291,23 @@ public partial class BatchDownloadViewModel : ObservableObject
     [RelayCommand]
     private void PasteUrls()
     {
-        if (System.Windows.Clipboard.ContainsText())
+        string? text;
+        try
         {
-            var clipText = System.Windows.Clipboard.GetText().Trim();
-            ImportText(clipText);
+            text = _readClipboardText();
         }
+        catch (COMException)
+        {
+            // Another process can temporarily own the clipboard.
+            return;
+        }
+
+        if (text is not null)
+            ImportText(text.Trim());
     }
+
+    private static string? ReadClipboardText()
+        => Clipboard.ContainsText() ? Clipboard.GetText() : null;
 
     [RelayCommand(CanExecute = nameof(CanStartBatchDownload))]
     private async Task StartBatchDownload()

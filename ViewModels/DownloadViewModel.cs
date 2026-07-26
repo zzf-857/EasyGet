@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -20,6 +21,7 @@ public partial class DownloadViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly IVideoInfoProvider _videoInfoProvider;
     private readonly Action<ProcessStartInfo> _startProcess;
+    private readonly Func<string?> _readClipboardText;
     private CancellationTokenSource? _parseCts;
     private int _parseRequestId;
 
@@ -107,12 +109,14 @@ public partial class DownloadViewModel : ObservableObject
         DownloadManager downloadManager,
         ConfigService configService,
         IVideoInfoProvider videoInfoProvider,
-        Action<ProcessStartInfo> startProcess)
+        Action<ProcessStartInfo> startProcess,
+        Func<string?>? readClipboardText = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _videoInfoProvider = videoInfoProvider;
         _startProcess = startProcess;
+        _readClipboardText = readClipboardText ?? ReadClipboardText;
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
 
         // 转发下载管理器的日志
@@ -198,11 +202,23 @@ public partial class DownloadViewModel : ObservableObject
     [RelayCommand]
     private void PasteUrl()
     {
-        if (System.Windows.Clipboard.ContainsText())
+        string? text;
+        try
         {
-            Url = System.Windows.Clipboard.GetText().Trim();
+            text = _readClipboardText();
         }
+        catch (COMException)
+        {
+            // Another process can temporarily own the clipboard.
+            return;
+        }
+
+        if (text is not null)
+            Url = text.Trim();
     }
+
+    private static string? ReadClipboardText()
+        => Clipboard.ContainsText() ? Clipboard.GetText() : null;
 
     /// <summary>
     /// 浏览选择下载目录

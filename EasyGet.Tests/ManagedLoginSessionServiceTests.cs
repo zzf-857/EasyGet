@@ -240,6 +240,28 @@ public sealed class ManagedLoginSessionServiceTests
     }
 
     [Fact]
+    public void ManagedLoginWindowFactory_AssignsMainWindowOwnerBeforeInitialization()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "Cookies", "ManagedLoginWindowFactory.cs")));
+        var createWindowIndex = source.IndexOf(
+            "new ManagedLoginWindow",
+            StringComparison.Ordinal);
+        var assignOwnerIndex = source.IndexOf(
+            "Owner = Application.Current?.MainWindow",
+            StringComparison.Ordinal);
+        var initializeIndex = source.IndexOf(
+            "window.InitializeAsync(cancellationToken)",
+            StringComparison.Ordinal);
+
+        Assert.True(createWindowIndex >= 0, "The production managed login window must be created by the factory.");
+        Assert.True(assignOwnerIndex > createWindowIndex, "The managed login window must use the application main window as its owner.");
+        Assert.True(
+            initializeIndex > assignOwnerIndex,
+            "The owner must be assigned before initialization can show the managed login window.");
+    }
+
+    [Fact]
     public void App_RegistersRealManagedLoginFallback()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath("App.xaml.cs"));

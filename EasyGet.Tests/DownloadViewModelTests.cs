@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using EasyGet.ViewModels;
 using EasyGet.Services;
 using EasyGet.Models;
@@ -300,6 +301,20 @@ public class DownloadViewModelTests
     }
 
     [Fact]
+    public void PasteUrlCommand_WhenClipboardIsBusy_LeavesCurrentUrlUnchanged()
+    {
+        using var context = CreateDownloadContext(
+            readClipboardText: () => throw new COMException("Clipboard is busy"));
+        context.ViewModel.Url = "https://example.com/current";
+
+        var exception = Record.Exception(() =>
+            context.ViewModel.PasteUrlCommand.Execute(null));
+
+        Assert.Null(exception);
+        Assert.Equal("https://example.com/current", context.ViewModel.Url);
+    }
+
+    [Fact]
     public void CancelParseCommand_ResetsPageStateToIdleAndClearsCts()
     {
         using var context = CreateDownloadContext();
@@ -386,7 +401,9 @@ public class DownloadViewModelTests
         }
     }
 
-    private static DownloadContext CreateDownloadContext(Action<ProcessStartInfo>? startProcess = null)
+    private static DownloadContext CreateDownloadContext(
+        Action<ProcessStartInfo>? startProcess = null,
+        Func<string?>? readClipboardText = null)
     {
         var configService = new TestConfigService();
         var dbPath = Path.Combine(
@@ -398,9 +415,14 @@ public class DownloadViewModelTests
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, historyService, configService);
         var videoInfoProvider = new FakeVideoInfoProvider();
-        var viewModel = startProcess is null
+        var viewModel = startProcess is null && readClipboardText is null
             ? new DownloadViewModel(manager, configService, videoInfoProvider)
-            : new DownloadViewModel(manager, configService, videoInfoProvider, startProcess);
+            : new DownloadViewModel(
+                manager,
+                configService,
+                videoInfoProvider,
+                startProcess ?? (_ => { }),
+                readClipboardText);
 
         return new DownloadContext(historyService, viewModel, videoInfoProvider);
     }
