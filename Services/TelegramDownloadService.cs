@@ -342,31 +342,37 @@ public class TelegramDownloadService : IDisposable
 
         var (chatTarget, startId, endId) = parsed.Value;
 
-        // 确保客户端登录成功
-        await _clientSemaphore.WaitAsync(ct);
         try
         {
-            if (_client == null)
-            {
-                InitClient();
-            }
+            ct.ThrowIfCancellationRequested();
 
-            if (_client!.User == null)
+            // 确保客户端登录成功
+            await _clientSemaphore.WaitAsync(ct);
+            try
             {
-                var loginStatus = await _client.Login(_configService.Config.TgPhoneNumber);
-                if (loginStatus != null)
+                ct.ThrowIfCancellationRequested();
+                if (_client == null)
                 {
-                    throw new InvalidOperationException("Telegram 账号未在设置中完成授权绑定登录，无法开始下载任务。");
+                    InitClient();
+                }
+
+                if (_client!.User == null)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var loginStatus = await _client.Login(_configService.Config.TgPhoneNumber);
+                    ct.ThrowIfCancellationRequested();
+                    if (loginStatus != null)
+                    {
+                        throw new InvalidOperationException("Telegram 账号未在设置中完成授权绑定登录，无法开始下载任务。");
+                    }
                 }
             }
-        }
-        finally
-        {
-            _clientSemaphore.Release();
-        }
+            finally
+            {
+                _clientSemaphore.Release();
+            }
 
-        try
-        {
+            ct.ThrowIfCancellationRequested();
             logCallback?.Invoke($"[Telegram] 正在获取会话: {chatTarget}...");
             IPeerInfo peerInfo;
             try
@@ -375,7 +381,9 @@ public class TelegramDownloadService : IDisposable
                 if (long.TryParse(chatTarget, out var chatId))
                 {
                     // 私有群组：为了避免 access_hash 缺失，先获取所有对话列表填充本地缓存
+                    ct.ThrowIfCancellationRequested();
                     var dialogs = await _client!.Messages_GetDialogs();
+                    ct.ThrowIfCancellationRequested();
                     Dictionary<long, ChatBase>? chatsDict = null;
                     if (dialogs is Messages_Dialogs md) chatsDict = md.chats;
                     else if (dialogs is Messages_DialogsSlice mds) chatsDict = mds.chats;
@@ -392,9 +400,15 @@ public class TelegramDownloadService : IDisposable
                 else
                 {
                     // 公开群组/频道
+                    ct.ThrowIfCancellationRequested();
                     var resolved = await _client!.Contacts_ResolveUsername(chatTarget);
+                    ct.ThrowIfCancellationRequested();
                     peerInfo = resolved.UserOrChat;
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -452,8 +466,7 @@ public class TelegramDownloadService : IDisposable
 
                 for (int idx = 0; idx < msgIds.Count; idx++)
                 {
-                    if (ct.IsCancellationRequested)
-                        break;
+                    ct.ThrowIfCancellationRequested();
 
                     var msgId = msgIds[idx];
                     logCallback?.Invoke($"[Telegram] [{idx + 1}/{msgIds.Count}] 正在拉取消息 ID: {msgId}...");
@@ -462,6 +475,7 @@ public class TelegramDownloadService : IDisposable
                         task, inputPeer, msgId, savePath, logCallback, progress, 
                         totalInBatch: msgIds.Count, currentBatchIndex: idx, 
                         prefix: $"{msgId}_", ct: ct);
+                    ct.ThrowIfCancellationRequested();
 
                     if (success) successCount++;
                     else failCount++;
@@ -475,11 +489,13 @@ public class TelegramDownloadService : IDisposable
                     }
                 }
 
+                ct.ThrowIfCancellationRequested();
                 if (successCount == 0)
                 {
                     throw new Exception("范围提取中所有的消息均下载失败。");
                 }
 
+                ct.ThrowIfCancellationRequested();
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
                 task.OutputFilePath = savePath;
@@ -496,11 +512,13 @@ public class TelegramDownloadService : IDisposable
                 Directory.CreateDirectory(savePath);
 
                 var success = await DownloadSingleMessageAsync(task, inputPeer, startId, savePath, logCallback, progress, 1, 0, "", ct);
+                ct.ThrowIfCancellationRequested();
                 if (!success)
                 {
                     throw new Exception($"下载消息 ID {startId} 失败。");
                 }
 
+                ct.ThrowIfCancellationRequested();
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
                 task.OutputFilePath = savePath;
@@ -537,17 +555,23 @@ public class TelegramDownloadService : IDisposable
     {
         try
         {
+            ct.ThrowIfCancellationRequested();
+
             // 通过 WTelegramClient 抓取单条消息，根据 Peer 类型分流调用
             Messages_MessagesBase res;
             if (peer is InputPeerChannel ipc)
             {
                 var inputChannel = new InputChannel(ipc.channel_id, ipc.access_hash);
+                ct.ThrowIfCancellationRequested();
                 res = await _client!.Channels_GetMessages(inputChannel, new InputMessageID { id = messageId });
             }
             else
             {
+                ct.ThrowIfCancellationRequested();
                 res = await _client!.Messages_GetMessages(new InputMessageID { id = messageId });
             }
+            ct.ThrowIfCancellationRequested();
+
             if (res.Messages.Length == 0 || res.Messages[0] is MessageEmpty)
             {
                 logCallback?.Invoke($"[Telegram] 消息 ID {messageId} 未找到或已被删除。");
@@ -629,8 +653,6 @@ public class TelegramDownloadService : IDisposable
 
                     Action<long, long> reportProgress = (bytesDownloaded, totalSize) =>
                     {
-                        if (ct.IsCancellationRequested) return;
-
                         var now = DateTime.UtcNow;
                         var elapsed = (now - lastReportedTime).TotalSeconds;
 
@@ -665,22 +687,27 @@ public class TelegramDownloadService : IDisposable
                         }
                     };
 
+                    var cancellableProgress = CreateCancellableProgressCallback(ct, reportProgress);
                     if (message.media is MessageMediaDocument mDoc && mDoc.document is Document d)
                     {
-                        await _client!.DownloadFileAsync(d, fileStream, (PhotoSizeBase)null!, (bytes, total) => reportProgress(bytes, total));
+                        ct.ThrowIfCancellationRequested();
+                        await _client!.DownloadFileAsync(d, fileStream, (PhotoSizeBase)null!, cancellableProgress);
                         ct.ThrowIfCancellationRequested();
                     }
                     else if (message.media is MessageMediaPhoto mPhoto && mPhoto.photo is Photo p)
                     {
                         var largestSize = p.sizes[^1];
-                        await _client!.DownloadFileAsync(p, fileStream, largestSize, (bytes, total) => reportProgress(bytes, total));
+                        ct.ThrowIfCancellationRequested();
+                        await _client!.DownloadFileAsync(p, fileStream, largestSize, cancellableProgress);
                         ct.ThrowIfCancellationRequested();
                     }
                 }
 
+                ct.ThrowIfCancellationRequested();
                 logCallback?.Invoke($"[Telegram] 媒体保存成功: {mediaFilePath}");
             }
 
+            ct.ThrowIfCancellationRequested();
             return true;
         }
         catch (OperationCanceledException)
@@ -692,6 +719,19 @@ public class TelegramDownloadService : IDisposable
             logCallback?.Invoke($"[Telegram] 下载消息 ID {messageId} 出错: {ex.Message}");
             return false;
         }
+    }
+
+    internal static WTelegram.Client.ProgressCallback CreateCancellableProgressCallback(
+        CancellationToken ct,
+        Action<long, long> reportProgress)
+    {
+        ArgumentNullException.ThrowIfNull(reportProgress);
+
+        return (bytesDownloaded, totalSize) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            reportProgress(bytesDownloaded, totalSize);
+        };
     }
 
     private static void UpdateTaskFileSizeFromDirectory(DownloadTask task, string directoryPath, Action<string>? logCallback)

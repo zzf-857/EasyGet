@@ -1,4 +1,5 @@
 using System;
+using EasyGet.Models;
 using EasyGet.Services;
 using Xunit;
 
@@ -86,5 +87,41 @@ public class TelegramDownloadServiceTests
             "0001_");
 
         Assert.Equal("0001_media：1.bin", Path.GetFileName(result));
+    }
+
+    [Fact]
+    public void CreateCancellableProgressCallback_CancelledTokenStopsBeforeReporting()
+    {
+        using var cancellation = new CancellationTokenSource();
+        var reportCount = 0;
+        var callback = TelegramDownloadService.CreateCancellableProgressCallback(
+            cancellation.Token,
+            (_, _) => reportCount++);
+
+        callback(10, 100);
+        cancellation.Cancel();
+
+        var exception = Assert.Throws<OperationCanceledException>(() => callback(20, 100));
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        Assert.Equal(1, reportCount);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_PreCancelledTokenMarksTaskCancelledWithoutConnecting()
+    {
+        using var service = new TelegramDownloadService(new TestConfigService());
+        using var cancellation = new CancellationTokenSource();
+        var task = new DownloadTask
+        {
+            Url = "https://t.me/durov/123",
+            OutputDirectory = Path.GetTempPath()
+        };
+        cancellation.Cancel();
+
+        var exception = await Assert.ThrowsAsync<OperationCanceledException>(
+            () => service.DownloadAsync(task, ct: cancellation.Token));
+
+        Assert.Equal(cancellation.Token, exception.CancellationToken);
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
     }
 }
