@@ -9,4 +9,5 @@ public class AppUpdateInfo
     public Uri? InstallerDownloadUrl { get; init; }
     public string InstallerFileName { get; init; } = "";
     public long InstallerSize { get; init; }
+    public string InstallerSha256 { get; init; } = "";
 }

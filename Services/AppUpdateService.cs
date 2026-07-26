@@ -3,6 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using EasyGet.Models;
 using Microsoft.Win32;
@@ -11,8 +13,11 @@ namespace EasyGet.Services;
 
 public class AppUpdateService : IAppUpdateService
 {
-    private const string LatestReleaseUrl = "https://api.github.com/repos/zzf-857/EasyGet/releases/latest";
+    private const string LatestReleaseManifestUrl = "https://github.com/zzf-857/EasyGet/releases/latest/download/easyget-update.json";
+    private const string ReleaseBaseUrl = "https://github.com/zzf-857/EasyGet/releases";
     private const string InnoUninstallKeyName = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\{5A8E1D83-9FE4-41A8-8F8D-DED866E53335}_is1";
+    private const int MaxManifestSize = 64 * 1024;
+    private const long MaxInstallerSize = 1024L * 1024 * 1024;
     private const int InstallerDownloadBufferSize = 81920;
     private static readonly HttpClient SharedHttpClient = CreateHttpClient();
     private static readonly object LogSync = new();
@@ -50,7 +55,7 @@ public class AppUpdateService : IAppUpdateService
     {
         LogUpdateEvent(
             "CheckLatestAsync started",
-            ("api", LatestReleaseUrl),
+            ("manifest", LatestReleaseManifestUrl),
             ("currentVersion", CurrentVersion),
             ("executablePath", CurrentExecutablePath),
             ("baseDirectory", AppContext.BaseDirectory),
@@ -58,11 +63,14 @@ public class AppUpdateService : IAppUpdateService
 
         try
         {
-            using var response = await _httpClient.GetAsync(LatestReleaseUrl, ct);
+            using var response = await _httpClient.GetAsync(
+                LatestReleaseManifestUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                ct);
             response.EnsureSuccessStatusCode();
 
-            var json = await response.Content.ReadAsStringAsync(ct);
-            var result = ParseLatestReleaseJson(json, CurrentVersion);
+            var json = await ReadManifestAsync(response.Content, ct);
+            var result = ParseUpdateManifestJson(json, CurrentVersion);
             LogUpdateEvent(
                 "CheckLatestAsync completed",
                 ("latestVersion", result.LatestVersion),
@@ -89,7 +97,11 @@ public class AppUpdateService : IAppUpdateService
         var fileName = string.IsNullOrWhiteSpace(updateInfo.InstallerFileName)
             ? $"EasyGet-Setup-v{updateInfo.LatestVersion}.exe"
             : updateInfo.InstallerFileName;
-        ValidateInstallerFileName(fileName);
+        ValidateInstallerFileName(fileName, updateInfo.LatestVersion);
+        if (updateInfo.InstallerSize is <= 0 or > MaxInstallerSize)
+            throw new InvalidDataException("更新清单中的安装包大小不合法。");
+
+        var expectedSha256 = NormalizeSha256(updateInfo.InstallerSha256);
         var targetPath = Path.Combine(_updatesDir, fileName);
         var tempPath = $"{targetPath}.download";
 
@@ -112,7 +124,14 @@ public class AppUpdateService : IAppUpdateService
             using var response = await _httpClient.GetAsync(updateInfo.InstallerDownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
             response.EnsureSuccessStatusCode();
 
-            var total = response.Content.Headers.ContentLength ?? updateInfo.InstallerSize;
+            var responseSize = response.Content.Headers.ContentLength;
+            if (responseSize is > 0 && responseSize.Value != updateInfo.InstallerSize)
+            {
+                throw new IOException(
+                    $"更新包大小与清单不一致：服务器声明 {responseSize.Value} / 清单声明 {updateInfo.InstallerSize} 字节。");
+            }
+
+            var total = updateInfo.InstallerSize;
             long totalRead = 0;
             LogUpdateEvent(
                 "Download response accepted",
@@ -122,6 +141,7 @@ public class AppUpdateService : IAppUpdateService
                 ("targetPath", targetPath));
 
             var buffer = ArrayPool<byte>.Shared.Rent(InstallerDownloadBufferSize);
+            using var sha256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
             try
             {
                 await using (var source = await response.Content.ReadAsStreamAsync(ct))
@@ -133,7 +153,14 @@ public class AppUpdateService : IAppUpdateService
                         if (read == 0)
                             break;
 
+                        if (read > total - totalRead)
+                        {
+                            throw new IOException(
+                                $"更新包大小超过清单声明：已读取至少 {totalRead + read} / 清单声明 {total} 字节。");
+                        }
+
                         await target.WriteAsync(buffer.AsMemory(0, read), ct);
+                        sha256.AppendData(buffer, 0, read);
                         totalRead += read;
 
                         if (total > 0)
@@ -143,10 +170,17 @@ public class AppUpdateService : IAppUpdateService
                     await target.FlushAsync(ct);
                 }
 
-                if (total > 0 && totalRead != total)
+                if (totalRead != total)
                 {
                     throw new IOException(
                         $"更新包下载不完整：已下载 {totalRead} / {total} 字节。");
+                }
+
+                var actualSha256 = Convert.ToHexString(sha256.GetHashAndReset());
+                if (!string.Equals(actualSha256, expectedSha256, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException(
+                        $"更新包 SHA-256 校验失败：实际 {actualSha256} / 清单 {expectedSha256}。");
                 }
             }
             finally
@@ -206,33 +240,29 @@ public class AppUpdateService : IAppUpdateService
         return true;
     }
 
-    public static AppUpdateInfo ParseLatestReleaseJson(string json, string currentVersion)
+    public static AppUpdateInfo ParseUpdateManifestJson(string json, string currentVersion)
     {
         using var document = JsonDocument.Parse(json);
         var root = document.RootElement;
 
-        var tagName = GetString(root, "tag_name");
-        var latestVersion = NormalizeVersionText(tagName);
-        var releaseUrl = TryCreateUri(GetString(root, "html_url"));
+        var latestVersion = GetString(root, "version");
+        if (!IsStrictThreePartVersion(latestVersion))
+            throw new InvalidDataException("更新清单中的版本号不合法。");
 
-        string installerFileName = "";
-        long installerSize = 0;
-        Uri? installerUrl = null;
+        var tagName = GetString(root, "tag");
+        if (!string.Equals(tagName, $"v{latestVersion}", StringComparison.Ordinal))
+            throw new InvalidDataException("更新清单中的 tag 与版本号不一致。");
 
-        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var asset in assets.EnumerateArray())
-            {
-                var name = GetString(asset, "name");
-                if (!IsInstallerAsset(name))
-                    continue;
+        var installerFileName = GetString(root, "setupAsset");
+        ValidateInstallerFileName(installerFileName, latestVersion);
 
-                installerFileName = name;
-                installerSize = GetInt64(asset, "size");
-                installerUrl = TryCreateUri(GetString(asset, "browser_download_url"));
-                break;
-            }
-        }
+        var installerSize = GetInt64(root, "setupSize");
+        if (installerSize is <= 0 or > MaxInstallerSize)
+            throw new InvalidDataException("更新清单中的安装包大小不合法。");
+
+        var installerSha256 = NormalizeSha256(GetString(root, "setupSha256"));
+        var releaseUrl = new Uri($"{ReleaseBaseUrl}/tag/{tagName}");
+        var installerUrl = new Uri($"{ReleaseBaseUrl}/download/{tagName}/{installerFileName}");
 
         return new AppUpdateInfo
         {
@@ -242,7 +272,8 @@ public class AppUpdateService : IAppUpdateService
             ReleasePageUrl = releaseUrl,
             InstallerDownloadUrl = installerUrl,
             InstallerFileName = installerFileName,
-            InstallerSize = installerSize
+            InstallerSize = installerSize,
+            InstallerSha256 = installerSha256
         };
     }
 
@@ -366,18 +397,61 @@ public class AppUpdateService : IAppUpdateService
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
     }
 
-    private static bool IsInstallerAsset(string name)
-        => name.StartsWith("EasyGet-Setup-v", StringComparison.OrdinalIgnoreCase)
-           && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
-
-    private static void ValidateInstallerFileName(string fileName)
+    private static void ValidateInstallerFileName(string fileName, string version)
     {
-        if (!IsInstallerAsset(fileName)
+        var expectedFileName = $"EasyGet-Setup-v{version}.exe";
+        if (!string.Equals(fileName, expectedFileName, StringComparison.Ordinal)
             || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal)
             || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
         {
             throw new InvalidDataException("更新包文件名不合法。");
         }
+    }
+
+    private static bool IsStrictThreePartVersion(string value)
+    {
+        var parts = value.Split('.', StringSplitOptions.None);
+        return parts.Length == 3
+               && parts.All(part => part.Length > 0
+                                    && part.All(character => character is >= '0' and <= '9')
+                                    && int.TryParse(part, out _));
+    }
+
+    private static string NormalizeSha256(string value)
+    {
+        var normalized = (value ?? "").Trim().ToUpperInvariant();
+        if (normalized.Length != 64
+            || normalized.Any(character => character is not (>= '0' and <= '9')
+                                           and not (>= 'A' and <= 'F')))
+        {
+            throw new InvalidDataException("更新清单中的安装包 SHA-256 不合法。");
+        }
+
+        return normalized;
+    }
+
+    private static async Task<string> ReadManifestAsync(HttpContent content, CancellationToken ct)
+    {
+        if (content.Headers.ContentLength is > MaxManifestSize)
+            throw new InvalidDataException("更新清单体积异常，已拒绝读取。");
+
+        await using var source = await content.ReadAsStreamAsync(ct);
+        using var target = new MemoryStream();
+        var buffer = new byte[4096];
+
+        while (true)
+        {
+            var read = await source.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
+            if (read == 0)
+                break;
+
+            if (read > MaxManifestSize - target.Length)
+                throw new InvalidDataException("更新清单体积异常，已拒绝读取。");
+
+            target.Write(buffer, 0, read);
+        }
+
+        return Encoding.UTF8.GetString(target.GetBuffer(), 0, checked((int)target.Length));
     }
 
     private static int[] ParseVersionParts(string version)
@@ -444,9 +518,6 @@ public class AppUpdateService : IAppUpdateService
         return Math.Max(0, number);
     }
 
-    private static Uri? TryCreateUri(string value)
-        => Uri.TryCreate(value, UriKind.Absolute, out var uri) ? uri : null;
-
     private static string GetDefaultUpdatesDir()
         => Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -467,23 +538,27 @@ public class AppUpdateService : IAppUpdateService
 
     private static string GetRegisteredInstallDirectory()
     {
-        foreach (var hive in new[] { Registry.CurrentUser, Registry.LocalMachine })
+        foreach (var hive in new[] { RegistryHive.CurrentUser, RegistryHive.LocalMachine })
         {
-            try
+            foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
             {
-                using var key = hive.OpenSubKey(InnoUninstallKeyName);
-                var installLocation = key?.GetValue("InstallLocation")?.ToString();
-                if (!string.IsNullOrWhiteSpace(installLocation))
-                    return installLocation;
+                try
+                {
+                    using var baseKey = RegistryKey.OpenBaseKey(hive, view);
+                    using var key = baseKey.OpenSubKey(InnoUninstallKeyName);
+                    var installLocation = key?.GetValue("InstallLocation")?.ToString();
+                    if (!string.IsNullOrWhiteSpace(installLocation))
+                        return installLocation;
 
-                var appPath = key?.GetValue("Inno Setup: App Path")?.ToString();
-                if (!string.IsNullOrWhiteSpace(appPath))
-                    return appPath;
-            }
-            catch
-            {
-                // Registry access can fail under restricted user contexts; runtime
-                // detection falls back to path heuristics in that case.
+                    var appPath = key?.GetValue("Inno Setup: App Path")?.ToString();
+                    if (!string.IsNullOrWhiteSpace(appPath))
+                        return appPath;
+                }
+                catch
+                {
+                    // Registry access can fail under restricted user contexts; runtime
+                    // detection falls back to path heuristics in that case.
+                }
             }
         }
 
@@ -572,7 +647,6 @@ public class AppUpdateService : IAppUpdateService
     {
         var client = new HttpClient();
         client.DefaultRequestHeaders.UserAgent.ParseAdd("EasyGet-AppUpdater");
-        client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
     }
 }

@@ -1,12 +1,17 @@
 using EasyGet.Models;
 using EasyGet.Services;
 using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace EasyGet.Tests;
 
 public class AppUpdateServiceTests
 {
+    private const string ValidSha256 = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+
     [Theory]
     [InlineData("1.1.0", "1.0.9", 1)]
     [InlineData("v1.1.0", "1.1.0+206b077", 0)]
@@ -20,58 +25,95 @@ public class AppUpdateServiceTests
     }
 
     [Fact]
-    public void ParseLatestRelease_SelectsSetupAssetAndMarksUpdateAvailable()
+    public void ParseUpdateManifest_SelectsSetupAssetAndMarksUpdateAvailable()
     {
-        const string json = """
-        {
-          "tag_name": "v1.1.0",
-          "html_url": "https://github.com/zzf-857/EasyGet/releases/tag/v1.1.0",
-          "assets": [
-            {
-              "name": "EasyGet-win-x64-Release.zip",
-              "size": 72000000,
-              "browser_download_url": "https://github.com/zzf-857/EasyGet/releases/download/v1.1.0/EasyGet-win-x64-Release.zip"
-            },
-            {
-              "name": "EasyGet-Setup-v1.1.0.exe",
-              "size": 85000000,
-              "browser_download_url": "https://github.com/zzf-857/EasyGet/releases/download/v1.1.0/EasyGet-Setup-v1.1.0.exe"
-            }
-          ]
-        }
-        """;
-
-        var info = AppUpdateService.ParseLatestReleaseJson(json, "1.0.0");
+        var info = AppUpdateService.ParseUpdateManifestJson(CreateManifest(), "1.0.0");
 
         Assert.True(info.IsUpdateAvailable);
         Assert.Equal("1.0.0", info.CurrentVersion);
         Assert.Equal("1.1.0", info.LatestVersion);
         Assert.Equal("EasyGet-Setup-v1.1.0.exe", info.InstallerFileName);
         Assert.Equal("https://github.com/zzf-857/EasyGet/releases/download/v1.1.0/EasyGet-Setup-v1.1.0.exe", info.InstallerDownloadUrl?.ToString());
+        Assert.Equal("https://github.com/zzf-857/EasyGet/releases/tag/v1.1.0", info.ReleasePageUrl?.ToString());
+        Assert.Equal(85_000_000, info.InstallerSize);
+        Assert.Equal(ValidSha256, info.InstallerSha256);
     }
 
     [Fact]
-    public void ParseLatestRelease_ReturnsNoUpdateWhenLatestIsNotNewer()
+    public void ParseUpdateManifest_ReturnsNoUpdateWhenLatestIsNotNewer()
     {
-        const string json = """
-        {
-          "tag_name": "v1.1.0",
-          "html_url": "https://github.com/zzf-857/EasyGet/releases/tag/v1.1.0",
-          "assets": [
-            {
-              "name": "EasyGet-Setup-v1.1.0.exe",
-              "size": 85000000,
-              "browser_download_url": "https://github.com/zzf-857/EasyGet/releases/download/v1.1.0/EasyGet-Setup-v1.1.0.exe"
-            }
-          ]
-        }
-        """;
-
-        var info = AppUpdateService.ParseLatestReleaseJson(json, "1.1.0");
+        var info = AppUpdateService.ParseUpdateManifestJson(CreateManifest(), "1.1.0");
 
         Assert.False(info.IsUpdateAvailable);
         Assert.Equal("1.1.0", info.LatestVersion);
         Assert.Equal("EasyGet-Setup-v1.1.0.exe", info.InstallerFileName);
+    }
+
+    [Fact]
+    public void ParseUpdateManifest_RejectsTagThatDoesNotMatchVersion()
+    {
+        var exception = Assert.Throws<InvalidDataException>(() =>
+            AppUpdateService.ParseUpdateManifestJson(
+                CreateManifest(tag: "v1.1.1"),
+                "1.0.0"));
+
+        Assert.Contains("tag", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("EasyGet-Setup-v1.1.1.exe")]
+    [InlineData("../EasyGet-Setup-v1.1.0.exe")]
+    [InlineData("easyget-setup-v1.1.0.exe")]
+    public void ParseUpdateManifest_RejectsUnexpectedInstallerAsset(string setupAsset)
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            AppUpdateService.ParseUpdateManifestJson(
+                CreateManifest(setupAsset: setupAsset),
+                "1.0.0"));
+    }
+
+    [Theory]
+    [InlineData(0, ValidSha256)]
+    [InlineData(1_073_741_825, ValidSha256)]
+    [InlineData(85_000_000, "")]
+    [InlineData(85_000_000, "0123456789ABCDEF")]
+    [InlineData(85_000_000, "G123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF")]
+    public void ParseUpdateManifest_RejectsInvalidInstallerIntegrityMetadata(long setupSize, string setupSha256)
+    {
+        Assert.Throws<InvalidDataException>(() =>
+            AppUpdateService.ParseUpdateManifestJson(
+                CreateManifest(setupSize: setupSize, setupSha256: setupSha256),
+                "1.0.0"));
+    }
+
+    [Fact]
+    public async Task CheckLatestAsync_UsesStaticReleaseManifestWithoutGitHubApi()
+    {
+        var handler = new StubHttpMessageHandler(Encoding.UTF8.GetBytes(CreateManifest(version: "9.9.9")));
+        var service = new AppUpdateService(new HttpClient(handler));
+
+        var info = await service.CheckLatestAsync();
+
+        Assert.True(info.IsUpdateAvailable);
+        Assert.Equal(
+            "https://github.com/zzf-857/EasyGet/releases/latest/download/easyget-update.json",
+            handler.LastRequestUri?.ToString());
+
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "AppUpdateService.cs")));
+        Assert.DoesNotContain("api.github.com", source, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CheckLatestAsync_RejectsOversizedManifestWithoutContentLength()
+    {
+        var handler = new StubHttpMessageHandler(new byte[65_537], omitContentLength: true);
+        var service = new AppUpdateService(new HttpClient(handler));
+
+        var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+            service.CheckLatestAsync());
+
+        Assert.Contains("清单体积异常", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -89,7 +131,8 @@ public class AppUpdateServiceTests
             LatestVersion = "1.1.1",
             InstallerFileName = "EasyGet-Setup-v1.1.1.exe",
             InstallerDownloadUrl = new Uri("https://example.com/EasyGet-Setup-v1.1.1.exe"),
-            InstallerSize = payload.Length
+            InstallerSize = payload.Length,
+            InstallerSha256 = ComputeSha256(payload)
         };
 
         try
@@ -135,7 +178,8 @@ public class AppUpdateServiceTests
             LatestVersion = "1.1.2",
             InstallerFileName = "EasyGet-Setup-v1.1.2.exe",
             InstallerDownloadUrl = new Uri("https://example.com/EasyGet-Setup-v1.1.2.exe"),
-            InstallerSize = payload.Length
+            InstallerSize = payload.Length,
+            InstallerSha256 = ComputeSha256(payload)
         };
 
         try
@@ -174,7 +218,8 @@ public class AppUpdateServiceTests
             LatestVersion = "1.1.3",
             InstallerFileName = Path.GetFileName(targetPath),
             InstallerDownloadUrl = new Uri("https://example.test/EasyGet-Setup-v1.1.3.exe"),
-            InstallerSize = 5
+            InstallerSize = 5,
+            InstallerSha256 = ComputeSha256(payload)
         };
 
         try
@@ -185,6 +230,106 @@ public class AppUpdateServiceTests
             Assert.Contains("下载不完整", exception.Message, StringComparison.Ordinal);
             Assert.Equal([9, 9, 9, 9], await File.ReadAllBytesAsync(targetPath));
             Assert.False(File.Exists($"{targetPath}.download"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_RejectsHashMismatchAndPreservesExistingInstaller()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-update-tests-{Guid.NewGuid():N}");
+        var payload = new byte[] { 1, 2, 3, 4 };
+        var service = new AppUpdateService(
+            new HttpClient(new StubHttpMessageHandler(payload)),
+            tempDir);
+        var targetPath = Path.Combine(tempDir, "EasyGet-Setup-v1.1.4.exe");
+        Directory.CreateDirectory(tempDir);
+        await File.WriteAllBytesAsync(targetPath, [9, 9, 9]);
+        var info = new AppUpdateInfo
+        {
+            LatestVersion = "1.1.4",
+            InstallerFileName = Path.GetFileName(targetPath),
+            InstallerDownloadUrl = new Uri("https://example.test/EasyGet-Setup-v1.1.4.exe"),
+            InstallerSize = payload.Length,
+            InstallerSha256 = ComputeSha256([4, 3, 2, 1])
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<InvalidDataException>(() =>
+                service.DownloadInstallerAsync(info));
+
+            Assert.Contains("SHA-256", exception.Message, StringComparison.Ordinal);
+            Assert.Equal([9, 9, 9], await File.ReadAllBytesAsync(targetPath));
+            Assert.False(File.Exists($"{targetPath}.download"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_RejectsContentLengthThatDiffersFromManifest()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-update-tests-{Guid.NewGuid():N}");
+        var payload = new byte[] { 1, 2, 3, 4 };
+        var service = new AppUpdateService(
+            new HttpClient(new StubHttpMessageHandler(payload, contentLength: 5)),
+            tempDir);
+        var info = new AppUpdateInfo
+        {
+            LatestVersion = "1.1.5",
+            InstallerFileName = "EasyGet-Setup-v1.1.5.exe",
+            InstallerDownloadUrl = new Uri("https://example.test/EasyGet-Setup-v1.1.5.exe"),
+            InstallerSize = payload.Length,
+            InstallerSha256 = ComputeSha256(payload)
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<IOException>(() =>
+                service.DownloadInstallerAsync(info));
+
+            Assert.Contains("大小与清单不一致", exception.Message, StringComparison.Ordinal);
+            Assert.Empty(Directory.EnumerateFiles(tempDir));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DownloadInstallerAsync_StopsUnknownLengthResponseAtManifestLimit()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-update-tests-{Guid.NewGuid():N}");
+        var payload = new byte[] { 1, 2, 3, 4, 5 };
+        var service = new AppUpdateService(
+            new HttpClient(new StubHttpMessageHandler(payload, omitContentLength: true)),
+            tempDir);
+        var info = new AppUpdateInfo
+        {
+            LatestVersion = "1.1.6",
+            InstallerFileName = "EasyGet-Setup-v1.1.6.exe",
+            InstallerDownloadUrl = new Uri("https://example.test/EasyGet-Setup-v1.1.6.exe"),
+            InstallerSize = 4,
+            InstallerSha256 = ComputeSha256(payload[..4])
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<IOException>(() =>
+                service.DownloadInstallerAsync(info));
+
+            Assert.Contains("超过清单声明", exception.Message, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(tempDir, "EasyGet-Setup-v1.1.6.exe.download")));
         }
         finally
         {
@@ -257,20 +402,68 @@ public class AppUpdateServiceTests
         Assert.Equal("安装版运行", actual);
     }
 
+    [Fact]
+    public void RegisteredInstallDirectory_EnumeratesBothRegistryViews()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "AppUpdateService.cs")));
+
+        Assert.Contains("RegistryView.Registry64", source, StringComparison.Ordinal);
+        Assert.Contains("RegistryView.Registry32", source, StringComparison.Ordinal);
+        Assert.Contains("RegistryKey.OpenBaseKey(hive, view)", source, StringComparison.Ordinal);
+    }
+
+    private static string CreateManifest(
+        string version = "1.1.0",
+        string? tag = null,
+        string? setupAsset = null,
+        long setupSize = 85_000_000,
+        string setupSha256 = ValidSha256)
+        => JsonSerializer.Serialize(new
+        {
+            version,
+            tag = tag ?? $"v{version}",
+            setupAsset = setupAsset ?? $"EasyGet-Setup-v{version}.exe",
+            setupSize,
+            setupSha256,
+            releaseUrl = $"https://github.com/zzf-857/EasyGet/releases/tag/v{version}"
+        });
+
+    private static string ComputeSha256(byte[] payload)
+        => Convert.ToHexString(SHA256.HashData(payload));
+
     private sealed class StubHttpMessageHandler(
         byte[] payload,
-        long? contentLength = null) : HttpMessageHandler
+        long? contentLength = null,
+        bool omitContentLength = false) : HttpMessageHandler
     {
+        public Uri? LastRequestUri { get; private set; }
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
-            {
-                Content = new ByteArrayContent(payload)
-            };
-            response.Content.Headers.ContentLength = contentLength ?? payload.Length;
+            LastRequestUri = request.RequestUri;
+            HttpContent content = omitContentLength
+                ? new UnknownLengthContent(payload)
+                : new ByteArrayContent(payload);
+            if (!omitContentLength)
+                content.Headers.ContentLength = contentLength ?? payload.Length;
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class UnknownLengthContent(byte[] payload) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+            => stream.WriteAsync(payload).AsTask();
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
         }
     }
 }
