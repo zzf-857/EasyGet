@@ -80,7 +80,7 @@ public class NotificationTests
         var dbPath = System.IO.Path.Combine(
             System.IO.Path.GetTempPath(),
             $"easyget-notif-vm-{Guid.NewGuid():N}.db");
-        
+
         try
         {
             using var history = new HistoryService(dbPath);
@@ -92,7 +92,6 @@ public class NotificationTests
             var historyVM = new HistoryViewModel(history);
             var settingsVM = new SettingsViewModel(configService, env, manager, new TelegramDownloadService(configService));
             var mainVM = new MainViewModel(
-                configService,
                 env,
                 manager,
                 downloadVM,
@@ -112,7 +111,7 @@ public class NotificationTests
 
             // 限制最大堆叠数为 3
             Assert.Equal(3, mainVM.Notifications.Count);
-            
+
             // 验证第 1 条被移出，当前剩下 "2", "3", "4"
             Assert.Equal("2", mainVM.Notifications[0].Message);
             Assert.Equal("3", mainVM.Notifications[1].Message);
@@ -142,7 +141,7 @@ public class NotificationTests
     public void NotificationItem_MultipleCloseCallsAreSafeAndIdempotent()
     {
         var item = new NotificationItem("Concurrent Close Test", true);
-        
+
         var exceptionCount = 0;
         var threads = Enumerable.Range(0, 10).Select(_ => new Thread(() =>
         {

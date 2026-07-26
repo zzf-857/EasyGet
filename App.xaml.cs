@@ -18,7 +18,7 @@ public partial class App : System.Windows.Application
 
     public static IServiceProvider Services { get; private set; } = null!;
 
-    protected override void OnStartup(StartupEventArgs e)
+    protected override async void OnStartup(StartupEventArgs e)
     {
         // 注册全局异常捕获
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
@@ -99,6 +99,10 @@ public partial class App : System.Windows.Application
 
             _serviceProvider = services.BuildServiceProvider();
             Services = _serviceProvider;
+
+            var configService = _serviceProvider.GetRequiredService<ConfigService>();
+            await configService.LoadAsync();
+            ThemeManager.ApplyTheme(configService.Config.ThemeColor);
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             mainWindow.Show();

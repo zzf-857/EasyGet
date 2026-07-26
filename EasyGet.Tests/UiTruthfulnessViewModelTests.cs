@@ -129,7 +129,6 @@ public class UiTruthfulnessViewModelTests
             new YtDlpVideoInfoProvider(batchContext.YtDlp));
         var history = new HistoryViewModel(batchContext.History, batchContext.Config);
         var main = new MainViewModel(
-            batchContext.Config,
             batchContext.Environment,
             batchContext.Manager,
             download,

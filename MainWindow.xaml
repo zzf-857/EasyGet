@@ -18,7 +18,7 @@
 
         MinWidth="1080" MinHeight="680"
 
-        WindowStartupLocation="CenterScreen"
+        WindowStartupLocation="Manual"
 
         WindowStyle="None"
 

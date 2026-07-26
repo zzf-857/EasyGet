@@ -1,5 +1,5 @@
 using System.Windows.Shell;
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
 using EasyGet.Services;
@@ -10,7 +10,6 @@ namespace EasyGet.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
-    private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
     private readonly DownloadManager _downloadManager;
 
@@ -44,7 +43,6 @@ public partial class MainViewModel : ObservableObject
         : "下载工具未就绪";
 
     public MainViewModel(
-        ConfigService configService,
         EnvironmentService envService,
         DownloadManager downloadManager,
         DownloadViewModel downloadVm,
@@ -52,7 +50,6 @@ public partial class MainViewModel : ObservableObject
         HistoryViewModel historyVm,
         SettingsViewModel settingsVm)
     {
-        _configService = configService;
         _envService = envService;
         _downloadManager = downloadManager;
 
@@ -233,9 +230,6 @@ public partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
-        await _configService.LoadAsync();
-        ThemeManager.ApplyTheme(_configService.Config.ThemeColor);
-
         SettingsVM.Initialize();
         DownloadVM.Initialize();
         HistoryVM.RefreshStorageStatus();

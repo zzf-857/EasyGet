@@ -843,6 +843,13 @@ public class ConfigService
             config.Window.Height,
             WindowState.MinHeight,
             WindowState.DefaultHeight);
+
+        if (config.Window.NativePlacement is { } placement
+            && ((long)placement.Right - placement.Left <= 0
+                || (long)placement.Bottom - placement.Top <= 0))
+        {
+            config.Window.NativePlacement = null;
+        }
     }
 
     private static double NormalizeWindowLength(double value, double minValue, double defaultValue)

@@ -22,7 +22,7 @@ public class AppConfig
     public int ConfigVersion { get; set; } = CurrentConfigVersion;
 
     /// <summary>默认下载目录</summary>
-    public string DefaultDownloadPath { get; set; } = 
+    public string DefaultDownloadPath { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "EasyGet");
 
     /// <summary>默认格式 (mp4, mkv, webm, mp3, m4a)</summary>
@@ -162,13 +162,25 @@ public class AppConfig
 /// </summary>
 public class WindowState
 {
-    public const double DefaultWidth = 1280;
-    public const double DefaultHeight = 800;
-    public const double MinWidth = 960;
-    public const double MinHeight = 600;
+    public const double DefaultWidth = 1360;
+    public const double DefaultHeight = 840;
+    public const double MinWidth = 1080;
+    public const double MinHeight = 680;
 
     public double Left { get; set; } = double.NaN;
     public double Top { get; set; } = double.NaN;
     public double Width { get; set; } = DefaultWidth;
     public double Height { get; set; } = DefaultHeight;
+    public NativeWindowPlacement? NativePlacement { get; set; }
+}
+
+/// <summary>
+/// Win32 正常窗口位置。坐标按 WINDOWPLACEMENT 的工作区坐标原样保存。
+/// </summary>
+public class NativeWindowPlacement
+{
+    public int Left { get; set; }
+    public int Top { get; set; }
+    public int Right { get; set; }
+    public int Bottom { get; set; }
 }

@@ -12,11 +12,10 @@ namespace EasyGet;
 public partial class MainWindow : Window
 {
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-    private const double MinimumVisibleTitleBarWidth = 96;
-    private const double MinimumVisibleTitleBarHeight = 24;
 
     private readonly MainViewModel _viewModel;
     private readonly ConfigService _configService;
+    private readonly WindowPlacementManager _windowPlacement;
     private bool _closeInProgress;
     private bool _closeCommitted;
 
@@ -26,19 +25,27 @@ public partial class MainWindow : Window
         _viewModel = viewModel;
         _configService = configService;
         DataContext = _viewModel;
+        _windowPlacement = new WindowPlacementManager(this, _configService.Config.Window);
+        _windowPlacement.PrepareInitialBounds();
 
-        SourceInitialized += (_, _) => TryEnableDarkSystemTitleBar();
+        SourceInitialized += MainWindow_SourceInitialized;
 
         Loaded += async (_, _) =>
         {
             await _viewModel.InitializeAsync();
-            RestoreWindowState();
         };
 
         Closing += MainWindow_Closing;
+        Closed += (_, _) => _windowPlacement.Dispose();
 
         Activated += MainWindow_Activated;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+    }
+
+    private void MainWindow_SourceInitialized(object? sender, EventArgs e)
+    {
+        TryEnableDarkSystemTitleBar();
+        _windowPlacement.InitializeSource();
     }
 
     private async void MainWindow_Closing(object? sender, CancelEventArgs e)
@@ -219,64 +226,8 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RestoreWindowState()
-    {
-        var ws = _configService.Config.Window;
-        if (ws.Width > 0) Width = ws.Width;
-        if (ws.Height > 0) Height = ws.Height;
-
-        if (!double.IsNaN(ws.Left) && !double.IsNaN(ws.Top))
-        {
-            var requestedBounds = new Rect(ws.Left, ws.Top, Width, Height);
-            var virtualScreenBounds = new Rect(
-                SystemParameters.VirtualScreenLeft,
-                SystemParameters.VirtualScreenTop,
-                SystemParameters.VirtualScreenWidth,
-                SystemParameters.VirtualScreenHeight);
-            var restoredBounds = EnsureRestoredBoundsVisible(
-                requestedBounds,
-                virtualScreenBounds,
-                SystemParameters.WorkArea);
-            Left = restoredBounds.Left;
-            Top = restoredBounds.Top;
-        }
-    }
-
-    internal static Rect EnsureRestoredBoundsVisible(
-        Rect requestedBounds,
-        Rect virtualScreenBounds,
-        Rect fallbackWorkArea)
-    {
-        var titleBarBounds = new Rect(
-            requestedBounds.Left,
-            requestedBounds.Top,
-            requestedBounds.Width,
-            Math.Min(requestedBounds.Height, MinimumVisibleTitleBarHeight));
-        var visibleTitleBar = Rect.Intersect(titleBarBounds, virtualScreenBounds);
-        if (!visibleTitleBar.IsEmpty
-            && visibleTitleBar.Width >= MinimumVisibleTitleBarWidth
-            && visibleTitleBar.Height >= MinimumVisibleTitleBarHeight)
-        {
-            return requestedBounds;
-        }
-
-        var left = fallbackWorkArea.Left
-                   + Math.Max(0, (fallbackWorkArea.Width - requestedBounds.Width) / 2);
-        var top = fallbackWorkArea.Top
-                  + Math.Max(0, (fallbackWorkArea.Height - requestedBounds.Height) / 2);
-        return new Rect(left, top, requestedBounds.Width, requestedBounds.Height);
-    }
-
     private void SaveWindowState()
-    {
-        if (WindowState == System.Windows.WindowState.Normal)
-        {
-            _configService.Config.Window.Left = Left;
-            _configService.Config.Window.Top = Top;
-            _configService.Config.Window.Width = Width;
-            _configService.Config.Window.Height = Height;
-        }
-    }
+        => _windowPlacement.Save();
 
     private void TopBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {

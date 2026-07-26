@@ -24,7 +24,6 @@ public class TaskbarProgressTests
         var historyVm = new HistoryViewModel(history, config);
 
         var main = new MainViewModel(
-            config,
             environment,
             manager,
             download,

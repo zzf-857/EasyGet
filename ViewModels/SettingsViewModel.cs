@@ -1040,6 +1040,9 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnTgPhoneNumberChanged(string value) => AutoSave();
     partial void OnSelectedThemeColorChanged(string value)
     {
+        if (_isInitializing)
+            return;
+
         ThemeManager.ApplyTheme(value);
         AutoSave();
     }
