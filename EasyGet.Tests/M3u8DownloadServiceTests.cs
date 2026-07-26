@@ -125,8 +125,112 @@ public class M3u8DownloadServiceTests
         Assert.NotEqual(first.OperationId, second.OperationId);
         Assert.NotEqual(first.SegmentDirectory, second.SegmentDirectory);
         Assert.NotEqual(first.TransportStreamPath, second.TransportStreamPath);
+        Assert.NotEqual(first.MuxedOutputPath, second.MuxedOutputPath);
         Assert.Equal(outputDirectory, Path.GetDirectoryName(first.SegmentDirectory));
         Assert.Equal(outputDirectory, Path.GetDirectoryName(first.TransportStreamPath));
+        Assert.Equal(outputDirectory, Path.GetDirectoryName(first.MuxedOutputPath));
+    }
+
+    [Fact]
+    public void EnsureSegmentsReadyForMerge_RejectsPermanentlyFailedSegments()
+    {
+        using var root = new TestDirectory();
+        var segmentDirectory = root.Path("segments");
+        Directory.CreateDirectory(segmentDirectory);
+        for (var index = 0; index < 3; index++)
+            File.WriteAllBytes(Path.Combine(segmentDirectory, $"{index:D4}.ts"), [1, 2, 3]);
+
+        var exception = Assert.Throws<IOException>(() =>
+            M3u8DownloadService.EnsureSegmentsReadyForMerge(
+                segmentDirectory,
+                totalSegments: 3,
+                failedIndices: [1]));
+
+        Assert.Contains("索引: 1", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("停止合并", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void EnsureSegmentsReadyForMerge_RejectsMissingAndEmptySegmentFiles()
+    {
+        using var root = new TestDirectory();
+        var segmentDirectory = root.Path("segments");
+        Directory.CreateDirectory(segmentDirectory);
+        File.WriteAllBytes(Path.Combine(segmentDirectory, "0000.ts"), [1]);
+        File.WriteAllBytes(Path.Combine(segmentDirectory, "0002.ts"), []);
+
+        var exception = Assert.Throws<IOException>(() =>
+            M3u8DownloadService.EnsureSegmentsReadyForMerge(
+                segmentDirectory,
+                totalSegments: 3,
+                failedIndices: []));
+
+        Assert.Contains("1, 2", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void IsSuccessfulFfmpegMerge_RequiresZeroExitCodeAndNonEmptyStagedOutput()
+    {
+        using var root = new TestDirectory();
+        var muxedOutputPath = root.Path("muxed.mp4");
+        File.WriteAllBytes(muxedOutputPath, [1, 2, 3]);
+
+        Assert.False(M3u8DownloadService.IsSuccessfulFfmpegMerge(
+            new ProcessOutput("", "ffmpeg failed", 1),
+            muxedOutputPath));
+        Assert.True(M3u8DownloadService.IsSuccessfulFfmpegMerge(
+            new ProcessOutput("", "", 0),
+            muxedOutputPath));
+
+        File.WriteAllBytes(muxedOutputPath, []);
+        Assert.False(M3u8DownloadService.IsSuccessfulFfmpegMerge(
+            new ProcessOutput("", "", 0),
+            muxedOutputPath));
+    }
+
+    [Fact]
+    public void IsSuccessfulFfmpegMerge_DoesNotTreatExistingFinalFileAsNewOutput()
+    {
+        using var root = new TestDirectory();
+        var finalOutputPath = root.Path("video.mp4");
+        File.WriteAllText(finalOutputPath, "existing output");
+        var workingPaths = M3u8DownloadService.CreateWorkingPaths(root.DirectoryPath);
+
+        var success = M3u8DownloadService.IsSuccessfulFfmpegMerge(
+            new ProcessOutput("", "", 0),
+            workingPaths.MuxedOutputPath);
+
+        Assert.False(success);
+        Assert.Equal("existing output", File.ReadAllText(finalOutputPath));
+    }
+
+    [Fact]
+    public void PromoteFfmpegOutputIfSuccessful_MoveFailureCannotReturnSuccess()
+    {
+        using var root = new TestDirectory();
+        var muxedOutputPath = root.Path("muxed.mp4");
+        var finalOutputPath = root.Path("video.mp4");
+        File.WriteAllText(muxedOutputPath, "new output");
+        File.WriteAllText(finalOutputPath, "existing output");
+
+        using (new FileStream(
+                   finalOutputPath,
+                   FileMode.Open,
+                   FileAccess.ReadWrite,
+                   FileShare.None))
+        {
+            var exception = Record.Exception(() =>
+                M3u8DownloadService.PromoteFfmpegOutputIfSuccessful(
+                    new ProcessOutput("", "", 0),
+                    muxedOutputPath,
+                    finalOutputPath));
+            Assert.True(
+                exception is IOException or UnauthorizedAccessException,
+                $"Unexpected exception: {exception}");
+        }
+
+        Assert.True(File.Exists(muxedOutputPath));
+        Assert.Equal("existing output", File.ReadAllText(finalOutputPath));
     }
 
     [Fact]

@@ -58,6 +58,7 @@ public class M3u8DownloadService
         var workingPaths = CreateWorkingPaths(task.OutputDirectory);
         var tempDir = workingPaths.SegmentDirectory;
         var outputTsPath = workingPaths.TransportStreamPath;
+        var muxedOutputPath = workingPaths.MuxedOutputPath;
         
         // 最终输出视频文件
         var finalName = DownloadFileNameBuilder.SanitizeResolvedTitle(
@@ -191,10 +192,11 @@ public class M3u8DownloadService
             stopwatch.Stop();
 
             // 3. 重试下载失败的分片
+            IReadOnlyList<int> stillFailed = failedIndices;
             if (failedIndices.Count > 0)
             {
                 logCallback?.Invoke($"[m3u8] 警告: 有 {failedIndices.Count} 个分片下载失败。开始重试...");
-                var stillFailed = await RetryFailedSegmentsAsync(
+                stillFailed = await RetryFailedSegmentsAsync(
                     failedIndices,
                     segments,
                     maxParallelSegments,
@@ -210,12 +212,9 @@ public class M3u8DownloadService
                     logCallback,
                     ct);
 
-                if (stillFailed.Count > 0)
-                {
-                    logCallback?.Invoke($"[m3u8] 严重警告: 依然有 {stillFailed.Count} 个分片下载失败，合成的视频可能存在损坏或卡顿。");
-                }
             }
 
+            EnsureSegmentsReadyForMerge(tempDir, totalSegments, stillFailed);
             logCallback?.Invoke("[m3u8] 分片下载完成，开始拼接...");
 
             // 4. 拼接分片为单个 ts 文件
@@ -224,15 +223,8 @@ public class M3u8DownloadService
                 for (int i = 0; i < totalSegments; i++)
                 {
                     var partPath = Path.Combine(tempDir, $"{i:D4}.ts");
-                    if (File.Exists(partPath))
-                    {
-                        using var infile = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, SegmentIoBufferSize, useAsync: true);
-                        await infile.CopyToAsync(outfile, SegmentIoBufferSize, ct);
-                    }
-                    else
-                    {
-                        logCallback?.Invoke($"[m3u8] 缺失分片: {partPath}");
-                    }
+                    using var infile = new FileStream(partPath, FileMode.Open, FileAccess.Read, FileShare.Read, SegmentIoBufferSize, useAsync: true);
+                    await infile.CopyToAsync(outfile, SegmentIoBufferSize, ct);
                 }
             }
 
@@ -251,15 +243,28 @@ public class M3u8DownloadService
                     // 确保输出路径目录存在
                     Directory.CreateDirectory(Path.GetDirectoryName(finalMp4Path)!);
                     
-                    var arguments = $"-y -i \"{outputTsPath}\" -c copy \"{finalMp4Path}\"";
-                    logCallback?.Invoke($"[m3u8] 运行 ffmpeg: {ffmpegPath} {arguments}");
-                    
-                    var processResult = await EnvironmentService.RunCommandAsync(ffmpegPath, arguments, TimeSpan.FromMinutes(10), ct);
-                    convertSuccess = File.Exists(finalMp4Path);
+                    var arguments = new[] { "-y", "-i", outputTsPath, "-c", "copy", muxedOutputPath };
+                    logCallback?.Invoke($"[m3u8] 运行 ffmpeg: {ffmpegPath} {string.Join(' ', arguments)}");
+
+                    var processResult = await YtDlpService.RunProcessAsync(
+                        ffmpegPath,
+                        arguments,
+                        TimeSpan.FromMinutes(10),
+                        ct);
+                    convertSuccess = PromoteFfmpegOutputIfSuccessful(
+                        processResult,
+                        muxedOutputPath,
+                        finalMp4Path);
                     if (convertSuccess)
                     {
                         logCallback?.Invoke($"[m3u8] 转换成功！已生成 MP4: {finalMp4Path}");
                         File.Delete(outputTsPath);
+                    }
+                    else
+                    {
+                        TryDeleteTemporaryFile(muxedOutputPath);
+                        logCallback?.Invoke(
+                            $"[m3u8] ffmpeg 封装未成功（退出码: {processResult.ExitCode}），将保留 TS 流作为回退输出。");
                     }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -268,6 +273,7 @@ public class M3u8DownloadService
                 }
                 catch (Exception ex)
                 {
+                    TryDeleteTemporaryFile(muxedOutputPath);
                     logCallback?.Invoke($"[m3u8] 使用 ffmpeg 封装 MP4 失败: {ex.Message}");
                 }
             }
@@ -277,11 +283,7 @@ public class M3u8DownloadService
                 logCallback?.Invoke("[m3u8] ffmpeg 封装失败或不可用，直接重命名 TS 文件为 MP4...");
                 try
                 {
-                    if (File.Exists(finalMp4Path))
-                    {
-                        File.Delete(finalMp4Path);
-                    }
-                    File.Move(outputTsPath, finalMp4Path);
+                    File.Move(outputTsPath, finalMp4Path, overwrite: true);
                     logCallback?.Invoke($"[m3u8] 重命名成功！已生成: {finalMp4Path} (注意：此文件实质为 TS 流格式)");
                 }
                 catch (Exception renameErr)
@@ -312,6 +314,9 @@ public class M3u8DownloadService
         }
         finally
         {
+            TryDeleteTemporaryFile(outputTsPath);
+            TryDeleteTemporaryFile(muxedOutputPath);
+
             // 清理临时分片目录
             try
             {
@@ -398,7 +403,8 @@ public class M3u8DownloadService
     internal static (
         string OperationId,
         string SegmentDirectory,
-        string TransportStreamPath) CreateWorkingPaths(string outputDirectory)
+        string TransportStreamPath,
+        string MuxedOutputPath) CreateWorkingPaths(string outputDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
 
@@ -406,7 +412,74 @@ public class M3u8DownloadService
         return (
             operationId,
             Path.Combine(outputDirectory, $"temp_segments_{operationId}"),
-            Path.Combine(outputDirectory, $"temp_output_{operationId}.ts"));
+            Path.Combine(outputDirectory, $"temp_output_{operationId}.ts"),
+            Path.Combine(outputDirectory, $"temp_output_{operationId}.mp4"));
+    }
+
+    internal static void EnsureSegmentsReadyForMerge(
+        string segmentDirectory,
+        int totalSegments,
+        IReadOnlyList<int> failedIndices)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(segmentDirectory);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(totalSegments);
+        ArgumentNullException.ThrowIfNull(failedIndices);
+
+        var unavailableIndices = failedIndices
+            .Where(index => index >= 0 && index < totalSegments)
+            .ToHashSet();
+        for (var index = 0; index < totalSegments; index++)
+        {
+            var partPath = Path.Combine(segmentDirectory, $"{index:D4}.ts");
+            if (!File.Exists(partPath) || new FileInfo(partPath).Length == 0)
+                unavailableIndices.Add(index);
+        }
+
+        if (unavailableIndices.Count == 0)
+            return;
+
+        var indexText = string.Join(", ", unavailableIndices.Order());
+        throw new IOException(
+            $"M3U8 分片下载不完整，缺失或无效的分片索引: {indexText}。已停止合并，避免生成损坏文件。");
+    }
+
+    internal static bool IsSuccessfulFfmpegMerge(
+        ProcessOutput processResult,
+        string muxedOutputPath)
+    {
+        ArgumentNullException.ThrowIfNull(processResult);
+        ArgumentException.ThrowIfNullOrWhiteSpace(muxedOutputPath);
+
+        return processResult.ExitCode == 0
+               && File.Exists(muxedOutputPath)
+               && new FileInfo(muxedOutputPath).Length > 0;
+    }
+
+    internal static bool PromoteFfmpegOutputIfSuccessful(
+        ProcessOutput processResult,
+        string muxedOutputPath,
+        string finalOutputPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(finalOutputPath);
+        if (!IsSuccessfulFfmpegMerge(processResult, muxedOutputPath))
+            return false;
+
+        File.Move(muxedOutputPath, finalOutputPath, overwrite: true);
+        return true;
+    }
+
+    private static void TryDeleteTemporaryFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or System.Security.SecurityException)
+        {
+        }
     }
 
     internal static async Task<IReadOnlyList<int>> RetryFailedSegmentsAsync(
