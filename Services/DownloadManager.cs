@@ -16,8 +16,10 @@ public class DownloadManager : IDisposable
     private readonly ConfigService _configService;
     private readonly DynamicConcurrencyGate _downloadGate;
     private readonly SemaphoreSlim _historyWriteSemaphore = new(1, 1);
-    private readonly Channel<DownloadTask> _metadataQueue;
+    private readonly Channel<DownloadAttempt> _metadataQueue;
     private readonly Task[] _metadataWorkers;
+    private readonly object _attemptLock = new();
+    private readonly Dictionary<DownloadTask, DownloadAttempt> _activeAttempts = [];
     private readonly object _idleLock = new();
     private int _activeTaskCount;
     private int _disposed;
@@ -63,7 +65,7 @@ public class DownloadManager : IDisposable
         _configService = configService;
         _downloadGate = new DynamicConcurrencyGate(
             NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads));
-        _metadataQueue = Channel.CreateBounded<DownloadTask>(new BoundedChannelOptions(
+        _metadataQueue = Channel.CreateBounded<DownloadAttempt>(new BoundedChannelOptions(
             MetadataQueueCapacity)
         {
             FullMode = BoundedChannelFullMode.Wait,
@@ -95,25 +97,51 @@ public class DownloadManager : IDisposable
     /// <summary>
     /// 添加并开始下载任务
     /// </summary>
-    public Task EnqueueAsync(DownloadTask task)
+    public async Task EnqueueAsync(DownloadTask task)
     {
         ObjectDisposedException.ThrowIf(
             Volatile.Read(ref _disposed) != 0,
             this);
-        task.Cts = new CancellationTokenSource();
+        var attempt = await BeginAttemptAsync(task);
 
-        if (string.IsNullOrEmpty(task.OutputDirectory))
-            task.OutputDirectory = _configService.Config.DefaultDownloadPath;
+        ObjectDisposedException.ThrowIf(
+            !StartEnqueuedAttempt(task, attempt),
+            this);
+    }
 
-        Tasks.Add(task);
+    private bool StartEnqueuedAttempt(DownloadTask task, DownloadAttempt attempt)
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            AbandonAttempt(attempt);
+            return false;
+        }
 
-        // 先获取视频信息
-        task.Status = DownloadStatus.Resolving;
-        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 正在解析: {task.Url}");
+        try
+        {
+            if (string.IsNullOrEmpty(task.OutputDirectory))
+                task.OutputDirectory = _configService.Config.DefaultDownloadPath;
 
-        RegisterActiveTask();
-        _ = QueueMetadataAsync(task);
-        return Task.CompletedTask;
+            Tasks.Add(task);
+
+            // 先获取视频信息
+            task.Status = DownloadStatus.Resolving;
+            RegisterActiveTask();
+            attempt.MarkRegistered();
+            LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 正在解析: {task.Url}");
+
+            _ = QueueMetadataAsync(attempt);
+            return true;
+        }
+        catch
+        {
+            FinishAttempt(attempt, currentTask =>
+            {
+                currentTask.Status = DownloadStatus.Failed;
+                currentTask.ErrorMessage = "启动下载任务失败，请重试";
+            });
+            throw;
+        }
     }
 
     public Task WaitForIdleAsync(CancellationToken cancellationToken)
@@ -127,120 +155,438 @@ public class DownloadManager : IDisposable
             : idleTask;
     }
 
-    private async Task QueueMetadataAsync(DownloadTask task)
+    private async Task QueueMetadataAsync(DownloadAttempt attempt)
     {
         try
         {
             await _metadataQueue.Writer.WriteAsync(
-                task,
-                task.Cts?.Token ?? CancellationToken.None);
+                attempt,
+                attempt.Token);
         }
         catch (OperationCanceledException)
         {
-            task.MarkCancelledUnlessPaused();
-            CompleteActiveTask();
-            NotifyTaskFinished(task);
+            FinishAttempt(attempt, currentTask => ApplyCancellationStatus(attempt, currentTask));
         }
         catch (Exception)
         {
-            task.Status = DownloadStatus.Failed;
-            task.ErrorMessage = "加入解析队列失败，请重试";
-            CompleteActiveTask();
-            NotifyTaskFinished(task);
+            if (attempt.Token.IsCancellationRequested)
+            {
+                FinishAttempt(
+                    attempt,
+                    currentTask => ApplyCancellationStatus(attempt, currentTask));
+            }
+            else
+            {
+                FinishAttempt(attempt, currentTask =>
+                {
+                    currentTask.Status = DownloadStatus.Failed;
+                    currentTask.ErrorMessage = "加入解析队列失败，请重试";
+                });
+            }
         }
     }
 
     private async Task ProcessMetadataQueueAsync()
     {
-        await foreach (var task in _metadataQueue.Reader.ReadAllAsync())
-            await ResolveMetadataAsync(task);
+        await foreach (var attempt in _metadataQueue.Reader.ReadAllAsync())
+        {
+            try
+            {
+                await ResolveMetadataAsync(attempt);
+            }
+            catch (Exception)
+            {
+                if (attempt.Token.IsCancellationRequested)
+                {
+                    FinishAttempt(
+                        attempt,
+                        currentTask => ApplyCancellationStatus(attempt, currentTask));
+                }
+                else
+                {
+                    FinishAttempt(attempt, currentTask =>
+                    {
+                        currentTask.Status = DownloadStatus.Failed;
+                        currentTask.ErrorMessage = "解析失败，请检查链接、网络或登录状态后重试";
+                    });
+                }
+            }
+        }
     }
 
-    private async Task ResolveMetadataAsync(DownloadTask task)
+    private async Task ResolveMetadataAsync(DownloadAttempt attempt)
     {
+        var task = attempt.Task;
         try
         {
             var info = await _ytDlpService.GetVideoInfoAsync(
                 task.Url,
-                task.Cts?.Token ?? CancellationToken.None);
-            if (info != null)
-                ApplyVideoInfoMetadata(task, info);
+                attempt.Token);
+            if (info != null
+                && !TryUpdateCurrentAttempt(
+                    attempt,
+                    currentTask => ApplyVideoInfoMetadata(currentTask, info)))
+            {
+                FinishAttempt(attempt);
+                return;
+            }
         }
         catch (OperationCanceledException)
         {
-            task.MarkCancelledUnlessPaused();
-            CompleteActiveTask();
-            NotifyTaskFinished(task);
+            FinishAttempt(attempt, currentTask => ApplyCancellationStatus(attempt, currentTask));
             return;
         }
         catch (Exception)
         {
-            task.Status = DownloadStatus.Failed;
-            task.ErrorMessage = "解析失败，请检查链接、网络或登录状态后重试";
-            LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 解析失败，请检查链接、网络或登录状态后重试");
-            CompleteActiveTask();
-            NotifyTaskFinished(task);
+            if (attempt.Token.IsCancellationRequested)
+            {
+                FinishAttempt(
+                    attempt,
+                    currentTask => ApplyCancellationStatus(attempt, currentTask));
+            }
+            else
+            {
+                var isCurrent = FinishAttempt(attempt, currentTask =>
+                {
+                    currentTask.Status = DownloadStatus.Failed;
+                    currentTask.ErrorMessage = "解析失败，请检查链接、网络或登录状态后重试";
+                });
+                if (isCurrent)
+                    LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 解析失败，请检查链接、网络或登录状态后重试");
+            }
+            return;
+        }
+        if (!TryUpdateCurrentAttempt(attempt, currentTask => currentTask.Status = DownloadStatus.Waiting))
+        {
+            FinishAttempt(attempt);
             return;
         }
 
-        task.Status = DownloadStatus.Waiting;
-        _ = ProcessDownloadAsync(task);
+        _ = ProcessDownloadAsync(attempt);
     }
 
-    private async Task ProcessDownloadAsync(DownloadTask task)
+    private async Task ProcessDownloadAsync(DownloadAttempt attempt)
     {
+        var task = attempt.Task;
         // 等待并发位
         try
         {
-            await _downloadGate.WaitAsync(task.Cts?.Token ?? CancellationToken.None);
+            await _downloadGate.WaitAsync(attempt.Token);
         }
         catch (OperationCanceledException)
         {
-            task.MarkCancelledUnlessPaused();
-            if (task.Status == DownloadStatus.Cancelled)
+            var isCurrent = FinishAttempt(
+                attempt,
+                currentTask => ApplyCancellationStatus(attempt, currentTask));
+            if (isCurrent && task.Status == DownloadStatus.Cancelled)
             {
                 LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
             }
-            CompleteActiveTask();
-            NotifyTaskFinished(task);
+            return;
+        }
+        catch (Exception)
+        {
+            if (attempt.Token.IsCancellationRequested)
+            {
+                FinishAttempt(
+                    attempt,
+                    currentTask => ApplyCancellationStatus(attempt, currentTask));
+            }
+            else
+            {
+                FinishAttempt(attempt, currentTask =>
+                {
+                    currentTask.Status = DownloadStatus.Failed;
+                    currentTask.ErrorMessage = "等待下载队列失败，请重试";
+                });
+            }
             return;
         }
 
+        var cancelled = false;
+        var failed = false;
         try
         {
             var progress = new Progress<DownloadProgress>(p =>
             {
-                ApplyProgress(task, p);
+                TryUpdateCurrentAttempt(
+                    attempt,
+                    currentTask => ApplyProgress(currentTask, p));
             });
 
-            await DownloadWithMatchingServiceAsync(task, progress);
-            await SaveHistoryIfCompletedAsync(task);
+            await DownloadWithMatchingServiceAsync(task, progress, attempt.Token);
+            if (IsCurrentAttempt(attempt))
+                await SaveHistoryIfCompletedAsync(task);
         }
         catch (OperationCanceledException)
         {
-            task.MarkCancelledUnlessPaused();
-            if (task.Status == DownloadStatus.Cancelled)
-            {
-                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已取消: {task.Title}");
-            }
-            else
-            {
-                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 已暂停: {task.Title}");
-            }
+            cancelled = true;
         }
         catch (Exception)
         {
-            task.Status = DownloadStatus.Failed;
-            task.ErrorMessage = "下载失败，请检查网络、登录状态或输出目录后重试";
-            LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 下载失败，请检查网络、登录状态或输出目录后重试");
+            if (attempt.Token.IsCancellationRequested)
+                cancelled = true;
+            else
+                failed = true;
         }
         finally
         {
             _downloadGate.Release();
-            CompleteActiveTask();
-            NotifyTaskFinished(task);
+            var isCurrent = FinishAttempt(attempt, currentTask =>
+            {
+                if (cancelled || attempt.IsCancellationRequested)
+                {
+                    ApplyCancellationStatus(attempt, currentTask);
+                }
+                else if (failed)
+                {
+                    currentTask.Status = DownloadStatus.Failed;
+                    currentTask.ErrorMessage = "下载失败，请检查网络、登录状态或输出目录后重试";
+                }
+            });
+
+            if (isCurrent && cancelled)
+            {
+                var action = task.Status == DownloadStatus.Cancelled ? "已取消" : "已暂停";
+                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {action}: {task.Title}");
+            }
+            else if (isCurrent && failed)
+            {
+                LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 下载失败，请检查网络、登录状态或输出目录后重试");
+            }
         }
     }
+
+    private async Task<DownloadAttempt> BeginAttemptAsync(DownloadTask task)
+    {
+        while (true)
+        {
+            Task? previousCompletion;
+            lock (_attemptLock)
+            {
+                ObjectDisposedException.ThrowIf(
+                    Volatile.Read(ref _disposed) != 0,
+                    this);
+
+                if (!_activeAttempts.TryGetValue(task, out var previousAttempt))
+                    return CreateAttemptLocked(task);
+
+                previousCompletion = previousAttempt.Completion;
+            }
+
+            await previousCompletion;
+        }
+    }
+
+    private async Task<DownloadAttempt?> BeginConditionalAttemptAsync(
+        DownloadTask task,
+        Func<DownloadStatus, bool> canStart)
+    {
+        while (true)
+        {
+            Task? previousCompletion;
+            DownloadAttempt? createdAttempt = null;
+            lock (_attemptLock)
+            {
+                if (Volatile.Read(ref _disposed) != 0)
+                    return null;
+
+                if (!canStart(task.Status))
+                    return null;
+
+                if (!_activeAttempts.TryGetValue(task, out var previousAttempt))
+                {
+                    createdAttempt = CreateAttemptLocked(task);
+                    previousCompletion = null;
+                }
+                else
+                {
+                    previousCompletion = previousAttempt.Completion;
+                }
+            }
+
+            if (createdAttempt is not null)
+            {
+                try
+                {
+                    task.Status = DownloadStatus.Waiting;
+                    if (createdAttempt.IsCancellationRequested)
+                        ApplyCancellationStatus(createdAttempt, task);
+                    return createdAttempt;
+                }
+                catch
+                {
+                    FinishAttempt(createdAttempt);
+                    throw;
+                }
+            }
+
+            await previousCompletion!;
+        }
+    }
+
+    private DownloadAttempt CreateAttemptLocked(DownloadTask task)
+    {
+        var attempt = new DownloadAttempt(task);
+        _activeAttempts.Add(task, attempt);
+        task.Cts = attempt.Source;
+        return attempt;
+    }
+
+    private bool IsCurrentAttempt(DownloadAttempt attempt)
+    {
+        lock (_attemptLock)
+        {
+            return _activeAttempts.TryGetValue(attempt.Task, out var activeAttempt)
+                && ReferenceEquals(activeAttempt, attempt)
+                && ReferenceEquals(attempt.Task.Cts, attempt.Source)
+                && !attempt.IsFinishing
+                && !attempt.IsCancellationRequested;
+        }
+    }
+
+    private bool TryUpdateCurrentAttempt(
+        DownloadAttempt attempt,
+        Action<DownloadTask> update)
+    {
+        lock (attempt.UpdateSync)
+        {
+            lock (_attemptLock)
+            {
+                if (!_activeAttempts.TryGetValue(attempt.Task, out var activeAttempt)
+                    || !ReferenceEquals(activeAttempt, attempt)
+                    || !ReferenceEquals(attempt.Task.Cts, attempt.Source)
+                    || attempt.IsFinishing
+                    || attempt.IsCancellationRequested)
+                {
+                    return false;
+                }
+            }
+
+            update(attempt.Task);
+            if (attempt.IsCancellationRequested)
+            {
+                ApplyCancellationStatus(attempt, attempt.Task);
+                return false;
+            }
+
+            lock (_attemptLock)
+            {
+                return _activeAttempts.TryGetValue(attempt.Task, out var activeAttempt)
+                    && ReferenceEquals(activeAttempt, attempt)
+                    && ReferenceEquals(attempt.Task.Cts, attempt.Source)
+                    && !attempt.IsFinishing;
+            }
+        }
+    }
+
+    private bool FinishAttempt(
+        DownloadAttempt attempt,
+        Action<DownloadTask>? updateCurrentTask = null)
+    {
+        if (!attempt.TryFinish())
+            return false;
+
+        var isCurrent = false;
+        try
+        {
+            lock (attempt.UpdateSync)
+            {
+                lock (_attemptLock)
+                {
+                    isCurrent = _activeAttempts.TryGetValue(attempt.Task, out var activeAttempt)
+                        && ReferenceEquals(activeAttempt, attempt);
+                    if (isCurrent && ReferenceEquals(attempt.Task.Cts, attempt.Source))
+                        attempt.Task.Cts = null;
+                }
+
+                if (isCurrent && updateCurrentTask is not null)
+                {
+                    try
+                    {
+                        updateCurrentTask(attempt.Task);
+                    }
+                    catch (Exception)
+                    {
+                        // Property subscribers must not prevent attempt cleanup.
+                    }
+                }
+            }
+        }
+        finally
+        {
+            if (attempt.IsCancellationRequested)
+                CancelAttemptSource(attempt.Task, attempt, attempt.Source);
+
+            var cancellationCompletion = attempt.SourceCancellationCompletion;
+            if (cancellationCompletion is not null && !cancellationCompletion.IsCompleted)
+            {
+                _ = CompleteAttemptCleanupAfterCancellationAsync(
+                    attempt,
+                    isCurrent,
+                    cancellationCompletion);
+            }
+            else
+            {
+                CompleteAttemptCleanup(attempt, isCurrent);
+            }
+        }
+
+        return isCurrent;
+    }
+
+    private async Task CompleteAttemptCleanupAfterCancellationAsync(
+        DownloadAttempt attempt,
+        bool isCurrent,
+        Task cancellationCompletion)
+    {
+        await cancellationCompletion.ConfigureAwait(false);
+        CompleteAttemptCleanup(attempt, isCurrent);
+    }
+
+    private void CompleteAttemptCleanup(DownloadAttempt attempt, bool isCurrent)
+    {
+        try
+        {
+            attempt.Source.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // An external owner may have disposed the exposed source.
+        }
+        finally
+        {
+            var idleSignal = attempt.WasRegistered
+                ? CompleteActiveTask()
+                : null;
+            attempt.MarkCleanupComplete();
+
+            try
+            {
+                if (isCurrent)
+                    NotifyTaskFinishedOnce(attempt);
+            }
+            finally
+            {
+                lock (_attemptLock)
+                {
+                    if (_activeAttempts.TryGetValue(attempt.Task, out var activeAttempt)
+                        && ReferenceEquals(activeAttempt, attempt))
+                    {
+                        _activeAttempts.Remove(attempt.Task);
+                    }
+                }
+
+                attempt.SignalCompletion();
+                idleSignal?.TrySetResult();
+            }
+        }
+    }
+
+    private static bool IsFinishedStatus(DownloadStatus status)
+        => status is DownloadStatus.Completed
+            or DownloadStatus.Failed
+            or DownloadStatus.Cancelled;
 
     private void RegisterActiveTask()
     {
@@ -254,18 +600,18 @@ public class DownloadManager : IDisposable
         }
     }
 
-    private void CompleteActiveTask()
+    private TaskCompletionSource? CompleteActiveTask()
     {
         TaskCompletionSource? signal = null;
         lock (_idleLock)
         {
             if (_activeTaskCount <= 0)
-                return;
+                return null;
             if (--_activeTaskCount == 0)
                 signal = _idleSignal;
         }
 
-        signal?.TrySetResult();
+        return signal;
     }
 
     private void NotifyTaskFinished(DownloadTask task)
@@ -295,70 +641,207 @@ public class DownloadManager : IDisposable
         if (task is null)
             return;
 
-        task.Cts?.Cancel();
-        if (task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Paused)
-            task.Status = DownloadStatus.Cancelled;
+        DownloadAttempt? attempt = null;
+        CancellationTokenSource? source;
+        bool shouldMarkCancelled;
+        var notifyFinishingCancellation = false;
+        lock (_attemptLock)
+        {
+            if (_activeAttempts.TryGetValue(task, out var activeAttempt))
+            {
+                if (activeAttempt.IsFinishing
+                    && !activeAttempt.WasPauseRequested
+                    && task.Status != DownloadStatus.Paused)
+                {
+                    return;
+                }
+
+                attempt = activeAttempt;
+                notifyFinishingCancellation = attempt.IsFinishing;
+                attempt.RequestCancel();
+            }
+
+            source = task.Cts;
+            shouldMarkCancelled = notifyFinishingCancellation
+                || task.Status is DownloadStatus.Waiting
+                or DownloadStatus.Resolving
+                or DownloadStatus.Paused;
+        }
+
+        try
+        {
+            if (shouldMarkCancelled)
+                task.Status = DownloadStatus.Cancelled;
+        }
+        finally
+        {
+            CancelAttemptSource(task, attempt, source);
+            if (notifyFinishingCancellation
+                && attempt is not null
+                && attempt.IsCleanupComplete)
+            {
+                NotifyTaskFinishedOnce(attempt);
+            }
+        }
+    }
+
+    private void NotifyTaskFinishedOnce(DownloadAttempt attempt)
+    {
+        if (!attempt.WasRegistered
+            || !IsFinishedStatus(attempt.Task.Status)
+            || !attempt.TryClaimFinishedNotification())
+        {
+            return;
+        }
+
+        NotifyTaskFinished(attempt.Task);
     }
 
     /// <summary>暂停任务</summary>
     public void Pause(string taskId)
     {
         var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-        if (task == null || task.Status != DownloadStatus.Downloading) return;
+        if (task is null)
+            return;
 
-        task.Status = DownloadStatus.Paused;
-        task.Cts?.Cancel();
+        DownloadAttempt? attempt = null;
+        CancellationTokenSource? source;
+        lock (_attemptLock)
+        {
+            if (task.Status != DownloadStatus.Downloading)
+                return;
+
+            if (_activeAttempts.TryGetValue(task, out var activeAttempt))
+            {
+                if (activeAttempt.IsFinishing)
+                    return;
+
+                attempt = activeAttempt;
+                attempt.RequestPause();
+            }
+            source = task.Cts;
+        }
+
+        try
+        {
+            task.Status = DownloadStatus.Paused;
+        }
+        finally
+        {
+            CancelAttemptSource(task, attempt, source);
+        }
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 暂停: {task.Title}");
     }
 
     /// <summary>恢复暂停的任务（yt-dlp 自动续传部分下载文件）</summary>
-    public Task ResumeAsync(string taskId)
+    public async Task ResumeAsync(string taskId)
     {
         var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-        if (task == null || task.Status != DownloadStatus.Paused)
-            return Task.CompletedTask;
+        if (task is null)
+            return;
 
-        task.Speed = 0;
-        task.Eta = 0;
-        task.ErrorMessage = "";
-        task.Cts = new CancellationTokenSource();
+        var attempt = await BeginConditionalAttemptAsync(
+            task,
+            static status => status == DownloadStatus.Paused);
+        if (attempt is null)
+            return;
 
-        Tasks.Remove(task);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            AbandonAttempt(attempt);
+            return;
+        }
 
-        // 重新入队，但跳过信息解析（已有元数据）
-        task.Status = DownloadStatus.Waiting;
-        Tasks.Add(task);
+        var removedFromQueue = false;
+        try
+        {
+            task.Speed = 0;
+            task.Eta = 0;
+            task.ErrorMessage = "";
 
-        RegisterActiveTask();
-        _ = ProcessDownloadAsync(task);
-        return Task.CompletedTask;
+            removedFromQueue = Tasks.Remove(task);
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                AbandonAttempt(attempt);
+                RestoreTaskIfMissing(task);
+                return;
+            }
+
+            // 重新入队，但跳过信息解析（已有元数据）
+            Tasks.Add(task);
+
+            RegisterActiveTask();
+            attempt.MarkRegistered();
+            _ = ProcessDownloadAsync(attempt);
+        }
+        catch
+        {
+            FinishAttempt(attempt, currentTask =>
+            {
+                currentTask.Status = DownloadStatus.Failed;
+                currentTask.ErrorMessage = "恢复下载任务失败，请重试";
+            });
+            if (removedFromQueue)
+                RestoreTaskIfMissing(task);
+            throw;
+        }
     }
 
     /// <summary>重试失败/已取消的任务</summary>
     public async Task RetryAsync(string taskId)
     {
         var task = Tasks.FirstOrDefault(t => t.Id == taskId);
-        if (task == null || (task.Status != DownloadStatus.Failed && task.Status != DownloadStatus.Cancelled))
+        if (task is null)
             return;
 
-        // 重置任务状态
-        task.Status = DownloadStatus.Waiting;
-        task.Progress = 0;
-        task.Speed = 0;
-        task.Eta = 0;
-        task.DownloadedSize = 0;
-        task.ErrorMessage = "";
-        ClearDouyinTaskAttemptState(task);
-        // 从队列中移除再重新入队
-        Tasks.Remove(task);
-        await EnqueueAsync(task);
+        var attempt = await BeginConditionalAttemptAsync(
+            task,
+            static status => status is DownloadStatus.Failed or DownloadStatus.Cancelled);
+        if (attempt is null)
+            return;
+
+        var removedFromQueue = false;
+        try
+        {
+            // 重置任务状态
+            task.Progress = 0;
+            task.Speed = 0;
+            task.Eta = 0;
+            task.DownloadedSize = 0;
+            task.ErrorMessage = "";
+            ClearDouyinTaskAttemptState(task);
+            // 从队列中移除再重新入队
+            removedFromQueue = Tasks.Remove(task);
+            if (!StartEnqueuedAttempt(task, attempt) && removedFromQueue)
+                RestoreTaskIfMissing(task);
+        }
+        catch
+        {
+            FinishAttempt(attempt, currentTask =>
+            {
+                currentTask.Status = DownloadStatus.Failed;
+                currentTask.ErrorMessage = "重试下载任务失败，请重试";
+            });
+            if (removedFromQueue)
+                RestoreTaskIfMissing(task);
+            throw;
+        }
     }
 
     /// <summary>取消所有任务</summary>
     public void CancelAll()
     {
         foreach (var task in Tasks.ToArray())
-            Cancel(task.Id);
+        {
+            try
+            {
+                Cancel(task.Id);
+            }
+            catch (Exception)
+            {
+                // A task subscriber must not prevent cancellation of later tasks.
+            }
+        }
     }
 
     public void Dispose()
@@ -367,7 +850,135 @@ public class DownloadManager : IDisposable
             return;
 
         CancelAll();
+
+        DownloadAttempt[] attemptsToCancel;
+        lock (_attemptLock)
+        {
+            attemptsToCancel = _activeAttempts.Values
+                .Where(attempt => !attempt.IsFinishing
+                    || attempt.WasPauseRequested
+                    || attempt.Task.Status == DownloadStatus.Paused)
+                .ToArray();
+            foreach (var attempt in attemptsToCancel)
+                attempt.RequestCancel();
+        }
+
+        foreach (var attempt in attemptsToCancel)
+        {
+            if (attempt.IsFinishing)
+            {
+                try
+                {
+                    attempt.Task.Status = DownloadStatus.Cancelled;
+                }
+                catch (Exception)
+                {
+                    // Property subscribers must not interrupt disposal.
+                }
+            }
+
+            CancelAttemptSource(attempt.Task, attempt, attempt.Source);
+            if (attempt.IsFinishing && attempt.IsCleanupComplete)
+            {
+                try
+                {
+                    NotifyTaskFinishedOnce(attempt);
+                }
+                catch (Exception)
+                {
+                    // Event subscribers must not interrupt disposal.
+                }
+            }
+        }
+
         _metadataQueue.Writer.TryComplete();
+    }
+
+    private void CancelAttemptSource(
+        DownloadTask task,
+        DownloadAttempt? attempt,
+        CancellationTokenSource? source)
+    {
+        if (source is null)
+            return;
+
+        if (attempt is not null)
+        {
+            if (!attempt.TryBeginSourceCancellation(out var completion))
+                return;
+
+            try
+            {
+                var cancellationTask = source.CancelAsync();
+                _ = cancellationTask.ContinueWith(
+                    static (completedTask, state) =>
+                    {
+                        _ = completedTask.Exception;
+                        ((TaskCompletionSource)state!).TrySetResult();
+                    },
+                    completion,
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+            catch (ObjectDisposedException)
+            {
+                ClearTaskSourceIfCurrent(task, source);
+                completion.TrySetResult();
+            }
+
+            return;
+        }
+
+        try
+        {
+            source.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            ClearTaskSourceIfCurrent(task, source);
+        }
+        catch (AggregateException)
+        {
+            // Cancellation callbacks have all run; task cleanup must continue.
+        }
+    }
+
+    private void ClearTaskSourceIfCurrent(
+        DownloadTask task,
+        CancellationTokenSource source)
+    {
+        lock (_attemptLock)
+        {
+            if (ReferenceEquals(task.Cts, source))
+            {
+                task.Cts = null;
+            }
+        }
+    }
+
+    private void AbandonAttempt(DownloadAttempt attempt)
+    {
+        attempt.RequestCancel();
+        CancelAttemptSource(attempt.Task, attempt, attempt.Source);
+        FinishAttempt(
+            attempt,
+            currentTask => ApplyCancellationStatus(attempt, currentTask));
+    }
+
+    private void RestoreTaskIfMissing(DownloadTask task)
+    {
+        if (!Tasks.Contains(task))
+            Tasks.Add(task);
+    }
+
+    private static void ApplyCancellationStatus(
+        DownloadAttempt attempt,
+        DownloadTask task)
+    {
+        task.Status = attempt.WasPauseRequested
+            ? DownloadStatus.Paused
+            : DownloadStatus.Cancelled;
     }
 
     /// <summary>
@@ -430,9 +1041,9 @@ public class DownloadManager : IDisposable
 
     private async Task DownloadWithMatchingServiceAsync(
         DownloadTask task,
-        IProgress<DownloadProgress> progress)
+        IProgress<DownloadProgress> progress,
+        CancellationToken token)
     {
-        var token = task.Cts?.Token ?? CancellationToken.None;
         Action<string> log = line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}");
 
         if (M3u8DownloadService.IsM3u8Url(task.Url))
@@ -592,6 +1203,74 @@ public class DownloadManager : IDisposable
         var invalid = System.IO.Path.GetInvalidFileNameChars();
         var sanitized = new string(value.Where(c => !invalid.Contains(c)).ToArray());
         return string.IsNullOrWhiteSpace(sanitized) ? "Item" : sanitized;
+    }
+
+    private sealed class DownloadAttempt
+    {
+        private readonly TaskCompletionSource _completion = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private TaskCompletionSource? _sourceCancellationCompletion;
+        private int _cancellationKind;
+        private int _cleanupComplete;
+        private int _finished;
+        private int _finishedNotificationClaimed;
+        private int _registered;
+
+        public DownloadAttempt(DownloadTask task)
+        {
+            Task = task;
+            Source = new CancellationTokenSource();
+            Token = Source.Token;
+        }
+
+        public DownloadTask Task { get; }
+        public CancellationTokenSource Source { get; }
+        public CancellationToken Token { get; }
+        public System.Threading.Tasks.Task Completion => _completion.Task;
+        public System.Threading.Tasks.Task? SourceCancellationCompletion
+            => Volatile.Read(ref _sourceCancellationCompletion)?.Task;
+        public object UpdateSync { get; } = new();
+        public bool IsCancellationRequested => Volatile.Read(ref _cancellationKind) != 0;
+        public bool IsCleanupComplete => Volatile.Read(ref _cleanupComplete) != 0;
+        public bool WasPauseRequested => Volatile.Read(ref _cancellationKind) == 1;
+        public bool IsFinishing => Volatile.Read(ref _finished) != 0;
+        public bool WasRegistered => Volatile.Read(ref _registered) != 0;
+
+        public void RequestPause()
+            => Interlocked.CompareExchange(ref _cancellationKind, 1, 0);
+
+        public void RequestCancel()
+            => Interlocked.Exchange(ref _cancellationKind, 2);
+
+        public bool TryFinish() => Interlocked.Exchange(ref _finished, 1) == 0;
+
+        public bool TryClaimFinishedNotification()
+            => Interlocked.Exchange(ref _finishedNotificationClaimed, 1) == 0;
+
+        public bool TryBeginSourceCancellation(out TaskCompletionSource completion)
+        {
+            var existing = Volatile.Read(ref _sourceCancellationCompletion);
+            if (existing is not null)
+            {
+                completion = existing;
+                return false;
+            }
+
+            var created = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            existing = Interlocked.CompareExchange(
+                ref _sourceCancellationCompletion,
+                created,
+                null);
+            completion = existing ?? created;
+            return existing is null;
+        }
+
+        public void MarkCleanupComplete() => Volatile.Write(ref _cleanupComplete, 1);
+
+        public void MarkRegistered() => Volatile.Write(ref _registered, 1);
+
+        public void SignalCompletion() => _completion.TrySetResult();
     }
 }
 

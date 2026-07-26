@@ -124,6 +124,7 @@ public class DownloadManagerTests
         foreach (var task in tasks)
             await manager.EnqueueAsync(task);
         await service.FourMetadataRequestsStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var queuedSource = Assert.IsType<CancellationTokenSource>(tasks[4].Cts);
 
         manager.Cancel(tasks[4].Id);
 
@@ -133,6 +134,8 @@ public class DownloadManagerTests
             .WaitAsync(TimeSpan.FromSeconds(3));
         Assert.Equal(DownloadStatus.Cancelled, statusAfterCancel);
         Assert.DoesNotContain(tasks[4].Url, service.ResolvedUrls);
+        Assert.Null(tasks[4].Cts);
+        AssertCancellationTokenSourceDisposed(queuedSource);
     }
 
     [Fact]
@@ -242,6 +245,7 @@ public class DownloadManagerTests
         Assert.DoesNotContain("secret-value", task.ErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("Secret Profile", task.ErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain(logs, log => log.Contains("secret-value", StringComparison.Ordinal));
+        Assert.Null(task.Cts);
     }
 
     [Fact]
@@ -268,6 +272,7 @@ public class DownloadManagerTests
         Assert.DoesNotContain("secret-value", task.ErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain("Secret Profile", task.ErrorMessage, StringComparison.Ordinal);
         Assert.DoesNotContain(logs, log => log.Contains("secret-value", StringComparison.Ordinal));
+        Assert.Null(task.Cts);
     }
 
     [Fact]
@@ -416,6 +421,7 @@ public class DownloadManagerTests
             manager.Tasks.Add(task);
 
             await manager.ResumeAsync(task.Id);
+            var source = Assert.IsType<CancellationTokenSource>(task.Cts);
             manager.Cancel(task.Id);
 
             var completed = await Task.WhenAny(finished.Task, Task.Delay(1000));
@@ -423,6 +429,8 @@ public class DownloadManagerTests
             Assert.Same(finished.Task, completed);
             Assert.Same(task, await finished.Task);
             Assert.Equal(DownloadStatus.Cancelled, task.Status);
+            Assert.Null(task.Cts);
+            AssertCancellationTokenSourceDisposed(source);
         }
         finally
         {
@@ -442,11 +450,145 @@ public class DownloadManagerTests
 
         await manager.EnqueueAsync(task);
         await service.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var source = Assert.IsType<CancellationTokenSource>(task.Cts);
         manager.Pause(task.Id);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(2));
 
         Assert.Equal(DownloadStatus.Paused, task.Status);
+        Assert.Null(task.Cts);
+        AssertCancellationTokenSourceDisposed(source);
+    }
+
+    [Fact]
+    public async Task CompletedDownload_ClearsAndDisposesAttemptSource()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new ResumeBlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask { Url = "https://example.com/completed" };
+
+        await manager.EnqueueAsync(task);
+        await service.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var source = Assert.IsType<CancellationTokenSource>(task.Cts);
+
+        service.Release();
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Null(task.Cts);
+        AssertCancellationTokenSourceDisposed(source);
+    }
+
+    [Fact]
+    public async Task ResumeAsync_WaitsForOldCleanupBeforeStartingNewAttempt()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.MaxConcurrentDownloads = 2;
+        var service = new PauseResumeIsolationYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask { Url = "https://example.com/resume-isolation" };
+        var finished = new TaskCompletionSource<DownloadTask>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var finishedCount = 0;
+        manager.TaskFinished += finishedTask =>
+        {
+            Interlocked.Increment(ref finishedCount);
+            finished.TrySetResult(finishedTask);
+        };
+
+        await manager.EnqueueAsync(task);
+        await service.FirstDownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var firstSource = Assert.IsType<CancellationTokenSource>(task.Cts);
+
+        manager.Pause(task.Id);
+        await service.FirstCancellationObserved.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var resumeTask = manager.ResumeAsync(task.Id);
+
+        Assert.False(resumeTask.IsCompleted);
+        Assert.Same(firstSource, task.Cts);
+        Assert.False(service.ResumedDownloadStarted.Task.IsCompleted);
+        Assert.False(finished.Task.IsCompleted);
+
+        service.AllowFirstAttemptToExit();
+        await resumeTask.WaitAsync(TimeSpan.FromSeconds(2));
+        var resumedSource = Assert.IsType<CancellationTokenSource>(task.Cts);
+        await service.ResumedDownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        AssertCancellationTokenSourceDisposed(firstSource);
+        Assert.Equal(0, Volatile.Read(ref finishedCount));
+        Assert.Same(resumedSource, task.Cts);
+        Assert.False(resumedSource.IsCancellationRequested);
+        Assert.Equal(DownloadStatus.Downloading, task.Status);
+
+        service.CompleteResumedDownload();
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Same(task, await finished.Task.WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Equal(1, Volatile.Read(ref finishedCount));
+        Assert.Null(task.Cts);
+        AssertCancellationTokenSourceDisposed(resumedSource);
+    }
+
+    [Fact]
+    public async Task Cancel_UpgradesFinishingPauseAndNotifiesOnlyOnce()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new ResumeBlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask { Url = "https://example.com/pause-cancel" };
+        var finishedCount = 0;
+        manager.TaskFinished += _ => Interlocked.Increment(ref finishedCount);
+
+        await manager.EnqueueAsync(task);
+        await service.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var source = Assert.IsType<CancellationTokenSource>(task.Cts);
+        var attemptsField = typeof(DownloadManager).GetField(
+            "_activeAttempts",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        var attempts = Assert.IsAssignableFrom<System.Collections.IDictionary>(
+            attemptsField?.GetValue(manager));
+        var attempt = Assert.IsAssignableFrom<object>(attempts[task]);
+        var updateSync = Assert.IsAssignableFrom<object>(
+            attempt.GetType().GetProperty("UpdateSync")?.GetValue(attempt));
+        var isFinishingProperty = attempt.GetType().GetProperty("IsFinishing");
+        var wasRegisteredProperty = attempt.GetType().GetProperty("WasRegistered");
+
+        Monitor.Enter(updateSync);
+        try
+        {
+            manager.Pause(task.Id);
+            Assert.True(SpinWait.SpinUntil(
+                () => isFinishingProperty?.GetValue(attempt) is true,
+                TimeSpan.FromSeconds(2)));
+            Assert.Equal(true, wasRegisteredProperty?.GetValue(attempt));
+
+            manager.Cancel(task.Id);
+
+            Assert.Equal(DownloadStatus.Cancelled, task.Status);
+            Assert.Equal(0, Volatile.Read(ref finishedCount));
+        }
+        finally
+        {
+            Monitor.Exit(updateSync);
+        }
+
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.Equal(1, Volatile.Read(ref finishedCount));
+        Assert.Null(task.Cts);
+        AssertCancellationTokenSourceDisposed(source);
     }
 
     [Fact]
@@ -469,6 +611,261 @@ public class DownloadManagerTests
 
         Assert.Equal(DownloadStatus.Cancelled, task.Status);
         Assert.True(task.Cts.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void CancelAndPause_DisposedSourcesDoNotThrow()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        using var manager = new DownloadManager(new FakeYtDlpDownloadService(), history, config);
+        var cancelSource = new CancellationTokenSource();
+        var pauseSource = new CancellationTokenSource();
+        cancelSource.Dispose();
+        pauseSource.Dispose();
+        var cancelTask = new DownloadTask
+        {
+            Url = "https://example.com/cancel",
+            Status = DownloadStatus.Paused,
+            Cts = cancelSource
+        };
+        var pauseTask = new DownloadTask
+        {
+            Url = "https://example.com/pause",
+            Status = DownloadStatus.Downloading,
+            Cts = pauseSource
+        };
+        manager.Tasks.Add(cancelTask);
+        manager.Tasks.Add(pauseTask);
+
+        var cancelException = Record.Exception(() => manager.Cancel(cancelTask.Id));
+        var pauseException = Record.Exception(() => manager.Pause(pauseTask.Id));
+
+        Assert.Null(cancelException);
+        Assert.Null(pauseException);
+        Assert.Equal(DownloadStatus.Cancelled, cancelTask.Status);
+        Assert.Equal(DownloadStatus.Paused, pauseTask.Status);
+        Assert.Null(cancelTask.Cts);
+        Assert.Null(pauseTask.Cts);
+    }
+
+    [Fact]
+    public async Task MetadataPropertyCallback_CanCancelWithoutWaitingForAttemptLock()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new FakeYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask { Url = "https://example.com/property-callback" };
+        var cancelCompletedInsideCallback = new TaskCompletionSource<bool>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        task.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(DownloadTask.Title))
+                return;
+
+            var cancelTask = Task.Run(() => manager.Cancel(task.Id));
+            cancelCompletedInsideCallback.TrySetResult(
+                cancelTask.Wait(TimeSpan.FromSeconds(1)));
+        };
+
+        await manager.EnqueueAsync(task);
+
+        Assert.True(await cancelCompletedInsideCallback.Task
+            .WaitAsync(TimeSpan.FromSeconds(2)));
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.Null(task.Cts);
+    }
+
+    [Fact]
+    public async Task MetadataWaitingSubscriberFailure_CleansAttemptAndKeepsWorkersAlive()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new FakeYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var failingTask = new DownloadTask { Url = "https://example.com/waiting-subscriber" };
+        failingTask.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(DownloadTask.Status)
+                && failingTask.Status == DownloadStatus.Waiting)
+            {
+                throw new InvalidOperationException("waiting subscriber failed");
+            }
+        };
+
+        await manager.EnqueueAsync(failingTask);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Failed, failingTask.Status);
+        Assert.Null(failingTask.Cts);
+
+        var nextTask = new DownloadTask { Url = "https://example.com/next-metadata" };
+        await manager.EnqueueAsync(nextTask);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Completed, nextTask.Status);
+        Assert.Null(nextTask.Cts);
+    }
+
+    [Fact]
+    public async Task FinishAttempt_PropertySubscriberFailureStillCleansUpAndAllowsRetry()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new ResumeBlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask { Url = "https://example.com/subscriber-failure" };
+
+        await manager.EnqueueAsync(task);
+        await service.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        var firstSource = Assert.IsType<CancellationTokenSource>(task.Cts);
+        System.ComponentModel.PropertyChangedEventHandler throwingHandler = (_, e) =>
+        {
+            if (e.PropertyName == nameof(DownloadTask.Status)
+                && task.Status == DownloadStatus.Cancelled)
+            {
+                throw new InvalidOperationException("subscriber failed");
+            }
+        };
+        task.PropertyChanged += throwingHandler;
+
+        manager.Cancel(task.Id);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        task.PropertyChanged -= throwingHandler;
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.Null(task.Cts);
+        AssertCancellationTokenSourceDisposed(firstSource);
+
+        await manager.RetryAsync(task.Id);
+        Assert.True(await WaitUntilAsync(
+            () => task.Status == DownloadStatus.Downloading && task.Cts is not null,
+            TimeSpan.FromSeconds(2)));
+        var retrySource = Assert.IsType<CancellationTokenSource>(task.Cts);
+
+        service.Release();
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Null(task.Cts);
+        AssertCancellationTokenSourceDisposed(retrySource);
+    }
+
+    [Fact]
+    public async Task DisposeDuringResumeRemoval_CancelsUnlistedAttemptBeforeDownloadStarts()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new ResumeBlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask
+        {
+            Url = "https://example.com/dispose-resume",
+            Status = DownloadStatus.Paused
+        };
+        manager.Tasks.Add(task);
+        CancellationTokenSource? removedSource = null;
+        manager.Tasks.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems?.Cast<DownloadTask>().Contains(task) != true)
+                return;
+
+            removedSource = task.Cts;
+            manager.Dispose();
+        };
+
+        await manager.ResumeAsync(task.Id);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.NotNull(removedSource);
+        AssertCancellationTokenSourceDisposed(removedSource);
+        Assert.False(service.DownloadStarted.Task.IsCompleted);
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.Null(task.Cts);
+        Assert.Contains(task, manager.Tasks);
+    }
+
+    [Fact]
+    public async Task DisposeDuringRetryRemoval_RestoresCancelledTaskWithoutStartingMetadata()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new FakeYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask
+        {
+            Url = "https://example.com/dispose-retry",
+            Status = DownloadStatus.Failed
+        };
+        manager.Tasks.Add(task);
+        CancellationTokenSource? removedSource = null;
+        manager.Tasks.CollectionChanged += (_, e) =>
+        {
+            if (e.OldItems?.Cast<DownloadTask>().Contains(task) != true)
+                return;
+
+            removedSource = task.Cts;
+            manager.Dispose();
+        };
+
+        await manager.RetryAsync(task.Id);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.NotNull(removedSource);
+        AssertCancellationTokenSourceDisposed(removedSource);
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.Null(task.Cts);
+        Assert.Contains(task, manager.Tasks);
+        Assert.Equal(0, service.GetVideoInfoCallCount);
+        Assert.Equal(0, service.DownloadCallCount);
+    }
+
+    [Fact]
+    public async Task ResumeAndRetryAfterDispose_DoNotCreateAttempts()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new FakeYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        manager.Dispose();
+        var pausedTask = new DownloadTask
+        {
+            Url = "https://example.com/disposed-resume",
+            Status = DownloadStatus.Paused
+        };
+        var failedTask = new DownloadTask
+        {
+            Url = "https://example.com/disposed-retry",
+            Status = DownloadStatus.Failed
+        };
+        manager.Tasks.Add(pausedTask);
+        manager.Tasks.Add(failedTask);
+
+        await manager.ResumeAsync(pausedTask.Id);
+        await manager.RetryAsync(failedTask.Id);
+
+        Assert.Null(pausedTask.Cts);
+        Assert.Null(failedTask.Cts);
+        Assert.Equal(0, service.GetVideoInfoCallCount);
+        Assert.Equal(0, service.DownloadCallCount);
     }
 
     [Fact]
@@ -629,6 +1026,22 @@ public class DownloadManagerTests
         return condition();
     }
 
+    private static bool IsCancellationTokenSourceDisposed(CancellationTokenSource source)
+    {
+        try
+        {
+            _ = source.Token;
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            return true;
+        }
+    }
+
+    private static void AssertCancellationTokenSourceDisposed(CancellationTokenSource source)
+        => Assert.True(IsCancellationTokenSourceDisposed(source));
+
     private sealed class FakeYtDlpDownloadService : IYtDlpDownloadService
     {
         private int _getVideoInfoCallCount;
@@ -787,6 +1200,58 @@ public class DownloadManagerTests
         }
 
         public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class PauseResumeIsolationYtDlpDownloadService : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _allowFirstAttemptToExit = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _completeResumedDownload = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _downloadCallCount;
+
+        public TaskCompletionSource FirstDownloadStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource FirstCancellationObserved { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource ResumedDownloadStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<VideoInfo?>(null);
+
+        public async Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            task.Status = DownloadStatus.Downloading;
+            if (Interlocked.Increment(ref _downloadCallCount) == 1)
+            {
+                FirstDownloadStarted.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    FirstCancellationObserved.TrySetResult();
+                    await _allowFirstAttemptToExit.Task;
+                    throw;
+                }
+            }
+
+            ResumedDownloadStarted.TrySetResult();
+            await _completeResumedDownload.Task.WaitAsync(cancellationToken);
+            task.Status = DownloadStatus.Completed;
+        }
+
+        public void AllowFirstAttemptToExit() => _allowFirstAttemptToExit.TrySetResult();
+
+        public void CompleteResumedDownload() => _completeResumedDownload.TrySetResult();
     }
 
     private sealed class CoordinatorBackedYtDlpDownloadService(
