@@ -89,6 +89,7 @@ public class AppUpdateService : IAppUpdateService
         var fileName = string.IsNullOrWhiteSpace(updateInfo.InstallerFileName)
             ? $"EasyGet-Setup-v{updateInfo.LatestVersion}.exe"
             : updateInfo.InstallerFileName;
+        ValidateInstallerFileName(fileName);
         var targetPath = Path.Combine(_updatesDir, fileName);
         var tempPath = $"{targetPath}.download";
 
@@ -112,6 +113,7 @@ public class AppUpdateService : IAppUpdateService
             response.EnsureSuccessStatusCode();
 
             var total = response.Content.Headers.ContentLength ?? updateInfo.InstallerSize;
+            long totalRead = 0;
             LogUpdateEvent(
                 "Download response accepted",
                 ("contentLength", (response.Content.Headers.ContentLength ?? 0).ToString()),
@@ -125,7 +127,6 @@ public class AppUpdateService : IAppUpdateService
                 await using (var source = await response.Content.ReadAsStreamAsync(ct))
                 await using (var target = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true))
                 {
-                    long totalRead = 0;
                     while (true)
                     {
                         var read = await source.ReadAsync(buffer.AsMemory(0, InstallerDownloadBufferSize), ct);
@@ -140,6 +141,12 @@ public class AppUpdateService : IAppUpdateService
                     }
 
                     await target.FlushAsync(ct);
+                }
+
+                if (total > 0 && totalRead != total)
+                {
+                    throw new IOException(
+                        $"更新包下载不完整：已下载 {totalRead} / {total} 字节。");
                 }
             }
             finally
@@ -174,6 +181,7 @@ public class AppUpdateService : IAppUpdateService
                 ("tempSize", GetFileSizeDescription(tempPath)),
                 ("targetSize", GetFileSizeDescription(targetPath)),
                 ("exception", ex.ToString()));
+            TryDeleteFile(tempPath);
             throw;
         }
     }
@@ -307,12 +315,9 @@ public class AppUpdateService : IAppUpdateService
 
                 EnsureFileCanBeOpenedExclusively(tempPath);
                 if (File.Exists(targetPath))
-                {
                     EnsureFileCanBeOpenedExclusively(targetPath);
-                    File.Delete(targetPath);
-                }
 
-                File.Move(tempPath, targetPath);
+                File.Move(tempPath, targetPath, overwrite: true);
                 EnsureFileCanBeOpenedExclusively(targetPath);
 
                 LogUpdateEvent(
@@ -364,6 +369,16 @@ public class AppUpdateService : IAppUpdateService
     private static bool IsInstallerAsset(string name)
         => name.StartsWith("EasyGet-Setup-v", StringComparison.OrdinalIgnoreCase)
            && name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateInstallerFileName(string fileName)
+    {
+        if (!IsInstallerAsset(fileName)
+            || !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal)
+            || fileName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new InvalidDataException("更新包文件名不合法。");
+        }
+    }
 
     private static int[] ParseVersionParts(string version)
     {
@@ -511,6 +526,19 @@ public class AppUpdateService : IAppUpdateService
         catch (Exception ex)
         {
             return $"unavailable: {ex.Message}";
+        }
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch
+        {
+            // 下载异常优先返回原始错误，临时文件留待下次覆盖。
         }
     }
 

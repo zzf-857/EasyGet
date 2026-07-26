@@ -157,6 +157,66 @@ public class AppUpdateServiceTests
     }
 
     [Fact]
+    public async Task DownloadInstallerAsync_RejectsTruncatedPayloadAndPreservesExistingInstaller()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-update-tests-{Guid.NewGuid():N}");
+        var logPath = Path.Combine(tempDir, "update.log");
+        var payload = new byte[] { 1, 2, 3 };
+        var service = new AppUpdateService(
+            new HttpClient(new StubHttpMessageHandler(payload, contentLength: 5)),
+            tempDir,
+            logPath);
+        var targetPath = Path.Combine(tempDir, "EasyGet-Setup-v1.1.3.exe");
+        Directory.CreateDirectory(tempDir);
+        await File.WriteAllBytesAsync(targetPath, [9, 9, 9, 9]);
+        var info = new AppUpdateInfo
+        {
+            LatestVersion = "1.1.3",
+            InstallerFileName = Path.GetFileName(targetPath),
+            InstallerDownloadUrl = new Uri("https://example.test/EasyGet-Setup-v1.1.3.exe"),
+            InstallerSize = 5
+        };
+
+        try
+        {
+            var exception = await Assert.ThrowsAsync<IOException>(() =>
+                service.DownloadInstallerAsync(info));
+
+            Assert.Contains("下载不完整", exception.Message, StringComparison.Ordinal);
+            Assert.Equal([9, 9, 9, 9], await File.ReadAllBytesAsync(targetPath));
+            Assert.False(File.Exists($"{targetPath}.download"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+                Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("..\\EasyGet-Setup-v1.1.3.exe")]
+    [InlineData("C:\\Temp\\EasyGet-Setup-v1.1.3.exe")]
+    [InlineData("EasyGet-v1.1.3.exe")]
+    public async Task DownloadInstallerAsync_RejectsUnsafeInstallerFileName(string fileName)
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"easyget-update-tests-{Guid.NewGuid():N}");
+        var service = new AppUpdateService(
+            new HttpClient(new StubHttpMessageHandler([1])),
+            tempDir);
+        var info = new AppUpdateInfo
+        {
+            LatestVersion = "1.1.3",
+            InstallerFileName = fileName,
+            InstallerDownloadUrl = new Uri("https://example.test/installer.exe")
+        };
+
+        await Assert.ThrowsAsync<InvalidDataException>(() =>
+            service.DownloadInstallerAsync(info));
+
+        Assert.False(Directory.Exists(tempDir));
+    }
+
+    [Fact]
     public void DownloadInstallerAsync_UsesAsyncBufferedFileStreamAndRentedBuffer()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
@@ -197,7 +257,9 @@ public class AppUpdateServiceTests
         Assert.Equal("安装版运行", actual);
     }
 
-    private sealed class StubHttpMessageHandler(byte[] payload) : HttpMessageHandler
+    private sealed class StubHttpMessageHandler(
+        byte[] payload,
+        long? contentLength = null) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
@@ -207,7 +269,7 @@ public class AppUpdateServiceTests
             {
                 Content = new ByteArrayContent(payload)
             };
-            response.Content.Headers.ContentLength = payload.Length;
+            response.Content.Headers.ContentLength = contentLength ?? payload.Length;
             return Task.FromResult(response);
         }
     }
