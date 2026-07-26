@@ -53,4 +53,38 @@ public class TelegramDownloadServiceTests
         var result = TelegramDownloadService.ParseTelegramLink(link);
         Assert.Null(result);
     }
+
+    [Theory]
+    [InlineData("..\\outside.bin", "outside.bin")]
+    [InlineData("C:\\Temp\\outside.bin", "outside.bin")]
+    [InlineData("folder/subfolder/video.mp4", "video.mp4")]
+    [InlineData("bad:name?.mp4", "bad：name？.mp4")]
+    public void BuildSafeMediaFilePath_ConfinesRemoteFileNameToSaveDirectory(
+        string remoteFileName,
+        string expectedFileName)
+    {
+        var savePath = Path.Combine(Path.GetTempPath(), "easyget-telegram-message");
+
+        var result = TelegramDownloadService.BuildSafeMediaFilePath(
+            savePath,
+            remoteFileName,
+            "media.bin");
+
+        Assert.Equal(Path.GetFullPath(savePath), Path.GetDirectoryName(result));
+        Assert.Equal(expectedFileName, Path.GetFileName(result));
+    }
+
+    [Fact]
+    public void BuildSafeMediaFilePath_UsesSanitizedFallbackAndPrefix()
+    {
+        var savePath = Path.Combine(Path.GetTempPath(), "easyget-telegram-message");
+
+        var result = TelegramDownloadService.BuildSafeMediaFilePath(
+            savePath,
+            "   ",
+            "media:1.bin",
+            "0001_");
+
+        Assert.Equal("0001_media：1.bin", Path.GetFileName(result));
+    }
 }

@@ -607,19 +607,19 @@ public class TelegramDownloadService : IDisposable
                 {
                     task.FileSize = totalSize;
                 }
-                var fileExt = Path.GetExtension(filename).TrimStart('.').ToLowerInvariant();
+                var mediaFilePath = BuildSafeMediaFilePath(
+                    savePath,
+                    filename,
+                    $"media_{messageId}",
+                    prefix);
+                var safeFileName = Path.GetFileName(mediaFilePath);
+                var fileExt = Path.GetExtension(safeFileName).TrimStart('.').ToLowerInvariant();
                 if (!string.IsNullOrEmpty(fileExt))
                 {
                     task.Format = fileExt;
                 }
 
-                if (!string.IsNullOrWhiteSpace(prefix))
-                {
-                    filename = $"{prefix}{filename}";
-                }
-
-                var mediaFilePath = Path.Combine(savePath, filename);
-                logCallback?.Invoke($"[Telegram] 准备下载媒体文件: {filename} (大小: {ByteSizeFormatter.FormatOrUnknown(totalSize)})");
+                logCallback?.Invoke($"[Telegram] 准备下载媒体文件: {safeFileName} (大小: {ByteSizeFormatter.FormatOrUnknown(totalSize)})");
 
                 // 流式分块下载，并提供精确进度上报
                 using (var fileStream = new FileStream(mediaFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
@@ -716,6 +716,45 @@ public class TelegramDownloadService : IDisposable
         {
             logCallback?.Invoke($"[Telegram] 计算目录大小失败: {ex.Message}");
         }
+    }
+
+    internal static string BuildSafeMediaFilePath(
+        string savePath,
+        string? remoteFileName,
+        string fallbackFileName,
+        string prefix = "")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fallbackFileName);
+
+        string? leafName;
+        try
+        {
+            leafName = Path.GetFileName(remoteFileName?.Trim());
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException)
+        {
+            leafName = null;
+        }
+
+        var fileName = DownloadFileNameBuilder.SanitizeResolvedTitle(
+            string.IsNullOrWhiteSpace(leafName) ? fallbackFileName : leafName);
+        var safePrefix = string.IsNullOrWhiteSpace(prefix)
+            ? ""
+            : DownloadFileNameBuilder.SanitizeResolvedTitle(prefix);
+        var rootPath = Path.GetFullPath(savePath);
+        var outputPath = Path.GetFullPath(Path.Combine(rootPath, $"{safePrefix}{fileName}"));
+        var rootWithSeparator = rootPath.EndsWith(Path.DirectorySeparatorChar)
+            || rootPath.EndsWith(Path.AltDirectorySeparatorChar)
+                ? rootPath
+                : rootPath + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        if (!outputPath.StartsWith(rootWithSeparator, comparison))
+            throw new IOException("Telegram 媒体文件路径超出任务下载目录。");
+
+        return outputPath;
     }
 
     public void Dispose()
