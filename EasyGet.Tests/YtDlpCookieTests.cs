@@ -368,17 +368,94 @@ public class YtDlpCookieTests
             1);
 
         Assert.Contains("抖音", message);
-        Assert.Contains("智能登录", message);
+        Assert.Contains("刚刷新", message);
+        Assert.Contains("不一定需要登录", message);
     }
 
     [Fact]
-    public void BuildDouyinFallbackVideoInfo_UsesShortShareTokenAsStableTitle()
+    public void BuildDouyinFallbackVideoInfo_UsesShortShareTokenAsDeterministicTitle()
     {
         var info = YtDlpService.BuildDouyinFallbackVideoInfo("https://v.douyin.com/vi3b7QpNklg/");
 
         Assert.Equal("Douyin_vi3b7QpNklg", info.Title);
         Assert.Equal("Douyin", info.Platform);
         Assert.Equal("https://v.douyin.com/vi3b7QpNklg/", info.Url);
+    }
+
+    [Theory]
+    [InlineData("https://www.douyin.com/video/7621772413184822582", "Douyin_7621772413184822582")]
+    [InlineData("https://www.douyin.com/note/7383344556677889900", "Douyin_7383344556677889900")]
+    [InlineData("https://www.douyin.com/gallery/7383344556677889901", "Douyin_7383344556677889901")]
+    [InlineData("https://www.iesdouyin.com/share/video/7621772413184822583", "Douyin_7621772413184822583")]
+    [InlineData("https://www.douyin.com/?modal_id=7621772413184822584", "Douyin_7621772413184822584")]
+    public void BuildDouyinFallbackVideoInfo_UsesParserContentId(
+        string url,
+        string expectedTitle)
+    {
+        var info = YtDlpService.BuildPlatformFallbackVideoInfo(url);
+
+        Assert.NotNull(info);
+        Assert.Equal(expectedTitle, info.Title);
+        Assert.Equal("Douyin", info.Platform);
+    }
+
+    [Theory]
+    [InlineData("https://www.tiktok.com/@creator/video/7524567890123456789", "TikTok_7524567890123456789")]
+    [InlineData("https://www.tiktok.com/embed/7524567890123456790", "TikTok_7524567890123456790")]
+    [InlineData("https://vm.tiktok.com/ZMExample1/", "TikTok_ZMExample1")]
+    [InlineData("https://vt.tiktok.com/ZSMExample2/", "TikTok_ZSMExample2")]
+    [InlineData("https://www.tiktok.com/t/ZTExample3/", "TikTok_ZTExample3")]
+    public void BuildTikTokFallbackVideoInfo_UsesCanonicalIdOrShortToken(
+        string url,
+        string expectedTitle)
+    {
+        var info = YtDlpService.BuildPlatformFallbackVideoInfo(url);
+
+        Assert.NotNull(info);
+        Assert.Equal(expectedTitle, info.Title);
+        Assert.Equal("TikTok", info.Platform);
+        Assert.Equal(url, info.Url);
+    }
+
+    [Fact]
+    public void BuildPlatformFallbackVideoInfo_RejectsLookalikeTikTokHost()
+    {
+        var info = YtDlpService.BuildPlatformFallbackVideoInfo(
+            "https://eviltiktok.com/@creator/video/7524567890123456789");
+
+        Assert.Null(info);
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessage_ExplainsTikTokLoginAfterBrowserCookieFailures()
+    {
+        var stderrLines = new[]
+        {
+            "ERROR: [TikTok] 7524567890123456789: Log in for access",
+            "ERROR: Could not copy Chrome cookie database."
+        };
+
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://www.tiktok.com/@creator/video/7524567890123456789",
+            stderrLines,
+            1);
+
+        Assert.Contains("TikTok", message);
+        Assert.Contains("智能登录", message);
+        Assert.Contains("重新登录", message);
+    }
+
+    [Fact]
+    public void BuildDownloadFailureMessage_ExplainsTikTokIpBlockWithoutSuggestingLogin()
+    {
+        var message = YtDlpService.BuildDownloadFailureMessage(
+            "https://vt.tiktok.com/ZSMExample2/",
+            ["ERROR: [TikTok] Your IP address is blocked from accessing this post"],
+            1);
+
+        Assert.Contains("IP", message);
+        Assert.Contains("代理", message);
+        Assert.DoesNotContain("登录", message);
     }
 
     private static int CountOccurrences(string text, string value)

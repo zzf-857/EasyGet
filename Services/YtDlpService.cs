@@ -250,8 +250,9 @@ public partial class YtDlpService
             Debug.WriteLine($"[YtDlpService] GetVideoInfo failed: {ex.Message}");
         }
 
-        if (IsDouyinUrl(url))
-            return BuildDouyinFallbackVideoInfo(url);
+        var platformFallback = BuildPlatformFallbackVideoInfo(url);
+        if (platformFallback is not null)
+            return platformFallback;
 
         if (IsXiaohongshuUrl(url))
         {
@@ -696,6 +697,7 @@ public partial class YtDlpService
         ArgumentNullException.ThrowIfNull(cookieArguments);
         var args = new List<string>
         {
+            "--ignore-config",
             "--no-playlist",
             "-f",
             BuildFormatString(task.Format, task.Quality)
@@ -828,6 +830,7 @@ public partial class YtDlpService
     {
         var args = new List<string>
         {
+            "--ignore-config",
             "--no-playlist",
             "--dump-json",
             "--no-download",
@@ -842,6 +845,7 @@ public partial class YtDlpService
     {
         var args = new List<string>
         {
+            "--ignore-config",
             "--flat-playlist",
             "--dump-json",
             "--no-warnings"
@@ -855,6 +859,7 @@ public partial class YtDlpService
     {
         var args = new List<string>
         {
+            "--ignore-config",
             "--flat-playlist",
             "--dump-single-json",
             "--no-warnings"
@@ -1070,18 +1075,17 @@ public partial class YtDlpService
         return RedactPotentialSensitiveText(redacted);
     }
 
-    private static bool IsDouyinUrl(string url)
-    {
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            return false;
-
-        return uri.Host.Contains("douyin.com", StringComparison.OrdinalIgnoreCase)
-            || uri.Host.Contains("iesdouyin.com", StringComparison.OrdinalIgnoreCase);
-    }
+    internal static VideoInfo? BuildPlatformFallbackVideoInfo(string url)
+        => MediaPlatformResolver.Resolve(url).Id switch
+        {
+            "douyin" => BuildDouyinFallbackVideoInfo(url),
+            "tiktok" => BuildTikTokFallbackVideoInfo(url),
+            _ => null
+        };
 
     internal static VideoInfo BuildDouyinFallbackVideoInfo(string url)
     {
-        var id = ExtractDouyinStableId(url);
+        var id = SanitizeFallbackStableId(DouyinUrlParser.Parse(url).Id);
         return new VideoInfo
         {
             Title = string.IsNullOrWhiteSpace(id) ? "Douyin_Video" : $"Douyin_{id}",
@@ -1093,31 +1097,61 @@ public partial class YtDlpService
         };
     }
 
-    private static string ExtractDouyinStableId(string url)
+    internal static VideoInfo BuildTikTokFallbackVideoInfo(string url)
     {
-        if (string.IsNullOrWhiteSpace(url))
-            return "";
-
-        var videoId = Regex.Match(url, @"/video/(\d+)", RegexOptions.IgnoreCase);
-        if (videoId.Success)
-            return videoId.Groups[1].Value;
-
-        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        var id = ExtractTikTokStableId(url);
+        return new VideoInfo
         {
-            var token = uri.AbsolutePath
-                .Split('/', StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault();
-
-            if (!string.IsNullOrWhiteSpace(token))
-                return SanitizeDouyinStableId(token);
-        }
-
-        var longNumber = Regex.Match(url, @"\d{12,}");
-        return longNumber.Success ? longNumber.Value : "";
+            Title = string.IsNullOrWhiteSpace(id) ? "TikTok_Video" : $"TikTok_{id}",
+            Platform = "TikTok",
+            Duration = 0,
+            Thumbnail = "",
+            FileSize = 0,
+            Url = url
+        };
     }
 
-    private static string SanitizeDouyinStableId(string value)
+    private static string ExtractTikTokStableId(string url)
     {
+        if (MediaPlatformResolver.Resolve(url).Id != "tiktok"
+            || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return "";
+        }
+
+        var segments = uri.AbsolutePath
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+        for (var index = 0; index + 1 < segments.Length; index++)
+        {
+            if ((segments[index].Equals("video", StringComparison.OrdinalIgnoreCase)
+                    || segments[index].Equals("embed", StringComparison.OrdinalIgnoreCase))
+                && segments[index + 1].All(char.IsDigit))
+            {
+                return segments[index + 1];
+            }
+        }
+
+        string? token = null;
+        if (uri.Host.Equals("vm.tiktok.com", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("vt.tiktok.com", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.Equals("t.tiktok.com", StringComparison.OrdinalIgnoreCase))
+        {
+            token = segments.FirstOrDefault();
+        }
+        else if (segments.Length > 1
+                 && segments[0].Equals("t", StringComparison.OrdinalIgnoreCase))
+        {
+            token = segments[1];
+        }
+
+        return SanitizeFallbackStableId(token);
+    }
+
+    private static string SanitizeFallbackStableId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
         var chars = value
             .Where(c => char.IsLetterOrDigit(c) || c is '-' or '_')
             .ToArray();
@@ -1150,6 +1184,12 @@ public partial class YtDlpService
         var lastErrorLine = failure.LastErrorLine;
 
         if (platform.Id == "douyin"
+            && failure.Category == CookieFailureCategory.CookieExpired)
+        {
+            return "抖音要求使用刚刷新的网站 Cookie（不一定需要登录）。请先在浏览器中打开并刷新抖音页面，并确认 yt-dlp 已更新后重试；如仍失败，请在智能登录设置中重新检测抖音。";
+        }
+
+        if (platform.Id == "douyin"
             && failure.Category is CookieFailureCategory.AuthenticationRequired
                 or CookieFailureCategory.CookieStoreLocked
                 or CookieFailureCategory.CookieDecryptFailed
@@ -1157,6 +1197,22 @@ public partial class YtDlpService
                 or CookieFailureCategory.BotChallenge)
         {
             return "抖音需要有效登录状态，但本机浏览器 Cookie 不可用或已失效。EasyGet 会继续尝试其他浏览器；如仍失败，请在智能登录设置中重新登录抖音。";
+        }
+
+        if (platform.Id == "tiktok"
+            && failure.Category == CookieFailureCategory.RateLimited)
+        {
+            return "TikTok 已限制当前 IP 或访问频率。请稍后重试，或检查代理节点、网络出口与内容所在地区是否匹配。";
+        }
+
+        if (platform.Id == "tiktok"
+            && failure.Category is CookieFailureCategory.AuthenticationRequired
+                or CookieFailureCategory.CookieStoreLocked
+                or CookieFailureCategory.CookieDecryptFailed
+                or CookieFailureCategory.CookieExpired
+                or CookieFailureCategory.BotChallenge)
+        {
+            return "TikTok 需要有效登录状态，或当前访问触发了平台验证。EasyGet 已尝试可用 Cookie；如仍失败，请在智能登录设置中重新登录 TikTok。";
         }
 
         if (platform.Id == "youtube"

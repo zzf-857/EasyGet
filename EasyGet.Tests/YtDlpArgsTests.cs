@@ -1,4 +1,5 @@
 using EasyGet.Services;
+using EasyGet.Models;
 using System.Reflection;
 using Xunit;
 
@@ -90,6 +91,7 @@ public class YtDlpArgsTests
     {
         var args = YtDlpService.BuildVideoInfoBaseArgs();
 
+        Assert.Equal("--ignore-config", args[0]);
         Assert.Contains("--dump-json", args);
         Assert.Contains("--no-download", args);
         AssertOptionValue(args, "--retries", "20");
@@ -102,6 +104,7 @@ public class YtDlpArgsTests
     {
         var args = YtDlpService.BuildPlaylistBaseArgs();
 
+        Assert.Equal("--ignore-config", args[0]);
         Assert.Contains("--flat-playlist", args);
         Assert.Contains("--dump-json", args);
         AssertOptionValue(args, "--retries", "20");
@@ -114,6 +117,7 @@ public class YtDlpArgsTests
     {
         var args = YtDlpService.BuildPlaylistInfoBaseArgs();
 
+        Assert.Equal("--ignore-config", args[0]);
         Assert.Contains("--flat-playlist", args);
         Assert.Contains("--dump-single-json", args);
         Assert.DoesNotContain("--dump-json", args);
@@ -140,6 +144,33 @@ public class YtDlpArgsTests
         YtDlpService.AddSiteCompatibilityArgs(args, "https://example.com/video");
 
         Assert.Empty(args);
+    }
+
+    [Fact]
+    public void BuildDownloadArgs_IgnoresUserYtDlpConfiguration()
+    {
+        using var root = new TestDirectory();
+        var service = new YtDlpService(
+            new ConfigService(root.Path("config")),
+            new EnvironmentService());
+        var method = typeof(YtDlpService).GetMethod(
+            "BuildDownloadArgs",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+        var task = new DownloadTask
+        {
+            Url = "https://www.tiktok.com/@creator/video/1234567890123456789",
+            OutputDirectory = root.DirectoryPath,
+            Format = "mp4",
+            Quality = "best"
+        };
+
+        var args = (List<string>)method!.Invoke(
+            service,
+            [task, Array.Empty<string>(), null])!;
+
+        Assert.Equal("--ignore-config", args[0]);
+        Assert.Equal(1, args.Count(argument => argument == "--ignore-config"));
     }
 
     private static void AssertOptionValue(List<string> args, string option, string expectedValue)

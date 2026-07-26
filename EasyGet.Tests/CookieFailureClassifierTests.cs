@@ -12,6 +12,12 @@ public sealed class CookieFailureClassifierTests
     [InlineData("youtube", "Sign in to confirm your age", CookieFailureCategory.AuthenticationRequired, true)]
     [InlineData("youtube", "HTTP Error 403: Forbidden", CookieFailureCategory.BotChallenge, true)]
     [InlineData("douyin", "Fresh cookies (not necessarily logged in) are needed", CookieFailureCategory.CookieExpired, true)]
+    [InlineData("douyin", "HTTP Error 403: Forbidden", CookieFailureCategory.BotChallenge, true)]
+    [InlineData("tiktok", "HTTP Error 403: Forbidden", CookieFailureCategory.BotChallenge, true)]
+    [InlineData("tiktok", "TikTok is requiring login for access to this content", CookieFailureCategory.AuthenticationRequired, true)]
+    [InlineData("tiktok", "This post may not be comfortable for some audiences. Log in for access", CookieFailureCategory.AuthenticationRequired, true)]
+    [InlineData("tiktok", "You do not have permission to view this post. Log into an account that has access", CookieFailureCategory.AuthenticationRequired, true)]
+    [InlineData("tiktok", "Your IP address is blocked from accessing this post", CookieFailureCategory.RateLimited, false)]
     [InlineData("instagram", "login required", CookieFailureCategory.AuthenticationRequired, true)]
     [InlineData("generic", "Login required to view this content", CookieFailureCategory.AuthenticationRequired, true)]
     [InlineData("twitter", "This post is not available without authentication", CookieFailureCategory.AuthenticationRequired, true)]
@@ -73,6 +79,21 @@ public sealed class CookieFailureClassifierTests
             [
                 "ERROR: login required",
                 "ERROR: HTTP Error 429: Too Many Requests"
+            ]);
+
+        Assert.Equal(CookieFailureCategory.RateLimited, result.Category);
+        Assert.False(result.ShouldTryNextCookieSource);
+    }
+
+    [Fact]
+    public void Classify_TikTokIpBlockTakesPrecedenceOverLoginAndForbiddenSignals()
+    {
+        var result = CookieFailureClassifier.Classify(
+            "tiktok",
+            [
+                "ERROR: TikTok is requiring login for access to this content",
+                "ERROR: HTTP Error 403: Forbidden",
+                "ERROR: Your IP address is blocked from accessing this post"
             ]);
 
         Assert.Equal(CookieFailureCategory.RateLimited, result.Category);

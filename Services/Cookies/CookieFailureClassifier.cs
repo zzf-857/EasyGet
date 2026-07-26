@@ -51,6 +51,12 @@ public static class CookieFailureClassifier
 
     private static CookieFailureCategory Match(string platformId, string line)
     {
+        if (platformId == "tiktok"
+            && ContainsAny(line, "IP address is blocked"))
+        {
+            return CookieFailureCategory.RateLimited;
+        }
+
         if (ContainsAny(line, "HTTP Error 429", "Too Many Requests", "rate limit", "ratelimit"))
             return CookieFailureCategory.RateLimited;
 
@@ -132,6 +138,22 @@ public static class CookieFailureClassifier
             && ContainsAny(line, "HTTP Error 412", "Precondition Failed"))
         {
             return CookieFailureCategory.BotChallenge;
+        }
+
+        if (platformId is "douyin" or "tiktok"
+            && ContainsAny(line, "HTTP Error 403"))
+        {
+            return CookieFailureCategory.BotChallenge;
+        }
+
+        if (platformId == "tiktok"
+            && ContainsAny(
+                line,
+                "TikTok is requiring login",
+                "log in for access",
+                "log into an account"))
+        {
+            return CookieFailureCategory.AuthenticationRequired;
         }
 
         if (ContainsAny(
