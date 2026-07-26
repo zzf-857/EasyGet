@@ -1749,11 +1749,12 @@ public class UiTruthfulnessViewModelTests
     private static ViewModelContext CreateViewModelContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
         var batchContext = CreateBatchContext(douyinSpecialDownloadService);
+        var telegram = new TelegramDownloadService(batchContext.Config);
         var settings = new SettingsViewModel(
             batchContext.Config,
             batchContext.Environment,
             batchContext.Manager,
-            new TelegramDownloadService(batchContext.Config));
+            telegram);
         var download = new DownloadViewModel(
             batchContext.Manager,
             batchContext.Config,
@@ -1776,7 +1777,7 @@ public class UiTruthfulnessViewModelTests
             history,
             settings);
 
-        return new ViewModelContext(batchContext, download, history, douyin, settings, main);
+        return new ViewModelContext(batchContext, telegram, download, history, douyin, settings, main);
     }
 
     private sealed class FakeDouyinDiscoveryService(
@@ -1815,17 +1816,11 @@ public class UiTruthfulnessViewModelTests
 
     private static BatchContext CreateBatchContext(IDouyinSpecialDownloadService? douyinSpecialDownloadService = null)
     {
-        var config = new TestConfigService();
+        var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
         var environment = new EnvironmentService();
-        var historyPath = Path.Combine(
-            Path.GetTempPath(),
-            "EasyGetTests",
-            Guid.NewGuid().ToString("N"),
-            "history.db");
-        environment.Status.YtDlpPath = Path.Combine(
-            Path.GetDirectoryName(historyPath)!,
-            "missing-test-yt-dlp.exe");
-        var history = new HistoryService(historyPath);
+        environment.Status.YtDlpPath = root.Path("missing-test-yt-dlp.exe");
+        var history = new HistoryService(root.Path("history.db"));
         var ytDlp = new YtDlpService(config, environment);
         var manager = new DownloadManager(
             ytDlp,
@@ -1834,10 +1829,11 @@ public class UiTruthfulnessViewModelTests
             douyinSpecialDownloadService: douyinSpecialDownloadService);
         var batch = new BatchDownloadViewModel(manager, config, ytDlp);
 
-        return new BatchContext(config, environment, history, ytDlp, manager, batch);
+        return new BatchContext(root, config, environment, history, ytDlp, manager, batch);
     }
 
     private sealed record BatchContext(
+        TestDirectory Root,
         ConfigService Config,
         EnvironmentService Environment,
         HistoryService History,
@@ -1845,17 +1841,28 @@ public class UiTruthfulnessViewModelTests
         DownloadManager Manager,
         BatchDownloadViewModel Batch) : IDisposable
     {
-        public void Dispose() => History.Dispose();
+        public void Dispose()
+        {
+            Manager.Dispose();
+            History.Dispose();
+            Root.Dispose();
+        }
     }
 
     private sealed record ViewModelContext(
         BatchContext BatchContext,
+        TelegramDownloadService Telegram,
         DownloadViewModel Download,
         HistoryViewModel History,
         DouyinViewModel Douyin,
         SettingsViewModel Settings,
         MainViewModel Main) : IDisposable
     {
-        public void Dispose() => BatchContext.Dispose();
+        public void Dispose()
+        {
+            Settings.FlushPendingSaveAsync().GetAwaiter().GetResult();
+            Telegram.Dispose();
+            BatchContext.Dispose();
+        }
     }
 }

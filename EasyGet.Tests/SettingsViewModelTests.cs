@@ -5,8 +5,11 @@ using Xunit;
 
 namespace EasyGet.Tests;
 
-public class SettingsViewModelTests
+public class SettingsViewModelTests : IDisposable
 {
+    private readonly TestDirectory _root = new();
+    private readonly List<IDisposable> _resources = [];
+
     [Fact]
     public void MainWindow_CloseFlowWaitsForPendingSettingsAndConfigSave()
     {
@@ -533,7 +536,7 @@ public class SettingsViewModelTests
                 "抖音 sidecar 可用 · 已检查 3 个模块",
                 ["config", "auth.cookie_manager", "core.api_client"],
                 []));
-        var viewModel = CreateViewModel(new TestConfigService(), new FakeAppUpdateService(), health);
+        var viewModel = CreateViewModel(CreateTempConfigService(), new FakeAppUpdateService(), health);
 
         await viewModel.CheckDouyinSidecarHealthCommand.ExecuteAsync(null);
 
@@ -554,7 +557,7 @@ public class SettingsViewModelTests
                 ["config", "core.api_client"],
                 ["config"],
                 "import self-test failed"));
-        var viewModel = CreateViewModel(new TestConfigService(), new FakeAppUpdateService(), health);
+        var viewModel = CreateViewModel(CreateTempConfigService(), new FakeAppUpdateService(), health);
 
         await viewModel.CheckDouyinSidecarHealthCommand.ExecuteAsync(null);
 
@@ -565,39 +568,51 @@ public class SettingsViewModelTests
         Assert.Contains("config", viewModel.DouyinSidecarHealthText, StringComparison.Ordinal);
     }
 
-    private static SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)
-        => CreateViewModel(new TestConfigService(), appUpdateService);
+    private SettingsViewModel CreateViewModel(IAppUpdateService appUpdateService)
+        => CreateViewModel(CreateTempConfigService(), appUpdateService);
 
-    private static SettingsViewModel CreateViewModel(
+    private SettingsViewModel CreateViewModel(
         ConfigService config,
         IAppUpdateService appUpdateService,
         IDouyinSidecarHealthService? douyinSidecarHealthService = null)
     {
         var environment = new EnvironmentService();
-        var historyPath = Path.Combine(
-            Path.GetTempPath(),
-            "EasyGetTests",
-            Guid.NewGuid().ToString("N"),
-            "history.db");
-        var history = new HistoryService(historyPath);
+        var history = Track(new HistoryService(
+            _root.Path($"history-{Guid.NewGuid():N}.db")));
         var ytDlp = new YtDlpService(config, environment);
-        var manager = new DownloadManager(ytDlp, history, config);
+        var manager = Track(new DownloadManager(ytDlp, history, config));
+        var telegram = Track(new TelegramDownloadService(config));
 
-        return new SettingsViewModel(
+        var viewModel = new SettingsViewModel(
             config,
             environment,
             manager,
-            new TelegramDownloadService(config),
+            telegram,
             appUpdateService,
             douyinSidecarHealthService);
+        _resources.Add(new ActionDisposable(
+            () => viewModel.FlushPendingSaveAsync().GetAwaiter().GetResult()));
+        return viewModel;
     }
 
-    private static ConfigService CreateTempConfigService()
-        => new(Path.Combine(
-            Path.GetTempPath(),
-            "EasyGetTests",
-            Guid.NewGuid().ToString("N"),
-            "config"));
+    private ConfigService CreateTempConfigService()
+        => new(_root.Path($"config-{Guid.NewGuid():N}"));
+
+    private T Track<T>(T resource)
+        where T : IDisposable
+    {
+        _resources.Add(resource);
+        return resource;
+    }
+
+    public void Dispose()
+    {
+        for (var index = _resources.Count - 1; index >= 0; index--)
+            _resources[index].Dispose();
+
+        _resources.Clear();
+        _root.Dispose();
+    }
 
     private static void AssertAppConfigBool(AppConfig config, string propertyName, bool expected)
     {
@@ -720,5 +735,13 @@ public class SettingsViewModelTests
             WasChecked = true;
             return Task.FromResult(result);
         }
+    }
+
+    private sealed class ActionDisposable(Action action) : IDisposable
+    {
+        private Action? _action = action;
+
+        public void Dispose()
+            => Interlocked.Exchange(ref _action, null)?.Invoke();
     }
 }

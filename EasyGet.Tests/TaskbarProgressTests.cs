@@ -3,7 +3,6 @@ using EasyGet.Services;
 using EasyGet.Models;
 using System.Windows.Shell;
 using Xunit;
-using System.IO;
 
 namespace EasyGet.Tests;
 
@@ -12,18 +11,15 @@ public class TaskbarProgressTests
     [Fact]
     public void TaskbarProgressFollowsLifecycleStates()
     {
-        var config = new TestConfigService();
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
         var environment = new EnvironmentService();
-        var historyPath = Path.Combine(
-            Path.GetTempPath(),
-            "EasyGetTests",
-            Guid.NewGuid().ToString("N"),
-            "history.db");
-        var history = new HistoryService(historyPath);
+        using var history = new HistoryService(root.Path("history.db"));
         var ytDlp = new YtDlpService(config, environment);
-        var manager = new DownloadManager(ytDlp, history, config);
+        using var manager = new DownloadManager(ytDlp, history, config);
+        using var telegram = new TelegramDownloadService(config);
         var batch = new BatchDownloadViewModel(manager, config, ytDlp);
-        var settings = new SettingsViewModel(config, environment, manager, new TelegramDownloadService(config));
+        var settings = new SettingsViewModel(config, environment, manager, telegram);
         var download = new DownloadViewModel(manager, config, new YtDlpVideoInfoProvider(ytDlp));
         var historyVm = new HistoryViewModel(history, config);
 
@@ -68,7 +64,5 @@ public class TaskbarProgressTests
 
         Assert.Equal(TaskbarItemProgressState.None, main.TaskbarState);
         Assert.Equal(0.0, main.TaskbarValue);
-
-        history.Dispose();
     }
 }

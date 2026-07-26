@@ -85,7 +85,7 @@ public sealed class BrowserCookieLoginDetectorTests
         var profilePath = root.Path("Firefox", "work.default-release");
         var databasePath = Path.Combine(profilePath, "cookies.sqlite");
         Directory.CreateDirectory(profilePath);
-        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        await using (var connection = CreateTestConnection(databasePath))
         {
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
@@ -139,7 +139,7 @@ public sealed class BrowserCookieLoginDetectorTests
             [profile],
             [youtube],
             CancellationToken.None);
-        await using (var connection = new SqliteConnection($"Data Source={databasePath}"))
+        await using (var connection = CreateTestConnection(databasePath))
         {
             await connection.OpenAsync();
             await using var insert = connection.CreateCommand();
@@ -203,7 +203,7 @@ public sealed class BrowserCookieLoginDetectorTests
         string databasePath,
         params (string Host, string Name, long Expiry)[] cookies)
     {
-        await using var connection = new SqliteConnection($"Data Source={databasePath}");
+        await using var connection = CreateTestConnection(databasePath);
         await connection.OpenAsync();
         await using (var create = connection.CreateCommand())
         {
@@ -225,4 +225,11 @@ public sealed class BrowserCookieLoginDetectorTests
             await insert.ExecuteNonQueryAsync();
         }
     }
+
+    private static SqliteConnection CreateTestConnection(string databasePath)
+        => new(new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Pooling = false
+        }.ToString());
 }

@@ -405,13 +405,9 @@ public class DownloadViewModelTests
         Action<ProcessStartInfo>? startProcess = null,
         Func<string?>? readClipboardText = null)
     {
-        var configService = new TestConfigService();
-        var dbPath = Path.Combine(
-            Path.GetTempPath(),
-            "EasyGetTests",
-            Guid.NewGuid().ToString("N"),
-            "history.db");
-        var historyService = new HistoryService(dbPath);
+        var root = new TestDirectory();
+        var configService = new ConfigService(root.Path("config"));
+        var historyService = new HistoryService(root.Path("history.db"));
         var ytDlp = new YtDlpService(configService, new EnvironmentService());
         var manager = new DownloadManager(ytDlp, historyService, configService);
         var videoInfoProvider = new FakeVideoInfoProvider();
@@ -424,7 +420,7 @@ public class DownloadViewModelTests
                 startProcess ?? (_ => { }),
                 readClipboardText);
 
-        return new DownloadContext(historyService, viewModel, videoInfoProvider);
+        return new DownloadContext(root, historyService, manager, viewModel, videoInfoProvider);
     }
 
     private static void TryDeleteDirectory(string path)
@@ -440,11 +436,18 @@ public class DownloadViewModelTests
     }
 
     private sealed record DownloadContext(
+        TestDirectory Root,
         HistoryService HistoryService,
+        DownloadManager Manager,
         DownloadViewModel ViewModel,
         FakeVideoInfoProvider VideoInfoProvider) : IDisposable
     {
-        public void Dispose() => HistoryService.Dispose();
+        public void Dispose()
+        {
+            Manager.Dispose();
+            HistoryService.Dispose();
+            Root.Dispose();
+        }
     }
 
     private sealed class FakeVideoInfoProvider : IVideoInfoProvider
