@@ -26,7 +26,12 @@ public class HistoryService : IDisposable
             ?? throw new ArgumentException("Database path must include a directory.", nameof(dbPath));
         Directory.CreateDirectory(dbDir);
 
-        _connection = new SqliteConnection($"Data Source={dbPath}");
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Pooling = false
+        }.ToString();
+        _connection = new SqliteConnection(connectionString);
         _connection.Open();
         InitializeDatabase();
     }

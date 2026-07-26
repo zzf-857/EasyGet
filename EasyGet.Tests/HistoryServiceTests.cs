@@ -9,6 +9,19 @@ namespace EasyGet.Tests;
 public class HistoryServiceTests
 {
     [Fact]
+    public void Dispose_ReleasesDatabaseFileImmediately()
+    {
+        using var root = new TestDirectory();
+        var databasePath = root.Path("history.db");
+        var service = new HistoryService(databasePath);
+
+        service.Dispose();
+
+        File.Delete(databasePath);
+        Assert.False(File.Exists(databasePath));
+    }
+
+    [Fact]
     public async Task HistoryFolders_CreateRenameMoveAndDeleteWithoutChangingFilePaths()
     {
         var dbPath = CreateTempDatabasePath();
