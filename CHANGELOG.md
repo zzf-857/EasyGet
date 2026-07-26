@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.3.7 - 2026-07-26
+
+### Platform Download Reliability
+- Let Douyin and TikTok downloads continue past blocked metadata lookups with deterministic fallback names and targeted guidance for fresh-cookie, login, HTTP 403, and IP restrictions.
+- Isolated EasyGet from user-level yt-dlp configuration, reused already resolved single-video metadata, and preserved the most actionable failure across Cookie retry attempts.
+- Made Telegram cancellation effective throughout login, message lookup, and media transfer; strictly validated Telegram and shared URLs, and confined remote filenames to the selected download directory.
+- Propagated Xiaohongshu image-download cancellation correctly instead of reporting it as an ordinary failure.
+
+### Download Task Stability
+- Reworked each download attempt to own its cancellation and cleanup resources, preventing pause, resume, retry, cancel, shutdown, and rapid repeated actions from interfering with one another.
+- Replaced live concurrency resizing with a cancellation-aware gate so rapid limit changes neither over-admit work nor leave queued downloads stuck.
+- Gave concurrent M3U8 jobs unique temporary paths, rejected master playlists and incomplete segment sets, and only promoted non-empty ffmpeg output after a successful merge.
+- Stopped M3U8 progress reporters and external merge processes cleanly on completion or cancellation, avoiding stale progress and background-task leaks.
+
+### Application Reliability
+- Restored windows to a visible monitor when a saved display position is no longer available and corrected Ctrl+1-4 navigation after removal of the obsolete Douyin workspace.
+- Handled temporarily busy clipboard access without disrupting single or batch downloads, bound compatibility-login dialogs to the main window, and released download log subscriptions when pages unload.
+- Kept unsaved manual Cookie drafts out of automatic settings saves, fixed overlapping save-version tracking, and ensured history database connections release their files cleanly.
+
+### Security and Updates
+- Validated update-package names and byte counts before installation, removed incomplete temporary downloads, and preserved an existing installer when a replacement download is truncated or invalid.
+
+### Tests
+- Added focused regression coverage for download-attempt races, dynamic concurrency, M3U8 completeness and cleanup, Telegram URL and path safety, platform fallbacks, settings persistence, updater integrity, shortcuts, and off-screen window recovery.
+- Verified 958 automated tests pass; 1 live or environment-dependent test remains explicitly skipped.
+
 ## 1.3.6 - 2026-07-18
 
 ### Download History Selection
