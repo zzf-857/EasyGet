@@ -502,6 +502,51 @@ public sealed class CookieSettingsViewModelTests
     }
 
     [Fact]
+    public async Task FlushPendingSaveAsync_DoesNotPersistUnconfirmedManualCookie()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault);
+        const string cookieDraft = "Cookie: auth_token=manual-secret";
+        viewModel.CookieContent = cookieDraft;
+        viewModel.LegacyCookiePlatform = "twitter";
+        viewModel.UseProxy = true;
+        viewModel.ProxyAddress = "http://127.0.0.1:7890";
+
+        Assert.True(await viewModel.FlushPendingSaveAsync());
+
+        Assert.True(config.Config.UseProxy);
+        Assert.Equal("http://127.0.0.1:7890", config.Config.ProxyAddress);
+        Assert.False(await vault.ExistsAsync("twitter", CancellationToken.None));
+        Assert.Equal(cookieDraft, viewModel.CookieContent);
+        Assert.Equal("twitter", viewModel.LegacyCookiePlatform);
+        Assert.Equal("", config.Config.CookieContent);
+        Assert.Equal("待加密保存", viewModel.ManualCookieStatusText);
+
+        var reloaded = new ConfigService(root.Path("config"), protector);
+        await reloaded.LoadAsync();
+        Assert.True(reloaded.Config.UseProxy);
+        Assert.Equal("http://127.0.0.1:7890", reloaded.Config.ProxyAddress);
+        Assert.Equal("", reloaded.Config.CookieContent);
+    }
+
+    [Fact]
     public async Task SaveSettingsAsync_EncryptsManualCookieAndClearsPlaintextState()
     {
         using var root = new TestDirectory();
@@ -545,6 +590,73 @@ public sealed class CookieSettingsViewModelTests
             var json = await File.ReadAllTextAsync(root.Path("config", fileName));
             Assert.DoesNotContain("manual-secret", json, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public async Task SaveSettingsAsync_DoesNotClearManualCookieEditedDuringMigration()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var config = new ConfigService(root.Path("config"), protector);
+        var vault = new PlatformCookieVault(root.Path("config"), protector);
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            cookieVault: vault)
+        {
+            CookieContent = "Cookie: auth_token=first-secret",
+            LegacyCookiePlatform = "twitter"
+        };
+        Directory.CreateDirectory(config.ConfigDirectory);
+
+        Task saveTask;
+        await using (var configLock = new FileStream(
+                         Path.Combine(config.ConfigDirectory, ".config.lock"),
+                         FileMode.OpenOrCreate,
+                         FileAccess.ReadWrite,
+                         FileShare.None))
+        {
+            saveTask = viewModel.SaveSettingsCommand.ExecuteAsync(null);
+            var timeout = DateTime.UtcNow + TimeSpan.FromSeconds(2);
+            while (!string.Equals(
+                       config.Config.CookieContent,
+                       "Cookie: auth_token=first-secret",
+                       StringComparison.Ordinal)
+                   && DateTime.UtcNow < timeout)
+            {
+                await Task.Delay(10);
+            }
+
+            Assert.Equal("Cookie: auth_token=first-secret", config.Config.CookieContent);
+            Assert.False(saveTask.IsCompleted);
+            viewModel.CookieContent = "Cookie: SID=second-secret";
+            viewModel.LegacyCookiePlatform = "youtube";
+        }
+
+        await saveTask;
+
+        Assert.Equal(
+            "Cookie: auth_token=first-secret",
+            await vault.LoadAsync("twitter", CancellationToken.None));
+        Assert.False(await vault.ExistsAsync("youtube", CancellationToken.None));
+        Assert.Equal("Cookie: SID=second-secret", viewModel.CookieContent);
+        Assert.Equal("youtube", viewModel.LegacyCookiePlatform);
+        Assert.Equal("待加密保存", viewModel.ManualCookieStatusText);
+        Assert.False(viewModel.IsManualCookieMessageSuccess);
+        Assert.Contains("当前修改仍待保存", viewModel.ManualCookieValidationMessage, StringComparison.Ordinal);
+        Assert.Equal("", config.Config.CookieContent);
+        Assert.Equal("", config.Config.LegacyCookiePlatform);
     }
 
     [Fact]

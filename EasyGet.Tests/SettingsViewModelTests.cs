@@ -499,6 +499,32 @@ public class SettingsViewModelTests
     }
 
     [Fact]
+    public async Task SaveSettingsCommand_DoesNotMarkChangesRaisedDuringSaveAsPersisted()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        var firstPath = Path.Combine(config.ConfigDirectory, "first-download-path");
+        var expectedPath = Path.Combine(config.ConfigDirectory, "latest-download-path");
+        var settingsSavedCount = 0;
+        viewModel.DefaultDownloadPath = firstPath;
+        viewModel.SettingsSaved += () =>
+        {
+            settingsSavedCount++;
+            if (settingsSavedCount == 1)
+                viewModel.DefaultDownloadPath = expectedPath;
+        };
+
+        await viewModel.SaveSettingsCommand.ExecuteAsync(null);
+        Assert.True(await viewModel.FlushPendingSaveAsync());
+        Assert.True(await config.SaveAsync());
+
+        var reloaded = new ConfigService(config.ConfigDirectory);
+        await reloaded.LoadAsync();
+        Assert.Equal(expectedPath, reloaded.Config.DefaultDownloadPath);
+        Assert.True(settingsSavedCount >= 2);
+    }
+
+    [Fact]
     public async Task CheckDouyinSidecarHealthCommand_ShowsAvailableStatus()
     {
         var health = new FakeDouyinSidecarHealthService(

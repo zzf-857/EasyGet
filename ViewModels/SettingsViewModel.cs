@@ -14,6 +14,12 @@ public partial class SettingsViewModel : ObservableObject
     private static readonly TimeSpan BrowserLoginDetectionTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan BrowserLoginDetectionInterval = TimeSpan.FromSeconds(2);
 
+    private enum SettingsSaveIntent
+    {
+        Automatic,
+        Explicit
+    }
+
     private static readonly IReadOnlyDictionary<string, string> DouyinTemplatePreviewValues =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -814,12 +820,12 @@ public partial class SettingsViewModel : ObservableObject
     [RelayCommand]
     private async Task SaveSettings()
     {
-        CancelPendingAutoSave();
-        if (await PersistSettingsAsync())
-            MarkLatestAutoSaveVersionPersisted();
+        var targetVersion = CancelPendingAutoSave();
+        if (await PersistSettingsAsync(SettingsSaveIntent.Explicit))
+            MarkAutoSaveVersionPersisted(targetVersion);
     }
 
-    private async Task<bool> PersistSettingsAsync()
+    private async Task<bool> PersistSettingsAsync(SettingsSaveIntent saveIntent)
     {
         await _settingsSaveGate.WaitAsync();
         try
@@ -841,35 +847,44 @@ public partial class SettingsViewModel : ObservableObject
             c.UseProxy = UseProxy;
             c.ProxyAddress = ProxyAddress;
             c.UseAria2c = UseAria2c;
-            var selectedCookiePlatform = MediaPlatformResolver.KnownPlatforms
-                .FirstOrDefault(platform => string.Equals(
-                    platform.StorageKey,
-                    LegacyCookiePlatform?.Trim(),
-                    StringComparison.Ordinal))
-                ?.StorageKey ?? "";
-            var cookieContentRequiresPlatform = !string.IsNullOrWhiteSpace(CookieContent)
-                                                && !CookieFileSerializer.HasExplicitDomainRows(CookieContent);
-            var canPersistManualCookie = !cookieContentRequiresPlatform
-                                         || selectedCookiePlatform.Length > 0;
-            if (!canPersistManualCookie)
-            {
-                ManualCookieValidationMessage = "请先选择所属平台，再保存 Header 格式 Cookie。";
-                IsManualCookieMessageSuccess = false;
-            }
-            else if (!string.IsNullOrWhiteSpace(CookieContent))
-            {
-                ManualCookieValidationMessage = "";
-                IsManualCookieMessageSuccess = false;
-            }
-            if (canPersistManualCookie)
-                c.CookieContent = CookieContent;
             c.SmartCookieEnabled = SmartCookieEnabled;
-            if (canPersistManualCookie)
+
+            var manualCookieContent = CookieContent;
+            var manualCookiePlatform = LegacyCookiePlatform;
+            var selectedCookiePlatform = "";
+            var canPersistManualCookie = false;
+            if (saveIntent == SettingsSaveIntent.Explicit)
             {
-                c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
-                    ? ""
-                    : selectedCookiePlatform;
+                selectedCookiePlatform = MediaPlatformResolver.KnownPlatforms
+                    .FirstOrDefault(platform => string.Equals(
+                        platform.StorageKey,
+                        manualCookiePlatform?.Trim(),
+                        StringComparison.Ordinal))
+                    ?.StorageKey ?? "";
+                var cookieContentRequiresPlatform = !string.IsNullOrWhiteSpace(manualCookieContent)
+                                                    && !CookieFileSerializer.HasExplicitDomainRows(manualCookieContent);
+                canPersistManualCookie = !cookieContentRequiresPlatform
+                                         || selectedCookiePlatform.Length > 0;
+                if (!canPersistManualCookie)
+                {
+                    ManualCookieValidationMessage = "请先选择所属平台，再保存 Header 格式 Cookie。";
+                    IsManualCookieMessageSuccess = false;
+                }
+                else if (!string.IsNullOrWhiteSpace(manualCookieContent))
+                {
+                    ManualCookieValidationMessage = "";
+                    IsManualCookieMessageSuccess = false;
+                }
+
+                if (canPersistManualCookie)
+                {
+                    c.CookieContent = manualCookieContent;
+                    c.LegacyCookiePlatform = string.IsNullOrWhiteSpace(c.CookieContent)
+                        ? ""
+                        : selectedCookiePlatform;
+                }
             }
+
             c.EnableDouyinSpecialEngine = EnableDouyinSpecialEngine;
             c.DouyinMode = DouyinMode;
             c.DouyinLimit = DouyinLimit;
@@ -905,7 +920,9 @@ public partial class SettingsViewModel : ObservableObject
             SyncNormalizedDouyinValues(c);
 
             _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
-            if (canPersistManualCookie && !string.IsNullOrWhiteSpace(c.CookieContent))
+            if (saveIntent == SettingsSaveIntent.Explicit
+                && canPersistManualCookie
+                && !string.IsNullOrWhiteSpace(c.CookieContent))
             {
                 var savedPlatform = MediaPlatformResolver.KnownPlatforms.FirstOrDefault(platform =>
                     string.Equals(
@@ -916,22 +933,41 @@ public partial class SettingsViewModel : ObservableObject
                     selectedCookiePlatform,
                     _cookieVault,
                     CancellationToken.None);
-                _isInitializing = true;
-                try
+                var cookieDraftUnchanged = string.Equals(
+                                               CookieContent,
+                                               manualCookieContent,
+                                               StringComparison.Ordinal)
+                                           && string.Equals(
+                                               LegacyCookiePlatform,
+                                               manualCookiePlatform,
+                                               StringComparison.Ordinal);
+                if (cookieDraftUnchanged)
                 {
-                    CookieContent = "";
-                    LegacyCookiePlatform = "";
-                }
-                finally
-                {
-                    _isInitializing = false;
-                }
+                    _isInitializing = true;
+                    try
+                    {
+                        CookieContent = "";
+                        LegacyCookiePlatform = "";
+                    }
+                    finally
+                    {
+                        _isInitializing = false;
+                    }
 
-                ManualCookieValidationMessage = "手动 Cookie 已加密保存并按平台隔离。";
-                ManualCookieStatusText = savedPlatform is null
-                    ? "已加密保存 · 已按域名拆分"
-                    : $"已加密保存 · {savedPlatform.DisplayName}";
-                IsManualCookieMessageSuccess = true;
+                    ManualCookieValidationMessage = "手动 Cookie 已加密保存并按平台隔离。";
+                    ManualCookieStatusText = savedPlatform is null
+                        ? "已加密保存 · 已按域名拆分"
+                        : $"已加密保存 · {savedPlatform.DisplayName}";
+                    IsManualCookieMessageSuccess = true;
+                }
+                else
+                {
+                    ManualCookieValidationMessage = "先前的手动 Cookie 已加密保存，当前修改仍待保存。";
+                    ManualCookieStatusText = string.IsNullOrWhiteSpace(CookieContent)
+                        ? "未配置 Cookie"
+                        : "待加密保存";
+                    IsManualCookieMessageSuccess = false;
+                }
             }
 
             if (!await _configService.SaveAsync())
@@ -1048,11 +1084,8 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             await Task.Delay(AutoSaveDebounceMilliseconds, debounce.Token);
-            if (await PersistSettingsAsync())
-            {
-                lock (_autoSaveGate)
-                    _autoSavePersistedVersion = Math.Max(_autoSavePersistedVersion, version);
-            }
+            if (await PersistSettingsAsync(SettingsSaveIntent.Automatic))
+                MarkAutoSaveVersionPersisted(version);
         }
         catch (OperationCanceledException) when (debounce.IsCancellationRequested)
         {
@@ -1095,7 +1128,7 @@ public partial class SettingsViewModel : ObservableObject
                 }
             }
 
-            if (!await PersistSettingsAsync())
+            if (!await PersistSettingsAsync(SettingsSaveIntent.Automatic))
                 return false;
 
             lock (_autoSaveGate)
@@ -1109,12 +1142,17 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    private void CancelPendingAutoSave()
+    private long CancelPendingAutoSave()
     {
         CancellationTokenSource? debounce;
+        long targetVersion;
         lock (_autoSaveGate)
+        {
             debounce = _autoSaveDebounce;
+            targetVersion = _autoSaveRequestedVersion;
+        }
         TryCancelDebounce(debounce);
+        return targetVersion;
     }
 
     private static void TryCancelDebounce(CancellationTokenSource? debounce)
@@ -1128,10 +1166,10 @@ public partial class SettingsViewModel : ObservableObject
         }
     }
 
-    private void MarkLatestAutoSaveVersionPersisted()
+    private void MarkAutoSaveVersionPersisted(long version)
     {
         lock (_autoSaveGate)
-            _autoSavePersistedVersion = _autoSaveRequestedVersion;
+            _autoSavePersistedVersion = Math.Max(_autoSavePersistedVersion, version);
     }
 
     private void SyncNormalizedPerformanceValues(EasyGet.Models.AppConfig config)
