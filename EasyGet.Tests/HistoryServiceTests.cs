@@ -9,6 +9,74 @@ namespace EasyGet.Tests;
 public class HistoryServiceTests
 {
     [Fact]
+    public async Task AddAsync_AssignsGeneratedIdAndIsolatesHistoryAddedSubscribers()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            DownloadHistory? receivedHistory = null;
+            service.HistoryAdded += _ => throw new InvalidOperationException("observer failure");
+            service.HistoryAdded += history => receivedHistory = history;
+            var addedHistory = new DownloadHistory
+            {
+                Url = "https://example.com/new-history",
+                Title = "new history",
+                DownloadTime = new DateTime(2026, 7, 28, 12, 0, 0)
+            };
+
+            await service.AddAsync(addedHistory);
+
+            Assert.True(addedHistory.Id > 0);
+            Assert.Same(addedHistory, receivedHistory);
+            Assert.Equal(addedHistory.Id, Assert.Single(await service.GetAllAsync()).Id);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task GetAllAsync_OrdersEqualDownloadTimesByDescendingId()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            var downloadTime = new DateTime(2026, 7, 28, 12, 0, 0);
+            var first = new DownloadHistory
+            {
+                Url = "https://example.com/same-time/first",
+                Title = "same-time first",
+                DownloadTime = downloadTime
+            };
+            var second = new DownloadHistory
+            {
+                Url = "https://example.com/same-time/second",
+                Title = "same-time second",
+                DownloadTime = downloadTime
+            };
+
+            await service.AddAsync(first);
+            await service.AddAsync(second);
+
+            Assert.Equal(
+                new[] { second.Id, first.Id },
+                (await service.GetAllAsync()).Select(item => item.Id));
+            Assert.Equal(
+                new[] { second.Id, first.Id },
+                (await service.GetAllAsync("same-time")).Select(item => item.Id));
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public void Dispose_ReleasesDatabaseFileImmediately()
     {
         using var root = new TestDirectory();

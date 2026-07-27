@@ -16,6 +16,9 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private ObservableObject? _currentPage;
     [ObservableProperty] private int _selectedNavIndex;
     [ObservableProperty] private string _statusMessage = "Ready";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SidebarWidth))]
+    private bool _isCompactLayout;
 
     [ObservableProperty] private TaskbarItemProgressState _taskbarState = TaskbarItemProgressState.None;
     [ObservableProperty] private double _taskbarValue;
@@ -29,6 +32,33 @@ public partial class MainViewModel : ObservableObject
 
     public string AppVersion { get; } = $"v{GetAssemblyVersion()}";
 
+    public double SidebarWidth => IsCompactLayout ? 56 : 216;
+    public int RunningTaskCount => _downloadManager.Tasks.Count(task =>
+        task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging);
+    public int WaitingTaskCount => _downloadManager.Tasks.Count(task => task.Status == DownloadStatus.Waiting);
+    public int FailedTaskCount => _downloadManager.Tasks.Count(task => task.Status == DownloadStatus.Failed);
+    public int QueueTaskCount => _downloadManager.Tasks.Count;
+    public bool HasQueueBadge => QueueTaskCount > 0;
+    public string TaskStatusText => $"{RunningTaskCount} 进行中 · {WaitingTaskCount} 等待 · {FailedTaskCount} 失败";
+    public string AggregateSpeedText => $"↓ {ByteSizeFormatter.FormatClampZero((long)_downloadManager.Tasks
+        .Where(task => task.Status == DownloadStatus.Downloading)
+        .Sum(task => double.IsFinite(task.Speed) ? Math.Max(0, task.Speed) : 0))}/s";
+    public string DiskStatusText => HistoryVM.StorageStatusText;
+    public bool IsEngineReady => SettingsVM.YtDlpFound && SettingsVM.FfmpegFound;
+    public string EngineVersionText
+    {
+        get
+        {
+            var ytDlp = SettingsVM.YtDlpFound && !string.IsNullOrWhiteSpace(SettingsVM.YtDlpVersion)
+                ? $"yt-dlp {SettingsVM.YtDlpVersion}"
+                : "yt-dlp 未就绪";
+            var ffmpeg = SettingsVM.FfmpegFound
+                ? $"ffmpeg {NormalizeToolVersion(SettingsVM.FfmpegVersion)}"
+                : "ffmpeg 未就绪";
+            return $"{ytDlp} · {ffmpeg}";
+        }
+    }
+
     public string CurrentPageTitle => SelectedNavIndex switch
     {
         0 => "单个视频下载",
@@ -38,7 +68,7 @@ public partial class MainViewModel : ObservableObject
         _ => "EasyGet"
     };
 
-    public string ToolStatusText => SettingsVM.YtDlpFound && SettingsVM.FfmpegFound
+    public string ToolStatusText => IsEngineReady
         ? "下载工具已就绪"
         : "下载工具未就绪";
 
@@ -64,6 +94,7 @@ public partial class MainViewModel : ObservableObject
         _downloadManager.TaskFinished += OnTaskFinished;
         SettingsVM.PropertyChanged += OnSettingsViewModelPropertyChanged;
         SettingsVM.SettingsSaved += OnSettingsSaved;
+        HistoryVM.PropertyChanged += OnHistoryViewModelPropertyChanged;
 
         _downloadManager.Tasks.CollectionChanged += OnTasksCollectionChanged;
         foreach (var task in _downloadManager.Tasks)
@@ -72,16 +103,27 @@ public partial class MainViewModel : ObservableObject
         }
 
         BatchDownloadVM.RequestShowNotification += (msg, isSuccess) =>
-        {
-            ShowToast(msg, isSuccess);
-        };
+            ShowToast(msg, isSuccess, isSuccess ? null : "查看队列", isSuccess ? null : () => Navigate("batch"));
         HistoryVM.RequestShowNotification += (msg, isSuccess) =>
-        {
-            ShowToast(msg, isSuccess);
-        };
+            ShowToast(msg, isSuccess, isSuccess ? null : "查看历史", isSuccess ? null : () => Navigate("history"));
+        DownloadVM.ClipboardLinkDetected += OnClipboardLinkDetected;
     }
 
-    public void ShowToast(string message, bool isSuccess)
+    public void ShowToast(string message, bool isSuccess, string? actionLabel = null, Action? recoveryAction = null)
+        => ShowToast(
+            message,
+            isSuccess ? NotificationKind.Success : NotificationKind.Failure,
+            actionLabel,
+            recoveryAction);
+
+    public void ShowInfoToast(string message, string? actionLabel = null, Action? action = null)
+        => ShowToast(message, NotificationKind.Info, actionLabel, action);
+
+    private void ShowToast(
+        string message,
+        NotificationKind kind,
+        string? actionLabel = null,
+        Action? recoveryAction = null)
     {
         var action = new Action(() =>
         {
@@ -94,7 +136,7 @@ public partial class MainViewModel : ObservableObject
                 }
             }
 
-            var item = new NotificationItem(message, isSuccess);
+            var item = new NotificationItem(message, kind, actionLabel, recoveryAction);
             item.Expired += OnNotificationExpired;
             item.Closed += OnNotificationClosed;
             Notifications.Add(item);
@@ -148,8 +190,37 @@ public partial class MainViewModel : ObservableObject
 
     private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SettingsViewModel.YtDlpFound) or nameof(SettingsViewModel.FfmpegFound))
+        if (e.PropertyName is nameof(SettingsViewModel.YtDlpFound)
+            or nameof(SettingsViewModel.FfmpegFound)
+            or nameof(SettingsViewModel.YtDlpVersion)
+            or nameof(SettingsViewModel.FfmpegVersion))
+        {
             OnPropertyChanged(nameof(ToolStatusText));
+            OnPropertyChanged(nameof(IsEngineReady));
+            OnPropertyChanged(nameof(EngineVersionText));
+        }
+    }
+
+    private void OnClipboardLinkDetected(string url)
+    {
+        ShowInfoToast(
+            "检测到新的媒体链接，可立即解析。",
+            "立即解析",
+            () => ParseClipboardLink(url));
+    }
+
+    private void ParseClipboardLink(string url)
+    {
+        DownloadVM.Url = url;
+        Navigate("download");
+        if (DownloadVM.ParseCommand.CanExecute(null))
+            DownloadVM.ParseCommand.Execute(null);
+    }
+
+    private void OnHistoryViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(HistoryViewModel.StorageStatusText))
+            OnPropertyChanged(nameof(DiskStatusText));
     }
 
     private void OnSettingsSaved()
@@ -161,29 +232,35 @@ public partial class MainViewModel : ObservableObject
     private void OnTaskFinished(DownloadTask task)
     {
         var title = string.IsNullOrEmpty(task.Title) ? task.Url : task.Title;
-        string msg = "";
-        bool isSuccess = false;
-
         switch (task.Status)
         {
             case DownloadStatus.Completed:
-                msg = $"下载完成: {title}";
-                isSuccess = true;
+                ShowToast($"下载完成: {title}", true);
                 break;
             case DownloadStatus.Failed:
-                msg = $"下载失败: {title}";
-                isSuccess = false;
+                ShowToast(
+                    BuildTaskFailureMessage(task),
+                    false,
+                    "查看队列",
+                    () => Navigate("batch"));
                 break;
             case DownloadStatus.Cancelled:
-                msg = $"已取消: {title}";
-                isSuccess = false;
+                ShowInfoToast(
+                    $"已取消: {title}",
+                    "查看队列",
+                    () => Navigate("batch"));
                 break;
         }
+    }
 
-        if (!string.IsNullOrEmpty(msg))
-        {
-            ShowToast(msg, isSuccess);
-        }
+    internal static string BuildTaskFailureMessage(DownloadTask task)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+
+        var title = string.IsNullOrEmpty(task.Title) ? task.Url : task.Title;
+        return string.IsNullOrWhiteSpace(task.ErrorMessage)
+            ? $"下载失败: {title}"
+            : $"下载失败: {title}\n{task.ErrorMessage.Trim()}";
     }
 
     [RelayCommand]
@@ -233,6 +310,7 @@ public partial class MainViewModel : ObservableObject
         SettingsVM.Initialize();
         DownloadVM.Initialize();
         HistoryVM.RefreshStorageStatus();
+        await HistoryVM.EnsureHistoryLoadedAsync();
 
         StatusMessage = "正在检查运行环境...";
         var status = await _envService.CheckEnvironmentAsync();
@@ -248,7 +326,7 @@ public partial class MainViewModel : ObservableObject
             catch (Exception ex)
             {
                 StatusMessage = "环境安装失败，请在设置页重试或手动安装。";
-                ShowToast($"环境安装失败: {ex.Message}", false);
+                ShowToast($"环境安装失败: {ex.Message}", false, "前往设置", () => Navigate("settings"));
             }
         }
 
@@ -276,22 +354,52 @@ public partial class MainViewModel : ObservableObject
             }
         }
         UpdateTaskbarProgress();
+        NotifyTaskStatusChanged();
     }
 
     private void OnTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(DownloadTask.Progress) or nameof(DownloadTask.Status))
+        if (e.PropertyName is nameof(DownloadTask.Progress) or nameof(DownloadTask.Status) or nameof(DownloadTask.Speed))
         {
             var app = System.Windows.Application.Current;
             if (app is not null)
             {
-                app.Dispatcher.Invoke(() => UpdateTaskbarProgress());
+                app.Dispatcher.Invoke(() =>
+                {
+                    UpdateTaskbarProgress();
+                    NotifyTaskStatusChanged();
+                });
             }
             else
             {
                 UpdateTaskbarProgress();
+                NotifyTaskStatusChanged();
             }
         }
+    }
+
+    [RelayCommand]
+    private void RedownloadHistoryItem(DownloadHistory? item)
+    {
+        if (item is null || string.IsNullOrWhiteSpace(item.Url))
+            return;
+
+        DownloadVM.Url = item.Url;
+        CurrentPage = DownloadVM;
+        SelectedNavIndex = 0;
+        if (DownloadVM.ParseCommand.CanExecute(null))
+            DownloadVM.ParseCommand.Execute(null);
+    }
+
+    private void NotifyTaskStatusChanged()
+    {
+        OnPropertyChanged(nameof(RunningTaskCount));
+        OnPropertyChanged(nameof(WaitingTaskCount));
+        OnPropertyChanged(nameof(FailedTaskCount));
+        OnPropertyChanged(nameof(QueueTaskCount));
+        OnPropertyChanged(nameof(HasQueueBadge));
+        OnPropertyChanged(nameof(TaskStatusText));
+        OnPropertyChanged(nameof(AggregateSpeedText));
     }
 
     private void UpdateTaskbarProgress()
@@ -338,5 +446,15 @@ public partial class MainViewModel : ObservableObject
             version = version[..metadataIndex];
 
         return version;
+    }
+
+    private static string NormalizeToolVersion(string version)
+    {
+        if (string.IsNullOrWhiteSpace(version))
+            return "就绪";
+
+        var firstLine = version.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim() ?? "就绪";
+        return firstLine.Length <= 24 ? firstLine : firstLine[..24];
     }
 }

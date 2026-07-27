@@ -13,7 +13,9 @@ namespace EasyGet.Views;
 public partial class HistoryView : System.Windows.Controls.UserControl
 {
     private const string HistoryItemsDataFormat = "EasyGet.HistoryItems";
-    private const double HistoryCardSlotWidth = 300;
+    private const double HistoryCardSlotWidth = 268;
+    private const double HistoryFolderRailMinWidth = 240;
+    private const double HistoryFolderRailMaxWidth = 420;
     private const int LargeFolderAnimationThreshold = 20;
     private Point _historyDragStart;
     private bool _historyDragCanStart;
@@ -35,12 +37,19 @@ public partial class HistoryView : System.Windows.Controls.UserControl
         };
     }
 
+    public void FocusSearch()
+    {
+        HistorySearchBox.Focus();
+        Keyboard.Focus(HistorySearchBox);
+        HistorySearchBox.SelectAll();
+    }
+
     private async void HistoryView_Loaded(object sender, System.Windows.RoutedEventArgs e)
     {
         if (DataContext is HistoryViewModel vm)
         {
             ObserveViewModel(vm);
-            await vm.LoadHistory();
+            await vm.EnsureHistoryLoadedAsync();
             ScrollHistoryToTop();
         }
     }
@@ -215,6 +224,53 @@ public partial class HistoryView : System.Windows.Controls.UserControl
         vm.CreateFolderCommand.Execute(null);
         NewFolderToggle.IsChecked = false;
         e.Handled = true;
+    }
+
+    private void CompactFolderCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is HistoryViewModel vm
+            && sender is ComboBox { SelectedItem: HistoryFolder folder })
+        {
+            vm.SelectFolderCommand.Execute(folder);
+        }
+    }
+
+    private void CompactBatchCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (DataContext is HistoryViewModel vm
+            && sender is ComboBox { SelectedItem: DownloadHistoryGroup group })
+        {
+            vm.SelectBatchFolderCommand.Execute(group);
+        }
+    }
+
+    private void HistoryFolderRailResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+        => ResizeHistoryFolderRail(e.HorizontalChange);
+
+    private void HistoryFolderRailResizeThumb_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        var widthDelta = e.Key switch
+        {
+            Key.Left => -16,
+            Key.Right => 16,
+            _ => 0
+        };
+        if (widthDelta == 0)
+            return;
+
+        ResizeHistoryFolderRail(widthDelta);
+        e.Handled = true;
+    }
+
+    private void ResizeHistoryFolderRail(double widthDelta)
+    {
+        var currentWidth = double.IsNaN(HistoryFolderRailHost.Width)
+            ? HistoryFolderRailHost.ActualWidth
+            : HistoryFolderRailHost.Width;
+        HistoryFolderRailHost.Width = Math.Clamp(
+            currentWidth + widthDelta,
+            HistoryFolderRailMinWidth,
+            HistoryFolderRailMaxWidth);
     }
 
     private static T? FindVisualChild<T>(DependencyObject parent)

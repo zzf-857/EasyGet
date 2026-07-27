@@ -37,6 +37,8 @@ public static class ConfirmationDialogService
     internal static bool IsDestructiveAction(string? title)
         => title?.Contains("删除", StringComparison.Ordinal) == true
            || title?.Contains("清空", StringComparison.Ordinal) == true
+           || title?.Contains("清除", StringComparison.Ordinal) == true
+           || title?.Contains("移除", StringComparison.Ordinal) == true
            || title?.Contains("停止", StringComparison.Ordinal) == true
            || title?.Contains("取消", StringComparison.Ordinal) == true;
 
@@ -44,6 +46,10 @@ public static class ConfirmationDialogService
     {
         if (title?.Contains("清空", StringComparison.Ordinal) == true)
             return "清空记录";
+        if (title?.Contains("清除", StringComparison.Ordinal) == true)
+            return "确认清除";
+        if (title?.Contains("移除", StringComparison.Ordinal) == true)
+            return "确认移除";
         if (title?.Contains("删除", StringComparison.Ordinal) == true)
             return "删除记录";
         if (title?.Contains("停止", StringComparison.Ordinal) == true

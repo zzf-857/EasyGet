@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.10 - 2026-07-28
+
+### Desktop Interface
+- Redesigned the four primary workspaces with larger standardized typography, denser spacing, aligned controls, responsive navigation, and overflow-safe layouts.
+- Added resizable batch-input and history side panes, queue thumbnails with aligned progress columns, richer folder details, context-menu deletion, and recent-download indicators.
+
+### Responsiveness and Reliability
+- Cached page views to remove navigation stalls and refreshed completed downloads and folders immediately in history.
+- Prevented browser Cookie login checks from leaving all platform actions disabled when the external login flow stalls or exits unexpectedly.
+
+### Tests
+- Added layout contracts, cached-page coverage, and focused regressions for history refresh, notifications, settings, Cookie login, and download workflows.
+- Verified 1015 automated tests pass; 1 live or environment-dependent test remains explicitly skipped.
+
 ## 1.3.9 - 2026-07-26
 
 ### Update Reliability

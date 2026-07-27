@@ -15,6 +15,8 @@ public class HistoryService : IDisposable
 
     private readonly SqliteConnection _connection;
 
+    public event Action<DownloadHistory>? HistoryAdded;
+
     public HistoryService()
         : this(GetDefaultDatabasePath())
     {
@@ -161,28 +163,60 @@ public class HistoryService : IDisposable
     /// </summary>
     public async Task AddAsync(DownloadHistory history)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id)
-            VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl, $batchId, $batchName, $batchDirectory, $folderId)
-            """;
-        cmd.Parameters.AddWithValue("$url", NormalizeHistoryText(history.Url));
-        cmd.Parameters.AddWithValue("$title", NormalizeHistoryText(history.Title));
-        cmd.Parameters.AddWithValue("$platform", NormalizeHistoryText(history.Platform));
-        cmd.Parameters.AddWithValue("$format", NormalizeHistoryText(history.Format));
-        cmd.Parameters.AddWithValue("$quality", NormalizeHistoryText(history.Quality));
-        cmd.Parameters.AddWithValue("$fileSize", history.FileSize);
-        cmd.Parameters.AddWithValue("$filePath", NormalizeHistoryText(history.FilePath));
-        cmd.Parameters.AddWithValue("$attachmentFilePaths", SerializeAttachmentFilePaths(history.AttachmentFilePaths));
-        cmd.Parameters.AddWithValue(
-            "$downloadTime",
-            history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$thumbnailUrl", NormalizeHistoryText(history.ThumbnailUrl));
-        cmd.Parameters.AddWithValue("$batchId", NormalizeHistoryText(history.BatchId));
-        cmd.Parameters.AddWithValue("$batchName", NormalizeHistoryText(history.BatchName));
-        cmd.Parameters.AddWithValue("$batchDirectory", NormalizeHistoryText(history.BatchDirectory));
-        cmd.Parameters.AddWithValue("$folderId", Math.Max(0, history.FolderId));
-        await cmd.ExecuteNonQueryAsync();
+        ArgumentNullException.ThrowIfNull(history);
+
+        long insertedId;
+        using (var cmd = _connection.CreateCommand())
+        {
+            cmd.CommandText = """
+                INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id)
+                VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl, $batchId, $batchName, $batchDirectory, $folderId)
+                RETURNING id
+                """;
+            cmd.Parameters.AddWithValue("$url", NormalizeHistoryText(history.Url));
+            cmd.Parameters.AddWithValue("$title", NormalizeHistoryText(history.Title));
+            cmd.Parameters.AddWithValue("$platform", NormalizeHistoryText(history.Platform));
+            cmd.Parameters.AddWithValue("$format", NormalizeHistoryText(history.Format));
+            cmd.Parameters.AddWithValue("$quality", NormalizeHistoryText(history.Quality));
+            cmd.Parameters.AddWithValue("$fileSize", history.FileSize);
+            cmd.Parameters.AddWithValue("$filePath", NormalizeHistoryText(history.FilePath));
+            cmd.Parameters.AddWithValue("$attachmentFilePaths", SerializeAttachmentFilePaths(history.AttachmentFilePaths));
+            cmd.Parameters.AddWithValue(
+                "$downloadTime",
+                history.DownloadTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$thumbnailUrl", NormalizeHistoryText(history.ThumbnailUrl));
+            cmd.Parameters.AddWithValue("$batchId", NormalizeHistoryText(history.BatchId));
+            cmd.Parameters.AddWithValue("$batchName", NormalizeHistoryText(history.BatchName));
+            cmd.Parameters.AddWithValue("$batchDirectory", NormalizeHistoryText(history.BatchDirectory));
+            cmd.Parameters.AddWithValue("$folderId", Math.Max(0, history.FolderId));
+
+            var result = await cmd.ExecuteScalarAsync();
+            insertedId = result is long id && id > 0
+                ? id
+                : throw new InvalidOperationException("SQLite did not return a valid history row id.");
+        }
+
+        history.Id = insertedId;
+        NotifyHistoryAdded(history);
+    }
+
+    private void NotifyHistoryAdded(DownloadHistory history)
+    {
+        var handlers = HistoryAdded;
+        if (handlers is null)
+            return;
+
+        foreach (Action<DownloadHistory> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(history);
+            }
+            catch
+            {
+                // History persistence must not fail because one observer failed.
+            }
+        }
     }
 
     /// <summary>
@@ -200,13 +234,13 @@ public class HistoryService : IDisposable
                    OR url LIKE $keyword
                    OR platform LIKE $keyword
                    OR batch_name LIKE $keyword
-                ORDER BY download_time DESC
+                ORDER BY download_time DESC, id DESC
                 """;
             cmd.Parameters.AddWithValue("$keyword", $"%{searchKeyword}%");
         }
         else
         {
-            cmd.CommandText = $"SELECT {HistoryColumns} FROM download_history ORDER BY download_time DESC";
+            cmd.CommandText = $"SELECT {HistoryColumns} FROM download_history ORDER BY download_time DESC, id DESC";
         }
 
         var results = new List<DownloadHistory>();
@@ -531,6 +565,7 @@ public class HistoryService : IDisposable
 
     public void Dispose()
     {
+        HistoryAdded = null;
         _connection.Dispose();
     }
 }

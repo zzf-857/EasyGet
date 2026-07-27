@@ -36,11 +36,12 @@ public partial class BatchDownloadViewModel : ObservableObject
     [ObservableProperty] private bool _isDownloading;
     [ObservableProperty] private bool _isImportingPlaylist;
     [ObservableProperty] private string _playlistUrl = "";
-    [ObservableProperty] private string _selectedQueueFilter = "进行中";
+    [ObservableProperty] private string _selectedQueueFilter = "全部";
 
     public ObservableCollection<DownloadTask> QueueTasks => _downloadManager.Tasks;
     public ObservableCollection<DownloadTask> VisibleQueueTasks { get; } = [];
     public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
+    public int WaitingTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Waiting);
     public int TotalTaskCount => QueueTasks.Count;
     public int CompletedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Completed);
     public int FailedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Failed);
@@ -69,15 +70,18 @@ public partial class BatchDownloadViewModel : ObservableObject
         : $"已完成 {CompletedTaskCount}/{TotalTaskCount} · 进行中 {RunningTaskCount} · 剩余 {RemainingTaskCount} · 失败 {FailedTaskCount}";
     public string EmptyQueueFilterText => SelectedQueueFilter switch
     {
+        "进行中" => "当前没有正在处理的任务",
+        "等待" => "当前没有等待中的任务",
+        "已暂停" => "当前没有暂停的任务",
         "失败" => "当前没有失败任务",
-        "已结束" => "当前没有已结束任务",
+        "已完成" => "当前没有已完成任务",
         "全部" => "暂无下载任务",
-        _ => TotalTaskCount == 0 ? "暂无并行任务" : "当前批次已处理完毕"
+        _ => "当前筛选下没有任务"
     };
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3 (仅音频)"];
     public string[] QualityOptions { get; } = ["最高画质", "1080p", "720p", "480p"];
-    public string[] QueueFilterOptions { get; } = ["进行中", "失败", "已结束", "全部"];
+    public string[] QueueFilterOptions { get; } = ["全部", "进行中", "等待", "已暂停", "失败", "已完成"];
 
     public event Action<string, bool>? RequestShowNotification;
 
@@ -213,7 +217,7 @@ public partial class BatchDownloadViewModel : ObservableObject
             RefreshQueueMetrics();
             foreach (var propertyName in new[]
                      {
-                         nameof(ActiveDownloadCount), nameof(TotalTaskCount), nameof(CompletedTaskCount),
+                         nameof(ActiveDownloadCount), nameof(WaitingTaskCount), nameof(TotalTaskCount), nameof(CompletedTaskCount),
                          nameof(FailedTaskCount), nameof(CancelledTaskCount), nameof(PausedTaskCount),
                          nameof(RunningTaskCount), nameof(RemainingTaskCount), nameof(FinishedTaskCount),
                          nameof(HasQueueTasks), nameof(HasVisibleQueueTasks),
@@ -246,10 +250,13 @@ public partial class BatchDownloadViewModel : ObservableObject
     {
         var visible = QueueTasks.Where(task => SelectedQueueFilter switch
         {
+            "进行中" => task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging,
+            "等待" => task.Status == DownloadStatus.Waiting,
+            "已暂停" => task.Status == DownloadStatus.Paused,
             "失败" => task.Status == DownloadStatus.Failed,
-            "已结束" => task.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled,
+            "已完成" => task.Status == DownloadStatus.Completed,
             "全部" => true,
-            _ => task.Status is not (DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled)
+            _ => true
         }).ToList();
 
         VisibleQueueTasks.Clear();

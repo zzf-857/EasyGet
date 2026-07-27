@@ -20,6 +20,7 @@
             <converters:HttpUrlToBooleanConverter x:Key="HttpUrlToBool"/>
             <converters:FileExistsToOpacityConverter x:Key="FileExistsToOpacity"/>
             <converters:EqualsToBoolConverter x:Key="EqualsToBoolConverter"/>
+            <converters:EqualsToVisibilityConverter x:Key="EqualsToVisibilityConverter"/>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

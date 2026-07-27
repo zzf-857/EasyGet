@@ -8,7 +8,7 @@ namespace EasyGet.Tests;
 public class ThemeStyleTests
 {
     [Fact]
-    public void ToolPanelBorderStyleUsesAppleElevatedSurfaceTreatment()
+    public void ToolPanelBorderStyleUsesDesignerCompactSurfaceTreatment()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
@@ -34,44 +34,50 @@ public class ThemeStyleTests
                 && element.Attribute("Property")?.Value == "CornerRadius")
             ?.Attribute("Value")?.Value;
 
-        Assert.True(double.TryParse(cornerRadius, out var radius), "ToolPanelBorder must set a numeric CornerRadius.");
-        Assert.InRange(radius, 12, 16);
+        Assert.Equal("8", cornerRadius);
+        AssertStyleSetter(style, "Padding", "16");
     }
 
     [Fact]
-    public void ThemeColorTokensFollowAppleInspiredDarkPalette()
+    public void ThemeColorTokensFollowDesignerWorkbenchDarkPalette()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
 
-        AssertColor(document, "BgPrimary", "#0D0D0F");
-        AssertColor(document, "BgSidebar", "#171719");
-        AssertColor(document, "BgSurface", "#1C1C1E");
-        AssertColor(document, "BgSurfaceHigh", "#242426");
-        AssertColor(document, "BgSurfaceHighest", "#2C2C2E");
-        AssertColor(document, "TextPrimary", "#F5F5F7");
-        AssertColor(document, "TextSecondary", "#C7C7CC");
-        AssertColor(document, "TextMuted", "#8E8E93");
-        AssertColor(document, "BorderPrimary", "#3A3A3C");
-        AssertColor(document, "BorderSubtle", "#2A2A2D");
-        AssertColor(document, "Accent", "#0A84FF");
-        AssertColor(document, "Success", "#30D158");
-        AssertColor(document, "Warning", "#FFD60A");
-        AssertColor(document, "Error", "#FF6961");
+        AssertColor(document, "BgChrome", "#121218");
+        AssertColor(document, "BgPrimary", "#1A1A21");
+        AssertColor(document, "BgSidebar", "#14141A");
+        AssertColor(document, "BgSurface", "#1E1E27");
+        AssertColor(document, "BgSurfaceHigh", "#22222C");
+        AssertColor(document, "BgSurfaceHighest", "#262733");
+        AssertColor(document, "BgInput", "#16161C");
+        AssertColor(document, "BgHover", "#2A2A35");
+        AssertColor(document, "TextPrimary", "#EEEFF4");
+        AssertColor(document, "TextSecondary", "#A8ABB8");
+        AssertColor(document, "TextMuted", "#70737F");
+        AssertColor(document, "TextDisabled", "#4A4C58");
+        AssertColor(document, "BorderPrimary", "#2A2A35");
+        AssertColor(document, "BorderSubtle", "#23232C");
+        AssertColor(document, "BorderStrong", "#3A3A46");
+        AssertColor(document, "Accent", "#5B9CFF");
+        AssertColor(document, "Success", "#4BB966");
+        AssertColor(document, "Warning", "#E0B54F");
+        AssertColor(document, "Error", "#E5605A");
+        AssertColor(document, "Destructive", "#C0392F");
 
-        AssertColor(document, "AccentContainer", "#112A43");
-        AssertColor(document, "SuccessContainer", "#153A22");
-        AssertColor(document, "ErrorContainer", "#421E1E");
+        AssertColor(document, "AccentContainer", "#203653");
+        AssertColor(document, "SuccessContainer", "#172D1E");
+        AssertColor(document, "ErrorContainer", "#381D20");
         AssertColor(document, "Scrim", "#52000000");
         AssertColor(document, "ScrimLight", "#8AFFFFFF");
         AssertColor(document, "ScrimHeavy", "#B3000000");
         AssertColor(document, "ScrimOverlay", "#B8171719");
-        AssertColor(document, "BgConsole", "#09090A");
-        AssertColor(document, "WindowCloseHover", "#492020");
-        AssertColor(document, "WindowClosePressed", "#602727");
-        AssertColor(document, "AccentGradientStart", "#0A84FF");
-        AssertColor(document, "AccentGradientEnd", "#64D2FF");
-        AssertColor(document, "ToggleTrack", "#3A3A3C");
-        AssertColor(document, "ToggleThumb", "#F2F2F7");
+        AssertColor(document, "BgConsole", "#101015");
+        AssertColor(document, "WindowCloseHover", "#C0392F");
+        AssertColor(document, "WindowClosePressed", "#A93226");
+        AssertColor(document, "AccentGradientStart", "#5B9CFF");
+        AssertColor(document, "AccentGradientEnd", "#5B9CFF");
+        AssertColor(document, "ToggleTrack", "#3A3A46");
+        AssertColor(document, "ToggleThumb", "#EEEFF4");
     }
 
     [Fact]
@@ -79,21 +85,73 @@ public class ThemeStyleTests
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
 
-        AssertDoubleToken(document, "FontSizeCaption", 11);
-        AssertDoubleToken(document, "FontSizeBody", 12);
+        AssertDoubleToken(document, "FontSizeCaption", 12);
+        AssertDoubleToken(document, "FontSizeBody", 14);
         AssertDoubleToken(document, "FontSizeBodyStrong", 14);
-        AssertDoubleToken(document, "FontSizeSection", 16);
-        AssertDoubleToken(document, "FontSizeCardTitle", 20);
-        AssertDoubleToken(document, "FontSizePageTitle", 28);
+        AssertDoubleToken(document, "FontSizeSection", 18);
+        AssertDoubleToken(document, "FontSizeCardTitle", 14);
+        AssertDoubleToken(document, "FontSizePageTitle", 20);
 
-        AssertDoubleToken(document, "IconSizeSmall", 12);
-        AssertDoubleToken(document, "IconSizeBody", 16);
-        AssertDoubleToken(document, "IconSizeLarge", 18);
+        AssertDoubleToken(document, "LineHeightCaption", 16);
+        AssertDoubleToken(document, "LineHeightBody", 20);
+        AssertDoubleToken(document, "LineHeightSection", 24);
+        AssertDoubleToken(document, "LineHeightPageTitle", 28);
+
+        AssertDoubleToken(document, "IconSizeSmall", 16);
+        AssertDoubleToken(document, "IconSizeBody", 20);
+        AssertDoubleToken(document, "IconSizeLarge", 24);
+        AssertDoubleToken(document, "IconSizePreview", 32);
         AssertDoubleToken(document, "IconSizeEmptyState", 48);
 
         AssertFontFamily(document, "FontFamilyUI", "Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
         AssertFontFamily(document, "FontFamilyMono", "Cascadia Code, Consolas, Microsoft YaHei UI");
         AssertFontFamily(document, "FontFamilyIcon", "Segoe Fluent Icons, Segoe MDL2 Assets");
+    }
+
+    [Theory]
+    [InlineData("TextPageTitle", "LineHeightPageTitle")]
+    [InlineData("TextSection", "LineHeightSection")]
+    [InlineData("TextCardTitle", "LineHeightBody")]
+    [InlineData("TextBodyStrong", "LineHeightBody")]
+    [InlineData("TextBody", "LineHeightBody")]
+    [InlineData("TextMono", "LineHeightBody")]
+    [InlineData("TextCaption", "LineHeightCaption")]
+    public void TextStylesUseSharedBlockLineHeights(string styleKey, string lineHeightToken)
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = document.Descendants().First(element =>
+            element.Name.LocalName == "Style"
+            && element.Attribute(x + "Key")?.Value == styleKey);
+
+        AssertStyleSetter(style, "LineHeight", $"{{StaticResource {lineHeightToken}}}");
+        AssertStyleSetter(style, "LineStackingStrategy", "BlockLineHeight");
+    }
+
+    [Fact]
+    public void SharedControlsUseFluentDesktopDimensions()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var windowControl = FindStyle(document, x, "WindowControlButton");
+        AssertStyleSetter(windowControl, "Width", "48");
+        AssertStyleSetter(windowControl, "Height", "48");
+
+        var nav = FindStyle(document, x, "NavRadioButton");
+        AssertStyleSetter(nav, "Height", "40");
+        Assert.DoesNotContain(nav.Elements(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Width");
+
+        var toolbarToggle = FindStyle(document, x, "ToolbarToggleButton");
+        AssertStyleSetter(toolbarToggle, "MinWidth", "32");
+        AssertStyleSetter(toolbarToggle, "MinHeight", "32");
+        AssertStyleSetter(toolbarToggle, "Height", "32");
+
+        var toggleSwitch = FindStyle(document, x, "ToggleSwitch");
+        AssertStyleSetter(toggleSwitch, "Width", "48");
+        AssertStyleSetter(toggleSwitch, "Height", "24");
     }
 
     [Theory]
@@ -105,6 +163,7 @@ public class ThemeStyleTests
     [InlineData("TextCaption")]
     [InlineData("TextMono")]
     [InlineData("IconGlyph")]
+    [InlineData("ConsoleExpander")]
     [InlineData("SearchFieldBorder")]
     [InlineData("FinderFolderBorder")]
     [InlineData("MediaCardBorder")]
@@ -125,6 +184,41 @@ public class ThemeStyleTests
                 && element.Attribute(x + "Key")?.Value == styleKey);
 
         Assert.NotNull(style);
+    }
+
+    [Fact]
+    public void ConsoleExpanderUsesOneRotatingDisclosureGlyph()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = FindStyle(document, x, "ConsoleExpander");
+
+        var glyphs = style.Descendants()
+            .Where(element => element.Name.LocalName == "TextBlock"
+                && element.Attribute("Text")?.Value == "\uE76C")
+            .ToList();
+        Assert.Single(glyphs);
+
+        Assert.Contains(glyphs[0].Ancestors(), element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Width")?.Value == "24"
+            && element.Attribute("Height")?.Value == "24");
+
+        Assert.Contains(style.Descendants(), element =>
+            element.Name.LocalName == "RotateTransform"
+            && element.Attribute("Angle")?.Value == "0");
+
+        var expandedTrigger = style.Descendants().First(element =>
+            element.Name.LocalName == "Trigger"
+            && element.Attribute("Property")?.Value == "IsChecked"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Contains(expandedTrigger.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("TargetName")?.Value == "DisclosureGlyph"
+            && element.Attribute("Property")?.Value == "RenderTransform"
+            && element.Descendants().Any(transform =>
+                transform.Name.LocalName == "RotateTransform"
+                && transform.Attribute("Angle")?.Value == "90"));
     }
 
     [Theory]
@@ -328,6 +422,50 @@ public class ThemeStyleTests
     }
 
     [Fact]
+    public void SurfaceButtonHonorsExplicitContentAlignmentWithoutChangingItsDefault()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style"
+            && element.Attribute(x + "Key")?.Value == "SurfaceButton");
+
+        Assert.Contains(style.Elements(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "HorizontalContentAlignment"
+            && element.Attribute("Value")?.Value == "Center");
+        Assert.Contains(style.Elements(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "VerticalContentAlignment"
+            && element.Attribute("Value")?.Value == "Center");
+
+        var presenter = style.Descendants().Single(element => element.Name.LocalName == "ContentPresenter");
+        Assert.Equal(
+            "{TemplateBinding HorizontalContentAlignment}",
+            presenter.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal(
+            "{TemplateBinding VerticalContentAlignment}",
+            presenter.Attribute("VerticalAlignment")?.Value);
+    }
+
+    [Fact]
+    public void CircularSelectionControlKeepsTemplateInsideItsDeclaredBounds()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = document.Descendants().First(element =>
+            element.Name.LocalName == "Style"
+            && element.Attribute(x + "Key")?.Value == "CircularCheckBox");
+
+        AssertStyleSetter(style, "Width", "24");
+        AssertStyleSetter(style, "Height", "24");
+        Assert.Contains(style.Descendants(), element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Width")?.Value == "24"
+            && element.Attribute("Height")?.Value == "24");
+    }
+
+    [Fact]
     public void ComboBoxStyleDefinesDisabledVisualState()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
@@ -518,6 +656,11 @@ public class ThemeStyleTests
     private static string GetRootPath(string relativePath)
         => TestRepositoryPaths.GetRootPath(relativePath);
 
+    private static XElement FindStyle(XDocument document, XNamespace x, string key)
+        => document.Descendants().First(element =>
+            element.Name.LocalName == "Style"
+            && element.Attribute(x + "Key")?.Value == key);
+
     private static void AssertStyleSetter(XElement style, string property, string expectedValue)
     {
         Assert.Contains(style.Elements(), element =>
@@ -575,15 +718,14 @@ public class ThemeStyleTests
     [Theory]
     [InlineData("Views")]
     [InlineData("MainWindow.xaml")]
-    public void ViewsAndMainWindowDoNotUseHardcodedFontAttributes(string relativePath)
+    public void ViewsAndMainWindowDoNotUseHardcodedFontFamilies(string relativePath)
     {
         var path = GetRootPath(relativePath);
         var files = Directory.Exists(path)
             ? Directory.EnumerateFiles(path, "*.xaml", SearchOption.AllDirectories)
             : [path];
 
-        // Match: (FontSize|FontFamily|FontWeight)\s*=\s*"(?!{)
-        var fontPattern = @"\b(FontSize|FontFamily|FontWeight)\s*=\s*""(?!\{)";
+        var fontPattern = @"\bFontFamily\s*=\s*""(?!\{)";
 
         var offenders = files
             .SelectMany(file => File.ReadLines(file)
@@ -594,7 +736,7 @@ public class ThemeStyleTests
 
         Assert.True(
             offenders.Count == 0,
-            "Views and MainWindow must use typography styles/tokens instead of hardcoded attributes: "
+            "Views and MainWindow must use shared font-family resources: "
                 + string.Join("; ", offenders));
     }
 

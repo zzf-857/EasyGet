@@ -50,6 +50,10 @@ public partial class DownloadHistory : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    /// <summary>是否为本次应用会话中新完成的下载（仅用于界面，不持久化）</summary>
+    [ObservableProperty]
+    private bool _isRecentlyCompleted;
+
     /// <summary>当前整理文件夹名称（仅用于界面，不持久化）</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasOrganizerFolder))]

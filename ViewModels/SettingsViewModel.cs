@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -10,6 +11,24 @@ namespace EasyGet.ViewModels;
 
 public partial class SettingsViewModel : ObservableObject
 {
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SettingsCategoryTitle))]
+    [NotifyPropertyChangedFor(nameof(SettingsCategoryDescription))]
+    private string _selectedCategory = "常规";
+
+    public string SettingsCategoryTitle => SelectedCategory;
+    public string SettingsCategoryDescription => SelectedCategory switch
+    {
+        "常规" => "外观与基础行为,更改即时生效并自动保存",
+        "下载" => "下载目录、媒体参数与并发性能",
+        "网络" => "代理连接与网络访问策略",
+        "账号与 Cookie" => "平台登录状态与 Cookie 获取策略",
+        "集成" => "Telegram 账号绑定与外部服务",
+        "更新与环境" => "EasyGet、yt-dlp、ffmpeg 与运行环境",
+        "数据管理" => "清理本地历史、登录状态与会话数据",
+        _ => "EasyGet 设置"
+    };
+
     private const int AutoSaveDebounceMilliseconds = 150;
     private static readonly TimeSpan BrowserLoginDetectionTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan BrowserLoginDetectionInterval = TimeSpan.FromSeconds(2);
@@ -53,6 +72,8 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IBrowserCookieLoginDetector _browserLoginDetector;
     private readonly CookieAcquisitionCoordinator? _cookieCoordinator;
     private readonly PlatformCookieVault _cookieVault;
+    private readonly ConcurrentDictionary<string, CancellationTokenSource> _browserLoginCancellations =
+        new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
     private readonly object _autoSaveGate = new();
     private CancellationTokenSource? _autoSaveDebounce;
@@ -162,6 +183,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _douyinLiveIdleTimeoutSeconds = AppConfig.DefaultDouyinLiveIdleTimeoutSeconds;
 
     [ObservableProperty] private bool _autoCategorizeByPlatform = true;
+    [ObservableProperty] private bool _clipboardMonitoringEnabled = true;
 
     [ObservableProperty] private bool _isUpdatingYtDlp;
     [ObservableProperty] private string _updateStatusMessage = "";
@@ -235,6 +257,7 @@ public partial class SettingsViewModel : ObservableObject
         && !string.IsNullOrWhiteSpace(_downloadedInstallerPath);
 
     public event Action? SettingsSaved;
+    public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
 
     public SettingsViewModel(
         ConfigService configService,
@@ -266,6 +289,13 @@ public partial class SettingsViewModel : ObservableObject
         _cookieVault = cookieVault ?? new PlatformCookieVault(configService.ConfigDirectory);
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
+    }
+
+    [RelayCommand]
+    private void SelectCategory(string? category)
+    {
+        if (!string.IsNullOrWhiteSpace(category))
+            SelectedCategory = category;
     }
 
     public void Initialize()
@@ -323,6 +353,7 @@ public partial class SettingsViewModel : ObservableObject
             DouyinLiveChunkSize = c.DouyinLiveChunkSize;
             DouyinLiveIdleTimeoutSeconds = c.DouyinLiveIdleTimeoutSeconds;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
+            ClipboardMonitoringEnabled = c.ClipboardMonitoringEnabled;
             SelectedThemeColor = c.ThemeColor;
             TgApiId = c.TgApiId;
             TgApiHash = c.TgApiHash;
@@ -366,7 +397,6 @@ public partial class SettingsViewModel : ObservableObject
                 cancellationToken);
             var health = _cookieHealthStore.Snapshot();
             _lastDiscoveredBrowserProfileCount = profiles.Count;
-            CookiePlatformStatuses.Clear();
             var verifiedPlatforms = 0;
 
             foreach (var platform in platforms)
@@ -383,15 +413,29 @@ public partial class SettingsViewModel : ObservableObject
                     .OrderByDescending(record => record.LastSuccessUtc)
                     .FirstOrDefault();
 
-                var item = new CookiePlatformStatusItem
+                var item = CookiePlatformStatuses.FirstOrDefault(status =>
+                    string.Equals(status.StorageKey, platform.StorageKey, StringComparison.Ordinal));
+                if (item is null)
                 {
-                    PlatformId = platform.Id,
-                    StorageKey = platform.StorageKey,
-                    DisplayName = platform.DisplayName
-                };
+                    item = new CookiePlatformStatusItem
+                    {
+                        PlatformId = platform.Id,
+                        StorageKey = platform.StorageKey,
+                        DisplayName = platform.DisplayName
+                    };
+                    CookiePlatformStatuses.Add(item);
+                }
+
                 var browserLoginDetected = detection.TryGetProfile(
                     platform.StorageKey,
                     out var detectedProfile);
+                if (item.IsOperating)
+                {
+                    if (successful is not null)
+                        verifiedPlatforms++;
+                    continue;
+                }
+
                 item.IsDetected = browserLoginDetected;
                 if (successful is not null)
                 {
@@ -420,8 +464,6 @@ public partial class SettingsViewModel : ObservableObject
                     item.NeedsLogin = true;
                     item.StatusText = "未发现可复用浏览器配置，首次使用时需要登录";
                 }
-
-                CookiePlatformStatuses.Add(item);
             }
 
             UpdateCookieStatusSummary(
@@ -463,10 +505,8 @@ public partial class SettingsViewModel : ObservableObject
             _ => "本地登录状态"
         };
 
-    [RelayCommand]
-    private async Task LoginPlatform(
-        CookiePlatformStatusItem? item,
-        CancellationToken cancellationToken)
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task LoginPlatform(CookiePlatformStatusItem? item)
     {
         if (item is null || item.IsOperating)
             return;
@@ -479,6 +519,15 @@ public partial class SettingsViewModel : ObservableObject
             return;
         }
 
+        using var loginCancellation = new CancellationTokenSource();
+        if (!_browserLoginCancellations.TryAdd(item.StorageKey, loginCancellation))
+            return;
+
+        using var timeoutCancellation = new CancellationTokenSource(BrowserLoginDetectionTimeout);
+        using var operationCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            loginCancellation.Token,
+            timeoutCancellation.Token);
+        var cancellationToken = operationCancellation.Token;
         item.IsOperating = true;
         item.StatusText = "正在打开系统默认浏览器...";
         var browserOpened = false;
@@ -489,9 +538,9 @@ public partial class SettingsViewModel : ObservableObject
             item.IsAvailable = false;
             item.IsDetected = false;
             item.NeedsLogin = false;
-            item.StatusText = "已打开系统默认浏览器 · 正在等待并自动检测登录（最多 3 分钟）";
+            item.StatusText = "已打开系统默认浏览器 · 请完成登录，EasyGet 正在自动检测（最多 3 分钟）";
 
-            var waitResult = await WaitForBrowserLoginAsync(platform, cancellationToken);
+            var waitResult = await WaitForBrowserLoginAsync(platform, item, cancellationToken);
             _lastDiscoveredBrowserProfileCount = Math.Max(
                 _lastDiscoveredBrowserProfileCount,
                 waitResult.DiscoveredProfileCount);
@@ -509,15 +558,23 @@ public partial class SettingsViewModel : ObservableObject
 
             item.IsDetected = false;
             item.NeedsLogin = waitResult.AnyReadableProfile;
-            item.StatusText = waitResult.AnyReadableProfile
-                ? "暂未检测到该平台登录 Cookie · 完成登录后点击上方“刷新”重新检测"
-                : "浏览器已打开，但 Cookie 暂时无法读取 · 完成登录后可直接下载或点击“刷新”";
+            item.StatusText = waitResult.AnyUnreadableProfile
+                ? "未能读取正在使用的浏览器 Cookie · 请关闭浏览器后重新扫描，或使用兼容登录"
+                : waitResult.AnyReadableProfile
+                    ? "暂未检测到该平台登录 Cookie · 完成登录后点击上方“重新扫描”"
+                    : "未发现可读取的浏览器 Cookie · 可尝试兼容登录";
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (loginCancellation.IsCancellationRequested)
         {
             item.StatusText = browserOpened
-                ? "系统浏览器登录检测已取消 · 已完成的浏览器登录不受影响"
+                ? "已停止自动检测 · 浏览器中已完成的登录不受影响"
                 : "打开浏览器操作已取消";
+        }
+        catch (OperationCanceledException) when (timeoutCancellation.IsCancellationRequested)
+        {
+            item.StatusText = browserOpened
+                ? "自动检测已结束 · 请关闭浏览器后重新扫描，或使用兼容登录"
+                : "打开系统默认浏览器超时，请重试";
         }
         catch (Exception)
         {
@@ -527,17 +584,40 @@ public partial class SettingsViewModel : ObservableObject
         }
         finally
         {
+            _browserLoginCancellations.TryRemove(item.StorageKey, out _);
             item.IsOperating = false;
+        }
+    }
+
+    [RelayCommand]
+    private void CancelPlatformLogin(CookiePlatformStatusItem? item)
+    {
+        if (item is null
+            || !_browserLoginCancellations.TryGetValue(item.StorageKey, out var cancellation))
+        {
+            return;
+        }
+
+        item.StatusText = "正在停止自动检测...";
+        try
+        {
+            cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The detection completed between the dictionary lookup and cancellation.
         }
     }
 
     private async Task<BrowserLoginWaitResult> WaitForBrowserLoginAsync(
         MediaPlatformDefinition platform,
+        CookiePlatformStatusItem item,
         CancellationToken cancellationToken)
     {
         var deadlineUtc = DateTime.UtcNow + BrowserLoginDetectionTimeout;
         var discoveredProfileCount = 0;
         var anyReadableProfile = false;
+        var anyUnreadableProfile = false;
         do
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -548,13 +628,19 @@ public partial class SettingsViewModel : ObservableObject
                 [platform],
                 cancellationToken);
             anyReadableProfile |= detection.ReadableProfileCount > 0;
+            anyUnreadableProfile |= detection.UnreadableProfileCount > 0;
             if (detection.TryGetProfile(platform.StorageKey, out var profile))
             {
                 return new BrowserLoginWaitResult(
                     profile,
                     discoveredProfileCount,
-                    anyReadableProfile);
+                    anyReadableProfile,
+                    anyUnreadableProfile);
             }
+
+            item.StatusText = detection.UnreadableProfileCount > 0
+                ? "浏览器 Cookie 正被占用 · 完成登录后请关闭浏览器，EasyGet 将继续检测"
+                : "正在等待浏览器登录 · EasyGet 每 2 秒自动检测一次";
 
             var remaining = deadlineUtc - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero)
@@ -570,13 +656,15 @@ public partial class SettingsViewModel : ObservableObject
         return new BrowserLoginWaitResult(
             null,
             discoveredProfileCount,
-            anyReadableProfile);
+            anyReadableProfile,
+            anyUnreadableProfile);
     }
 
     private sealed record BrowserLoginWaitResult(
         BrowserProfile? Profile,
         int DiscoveredProfileCount,
-        bool AnyReadableProfile);
+        bool AnyReadableProfile,
+        bool AnyUnreadableProfile);
 
     [RelayCommand]
     private async Task CompatibleLoginPlatform(
@@ -699,6 +787,19 @@ public partial class SettingsViewModel : ObservableObject
         {
             item.IsOperating = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task ConfirmClearAllManagedSessions()
+    {
+        if (ConfirmFunc?.Invoke(
+                "确定要清除 EasyGet 保存的全部平台登录数据吗？系统浏览器中的登录不会受影响。",
+                "清除全部登录数据") != true)
+        {
+            return;
+        }
+
+        await ClearAllManagedSessions(CancellationToken.None);
     }
 
     [RelayCommand]
@@ -910,6 +1011,7 @@ public partial class SettingsViewModel : ObservableObject
             c.DouyinLiveChunkSize = DouyinLiveChunkSize;
             c.DouyinLiveIdleTimeoutSeconds = DouyinLiveIdleTimeoutSeconds;
             c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
+            c.ClipboardMonitoringEnabled = ClipboardMonitoringEnabled;
             c.ThemeColor = SelectedThemeColor;
             c.TgApiId = TgApiId;
             c.TgApiHash = TgApiHash;
@@ -1035,6 +1137,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinLiveChunkSizeChanged(int value) => AutoSave();
     partial void OnDouyinLiveIdleTimeoutSecondsChanged(int value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
+    partial void OnClipboardMonitoringEnabledChanged(bool value) => AutoSave();
     partial void OnTgApiIdChanged(string value) => AutoSave();
     partial void OnTgApiHashChanged(string value) => AutoSave();
     partial void OnTgPhoneNumberChanged(string value) => AutoSave();
@@ -1290,6 +1393,19 @@ public partial class SettingsViewModel : ObservableObject
         }
 
         return $"示例：{preview}";
+    }
+
+    [RelayCommand]
+    private async Task ConfirmClearCookie()
+    {
+        if (ConfirmFunc?.Invoke(
+                "确定要清除手动导入并加密保存的 Cookie 吗？",
+                "清除手动 Cookie") != true)
+        {
+            return;
+        }
+
+        await ClearCookie(CancellationToken.None);
     }
 
     [RelayCommand]
@@ -1559,6 +1675,19 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsTgOperating = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task ConfirmTgLogOut()
+    {
+        if (ConfirmFunc?.Invoke(
+                "确定要移除本机保存的 Telegram 登录会话吗？",
+                "移除 Telegram 会话") != true)
+        {
+            return;
+        }
+
+        await TgLogOut();
     }
 
     [RelayCommand]

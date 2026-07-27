@@ -141,6 +141,9 @@ public class AppConfig
     /// <summary>是否按平台自动归类下载文件到子文件夹</summary>
     public bool AutoCategorizeByPlatform { get; set; } = true;
 
+    /// <summary>窗口激活时是否检测剪贴板中的媒体链接</summary>
+    public bool ClipboardMonitoringEnabled { get; set; } = true;
+
     /// <summary>主题配色名称 (Indigo, Teal, Rose, Amber, Blue)</summary>
     public string ThemeColor { get; set; } = "Indigo";
 

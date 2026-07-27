@@ -55,10 +55,10 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string? _urlError;
     [ObservableProperty] private bool _isLogExpanded; // Default is false (collapsed)
 
-    [ObservableProperty] private bool _showClipboardPrompt;
     [ObservableProperty] private string _clipboardPromptUrl = "";
     private string _lastClipboardPromptUrl = "";
-    private System.Timers.Timer? _clipboardPromptTimer;
+
+    public event Action<string>? ClipboardLinkDetected;
 
     // 当前任务状态
     [ObservableProperty]
@@ -578,17 +578,16 @@ public partial class DownloadViewModel : ObservableObject
     };
 
     [RelayCommand]
-    private async Task UseClipboardPrompt()
+    private async Task RunPrimaryAction()
     {
-        ShowClipboardPrompt = false;
-        Url = ClipboardPromptUrl;
-        await ParseCommand.ExecuteAsync(null);
-    }
+        if (IsReady)
+        {
+            await StartDownloadCommand.ExecuteAsync(null);
+            return;
+        }
 
-    [RelayCommand]
-    private void DismissClipboardPrompt()
-    {
-        ShowClipboardPrompt = false;
+        if (ParseCommand.CanExecute(null))
+            await ParseCommand.ExecuteAsync(null);
     }
 
     public static bool IsValidClipboardUrl(string text, string currentUrl, string lastPromptedUrl)
@@ -622,26 +621,7 @@ public partial class DownloadViewModel : ObservableObject
             var extracted = ExtractUrl(clipboardText)!;
             ClipboardPromptUrl = extracted;
             _lastClipboardPromptUrl = extracted;
-            ShowClipboardPrompt = true;
-
-            _clipboardPromptTimer?.Stop();
-            _clipboardPromptTimer?.Dispose();
-
-            _clipboardPromptTimer = new System.Timers.Timer(8000) { AutoReset = false };
-            _clipboardPromptTimer.Elapsed += (s, e) =>
-            {
-                var dispatcher = System.Windows.Application.Current?.Dispatcher;
-                var action = new Action(() => ShowClipboardPrompt = false);
-                if (dispatcher is null || dispatcher.CheckAccess())
-                {
-                    action();
-                }
-                else
-                {
-                    dispatcher.Invoke(action);
-                }
-            };
-            _clipboardPromptTimer.Start();
+            ClipboardLinkDetected?.Invoke(extracted);
         }
     }
 }

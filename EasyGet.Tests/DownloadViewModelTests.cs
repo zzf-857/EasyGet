@@ -291,40 +291,19 @@ public class DownloadViewModelTests
     }
 
     [Fact]
-    public async Task CheckClipboardAndPrompt_ShowsPromptAndHidesAfterTimerElapsed()
+    public void CheckClipboardAndPrompt_RaisesDetectedEventOnceForANewUrl()
     {
         using var context = CreateDownloadContext();
         var viewModel = context.ViewModel;
         viewModel.Url = "https://current.com";
+        var detectedUrls = new List<string>();
+        viewModel.ClipboardLinkDetected += detectedUrls.Add;
 
-        // Call CheckClipboardAndPrompt with a valid new URL
+        viewModel.CheckClipboardAndPrompt("Check this: https://new.com");
         viewModel.CheckClipboardAndPrompt("Check this: https://new.com");
 
-        // Verify it sets ShowClipboardPrompt to true and sets the URL
-        Assert.True(viewModel.ShowClipboardPrompt);
         Assert.Equal("https://new.com", viewModel.ClipboardPromptUrl);
-
-        // Retrieve the private timer via reflection and shorten its interval
-        var timerField = typeof(DownloadViewModel).GetField("_clipboardPromptTimer",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        Assert.NotNull(timerField);
-
-        var timer = (System.Timers.Timer?)timerField.GetValue(viewModel);
-        Assert.NotNull(timer);
-
-        // Set interval to 50ms and wait for elapsed
-        timer.Interval = 50;
-
-        // Wait up to 1 second for the background timer to trigger
-        int elapsedMs = 0;
-        while (viewModel.ShowClipboardPrompt && elapsedMs < 1000)
-        {
-            await Task.Delay(20);
-            elapsedMs += 20;
-        }
-
-        // Verify the prompt is now hidden
-        Assert.False(viewModel.ShowClipboardPrompt);
+        Assert.Equal(["https://new.com"], detectedUrls);
     }
 
     [Fact]

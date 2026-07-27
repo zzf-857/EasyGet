@@ -3,52 +3,62 @@
                     xmlns:sys="clr-namespace:System;assembly=mscorlib"
                     xmlns:behaviors="clr-namespace:EasyGet.Behaviors">
 
-    <!-- ========== Apple-inspired dark semantic color system ========== -->
-    <Color x:Key="BgPrimary">#0D0D0F</Color>
-    <Color x:Key="BgSidebar">#171719</Color>
-    <Color x:Key="BgSurface">#1C1C1E</Color>
-    <Color x:Key="BgSurfaceHigh">#242426</Color>
-    <Color x:Key="BgSurfaceHighest">#2C2C2E</Color>
-    <Color x:Key="BgHover">#343438</Color>
-    <Color x:Key="TextPrimary">#F5F5F7</Color>
-    <Color x:Key="TextSecondary">#C7C7CC</Color>
-    <Color x:Key="TextMuted">#8E8E93</Color>
-    <Color x:Key="BorderPrimary">#3A3A3C</Color>
-    <Color x:Key="BorderSubtle">#2A2A2D</Color>
-    <Color x:Key="Accent">#0A84FF</Color>
-    <Color x:Key="Success">#30D158</Color>
-    <Color x:Key="Error">#FF6961</Color>
-    <Color x:Key="Warning">#FFD60A</Color>
-    <Color x:Key="AccentContainer">#112A43</Color>
-    <Color x:Key="SuccessContainer">#153A22</Color>
-    <Color x:Key="ErrorContainer">#421E1E</Color>
+    <!-- ========== EasyGet workbench dark semantic color system ========== -->
+    <Color x:Key="BgChrome">#121218</Color>
+    <Color x:Key="BgPrimary">#1A1A21</Color>
+    <Color x:Key="BgSidebar">#14141A</Color>
+    <Color x:Key="BgSurface">#1E1E27</Color>
+    <Color x:Key="BgSurfaceHigh">#22222C</Color>
+    <Color x:Key="BgSurfaceHighest">#262733</Color>
+    <Color x:Key="BgInput">#16161C</Color>
+    <Color x:Key="BgHover">#2A2A35</Color>
+    <Color x:Key="TextPrimary">#EEEFF4</Color>
+    <Color x:Key="TextSecondary">#A8ABB8</Color>
+    <Color x:Key="TextMuted">#70737F</Color>
+    <Color x:Key="TextDisabled">#4A4C58</Color>
+    <Color x:Key="BorderPrimary">#2A2A35</Color>
+    <Color x:Key="BorderSubtle">#23232C</Color>
+    <Color x:Key="BorderStrong">#3A3A46</Color>
+    <Color x:Key="Accent">#5B9CFF</Color>
+    <Color x:Key="Success">#4BB966</Color>
+    <Color x:Key="Error">#E5605A</Color>
+    <Color x:Key="Warning">#E0B54F</Color>
+    <Color x:Key="Destructive">#C0392F</Color>
+    <Color x:Key="AccentContainer">#203653</Color>
+    <Color x:Key="SuccessContainer">#172D1E</Color>
+    <Color x:Key="ErrorContainer">#381D20</Color>
     <Color x:Key="Scrim">#52000000</Color>
     <Color x:Key="ScrimLight">#8AFFFFFF</Color>
     <Color x:Key="ScrimHeavy">#B3000000</Color>
     <Color x:Key="ScrimOverlay">#B8171719</Color>
-    <Color x:Key="BgConsole">#09090A</Color>
-    <Color x:Key="WindowCloseHover">#492020</Color>
-    <Color x:Key="WindowClosePressed">#602727</Color>
-    <Color x:Key="AccentGradientStart">#0A84FF</Color>
-    <Color x:Key="AccentGradientEnd">#64D2FF</Color>
-    <Color x:Key="ToggleTrack">#3A3A3C</Color>
-    <Color x:Key="ToggleThumb">#F2F2F7</Color>
+    <Color x:Key="BgConsole">#101015</Color>
+    <Color x:Key="WindowCloseHover">#C0392F</Color>
+    <Color x:Key="WindowClosePressed">#A93226</Color>
+    <Color x:Key="AccentGradientStart">#5B9CFF</Color>
+    <Color x:Key="AccentGradientEnd">#5B9CFF</Color>
+    <Color x:Key="ToggleTrack">#3A3A46</Color>
+    <Color x:Key="ToggleThumb">#EEEFF4</Color>
 
+    <SolidColorBrush x:Key="BgChromeBrush" Color="{StaticResource BgChrome}"/>
     <SolidColorBrush x:Key="BgPrimaryBrush" Color="{StaticResource BgPrimary}"/>
     <SolidColorBrush x:Key="BgSidebarBrush" Color="{StaticResource BgSidebar}"/>
     <SolidColorBrush x:Key="BgSurfaceBrush" Color="{StaticResource BgSurface}"/>
     <SolidColorBrush x:Key="BgSurfaceHighBrush" Color="{StaticResource BgSurfaceHigh}"/>
     <SolidColorBrush x:Key="BgSurfaceHighestBrush" Color="{StaticResource BgSurfaceHighest}"/>
+    <SolidColorBrush x:Key="BgInputBrush" Color="{StaticResource BgInput}"/>
     <SolidColorBrush x:Key="BgHoverBrush" Color="{StaticResource BgHover}"/>
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
     <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}"/>
+    <SolidColorBrush x:Key="TextDisabledBrush" Color="{StaticResource TextDisabled}"/>
     <SolidColorBrush x:Key="BorderPrimaryBrush" Color="{StaticResource BorderPrimary}"/>
     <SolidColorBrush x:Key="BorderSubtleBrush" Color="{StaticResource BorderSubtle}"/>
+    <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrong}"/>
     <SolidColorBrush x:Key="AccentBrush" Color="{DynamicResource Accent}"/>
     <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource Success}"/>
     <SolidColorBrush x:Key="ErrorBrush" Color="{StaticResource Error}"/>
     <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource Warning}"/>
+    <SolidColorBrush x:Key="DestructiveBrush" Color="{StaticResource Destructive}"/>
     <SolidColorBrush x:Key="AccentContainerBrush" Color="{DynamicResource AccentContainer}"/>
     <SolidColorBrush x:Key="SuccessContainerBrush" Color="{StaticResource SuccessContainer}"/>
     <SolidColorBrush x:Key="ErrorContainerBrush" Color="{StaticResource ErrorContainer}"/>
@@ -64,17 +74,22 @@
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent"/>
 
     <!-- ========== 排版系统 Tokens (Typography Tokens) ========== -->
-    <sys:Double x:Key="FontSizeCaption">11</sys:Double>
-    <sys:Double x:Key="FontSizeBody">12</sys:Double>
+    <sys:Double x:Key="FontSizeCaption">12</sys:Double>
+    <sys:Double x:Key="FontSizeBody">14</sys:Double>
     <sys:Double x:Key="FontSizeBodyStrong">14</sys:Double>
-    <sys:Double x:Key="FontSizeSection">16</sys:Double>
-    <sys:Double x:Key="FontSizeCardTitle">20</sys:Double>
-    <sys:Double x:Key="FontSizePageTitle">28</sys:Double>
+    <sys:Double x:Key="FontSizeSection">18</sys:Double>
+    <sys:Double x:Key="FontSizeCardTitle">14</sys:Double>
+    <sys:Double x:Key="FontSizePageTitle">20</sys:Double>
 
-    <sys:Double x:Key="IconSizeSmall">12</sys:Double>
-    <sys:Double x:Key="IconSizeBody">16</sys:Double>
-    <sys:Double x:Key="IconSizeLarge">18</sys:Double>
-    <sys:Double x:Key="IconSizePreview">28</sys:Double>
+    <sys:Double x:Key="LineHeightCaption">16</sys:Double>
+    <sys:Double x:Key="LineHeightBody">20</sys:Double>
+    <sys:Double x:Key="LineHeightSection">24</sys:Double>
+    <sys:Double x:Key="LineHeightPageTitle">28</sys:Double>
+
+    <sys:Double x:Key="IconSizeSmall">16</sys:Double>
+    <sys:Double x:Key="IconSizeBody">20</sys:Double>
+    <sys:Double x:Key="IconSizeLarge">24</sys:Double>
+    <sys:Double x:Key="IconSizePreview">32</sys:Double>
     <sys:Double x:Key="IconSizeEmptyState">48</sys:Double>
 
     <FontWeight x:Key="FontWeightNormal">Normal</FontWeight>
@@ -105,7 +120,7 @@
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Padding" Value="8,4"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -150,42 +165,56 @@
     <Style x:Key="TextPageTitle" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizePageTitle}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightPageTitle}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
     </Style>
     <Style x:Key="TextCardTitle" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeCardTitle}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightBody}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
     </Style>
     <Style x:Key="TextSection" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeSection}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightSection}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
     </Style>
     <Style x:Key="TextBodyStrong" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightBody}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
     </Style>
     <Style x:Key="TextBody" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightBody}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
     </Style>
     <Style x:Key="TextCaption" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightCaption}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
     </Style>
     <Style x:Key="TextMono" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyMono}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="LineHeight" Value="{StaticResource LineHeightBody}"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
     </Style>
@@ -208,13 +237,108 @@
     <DropShadowEffect x:Key="HoverShadow" BlurRadius="24" ShadowDepth="7" Direction="270" Color="Black" Opacity="0.34"/>
     <DropShadowEffect x:Key="PopupShadow" BlurRadius="32" ShadowDepth="10" Direction="270" Color="Black" Opacity="0.48"/>
 
+    <!-- ========== Console expander with one predictable disclosure glyph ========== -->
+    <Style x:Key="ConsoleExpander" TargetType="{x:Type Expander}">
+        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+        <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Expander}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <ToggleButton x:Name="HeaderSite"
+                                      Grid.Row="0"
+                                      Focusable="False"
+                                      Background="{TemplateBinding Background}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      BorderThickness="0"
+                                      HorizontalContentAlignment="Stretch"
+                                      VerticalContentAlignment="Center"
+                                      Content="{TemplateBinding Header}"
+                                      ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                      IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="{x:Type ToggleButton}">
+                                    <Border x:Name="HeaderBackground"
+                                            Background="{TemplateBinding Background}"
+                                            SnapsToDevicePixels="True">
+                                        <Grid MinHeight="40">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="40"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid Grid.Column="0" Width="24" Height="24"
+                                                  HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock x:Name="DisclosureGlyph"
+                                                           Text="&#xE76C;"
+                                                           Style="{StaticResource IconGlyph}"
+                                                           FontSize="{StaticResource IconSizeSmall}"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           HorizontalAlignment="Center"
+                                                           RenderTransformOrigin="0.5,0.5">
+                                                    <TextBlock.RenderTransform>
+                                                        <RotateTransform Angle="0"/>
+                                                    </TextBlock.RenderTransform>
+                                                </TextBlock>
+                                            </Grid>
+                                            <ContentPresenter Grid.Column="1"
+                                                              Content="{TemplateBinding Content}"
+                                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                                              VerticalAlignment="Center"
+                                                              RecognizesAccessKey="True"/>
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="HeaderBackground" Property="Background" Value="{StaticResource BgHoverBrush}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsChecked" Value="True">
+                                            <Setter TargetName="DisclosureGlyph" Property="RenderTransform">
+                                                <Setter.Value>
+                                                    <RotateTransform Angle="90"/>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter Property="Opacity" Value="0.45"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+                        <ContentPresenter x:Name="ExpandSite"
+                                          Grid.Row="1"
+                                          Focusable="False"
+                                          ContentSource="Content"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                          Margin="{TemplateBinding Padding}"
+                                          Visibility="Collapsed"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="HeaderSite" Property="IsEnabled" Value="False"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ========== 工具面板样式 ========== -->
     <Style x:Key="ToolPanelBorder" TargetType="Border">
         <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="14"/>
-        <Setter Property="Padding" Value="22,18"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="Padding" Value="16"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
         <Setter Property="RenderTransform">
@@ -226,12 +350,13 @@
 
     <!-- ========== TextBox 样式 ========== -->
     <Style x:Key="DarkTextBox" TargetType="TextBox">
-        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="CaretBrush" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Padding" Value="12,4"/>
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
         <Setter Property="Template">
@@ -242,7 +367,7 @@
                         <Border x:Name="FocusRing"
                                 BorderBrush="{DynamicResource AccentBrush}"
                                 BorderThickness="2"
-                                CornerRadius="9"
+                                CornerRadius="6"
                                 Opacity="0"
                                 Margin="-1"
                                 SnapsToDevicePixels="True"/>
@@ -250,9 +375,10 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="8"
+                                CornerRadius="5"
                                 SnapsToDevicePixels="True">
-                            <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="0"
+                                          Padding="{TemplateBinding Padding}"/>
                         </Border>
                     </Grid>
                     <ControlTemplate.Triggers>
@@ -284,7 +410,8 @@
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
-        <Setter Property="Padding" Value="18,9"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Padding" Value="16,4"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -292,14 +419,14 @@
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
                             TextElement.Foreground="{TemplateBinding Foreground}"
-                            CornerRadius="10"
+                            CornerRadius="5"
                             RenderTransformOrigin="0.5,0.5"
                             SnapsToDevicePixels="True">
                         <Border.RenderTransform>
                             <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
                         </Border.RenderTransform>
                         <Grid>
-                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="10" IsHitTestVisible="False"/>
+                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="5" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}"/>
                         </Grid>
@@ -391,7 +518,10 @@
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
-        <Setter Property="Padding" Value="14,9"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Padding" Value="12,4"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -401,15 +531,16 @@
                             TextElement.Foreground="{TemplateBinding Foreground}"
                             BorderBrush="{StaticResource BorderSubtleBrush}"
                             BorderThickness="1"
-                            CornerRadius="10"
+                            CornerRadius="5"
                             RenderTransformOrigin="0.5,0.5"
                             SnapsToDevicePixels="True">
                         <Border.RenderTransform>
                             <ScaleTransform x:Name="ButtonScale" ScaleX="1" ScaleY="1"/>
                         </Border.RenderTransform>
                         <Grid>
-                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="10" IsHitTestVisible="False"/>
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                            <Border x:Name="HoverOverlay" Background="White" Opacity="0" CornerRadius="5" IsHitTestVisible="False"/>
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
                                               Margin="{TemplateBinding Padding}"/>
                         </Grid>
                     </Border>
@@ -498,8 +629,8 @@
     </Style>
 
     <Style x:Key="WindowControlButton" TargetType="Button">
-        <Setter Property="Width" Value="40"/>
-        <Setter Property="Height" Value="46"/>
+        <Setter Property="Width" Value="48"/>
+        <Setter Property="Height" Value="48"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="BorderThickness" Value="0"/>
@@ -509,14 +640,14 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
-                            Width="28"
-                            Height="28"
-                            CornerRadius="8"
+                            Width="48"
+                            Height="48"
+                            CornerRadius="0"
                             Background="{TemplateBinding Background}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center">
                         <Grid>
-                            <Border x:Name="HoverOverlay" Background="White" CornerRadius="8" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="HoverOverlay" Background="White" CornerRadius="0" Opacity="0" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Grid>
@@ -562,14 +693,14 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
-                            Width="28"
-                            Height="28"
-                            CornerRadius="8"
+                            Width="48"
+                            Height="48"
+                            CornerRadius="0"
                             Background="{TemplateBinding Background}"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center">
                         <Grid>
-                            <Border x:Name="HoverOverlay" Background="{StaticResource ErrorBrush}" CornerRadius="8" Opacity="0" IsHitTestVisible="False"/>
+                            <Border x:Name="HoverOverlay" Background="{StaticResource ErrorBrush}" CornerRadius="0" Opacity="0" IsHitTestVisible="False"/>
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"/>
                         </Grid>
@@ -615,12 +746,12 @@
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition/>
-                <ColumnDefinition Width="28"/>
+                <ColumnDefinition Width="32"/>
             </Grid.ColumnDefinitions>
             <Border x:Name="Border" Grid.ColumnSpan="2"
                     Background="{StaticResource BgSurfaceBrush}"
                     BorderBrush="{StaticResource BorderSubtleBrush}"
-                    BorderThickness="1" CornerRadius="8"/>
+                    BorderThickness="1" CornerRadius="5"/>
             <Path x:Name="Arrow" Grid.Column="1"
                   Fill="{StaticResource TextMutedBrush}"
                   HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -647,13 +778,14 @@
 
     <!-- ========== ComboBox 样式 ========== -->
     <Style x:Key="DarkComboBox" TargetType="ComboBox">
-        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
-        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Padding" Value="12,4"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="behaviors:PopupPlacement.Placement" Value="Bottom"/>
@@ -665,7 +797,7 @@
                 <Style TargetType="ComboBoxItem">
                     <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                     <Setter Property="Background" Value="Transparent"/>
-                    <Setter Property="Padding" Value="10,6"/>
+                    <Setter Property="Padding" Value="12,4"/>
                     <Setter Property="Cursor" Value="Hand"/>
                     <Setter Property="Template">
                         <Setter.Value>
@@ -702,7 +834,7 @@
                                           Content="{TemplateBinding SelectionBoxItem}"
                                           ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                           ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
-                                          Margin="12,7,28,7"
+                                          Margin="12,0,32,0"
                                           VerticalAlignment="Center"
                                           HorizontalAlignment="Left"/>
                         <Popup x:Name="Popup"
@@ -720,8 +852,8 @@
                                 <Border x:Name="DropDownBorder"
                                         Background="{StaticResource BgSurfaceHighestBrush}"
                                         BorderBrush="{StaticResource BorderPrimaryBrush}"
-                                        BorderThickness="1" CornerRadius="8"
-                                        Margin="0,2,0,0" Padding="4"
+                                        BorderThickness="1" CornerRadius="5"
+                                        Margin="0,4,0,0" Padding="4"
                                         Effect="{StaticResource PopupShadow}">
                                     <ScrollViewer SnapsToDevicePixels="True">
                                         <StackPanel IsItemsHost="True"
@@ -780,7 +912,7 @@
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="border"
                             Background="{TemplateBinding Background}"
-                            CornerRadius="10"
+                            CornerRadius="5"
                             SnapsToDevicePixels="True">
                         <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                                           VerticalAlignment="Center"
@@ -796,15 +928,15 @@
         </Setter>
     </Style>
 
-    <!-- ========== Apple-style labeled sidebar selection ========== -->
+    <!-- ========== Fluent labeled sidebar selection ========== -->
     <Style x:Key="NavRadioButton" TargetType="RadioButton">
-        <Setter Property="Width" Value="192"/>
-        <Setter Property="Height" Value="44"/>
+        <Setter Property="Height" Value="40"/>
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
         <Setter Property="FontWeight" Value="{StaticResource FontWeightSemiBold}"/>
-        <Setter Property="Padding" Value="0"/>
+        <Setter Property="Padding" Value="12,0,24,0"/>
+        <Setter Property="HorizontalAlignment" Value="Stretch"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Cursor" Value="Hand"/>
@@ -812,8 +944,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="RadioButton">
-                    <Grid Width="{TemplateBinding Width}"
-                          Height="{TemplateBinding Height}"
+                    <Grid Height="{TemplateBinding Height}"
                           RenderTransformOrigin="0.5,0.5"
                           SnapsToDevicePixels="True">
                         <Grid.RenderTransform>
@@ -821,12 +952,12 @@
                         </Grid.RenderTransform>
                         <Border x:Name="border"
                                 Background="{TemplateBinding Background}"
-                                CornerRadius="10"
+                                CornerRadius="5"
                                 BorderBrush="Transparent"
                                 BorderThickness="1"/>
                         <Border x:Name="HoverOverlay"
                                 Background="White"
-                                CornerRadius="10"
+                                CornerRadius="5"
                                 Opacity="0"
                                 IsHitTestVisible="False"/>
                         <Border x:Name="ActiveIndicator"
@@ -845,7 +976,7 @@
                         </Border>
                         <ContentPresenter HorizontalAlignment="Stretch"
                                           VerticalAlignment="Center"
-                                          Margin="14,0,26,0"/>
+                                          Margin="{TemplateBinding Padding}"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <EventTrigger RoutedEvent="MouseEnter">
@@ -951,6 +1082,10 @@
                             <Setter TargetName="ActiveIndicator" Property="Opacity" Value="1"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
+                        <DataTrigger Binding="{Binding DataContext.IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}"
+                                     Value="True">
+                            <Setter TargetName="ActiveIndicator" Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4"/>
                             <Setter Property="Cursor" Value="Arrow"/>
@@ -967,7 +1102,8 @@
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
         <Setter Property="FontWeight" Value="{StaticResource FontWeightNormal}"/>
-        <Setter Property="Padding" Value="14,6"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Padding" Value="12,4"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="GroupName" Value="HistoryFilter"/>
         <Setter Property="Template">
@@ -1043,12 +1179,12 @@
         </Setter>
     </Style>
 
-    <!-- ========== Reusable Apple-inspired surfaces and contextual controls ========== -->
+    <!-- ========== Reusable Fluent surfaces and contextual controls ========== -->
     <Style x:Key="SearchFieldBorder" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="11"/>
+        <Setter Property="CornerRadius" Value="5"/>
         <Setter Property="Padding" Value="12,0"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
@@ -1057,7 +1193,7 @@
         <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="13"/>
+        <Setter Property="CornerRadius" Value="7"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
 
@@ -1065,7 +1201,7 @@
         <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="CornerRadius" Value="7"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
 
@@ -1073,8 +1209,8 @@
         <Setter Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="14"/>
-        <Setter Property="Padding" Value="18"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12"/>
         <Setter Property="Effect" Value="{StaticResource PopupShadow}"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
@@ -1083,21 +1219,22 @@
         <Setter Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="CornerRadius" Value="16"/>
-        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12,8"/>
         <Setter Property="Effect" Value="{StaticResource PopupShadow}"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
     </Style>
 
     <Style x:Key="ToolbarIconButton" TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-        <Setter Property="Width" Value="36"/>
-        <Setter Property="Height" Value="36"/>
+        <Setter Property="Width" Value="32"/>
+        <Setter Property="Height" Value="32"/>
         <Setter Property="Padding" Value="0"/>
     </Style>
 
     <Style x:Key="ToolbarToggleButton" TargetType="ToggleButton">
-        <Setter Property="Width" Value="36"/>
-        <Setter Property="Height" Value="36"/>
+        <Setter Property="MinWidth" Value="32"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="Height" Value="32"/>
         <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
@@ -1112,7 +1249,7 @@
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10"
+                            CornerRadius="5"
                             RenderTransformOrigin="0.5,0.5">
                         <Border.RenderTransform>
                             <ScaleTransform x:Name="ToggleScale" ScaleX="1" ScaleY="1"/>
@@ -1173,13 +1310,13 @@
     </Style>
 
     <Style x:Key="CircularCheckBox" TargetType="CheckBox">
-        <Setter Property="Width" Value="22"/>
-        <Setter Property="Height" Value="22"/>
+        <Setter Property="Width" Value="24"/>
+        <Setter Property="Height" Value="24"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
-                    <Grid Width="22" Height="22" RenderTransformOrigin="0.5,0.5">
+                    <Grid Width="24" Height="24" RenderTransformOrigin="0.5,0.5">
                         <Grid.RenderTransform>
                             <ScaleTransform x:Name="CheckScale" ScaleX="1" ScaleY="1"/>
                         </Grid.RenderTransform>
@@ -1190,7 +1327,7 @@
                         <TextBlock x:Name="CheckGlyph"
                                    Text="&#xE73E;"
                                    Style="{StaticResource IconGlyph}"
-                                   FontSize="11"
+                                   FontSize="{StaticResource IconSizeSmall}"
                                    Foreground="{StaticResource TextPrimaryBrush}"
                                    Visibility="Collapsed"/>
                     </Grid>
@@ -1237,14 +1374,14 @@
 
     <!-- ========== ToggleButton (开关) 样式 ========== -->
     <Style x:Key="ToggleSwitch" TargetType="ToggleButton">
-        <Setter Property="Width" Value="44"/>
+        <Setter Property="Width" Value="48"/>
         <Setter Property="Height" Value="24"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ToggleButton">
                     <Border x:Name="track"
-                            Width="44" Height="24"
+                            Width="48" Height="24"
                             CornerRadius="12"
                             Background="{StaticResource ToggleTrackBrush}">
                         <Grid>
@@ -1266,8 +1403,8 @@
                                 <BeginStoryboard>
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="ThumbTranslate"
-                                                         Storyboard.TargetProperty="X"
-                                                         To="20"
+                                                          Storyboard.TargetProperty="X"
+                                                          To="24"
                                                          Duration="{StaticResource MotionDurationFast}"
                                                          EasingFunction="{StaticResource MotionEaseOut}"/>
                                     </Storyboard>

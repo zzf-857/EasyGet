@@ -1,3 +1,4 @@
+using EasyGet.Models;
 using EasyGet.Services;
 using EasyGet.Services.Cookies;
 using EasyGet.ViewModels;
@@ -174,6 +175,148 @@ public sealed class CookieSettingsViewModelTests
         Assert.True(item.IsDetected);
         Assert.Contains("Edge", item.StatusText, StringComparison.Ordinal);
         Assert.Contains("优先读取", item.StatusText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task LoginPlatformAsync_WhileWaitingKeepsOtherPlatformCommandEnabled()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var profile = new BrowserProfile(
+            "edge",
+            "Edge",
+            "Default",
+            @"C:\Profiles\Edge\Default",
+            DateTime.UtcNow,
+            IsDefaultBrowser: true);
+        var detector = new BlockingBrowserCookieLoginDetector();
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([profile]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            defaultBrowserLauncher: new RecordingDefaultBrowserLauncher(),
+            browserLoginDetector: detector);
+        var bilibili = CreatePlatformStatusItem("bilibili");
+        var youtube = CreatePlatformStatusItem("youtube");
+
+        var login = viewModel.LoginPlatformCommand.ExecuteAsync(bilibili);
+        await detector.DetectionStarted.WaitAsync(TimeSpan.FromSeconds(2));
+        try
+        {
+            Assert.True(bilibili.IsOperating);
+            Assert.Contains("正在自动检测", bilibili.StatusText, StringComparison.Ordinal);
+            Assert.True(viewModel.LoginPlatformCommand.CanExecute(youtube));
+        }
+        finally
+        {
+            viewModel.CancelPlatformLoginCommand.Execute(bilibili);
+            await login.WaitAsync(TimeSpan.FromSeconds(2));
+        }
+    }
+
+    [Fact]
+    public async Task CancelPlatformLoginCommand_CancelsMatchingItemAndRestoresOperatingState()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var profile = new BrowserProfile(
+            "edge",
+            "Edge",
+            "Default",
+            @"C:\Profiles\Edge\Default",
+            DateTime.UtcNow,
+            IsDefaultBrowser: true);
+        var detector = new BlockingBrowserCookieLoginDetector();
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([profile]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            defaultBrowserLauncher: new RecordingDefaultBrowserLauncher(),
+            browserLoginDetector: detector);
+        var bilibili = CreatePlatformStatusItem("bilibili");
+
+        var login = viewModel.LoginPlatformCommand.ExecuteAsync(bilibili);
+        await detector.DetectionStarted.WaitAsync(TimeSpan.FromSeconds(2));
+
+        viewModel.CancelPlatformLoginCommand.Execute(bilibili);
+
+        await detector.CancellationObserved.WaitAsync(TimeSpan.FromSeconds(2));
+        await login.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.False(bilibili.IsOperating);
+        Assert.Contains("已停止", bilibili.StatusText, StringComparison.Ordinal);
+        Assert.True(viewModel.LoginPlatformCommand.CanExecute(bilibili));
+    }
+
+    [Fact]
+    public async Task RefreshCookieStatusAsync_DuringPendingLoginPreservesVisibleOperatingItem()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var profile = new BrowserProfile(
+            "edge",
+            "Edge",
+            "Default",
+            @"C:\Profiles\Edge\Default",
+            DateTime.UtcNow,
+            IsDefaultBrowser: true);
+        var detector = new BlockingBrowserCookieLoginDetector(blockSinglePlatformOnly: true);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([profile]),
+            cookieHealthStore: new StaticCookieHealthStore([]),
+            managedLogin: new FakeManagedLoginSessionService(),
+            defaultBrowserLauncher: new RecordingDefaultBrowserLauncher(),
+            browserLoginDetector: detector);
+        await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+        var bilibili = viewModel.CookiePlatformStatuses.Single(status =>
+            status.PlatformId == "bilibili");
+
+        var login = viewModel.LoginPlatformCommand.ExecuteAsync(bilibili);
+        await detector.DetectionStarted.WaitAsync(TimeSpan.FromSeconds(2));
+        try
+        {
+            await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+
+            var visibleBilibili = viewModel.CookiePlatformStatuses.Single(status =>
+                status.PlatformId == "bilibili");
+            Assert.Same(bilibili, visibleBilibili);
+            Assert.True(visibleBilibili.IsOperating);
+            Assert.Contains("正在自动检测", visibleBilibili.StatusText, StringComparison.Ordinal);
+        }
+        finally
+        {
+            viewModel.CancelPlatformLoginCommand.Execute(bilibili);
+            await login.WaitAsync(TimeSpan.FromSeconds(2));
+        }
     }
 
     [Fact]
@@ -884,19 +1027,26 @@ public sealed class CookieSettingsViewModelTests
     {
         var xaml = File.ReadAllText(TestRepositoryPaths.GetViewPath("SettingsView.xaml"));
 
-        Assert.Contains("智能登录与 Cookie", xaml, StringComparison.Ordinal);
+        Assert.Contains("账号与 Cookie", xaml, StringComparison.Ordinal);
+        Assert.Contains("智能 Cookie", xaml, StringComparison.Ordinal);
         Assert.Contains("SmartCookieEnabled", xaml, StringComparison.Ordinal);
         Assert.Contains("RefreshCookieStatusCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LoginPlatformCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("CancelPlatformLoginCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains(
+            "DataTrigger Binding=\"{Binding IsOperating}\" Value=\"True\"",
+            xaml,
+            StringComparison.Ordinal);
         Assert.Contains("CompatibleLoginPlatformCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("ClearPlatformSessionCommand", xaml, StringComparison.Ordinal);
-        Assert.Contains("ClearAllManagedSessionsCommand", xaml, StringComparison.Ordinal);
+        Assert.Contains("ConfirmClearAllManagedSessionsCommand", xaml, StringComparison.Ordinal);
         Assert.Contains("LegacyCookiePlatform", xaml, StringComparison.Ordinal);
         Assert.Contains("ManualCookieValidationMessage", xaml, StringComparison.Ordinal);
-        Assert.Contains("加密保存手动 Cookie", xaml, StringComparison.Ordinal);
+        Assert.Contains("高级：手动导入 Cookie", xaml, StringComparison.Ordinal);
+        Assert.Contains("Content=\"加密保存\"", xaml, StringComparison.Ordinal);
         Assert.Contains("Expander", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name", xaml, StringComparison.Ordinal);
-        Assert.Contains("系统默认浏览器", xaml, StringComparison.Ordinal);
+        Assert.Contains("按平台选择系统浏览器或 EasyGet 登录状态", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("最后才显示一次平台登录窗口", xaml, StringComparison.Ordinal);
     }
 
@@ -910,6 +1060,59 @@ public sealed class CookieSettingsViewModelTests
         : IBrowserProfileDiscoveryService
     {
         public IReadOnlyList<BrowserProfile> Discover() => throw new IOException(message);
+    }
+
+    private static CookiePlatformStatusItem CreatePlatformStatusItem(string platformId)
+    {
+        var platform = MediaPlatformResolver.KnownPlatforms.Single(definition =>
+            string.Equals(definition.Id, platformId, StringComparison.Ordinal));
+        return new CookiePlatformStatusItem
+        {
+            PlatformId = platform.Id,
+            StorageKey = platform.StorageKey,
+            DisplayName = platform.DisplayName
+        };
+    }
+
+    private sealed class BlockingBrowserCookieLoginDetector(bool blockSinglePlatformOnly = false)
+        : IBrowserCookieLoginDetector
+    {
+        private readonly TaskCompletionSource<BrowserCookieLoginDetection> _completion = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task DetectionStarted => _detectionStarted.Task;
+        public Task CancellationObserved => _cancellationObserved.Task;
+
+        private readonly TaskCompletionSource _detectionStarted = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _cancellationObserved = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task<BrowserCookieLoginDetection> DetectAsync(
+            IReadOnlyList<BrowserProfile> profiles,
+            IReadOnlyList<MediaPlatformDefinition> platforms,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (blockSinglePlatformOnly && platforms.Count != 1)
+            {
+                return new BrowserCookieLoginDetection(
+                    new Dictionary<string, BrowserProfile>(StringComparer.Ordinal),
+                    profiles.Count,
+                    0);
+            }
+
+            _detectionStarted.TrySetResult();
+            try
+            {
+                return await _completion.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _cancellationObserved.TrySetResult();
+                throw;
+            }
+        }
     }
 
     private sealed class RecordingDefaultBrowserLauncher : IDefaultBrowserLauncher

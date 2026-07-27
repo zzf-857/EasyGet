@@ -16,51 +16,54 @@
         AutomationProperties.Name="平台智能登录窗口">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="56" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0"
-                Padding="24,18"
-                Background="{DynamicResource BgSurfaceBrush}"
+                Padding="16,8"
+                Background="{DynamicResource BgChromeBrush}"
                 BorderBrush="{DynamicResource BorderSubtleBrush}"
                 BorderThickness="0,0,0,1">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
-                <TextBlock Style="{StaticResource TextCardTitle}"
-                           Text="{Binding WindowHeading}" />
-                <TextBlock Grid.Row="1"
-                           Margin="0,8,0,0"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           Text="EasyGet 只会读取下列平台域名的登录状态，不会显示或上传 Cookie 内容。"
-                           TextWrapping="Wrap" />
-                <TextBlock Grid.Row="2"
-                           Margin="0,6,0,0"
-                           Foreground="{DynamicResource AccentBrush}"
-                           Text="{Binding AllowedDomainsText, StringFormat=允许域名：{0}}"
-                           TextWrapping="Wrap"
-                           AutomationProperties.Name="允许读取的登录域名" />
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Ellipse Width="8" Height="8" Fill="{StaticResource SuccessBrush}" Margin="0,0,8,0"/>
+                    <TextBlock Style="{StaticResource TextBodyStrong}" Text="{Binding WindowHeading}" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Margin="16,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextMutedBrush}" FontSize="{StaticResource FontSizeCaption}"
+                           Text="登录数据仅保存在本机,EasyGet 不显示或上传 Cookie 内容。"
+                           TextTrimming="CharacterEllipsis" />
+                <Border Grid.Column="2" Padding="8,4" CornerRadius="4"
+                        Background="{DynamicResource AccentContainerBrush}"
+                        ToolTip="允许读取的登录域名">
+                    <TextBlock Foreground="{DynamicResource AccentBrush}" FontSize="{StaticResource FontSizeCaption}"
+                               Text="{Binding AllowedDomainsText, StringFormat=允许域名: {0}}"
+                               TextTrimming="CharacterEllipsis" MaxWidth="360"
+                               AutomationProperties.Name="允许读取的登录域名" />
+                </Border>
             </Grid>
         </Border>
 
         <Border Grid.Row="1"
-                Margin="16"
+                Margin="12"
                 Background="{DynamicResource BgSurfaceHighestBrush}"
                 BorderBrush="{DynamicResource BorderPrimaryBrush}"
                 BorderThickness="1"
-                CornerRadius="10"
+                CornerRadius="6"
                 ClipToBounds="True">
             <wv2:WebView2 x:Name="Browser"
                           AutomationProperties.Name="平台登录网页" />
         </Border>
 
         <Border Grid.Row="2"
-                Padding="20,14"
+                Padding="16,12"
                 Background="{DynamicResource BgSurfaceBrush}"
                 BorderBrush="{DynamicResource BorderSubtleBrush}"
                 BorderThickness="0,1,0,0">
@@ -71,6 +74,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock x:Name="StatusText"
+                           Style="{StaticResource TextBody}"
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource TextSecondaryBrush}"
                            Text="请在上方网页完成登录，然后点击继续。"
@@ -80,7 +84,7 @@
                         Grid.Column="1"
                         Margin="16,0,8,0"
                         MinWidth="112"
-                        Padding="16,9"
+                        Height="32" Padding="16,4"
                         Content="取消"
                         Style="{StaticResource SurfaceButton}"
                         Click="CancelButton_Click"
@@ -88,7 +92,7 @@
                 <Button x:Name="ContinueButton"
                         Grid.Column="2"
                         MinWidth="168"
-                        Padding="16,9"
+                        Height="32" Padding="16,4"
                         Content="已完成登录，继续"
                         Style="{StaticResource AccentButton}"
                         IsDefault="True"

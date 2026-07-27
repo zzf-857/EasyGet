@@ -118,7 +118,7 @@ public sealed class BrowserCookieLoginDetectorTests
     }
 
     [Fact]
-    public async Task DetectAsync_InvalidatesReadableCacheWhenCookieActivityChanges()
+    public async Task DetectAsync_RefreshesReadableMissWhenCookieAppearsWithoutActivityChange()
     {
         using var root = new TestDirectory();
         var profilePath = root.Path("Chrome", "Default");
@@ -153,18 +153,13 @@ public sealed class BrowserCookieLoginDetectorTests
             await insert.ExecuteNonQueryAsync();
         }
 
-        var unchangedActivity = await detector.DetectAsync(
+        var afterLogin = await detector.DetectAsync(
             [profile],
-            [youtube],
-            CancellationToken.None);
-        var afterActivityChange = await detector.DetectAsync(
-            [profile with { LastActivityUtc = firstActivity.AddMinutes(1) }],
             [youtube],
             CancellationToken.None);
 
         Assert.Empty(beforeLogin.AuthenticatedProfiles);
-        Assert.Empty(unchangedActivity.AuthenticatedProfiles);
-        Assert.True(afterActivityChange.TryGetProfile(youtube.StorageKey, out _));
+        Assert.True(afterLogin.TryGetProfile(youtube.StorageKey, out _));
     }
 
     [Fact]

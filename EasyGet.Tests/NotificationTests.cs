@@ -27,6 +27,71 @@ public class NotificationTests
     }
 
     [Fact]
+    public async Task FailureNotification_PersistsUntilClosed()
+    {
+        var expired = false;
+        var item = new NotificationItem("Download failed", false);
+        item.Expired += _ => expired = true;
+
+        await Task.Delay(TimeSpan.FromMilliseconds(4300));
+
+        Assert.False(expired);
+        Assert.Equal(1, item.RemainingRatio);
+        item.Close();
+    }
+
+    [Fact]
+    public void NotificationKindsUseDesignerDismissDurations()
+    {
+        var success = new NotificationItem("Done", NotificationKind.Success);
+        var info = new NotificationItem("Detected", NotificationKind.Info);
+        var failure = new NotificationItem("Failed", NotificationKind.Failure);
+
+        Assert.Equal(TimeSpan.FromSeconds(4), success.AutoDismissAfter);
+        Assert.Equal(TimeSpan.FromSeconds(5), info.AutoDismissAfter);
+        Assert.Null(failure.AutoDismissAfter);
+        Assert.True(success.IsSuccess);
+        Assert.True(info.IsInfo);
+        Assert.True(failure.IsFailure);
+
+        success.Close();
+        info.Close();
+        failure.Close();
+    }
+
+    [Fact]
+    public void FailureNotification_ExecutesRecoveryActionAndCloses()
+    {
+        var actionExecuted = false;
+        var closed = false;
+        var item = new NotificationItem("Download failed", false, "查看队列", () => actionExecuted = true);
+        item.Closed += _ => closed = true;
+
+        item.ExecuteActionCommand.Execute(null);
+
+        Assert.True(actionExecuted);
+        Assert.True(closed);
+        Assert.True(item.HasAction);
+        Assert.Equal("查看队列", item.ActionLabel);
+    }
+
+    [Fact]
+    public void TaskFailureToastIncludesReasonAndNextStepCanRemainActionable()
+    {
+        var task = new DownloadTask
+        {
+            Title = "Example",
+            Url = "https://example.com/video",
+            ErrorMessage = "Cookie 已失效，请重新登录。"
+        };
+
+        var message = MainViewModel.BuildTaskFailureMessage(task);
+
+        Assert.Contains("下载失败: Example", message, StringComparison.Ordinal);
+        Assert.Contains("Cookie 已失效，请重新登录。", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task NotificationItem_PauseAndResumeTimer()
     {
         var item = new NotificationItem("Test Msg", true);
@@ -122,6 +187,63 @@ public class NotificationTests
             {
                 item.Close();
             }
+        }
+        finally
+        {
+            foreach (var path in new[] { dbPath, $"{dbPath}-wal", $"{dbPath}-shm" })
+            {
+                try
+                {
+                    if (System.IO.File.Exists(path))
+                        System.IO.File.Delete(path);
+                }
+                catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public void ClipboardDetectionCreatesActionableInfoToastWithoutChangingPage()
+    {
+        var configService = new TestConfigService();
+        var dbPath = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(),
+            $"easyget-clipboard-toast-{Guid.NewGuid():N}.db");
+
+        try
+        {
+            using var history = new HistoryService(dbPath);
+            var env = new EnvironmentService();
+            var ytDlp = new YtDlpService(configService, env);
+            var manager = new DownloadManager(ytDlp, history, configService);
+            var downloadVM = new DownloadViewModel(
+                manager,
+                configService,
+                new YtDlpVideoInfoProvider(ytDlp));
+            var batchDownloadVM = new BatchDownloadViewModel(manager, configService, ytDlp);
+            var historyVM = new HistoryViewModel(history);
+            var settingsVM = new SettingsViewModel(
+                configService,
+                env,
+                manager,
+                new TelegramDownloadService(configService));
+            var mainVM = new MainViewModel(
+                env,
+                manager,
+                downloadVM,
+                batchDownloadVM,
+                historyVM,
+                settingsVM);
+            mainVM.NavigateCommand.Execute("settings");
+
+            downloadVM.CheckClipboardAndPrompt("https://example.com/video");
+
+            var notification = Assert.Single(mainVM.Notifications);
+            Assert.Equal(NotificationKind.Info, notification.Kind);
+            Assert.Equal("立即解析", notification.ActionLabel);
+            Assert.True(notification.HasAction);
+            Assert.Equal(3, mainVM.SelectedNavIndex);
+            notification.Close();
         }
         finally
         {

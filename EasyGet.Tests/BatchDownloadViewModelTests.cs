@@ -14,7 +14,22 @@ namespace EasyGet.Tests;
 public class BatchDownloadViewModelTests
 {
     [Fact]
-    public void QueueSummary_FiltersFinishedTasksAndTracksAggregateProgress()
+    public void QueueFilterOptions_MatchDesignerSegments()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp);
+
+        Assert.Equal(
+            new[] { "全部", "进行中", "等待", "已暂停", "失败", "已完成" },
+            viewModel.QueueFilterOptions);
+    }
+
+    [Fact]
+    public void QueueSummary_TracksAggregateProgressAndDesignerFilters()
     {
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
@@ -37,14 +52,22 @@ public class BatchDownloadViewModelTests
         Assert.Equal(1, viewModel.FailedTaskCount);
         Assert.Equal(2, viewModel.FinishedTaskCount);
         Assert.Equal(1, viewModel.RemainingTaskCount);
-        Assert.Single(viewModel.VisibleQueueTasks);
-        Assert.Equal("https://example.com/running", viewModel.VisibleQueueTasks[0].Url);
+        Assert.Equal(3, viewModel.VisibleQueueTasks.Count);
         Assert.Equal(160d / 3d, viewModel.OverallProgress, precision: 6);
         Assert.Equal(1024, viewModel.AggregateSpeed);
         Assert.Contains("已完成 1/3", viewModel.QueueSummaryText, StringComparison.Ordinal);
 
-        viewModel.SetQueueFilterCommand.Execute("已结束");
-        Assert.Equal(2, viewModel.VisibleQueueTasks.Count);
+        viewModel.SetQueueFilterCommand.Execute("进行中");
+        Assert.Single(viewModel.VisibleQueueTasks);
+        Assert.Equal("https://example.com/running", viewModel.VisibleQueueTasks[0].Url);
+
+        viewModel.SetQueueFilterCommand.Execute("失败");
+        Assert.Single(viewModel.VisibleQueueTasks);
+        Assert.Equal("https://example.com/failed", viewModel.VisibleQueueTasks[0].Url);
+
+        viewModel.SetQueueFilterCommand.Execute("已完成");
+        Assert.Single(viewModel.VisibleQueueTasks);
+        Assert.Equal("https://example.com/done", viewModel.VisibleQueueTasks[0].Url);
 
         viewModel.ClearFinishedCommand.Execute(null);
         Assert.Single(manager.Tasks);

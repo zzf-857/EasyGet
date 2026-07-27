@@ -10,7 +10,7 @@ namespace EasyGet.Tests;
 public class ShortcutTests
 {
     [Fact]
-    public void SettingsViewContainsKeyboardShortcutsHelpText()
+    public void SettingsViewDoesNotRenderInstructionalShortcutCopy()
     {
         var viewPath = GetViewPath("SettingsView.xaml");
         var document = XDocument.Load(viewPath);
@@ -20,8 +20,8 @@ public class ShortcutTests
             .Select(e => e.Attribute("Text")?.Value ?? "")
             .ToList();
 
-        var containsShortcutsText = textBlocks.Any(t => t.Contains("键盘快捷键") && t.Contains("Ctrl+1~4"));
-        Assert.True(containsShortcutsText, "SettingsView should contain keyboard shortcuts help text.");
+        Assert.DoesNotContain(textBlocks, text => text.Contains("键盘快捷键", StringComparison.Ordinal));
+        Assert.DoesNotContain(textBlocks, text => text.Contains("Ctrl+1~4", StringComparison.Ordinal));
     }
 
     [Theory]
@@ -52,6 +52,49 @@ public class ShortcutTests
         var codeContent = File.ReadAllText(codePath);
         Assert.Contains("PreviewKeyDown += MainWindow_PreviewKeyDown", codeContent);
         Assert.Contains("private void MainWindow_PreviewKeyDown", codeContent);
+    }
+
+    [Fact]
+    public void DesignerKeyboardWorkflowsAreConnectedToRealViewsAndCommands()
+    {
+        var mainWindow = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
+        var downloadView = File.ReadAllText(GetViewPath("DownloadView.xaml"));
+        var batchView = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
+        var batchCode = File.ReadAllText(GetViewPath("BatchDownloadView.xaml.cs"));
+        var historyView = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+        var historyCode = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        Assert.Contains("Key.F", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("FocusSearch", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("Key.Space or Key.Delete", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("DeleteSelectedCommand", mainWindow, StringComparison.Ordinal);
+        Assert.Contains("RunPrimaryActionCommand", downloadView, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"QueueList\"", batchView, StringComparison.Ordinal);
+        Assert.Contains("TryHandleQueueShortcut", batchCode, StringComparison.Ordinal);
+        Assert.Contains("PauseTaskCommand", batchCode, StringComparison.Ordinal);
+        Assert.Contains("ResumeTaskCommand", batchCode, StringComparison.Ordinal);
+        Assert.Contains("CancelTaskCommand", batchCode, StringComparison.Ordinal);
+        Assert.Contains("x:Name=\"HistorySearchBox\"", historyView, StringComparison.Ordinal);
+        Assert.Contains("HistorySearchBox.SelectAll", historyCode, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClipboardMonitoringIsGlobalAndDoesNotForceNavigation()
+    {
+        var mainWindow = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
+        var activatedStart = mainWindow.IndexOf(
+            "private void MainWindow_Activated",
+            StringComparison.Ordinal);
+        var activatedEnd = mainWindow.IndexOf(
+            "private static T? FindVisualChild",
+            activatedStart,
+            StringComparison.Ordinal);
+        var activatedBody = mainWindow[activatedStart..activatedEnd];
+
+        Assert.Contains("ClipboardMonitoringEnabled", activatedBody, StringComparison.Ordinal);
+        Assert.Contains("CheckClipboardAndPrompt", activatedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectedNavIndex", activatedBody, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavigateCommand", activatedBody, StringComparison.Ordinal);
     }
 
     private static string GetViewPath(string fileName)

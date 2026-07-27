@@ -3,637 +3,457 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:behaviors="clr-namespace:EasyGet.Behaviors"
              Background="Transparent"
-             behaviors:Motion.PageEnter="True"
              AllowDrop="True"
              DragOver="UserControl_DragOver"
              DragLeave="UserControl_DragLeave"
              Drop="UserControl_Drop">
 
-    <Grid Margin="32,28,32,0">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="400" MinWidth="320" MaxWidth="520"/>
+            <ColumnDefinition Width="6"/>
+            <ColumnDefinition Width="*" MinWidth="560"/>
+        </Grid.ColumnDefinitions>
 
-        <!-- Drag & Drop Overlay -->
-        <Border x:Name="DragDropOverlay"
-                Grid.RowSpan="4"
-                Background="{StaticResource ScrimHeavyBrush}"
-                BorderBrush="{DynamicResource AccentBrush}"
-                BorderThickness="2"
-                CornerRadius="16"
-                Opacity="0"
-                Visibility="Collapsed"
-                IsHitTestVisible="False"
-                Margin="-8"
-                Panel.ZIndex="100">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="&#xE78A;" Style="{StaticResource IconGlyph}"
-                           FontSize="{StaticResource IconSizeEmptyState}" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
-                <TextBlock Text="拖入链接文本或 .txt 文件以批量导入"
-                           Style="{StaticResource TextSection}" HorizontalAlignment="Center"/>
-                <TextBlock Text="释放以提取所有视频链接"
-                           Style="{StaticResource TextBody}" HorizontalAlignment="Center" Margin="0,8,0,0"/>
-            </StackPanel>
-        </Border>
- 
-        <Grid Grid.Row="0" Margin="0,0,0,24">
-            <StackPanel>
-                <TextBlock Text="批量下载"
-                           Style="{StaticResource TextPageTitle}"/>
-                <TextBlock Text="输入多个视频链接，我们将自动为您解析并加入下载队列。"
-                           Style="{StaticResource TextBody}"
-                           Margin="0,8,0,0"/>
-            </StackPanel>
-            <Button HorizontalAlignment="Right"
-                    VerticalAlignment="Bottom"
-                    Style="{StaticResource SurfaceButton}"
-                    ToolTip="粘贴多个视频链接"
-                    AutomationProperties.Name="粘贴多个视频链接"
-                    Command="{Binding PasteUrlsCommand}">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="&#xE77F;" Style="{StaticResource IconGlyph}"
-                               FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="粘贴内容" VerticalAlignment="Center"/>
+        <Border Grid.Column="0" Background="{StaticResource BgPrimaryBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0">
+            <Grid Margin="16">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                    <TextBlock Text="批量下载" Style="{StaticResource TextPageTitle}"/>
+                    <TextBlock Text="每行一个链接,解析后按并发自动开始" Margin="0,4,0,0"
+                               Style="{StaticResource TextCaption}"/>
                 </StackPanel>
-            </Button>
-        </Grid>
- 
-        <Border Grid.Row="1" Style="{StaticResource ToolPanelBorder}" Padding="22,20" Margin="0,0,0,24">
-            <StackPanel>
-                <Grid Margin="0,0,0,10">
-                    <TextBlock Text="粘贴视频链接（每行一个）"
-                               Style="{StaticResource TextBodyStrong}"
-                               VerticalAlignment="Center"/>
-                    <Border HorizontalAlignment="Right"
-                            Background="{DynamicResource AccentContainerBrush}"
-                            CornerRadius="5"
-                            Padding="8,2">
-                        <TextBlock Style="{StaticResource TextCaption}"
-                                   Foreground="{DynamicResource AccentBrush}">
-                            <Run Text="已检测到 "/>
-                            <Run Text="{Binding LinkCount, Mode=OneWay}"/>
-                            <Run Text=" 个链接"/>
-                        </TextBlock>
-                    </Border>
-                </Grid>
- 
-                <TextBox Style="{StaticResource DarkTextBox}"
-                          Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}"
-                          AcceptsReturn="True"
-                          TextWrapping="Wrap"
-                          Height="170"
-                          VerticalScrollBarVisibility="Auto"
-                          FontFamily="{StaticResource FontFamilyMono}"
-                          FontSize="{StaticResource FontSizeBody}"/>
- 
-                <Grid Margin="0,18,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
- 
-                    <StackPanel Grid.Column="0" Margin="0,0,16,0">
-                        <TextBlock Text="下载格式" Style="{StaticResource TextCaption}" Margin="0,0,0,5"/>
-                        <ComboBox Style="{StaticResource DarkComboBox}"
-                                  Width="132"
-                                  ItemsSource="{Binding FormatOptions}"
-                                  SelectedItem="{Binding SelectedFormat}"/>
-                    </StackPanel>
- 
-                    <StackPanel Grid.Column="1">
-                        <TextBlock Text="清晰度优先" Style="{StaticResource TextCaption}" Margin="0,0,0,5"/>
-                        <ComboBox Style="{StaticResource DarkComboBox}"
-                                  Width="160"
-                                  ItemsSource="{Binding QualityOptions}"
-                                  SelectedItem="{Binding SelectedQuality}"/>
-                    </StackPanel>
- 
-                    <Button Grid.Column="3"
-                             Style="{StaticResource AccentButton}"
-                             Padding="24,12"
-                             VerticalAlignment="Bottom"
-                             ToolTip="开始批量下载"
-                             AutomationProperties.Name="开始批量下载"
-                             Command="{Binding StartBatchDownloadCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE945;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeBody}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                             <TextBlock Text="开始批量下载" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                </Grid>
- 
-                <StackPanel Margin="0,16,0,0">
-                    <TextBlock Text="播放列表链接" Style="{StaticResource TextCaption}" Margin="0,0,0,5"/>
-                    <Grid>
+
+                <TextBox Grid.Row="1" Style="{StaticResource DarkTextBox}"
+                         Background="{StaticResource BgInputBrush}"
+                         Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}"
+                          AcceptsReturn="True" TextWrapping="Wrap" Padding="12,8"
+                         VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FontFamilyMono}"
+                         FontSize="{StaticResource FontSizeBody}" AutomationProperties.Name="批量视频链接"/>
+
+                <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                    <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Grid Grid.Column="0">
-                            <TextBox Style="{StaticResource DarkTextBox}"
-                                     Text="{Binding PlaylistUrl, UpdateSourceTrigger=PropertyChanged}"
-                                     FontSize="{StaticResource FontSizeBody}"/>
-                            <TextBlock Text="粘贴播放列表 URL (例如 YouTube, Bilibili 列表)..." 
-                                       IsHitTestVisible="False"
-                                       Margin="12,8,12,8"
-                                       VerticalAlignment="Center">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBody}">
-                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Style.Triggers>
-                                            <DataTrigger Binding="{Binding PlaylistUrl}" Value="">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding PlaylistUrl}" Value="{x:Null}">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Grid>
-                        <Button Grid.Column="1"
-                                Style="{StaticResource SurfaceButton}"
-                                Margin="8,0,0,0"
-                                FontSize="{StaticResource FontSizeBody}"
-                                ToolTip="导入播放列表"
-                                AutomationProperties.Name="导入播放列表"
-                                Command="{Binding ImportPlaylistCommand}"
-                                IsEnabled="{Binding IsImportingPlaylist, Converter={StaticResource InverseBool}}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyph}"
-                                           FontSize="{StaticResource IconSizeSmall}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="导入播放列表" VerticalAlignment="Center"/>
-                            </StackPanel>
-                        </Button>
+                        <TextBlock Grid.Column="0" Margin="0,0,8,0" VerticalAlignment="Center"
+                                   Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis">
+                            <Run Text="每行一个链接 · "/><Run Text="{Binding LinkCount, Mode=OneWay}"/><Run Text=" 个有效链接"/>
+                        </TextBlock>
+                        <Button Grid.Column="1" Height="32" Padding="12,4"
+                                Style="{StaticResource SurfaceButton}" Command="{Binding PasteUrlsCommand}"
+                                Content="粘贴剪贴板"/>
                     </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="下载格式" Style="{StaticResource TextCaption}" Margin="0,0,0,4"/>
+                            <ComboBox Height="32" Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding FormatOptions}" SelectedItem="{Binding SelectedFormat}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="清晰度优先" Style="{StaticResource TextCaption}" Margin="0,0,0,4"/>
+                            <ComboBox Height="32" Style="{StaticResource DarkComboBox}"
+                                      ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding SelectedQuality}"/>
+                        </StackPanel>
+                    </Grid>
+                    <Button Height="36" Margin="0,12,0,0" Style="{StaticResource AccentButton}"
+                            Command="{Binding StartBatchDownloadCommand}" Content="解析并加入队列"/>
+
+                    <Border Height="1" Background="{StaticResource BorderSubtleBrush}" Margin="0,16,0,12"/>
+                    <TextBlock Text="播放列表 / 合集" Style="{StaticResource TextBodyStrong}" Margin="0,0,0,8"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Grid.Column="0" Height="32" Style="{StaticResource DarkTextBox}"
+                                 Background="{StaticResource BgInputBrush}" Padding="12,4"
+                                 VerticalContentAlignment="Center"
+                                 Text="{Binding PlaylistUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="粘贴 YouTube、Bilibili 等播放列表链接"/>
+                        <Button Grid.Column="2" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}"
+                                Command="{Binding ImportPlaylistCommand}" Content="导入"/>
+                    </Grid>
+                    <Border Height="40" Margin="0,8,0,0" Background="{StaticResource BgInputBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                            CornerRadius="5">
+                        <TextBlock Text="也可将 .txt 链接文件拖入此窗口" HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" Style="{StaticResource TextCaption}"/>
+                    </Border>
                 </StackPanel>
-            </StackPanel>
+            </Grid>
         </Border>
- 
-        <Grid Grid.Row="2">
+
+        <GridSplitter Grid.Column="1"
+                      Width="6"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch"
+                      Background="Transparent"
+                      Cursor="SizeWE"
+                      ResizeDirection="Columns"
+                      ResizeBehavior="PreviousAndNext"
+                      ShowsPreview="True"
+                      DragIncrement="2"
+                      KeyboardIncrement="16"
+                      Focusable="True"
+                      IsTabStop="True"
+                      ToolTip="拖动以调整输入面板宽度"
+                      AutomationProperties.Name="调整输入面板宽度">
+            <GridSplitter.Template>
+                <ControlTemplate TargetType="{x:Type GridSplitter}">
+                    <Grid Background="Transparent">
+                        <Border x:Name="DividerLine" Width="1" HorizontalAlignment="Center"
+                                Background="{StaticResource BorderSubtleBrush}"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="DividerLine" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Setter TargetName="DividerLine" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </GridSplitter.Template>
+        </GridSplitter>
+
+        <Grid Grid.Column="2" Margin="24,16,24,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
- 
+
             <Grid Grid.Row="0" Margin="0,0,0,12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <StackPanel Grid.Row="0" Orientation="Horizontal">
-                    <TextBlock Text="下载队列"
-                               Style="{StaticResource TextCardTitle}"
-                               VerticalAlignment="Center"/>
-                    <Border Background="{StaticResource BgSurfaceHighBrush}"
-                            CornerRadius="10"
-                            Padding="8,2"
-                            Margin="10,0,0,0"
-                            VerticalAlignment="Center">
-                        <TextBlock Text="{Binding QueueSummaryText, Mode=OneWay}"
-                                   Style="{StaticResource TextBody}"/>
-                    </Border>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <TextBlock Text="下载队列" Style="{StaticResource TextSection}"/>
+                    <TextBlock Text="{Binding QueueSummaryText}" Margin="0,4,0,0"
+                               Style="{StaticResource TextCaption}"
+                               TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding QueueSummaryText}"/>
                 </StackPanel>
-                <StackPanel Grid.Row="1"
-                            Orientation="Horizontal"
-                            HorizontalAlignment="Right"
-                            Margin="0,8,0,0">
-                    <Border Background="{StaticResource BgSurfaceBrush}"
-                            BorderBrush="{StaticResource BorderSubtleBrush}"
-                            BorderThickness="1"
-                            CornerRadius="8"
-                            Padding="3"
-                            Margin="0,0,10,0">
-                        <StackPanel Orientation="Horizontal">
-                            <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
-                                         Content="进行中"
-                                         IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=进行中}"
-                                         Command="{Binding SetQueueFilterCommand}" CommandParameter="进行中"/>
-                            <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
-                                         Margin="2,0,0,0"
-                                         Content="失败"
-                                         IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=失败}"
-                                         Command="{Binding SetQueueFilterCommand}" CommandParameter="失败"/>
-                            <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
-                                         Margin="2,0,0,0"
-                                         Content="已结束"
-                                         IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=已结束}"
-                                         Command="{Binding SetQueueFilterCommand}" CommandParameter="已结束"/>
-                            <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
-                                         Margin="2,0,0,0"
-                                         Content="全部"
-                                         IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=全部}"
-                                         Command="{Binding SetQueueFilterCommand}" CommandParameter="全部"/>
-                        </StackPanel>
-                    </Border>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="10,5"
-                            FontSize="{StaticResource FontSizeBody}"
-                            ToolTip="暂停全部任务"
-                            AutomationProperties.Name="暂停全部任务"
-                            Command="{Binding PauseAllCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE769;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="暂停全部" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="10,5"
-                            FontSize="{StaticResource FontSizeBody}"
-                            Margin="8,0,0,0"
-                            ToolTip="恢复全部暂停任务"
-                            AutomationProperties.Name="恢复全部暂停任务"
-                            Command="{Binding ResumeAllCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE768;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0"/>
-                            <TextBlock Text="恢复全部"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="10,5"
-                            FontSize="{StaticResource FontSizeBody}"
-                            Margin="8,0,0,0"
-                            ToolTip="重新下载全部失败任务"
-                            AutomationProperties.Name="重试全部失败任务"
-                            Command="{Binding RetryFailedCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0"/>
-                            <TextBlock Text="重试失败"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="10,5"
-                            FontSize="{StaticResource FontSizeBody}"
-                            Margin="8,0,0,0"
-                            ToolTip="停止所有未完成任务"
-                            AutomationProperties.Name="停止所有未完成任务"
-                            Command="{Binding CancelAllCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="停止未完成" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Button>
-                    <Button Style="{StaticResource SurfaceButton}"
-                            Padding="10,5"
-                            FontSize="{StaticResource FontSizeBody}"
-                            Margin="8,0,0,0"
-                            ToolTip="从队列移除已完成、失败和已取消任务"
-                            AutomationProperties.Name="清理已结束任务"
-                            Command="{Binding ClearFinishedCommand}">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}"
-                                       FontSize="{StaticResource IconSizeSmall}" Margin="0,0,5,0"/>
-                            <TextBlock Text="清理已结束" VerticalAlignment="Center"/>
-                        </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}"
+                            Command="{Binding PauseAllCommand}" Content="全部暂停"/>
+                    <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource SurfaceButton}"
+                            Command="{Binding ResumeAllCommand}" Content="全部恢复"/>
+                    <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource SurfaceButton}"
+                            Command="{Binding RetryFailedCommand}" Content="重试失败"/>
+                    <Button x:Name="OverflowButton" Width="32" Height="32" Padding="0" Margin="8,0,0,0"
+                            Style="{StaticResource ToolbarIconButton}" ToolTip="更多队列操作"
+                            AutomationProperties.Name="更多队列操作" Click="OverflowButton_Click">
+                        <Button.ContextMenu>
+                            <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                                <MenuItem Header="停止全部未完成任务" Command="{Binding CancelAllCommand}"/>
+                                <MenuItem Header="清理已结束任务" Command="{Binding ClearFinishedCommand}"/>
+                            </ContextMenu>
+                        </Button.ContextMenu>
+                        <TextBlock Text="&#xE712;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                     </Button>
                 </StackPanel>
             </Grid>
 
-            <Border Grid.Row="1"
-                    Style="{StaticResource ToolPanelBorder}"
-                    Padding="14,10"
-                    Margin="0,0,0,12"
-                    Visibility="{Binding HasQueueTasks, Converter={StaticResource BoolToVisibility}}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <StackPanel>
-                        <Grid Margin="0,0,0,7">
-                            <TextBlock Text="{Binding QueueSummaryText, Mode=OneWay}"
-                                       Style="{StaticResource TextBodyStrong}"/>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                <TextBlock Text="总进度 " Style="{StaticResource TextCaption}"/>
-                                <TextBlock Text="{Binding OverallProgressText, Mode=OneWay}"
-                                           Style="{StaticResource TextCaption}"
-                                           Foreground="{DynamicResource AccentBrush}"
-                                           FontWeight="{StaticResource FontWeightSemiBold}"/>
-                                <TextBlock Text="  ·  当前速度 " Style="{StaticResource TextCaption}"/>
-                                <TextBlock Text="{Binding AggregateSpeedText, Mode=OneWay}"
-                                           Style="{StaticResource TextCaption}"/>
-                            </StackPanel>
-                        </Grid>
-                        <ProgressBar Style="{StaticResource AccentProgressBar}"
-                                     Value="{Binding OverallProgress, Mode=OneWay}"
-                                     Maximum="100"
-                                     Height="6"/>
+            <Grid Grid.Row="1" Margin="0,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" HorizontalAlignment="Left" Background="{StaticResource BgSurfaceBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                        CornerRadius="6" Padding="4">
+                    <StackPanel Orientation="Horizontal">
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="全部"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=全部}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="全部"/><TextBlock Text="{Binding TotalTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="进行中"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=进行中}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="进行中"/><TextBlock Text="{Binding RunningTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="等待"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=等待}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="等待"/><TextBlock Text="{Binding WaitingTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="已暂停"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=已暂停}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="已暂停"/><TextBlock Text="{Binding PausedTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="失败"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=失败}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="失败"/><TextBlock Text="{Binding FailedTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="已完成"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=已完成}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="已完成"/><TextBlock Text="{Binding CompletedTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
                     </StackPanel>
-                </Grid>
-            </Border>
+                </Border>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Margin="0,8,0,0"
+                            Visibility="{Binding HasQueueTasks, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock Text="{Binding OverallProgressText}" Style="{StaticResource TextMono}" FontSize="{StaticResource FontSizeCaption}"/>
+                    <ProgressBar Width="112" Height="4" Margin="8,0,0,0" Maximum="100" Value="{Binding OverallProgress, Mode=OneWay}"/>
+                    <TextBlock Text="{Binding AggregateSpeedText}" Style="{StaticResource TextMono}"
+                               Foreground="{DynamicResource AccentBrush}" FontSize="{StaticResource FontSizeCaption}" Margin="12,0,0,0"/>
+                </StackPanel>
+            </Grid>
 
-            <Border Grid.Row="2"
-                    Style="{StaticResource ToolPanelBorder}"
-                    Padding="0"
-                    Background="Transparent"
-                    BorderThickness="0">
-                <Grid>
-                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,60,0,60">
-                        <StackPanel.Style>
-                            <Style TargetType="StackPanel">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                            <DataTrigger Binding="{Binding VisibleQueueTasks.Count}" Value="0">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </StackPanel.Style>
-                        <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}"
-                                   FontSize="{StaticResource IconSizeEmptyState}" Foreground="{StaticResource BorderPrimaryBrush}" HorizontalAlignment="Center"/>
-                        <TextBlock Text="{Binding EmptyQueueFilterText, Mode=OneWay}" Style="{StaticResource TextBodyStrong}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
-                        <TextBlock Text="可切换队列筛选，或在上方粘贴链接开始新的批量下载" Style="{StaticResource TextBody}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                    </StackPanel>
- 
-                    <ListBox ItemsSource="{Binding VisibleQueueTasks}"
-                             Background="Transparent"
-                             BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Padding" Value="0"/>
-                                <Setter Property="Margin" Value="0,0,0,10"/>
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="behaviors:Motion.PageEnter" Value="True"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="ListBoxItem">
-                                            <ContentPresenter/>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Border Style="{StaticResource ToolPanelBorder}"
-                                        Padding="0"
-                                        ClipToBounds="True">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="4"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
- 
-                                        <!-- 4px left status line -->
-                                        <Border Grid.Column="0" Width="4" HorizontalAlignment="Left">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="{StaticResource BorderPrimaryBrush}"/>
+            <Grid Grid.Row="2">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding VisibleQueueTasks.Count}" Value="0">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
+                    <TextBlock Text="&#xE896;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeEmptyState}"
+                               Foreground="{StaticResource TextDisabledBrush}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="{Binding EmptyQueueFilterText}" Margin="0,12,0,0"
+                               Style="{StaticResource TextBodyStrong}" HorizontalAlignment="Center"/>
+                    <TextBlock Text="在左侧粘贴链接或导入播放列表即可开始"
+                               Margin="0,4,0,0" Style="{StaticResource TextCaption}"/>
+                </StackPanel>
+
+                <ListBox x:Name="QueueList" ItemsSource="{Binding VisibleQueueTasks}" Background="Transparent" BorderThickness="0"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         ScrollViewer.CanContentScroll="True"
+                         VirtualizingPanel.IsVirtualizing="True"
+                         VirtualizingPanel.VirtualizationMode="Recycling">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Height" Value="68"/>
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="behaviors:Motion.PageEnter" Value="True"/>
+                            <Setter Property="Template">
+                                <Setter.Value><ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate></Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                                <Grid Margin="8,0,4,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20"/>
+                                        <ColumnDefinition Width="92"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="168"/>
+                                        <ColumnDefinition Width="120"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <Ellipse Grid.Column="0" Width="8" Height="8"
+                                             HorizontalAlignment="Left" VerticalAlignment="Center">
+                                        <Ellipse.Style>
+                                            <Style TargetType="Ellipse">
+                                                <Setter Property="Fill" Value="{StaticResource TextDisabledBrush}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Waiting"><Setter Property="Fill" Value="{StaticResource TextMutedBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Resolving"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Downloading"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Merging"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Paused"><Setter Property="Fill" Value="{StaticResource WarningBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Fill" Value="{StaticResource SuccessBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Fill" Value="{StaticResource ErrorBrush}"/></DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Ellipse.Style>
+                                    </Ellipse>
+
+                                    <Border Grid.Column="1" Width="80" Height="45"
+                                            HorizontalAlignment="Center" VerticalAlignment="Center"
+                                            Background="{StaticResource BgSurfaceHighestBrush}"
+                                            BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                                            CornerRadius="4" ClipToBounds="True">
+                                        <Grid ClipToBounds="True">
+                                            <TextBlock Text="&#xEC4F;" Style="{StaticResource IconGlyph}"
+                                                       FontSize="{StaticResource IconSizeLarge}"
+                                                       Foreground="{StaticResource TextDisabledBrush}"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            <Image Width="80" Height="45" Source="{Binding ThumbnailUrl}"
+                                                   Stretch="UniformToFill"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                                        </Grid>
+                                    </Border>
+
+                                    <Grid Grid.Column="2" Margin="0,8,12,8">
+                                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                        <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource TextBodyStrong}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <StackPanel Grid.Row="1" Margin="0,4,0,0" Orientation="Horizontal">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Waiting">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                                        <DataTrigger Binding="{Binding ErrorMessage}" Value="">
+                                                            <Setter Property="Visibility" Value="Visible"/>
                                                         </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Resolving">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Downloading">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Merging">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Completed">
-                                                            <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                            <Setter Property="Background" Value="{StaticResource ErrorBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding Status}" Value="Paused">
-                                                            <Setter Property="Background" Value="{StaticResource WarningBrush}"/>
+                                                        <DataTrigger Binding="{Binding ErrorMessage}" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Visible"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </Border.Style>
-                                        </Border>
- 
-                                        <!-- Card content -->
-                                        <Grid Grid.Column="1" Margin="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="112"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
- 
-                                            <Border Grid.Column="0"
-                                                    Width="96"
-                                                    Height="62"
-                                                    CornerRadius="7"
-                                                    Background="{StaticResource BgSurfaceHighestBrush}"
-                                                    ClipToBounds="True"
-                                                    HorizontalAlignment="Left">
-                                                <Image Source="{Binding ThumbnailUrl}"
-                                                       Stretch="UniformToFill"
-                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
-                                            </Border>
- 
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" MinWidth="0">
-                                                <DockPanel LastChildFill="True">
-                                                    <Border DockPanel.Dock="Right"
-                                                            Background="{DynamicResource AccentContainerBrush}"
-                                                            CornerRadius="4"
-                                                            Padding="6,2"
-                                                            Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}, FallbackValue=Collapsed}">
-                                                         <TextBlock Text="{Binding Platform}"
-                                                                    Style="{StaticResource TextCaption}"
-                                                                    Foreground="{DynamicResource AccentBrush}"/>
-                                                    </Border>
-                                                    <TextBlock Text="{Binding DisplayTitle}"
-                                                               Style="{StaticResource TextBodyStrong}"
-                                                               TextTrimming="CharacterEllipsis"/>
-                                                </DockPanel>
-                                                <Grid Margin="0,6,0,4">
-                                                    <TextBlock Style="{StaticResource TextCaption}">
-                                                        <Run Text="{Binding StatusText, Mode=OneWay}"/>
-                                                        <Run Text=" · "/>
-                                                        <Run Text="{Binding FileSizeText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                    <TextBlock HorizontalAlignment="Right" 
-                                                               Style="{StaticResource TextCaption}" 
-                                                               FontFamily="{StaticResource FontFamilyMono}"
-                                                               Foreground="{DynamicResource AccentBrush}">
-                                                        <Run Text="{Binding Progress, StringFormat={}{0:F0}, Mode=OneWay}"/>
-                                                        <Run Text="% · "/>
-                                                        <Run Text="{Binding SpeedText, Mode=OneWay}"/>
-                                                        <Run Text=" · ETA "/>
-                                                        <Run Text="{Binding EtaText, Mode=OneWay}"/>
-                                                    </TextBlock>
-                                                </Grid>
-                                                <ProgressBar Style="{StaticResource AccentProgressBar}"
-                                                             Value="{Binding Progress}"
-                                                             Maximum="100"
-                                                             Height="5"/>
-                                                <TextBlock Text="{Binding ErrorMessage}"
-                                                           Style="{StaticResource TextCaption}"
-                                                           Foreground="{StaticResource ErrorBrush}"
-                                                           Margin="0,5,0,0"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibility}}"/>
-                                            </StackPanel>
- 
-                                            <StackPanel Grid.Column="2"
-                                                        Orientation="Horizontal"
-                                                        VerticalAlignment="Center"
-                                                        Margin="16,0,0,0">
-                                                <Button ToolTip="打开任务文件夹"
-                                                        AutomationProperties.Name="打开任务文件夹"
-                                                        Padding="8,5"
-                                                        FontSize="{StaticResource FontSizeCaption}"
-                                                        Margin="0,0,4,0"
-                                                        Command="{Binding DataContext.OpenTaskFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Id}">
-                                                    <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                                                </Button>
-                                                <Button ToolTip="暂停"
-                                                        AutomationProperties.Name="暂停任务"
-                                                        Padding="8,5"
-                                                        FontSize="{StaticResource FontSizeCaption}"
-                                                        Margin="0,0,4,0"
-                                                        Command="{Binding DataContext.PauseTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Id}">
-                                                    <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Downloading">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Button.Style>
-                                                    <TextBlock Text="&#xE769;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                                                </Button>
-                                                <Button ToolTip="恢复"
-                                                        AutomationProperties.Name="恢复任务"
-                                                        Padding="8,5"
-                                                        FontSize="{StaticResource FontSizeCaption}"
-                                                        Margin="0,0,4,0"
-                                                        Command="{Binding DataContext.ResumeTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Id}">
-                                                    <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Paused">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Button.Style>
-                                                    <TextBlock Text="&#xE768;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                                                </Button>
-                                                <Button ToolTip="重试"
-                                                        AutomationProperties.Name="重试任务"
-                                                        Padding="8,5"
-                                                        FontSize="{StaticResource FontSizeCaption}"
-                                                        Margin="0,0,4,0"
-                                                        Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        CommandParameter="{Binding Id}">
-                                                    <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                 <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                                     <Setter Property="Visibility" Value="Visible"/>
-                                                                 </DataTrigger>
-                                                                 <DataTrigger Binding="{Binding Status}" Value="Cancelled">
-                                                                     <Setter Property="Visibility" Value="Visible"/>
-                                                                 </DataTrigger>
-                                                             </Style.Triggers>
-                                                         </Style>
-                                                    </Button.Style>
-                                                    <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                                                </Button>
-                                                <Button ToolTip="停止任务；已结束任务将从队列移除"
-                                                        AutomationProperties.Name="停止或移出队列"
-                                                        Padding="8,5"
-                                                        FontSize="{StaticResource FontSizeCaption}"
-                                                        behaviors:Motion.AnimateRemove="True"
-                                                        behaviors:Motion.RemoveCommand="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                        behaviors:Motion.RemoveParameter="{Binding Id}">
-                                                    <Button.Style>
-                                                        <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Waiting">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Resolving">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Downloading">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Merging">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Paused">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Failed">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Completed">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding Status}" Value="Cancelled">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Button.Style>
-                                                    <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                                                </Button>
-                                            </StackPanel>
-                                        </Grid>
+                                            </StackPanel.Style>
+                                            <TextBlock Text="{Binding Platform, Mode=OneWay}" Style="{StaticResource TextCaption}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}}"/>
+                                            <TextBlock Text=" · " Style="{StaticResource TextCaption}"
+                                                       Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}}"/>
+                                            <TextBlock Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis">
+                                                <Run Text="{Binding Quality, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding FileSizeText, Mode=OneWay}"/>
+                                            </TextBlock>
+                                        </StackPanel>
+                                        <TextBlock Grid.Row="1" Text="{Binding ErrorMessage}" Margin="0,4,0,0"
+                                                   Style="{StaticResource TextCaption}"
+                                                   Foreground="{StaticResource ErrorBrush}" TextTrimming="CharacterEllipsis"
+                                                   Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibility}}"/>
                                     </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-            </Border>
+
+                                    <Grid Grid.Column="3" Margin="0,8,16,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="44"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="18"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Paused"><Setter Property="Foreground" Value="{StaticResource WarningBrush}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                            <Run Text="{Binding StatusText, Mode=OneWay}"/>
+                                        </TextBlock>
+                                        <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                   Style="{StaticResource TextCaption}"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   Typography.NumeralAlignment="Tabular">
+                                            <Run Text="{Binding Progress, Mode=OneWay, StringFormat={}{0:F0}}"/><Run Text="%"/>
+                                        </TextBlock>
+                                        <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="4"
+                                                     HorizontalAlignment="Stretch"
+                                                     Maximum="100" Value="{Binding Progress}"
+                                                     VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <StackPanel Grid.Column="4" Orientation="Horizontal"
+                                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                                        <Button Height="32" Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                Command="{Binding DataContext.OpenTaskFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Id}" Content="打开位置">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Height="32" Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                Command="{Binding DataContext.PauseTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Id}" Content="暂停">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Status}" Value="Downloading"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Height="32" Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                Command="{Binding DataContext.ResumeTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Id}" Content="继续">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers><DataTrigger Binding="{Binding Status}" Value="Paused"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Height="32" Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                Foreground="{DynamicResource AccentBrush}"
+                                                Command="{Binding DataContext.RetryTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                CommandParameter="{Binding Id}" Content="重试">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Cancelled"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                        <Button Height="32" Padding="8,4" Background="Transparent" BorderThickness="0"
+                                                Foreground="{StaticResource ErrorBrush}"
+                                                behaviors:Motion.AnimateRemove="True"
+                                                behaviors:Motion.RemoveCommand="{Binding DataContext.CancelTaskCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                behaviors:Motion.RemoveParameter="{Binding Id}">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+                                                    <Setter Property="Content" Value="取消"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Content" Value="移除"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Content" Value="移除"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Cancelled"><Setter Property="Content" Value="移除"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Grid>
         </Grid>
- 
-        <Border Grid.Row="3"
-                BorderBrush="{StaticResource BorderSubtleBrush}"
-                BorderThickness="0,1,0,0"
-                Padding="0,12,0,12"
-                VerticalAlignment="Center">
-            <DockPanel>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding DataContext.AppVersion, RelativeSource={RelativeSource AncestorType=Window}}" 
-                               Style="{StaticResource TextBody}"
-                               FontWeight="{StaticResource FontWeightSemiBold}"/>
-                    <TextBlock Text="  ·  "
-                               Style="{StaticResource TextBody}"/>
-                    <TextBlock Text="{Binding QueueSummaryText, Mode=OneWay}"
-                               Style="{StaticResource TextBody}"
-                               FontWeight="{StaticResource FontWeightSemiBold}"/>
-                    <TextBlock Text="  ·  " Style="{StaticResource TextBody}"/>
-                    <TextBlock Text="{Binding AggregateSpeedText, Mode=OneWay}"
-                               Style="{StaticResource TextBody}"
-                               FontFamily="{StaticResource FontFamilyMono}"
-                               Foreground="{DynamicResource AccentBrush}"/>
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <Ellipse Width="7" Height="7" Fill="{DynamicResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding DataContext.ToolStatusText, RelativeSource={RelativeSource AncestorType=Window}}" 
-                               Style="{StaticResource TextBody}"/>
-                </StackPanel>
-            </DockPanel>
+
+        <Border x:Name="DragDropOverlay" Grid.ColumnSpan="3" Margin="8"
+                Background="{StaticResource ScrimHeavyBrush}" BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="2" CornerRadius="8" Opacity="0" Visibility="Collapsed"
+                IsHitTestVisible="False" Panel.ZIndex="100">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <TextBlock Text="&#xE78A;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeEmptyState}"
+                           Foreground="{DynamicResource AccentBrush}"/>
+                <TextBlock Text="释放以导入链接文本或 .txt 文件" Margin="0,12,0,0"
+                           Style="{StaticResource TextSection}"/>
+            </StackPanel>
         </Border>
     </Grid>
 </UserControl>

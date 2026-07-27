@@ -48,6 +48,10 @@ Desktop.ini
 logs/
 
 ## Download/test artifacts
+.playwright-cli/
+Designer/*.html
+output/
+test_*/
 *.mp4
 *.webm
 *.part

@@ -34,6 +34,20 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task SaveAndReload_PreservesClipboardMonitoringPreference()
+    {
+        var service = new ConfigService(_tempDir);
+        service.Config.ClipboardMonitoringEnabled = false;
+
+        Assert.True(await service.SaveAsync());
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        Assert.False(reloaded.Config.ClipboardMonitoringEnabled);
+    }
+
+    [Fact]
     public async Task LoadAsync_PrefersVersionedBackupWhenLegacyProcessOverwritesPrimary()
     {
         Directory.CreateDirectory(_tempDir);

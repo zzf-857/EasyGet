@@ -246,6 +246,20 @@ public class EqualsToBoolConverter : IValueConverter
     }
 }
 
+/// <summary>
+/// 对象值与参数相等时显示，否则折叠。
+/// </summary>
+public class EqualsToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value?.ToString() == parameter?.ToString()
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        => Binding.DoNothing;
+}
+
 file static class ConverterBrushFactory
 {
     public static Brush Create(byte red, byte green, byte blue)

@@ -3,9 +3,11 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using Microsoft.Extensions.DependencyInjection;
 using EasyGet.Services;
 using EasyGet.ViewModels;
+using EasyGet.Views;
 
 namespace EasyGet;
 
@@ -40,6 +42,8 @@ public partial class MainWindow : Window
 
         Activated += MainWindow_Activated;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
+        SizeChanged += (_, _) => _viewModel.IsCompactLayout = ActualWidth < 1280;
+        _viewModel.IsCompactLayout = Width < 1280;
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -106,6 +110,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (Keyboard.Modifiers == ModifierKeys.Control
+            && e.Key == Key.F
+            && _viewModel.SelectedNavIndex == 2)
+        {
+            FindVisualChild<HistoryView>(this)?.FocusSearch();
+            e.Handled = true;
+            return;
+        }
+
         // 2. Escape
         if (e.Key == Key.Escape)
         {
@@ -119,6 +132,14 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (_viewModel.SelectedNavIndex == 2
+                && _viewModel.HistoryVM.ClearSelectionCommand.CanExecute(null))
+            {
+                _viewModel.HistoryVM.ClearSelectionCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
             if (_viewModel.Notifications.Count > 0)
             {
                 if (_viewModel.DismissNotificationCommand.CanExecute(null))
@@ -128,6 +149,27 @@ public partial class MainWindow : Window
                 e.Handled = true;
                 return;
             }
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None
+            && _viewModel.SelectedNavIndex == 1
+            && e.Key is Key.Space or Key.Delete
+            && Keyboard.FocusedElement is not System.Windows.Controls.TextBox
+            && FindVisualChild<BatchDownloadView>(this)?.TryHandleQueueShortcut(e.Key) == true)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (Keyboard.Modifiers == ModifierKeys.None
+            && _viewModel.SelectedNavIndex == 2
+            && e.Key == Key.Delete
+            && Keyboard.FocusedElement is not System.Windows.Controls.TextBox
+            && _viewModel.HistoryVM.DeleteSelectedCommand.CanExecute(null))
+        {
+            _viewModel.HistoryVM.DeleteSelectedCommand.Execute(null);
+            e.Handled = true;
+            return;
         }
 
         // 3. Ctrl + V (when focus is NOT in a TextBox)
@@ -188,7 +230,8 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (_viewModel.SelectedNavIndex == 0 && System.Windows.Clipboard.ContainsText())
+            if (_viewModel.SettingsVM.ClipboardMonitoringEnabled
+                && System.Windows.Clipboard.ContainsText())
             {
                 var text = System.Windows.Clipboard.GetText();
                 _viewModel.DownloadVM.CheckClipboardAndPrompt(text);
@@ -202,6 +245,23 @@ public partial class MainWindow : Window
         {
             // General safety net
         }
+    }
+
+    private static T? FindVisualChild<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+        {
+            var child = VisualTreeHelper.GetChild(root, index);
+            if (child is T match)
+                return match;
+
+            var descendant = FindVisualChild<T>(child);
+            if (descendant is not null)
+                return descendant;
+        }
+
+        return null;
     }
 
     private void TryEnableDarkSystemTitleBar()

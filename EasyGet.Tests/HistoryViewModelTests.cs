@@ -10,6 +10,199 @@ namespace EasyGet.Tests;
 public class HistoryViewModelTests
 {
     [Fact]
+    public async Task EnsureHistoryLoadedAsync_ReusesTheSuccessfulInitialLoad()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            var scheduler = new ManualHistoryUpdateScheduler();
+            var viewModel = CreateHistoryViewModel(service, scheduler);
+            var firstHistory = new DownloadHistory
+            {
+                Url = "https://example.com/one",
+                Title = "one",
+                DownloadTime = new DateTime(2026, 7, 28, 12, 0, 0)
+            };
+
+            await service.AddAsync(firstHistory);
+
+            Assert.Equal(0, scheduler.Count);
+
+            await viewModel.EnsureHistoryLoadedAsync();
+            var initiallyLoadedItem = Assert.Single(viewModel.HistoryItems);
+            Assert.Equal(firstHistory.Id, initiallyLoadedItem.Id);
+            Assert.True(initiallyLoadedItem.IsRecentlyCompleted);
+            Assert.Equal(1, scheduler.Count);
+
+            await viewModel.EnsureHistoryLoadedAsync();
+
+            Assert.Same(initiallyLoadedItem, Assert.Single(viewModel.HistoryItems));
+
+            await scheduler.RunNextAsync();
+
+            Assert.Same(initiallyLoadedItem, Assert.Single(viewModel.HistoryItems));
+
+            var secondHistory = new DownloadHistory
+            {
+                Url = "https://example.com/two",
+                Title = "two",
+                DownloadTime = new DateTime(2026, 7, 28, 12, 1, 0)
+            };
+            await service.AddAsync(secondHistory);
+
+            Assert.Equal(1, scheduler.Count);
+            await viewModel.EnsureHistoryLoadedAsync();
+
+            Assert.Same(initiallyLoadedItem, Assert.Single(viewModel.HistoryItems));
+
+            await scheduler.RunNextAsync();
+
+            Assert.Equal(2, viewModel.HistoryItems.Count);
+            Assert.Contains(initiallyLoadedItem, viewModel.HistoryItems);
+            Assert.Equal(secondHistory.Id, viewModel.HistoryItems[0].Id);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task HistoryAdded_CoalescesUpdatesAndKeepsRecentBatchStateAcrossReload()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            var downloadTime = new DateTime(2026, 7, 28, 12, 0, 0);
+            var existingHistory = new DownloadHistory
+            {
+                Url = "https://example.com/existing",
+                Title = "existing",
+                Format = "mp4",
+                DownloadTime = downloadTime
+            };
+            await service.AddAsync(existingHistory);
+            var scheduler = new ManualHistoryUpdateScheduler();
+            var viewModel = CreateHistoryViewModel(service, scheduler);
+            await viewModel.LoadHistory();
+            var initiallyLoadedItem = Assert.Single(viewModel.HistoryItems);
+
+            var firstBatchHistory = new DownloadHistory
+            {
+                Url = "https://example.com/batch/one",
+                Title = "batch one",
+                Format = "mp4",
+                BatchId = "recent-batch",
+                BatchName = "最近完成批次",
+                BatchDirectory = @"D:\Videos\recent-batch",
+                DownloadTime = downloadTime
+            };
+            var secondBatchHistory = new DownloadHistory
+            {
+                Url = "https://example.com/batch/two",
+                Title = "batch two",
+                Format = "mp4",
+                BatchId = "recent-batch",
+                BatchName = "最近完成批次",
+                BatchDirectory = @"D:\Videos\recent-batch",
+                DownloadTime = downloadTime
+            };
+
+            await Task.Run(() => service.AddAsync(firstBatchHistory));
+            await Task.Run(() => service.AddAsync(secondBatchHistory));
+
+            Assert.Equal(1, scheduler.Count);
+            Assert.Same(initiallyLoadedItem, Assert.Single(viewModel.HistoryItems));
+
+            await scheduler.RunNextAsync();
+
+            Assert.Equal(3, viewModel.TotalHistoryCount);
+            Assert.Equal(3, viewModel.UnfiledHistoryCount);
+            Assert.Equal(
+                new[] { secondBatchHistory.Id, firstBatchHistory.Id, existingHistory.Id },
+                viewModel.HistoryItems.Select(item => item.Id));
+            Assert.False(viewModel.HistoryItems.Single(item => item.Id == existingHistory.Id).IsRecentlyCompleted);
+            Assert.All(
+                viewModel.HistoryItems.Where(item => item.Id != existingHistory.Id),
+                item => Assert.True(item.IsRecentlyCompleted));
+
+            var batch = Assert.Single(viewModel.BatchFolderCards);
+            Assert.True(batch.HasRecentCompletion);
+            Assert.Equal(2, batch.ItemCount);
+
+            viewModel.SelectBatchFolderCommand.Execute(batch);
+
+            Assert.True(Assert.Single(viewModel.HistoryGroups).HasRecentCompletion);
+
+            await viewModel.LoadHistory();
+
+            Assert.Equal(
+                new[] { secondBatchHistory.Id, firstBatchHistory.Id, existingHistory.Id },
+                viewModel.HistoryItems.Select(item => item.Id));
+            Assert.False(viewModel.HistoryItems.Single(item => item.Id == existingHistory.Id).IsRecentlyCompleted);
+            Assert.All(
+                viewModel.HistoryItems.Where(item => item.Id != existingHistory.Id),
+                item => Assert.True(item.IsRecentlyCompleted));
+            Assert.True(Assert.Single(viewModel.BatchFolderCards).HasRecentCompletion);
+            Assert.True(Assert.Single(viewModel.HistoryGroups).HasRecentCompletion);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task HistoryAdded_WhenSearchDoesNotMatch_UpdatesCountsWithoutChangingVisibleItems()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/visible",
+                Title = "needle result",
+                Platform = "Example",
+                Format = "mp4",
+                DownloadTime = new DateTime(2026, 7, 28, 12, 0, 0)
+            });
+            var scheduler = new ManualHistoryUpdateScheduler();
+            var viewModel = CreateHistoryViewModel(service, scheduler);
+            viewModel.SearchKeyword = "needle";
+            await viewModel.LoadAllHistoryForWorkspace();
+            await viewModel.LoadHistory();
+            var visibleHistory = Assert.Single(viewModel.HistoryItems);
+
+            var hiddenHistory = new DownloadHistory
+            {
+                Url = "https://example.com/hidden",
+                Title = "unrelated result",
+                Platform = "Other",
+                Format = "mp4",
+                BatchName = "another batch",
+                DownloadTime = new DateTime(2026, 7, 28, 12, 1, 0)
+            };
+            await service.AddAsync(hiddenHistory);
+
+            Assert.Equal(1, scheduler.Count);
+            await scheduler.RunNextAsync();
+
+            Assert.Equal(2, viewModel.TotalHistoryCount);
+            Assert.Equal(2, viewModel.UnfiledHistoryCount);
+            Assert.Same(visibleHistory, Assert.Single(viewModel.HistoryItems));
+            Assert.Equal(1, viewModel.VisibleHistoryCount);
+            Assert.DoesNotContain(viewModel.HistoryItems, item => item.Id == hiddenHistory.Id);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task ReloadHistory_RebindsBulkTargetToTheRefreshedFolderCollection()
     {
         var dbPath = CreateTempDatabasePath();
@@ -738,6 +931,10 @@ public class HistoryViewModelTests
             await viewModel.LoadHistory();
 
             Assert.Equal(3, viewModel.HistoryItems.Count);
+            Assert.Equal("全部下载", viewModel.SelectedFolderTitle);
+            Assert.True(viewModel.IsShowingAllFolders);
+            Assert.Equal("3", viewModel.CurrentLocationFileCountText);
+            Assert.Equal("3 KB", viewModel.CurrentLocationSizeText);
             var batch = Assert.Single(viewModel.BatchFolderCards);
             var standalone = Assert.Single(viewModel.HistoryGroups);
             var standaloneRow = Assert.Single(viewModel.HistoryCardRows);
@@ -768,6 +965,11 @@ public class HistoryViewModelTests
 
             viewModel.SelectBatchFolderCommand.Execute(batch);
             Assert.Equal(batch.Key, viewModel.SelectedBatchKey);
+            Assert.False(viewModel.IsShowingAllFolders);
+            Assert.Equal(batch.Name, viewModel.SelectedFolderTitle);
+            Assert.Equal(@"D:\Videos\collection", viewModel.CurrentLocationPathText);
+            Assert.Equal("2", viewModel.CurrentLocationFileCountText);
+            Assert.Equal("3 KB", viewModel.CurrentLocationSizeText);
             Assert.Equal(2, viewModel.VisibleHistoryCount);
             var openedBatch = Assert.Single(viewModel.HistoryGroups);
             var openedBatchRow = Assert.Single(viewModel.HistoryCardRows);
@@ -782,6 +984,7 @@ public class HistoryViewModelTests
 
             viewModel.ReturnToHistoryRootCommand.Execute(null);
             Assert.Null(viewModel.SelectedBatchKey);
+            Assert.True(viewModel.IsShowingAllFolders);
             Assert.Equal(3, viewModel.VisibleHistoryCount);
             Assert.False(Assert.Single(viewModel.HistoryGroups).IsBatch);
 
@@ -1087,6 +1290,48 @@ public class HistoryViewModelTests
 
         Assert.Contains("_startProcess(CreateOpenFolderStartInfo(filePath));", openFolderSource, StringComparison.Ordinal);
         Assert.DoesNotContain("Process.Start", openFolderSource, StringComparison.Ordinal);
+    }
+
+    private static HistoryViewModel CreateHistoryViewModel(
+        HistoryService service,
+        ManualHistoryUpdateScheduler scheduler)
+        => new(
+            service,
+            new TestConfigService(),
+            static _ => { },
+            scheduler.Schedule);
+
+    private sealed class ManualHistoryUpdateScheduler
+    {
+        private readonly object _gate = new();
+        private readonly Queue<Func<Task>> _updates = new();
+
+        public int Count
+        {
+            get
+            {
+                lock (_gate)
+                    return _updates.Count;
+            }
+        }
+
+        public void Schedule(Func<Task> update)
+        {
+            lock (_gate)
+                _updates.Enqueue(update);
+        }
+
+        public async Task RunNextAsync()
+        {
+            Func<Task> update;
+            lock (_gate)
+            {
+                Assert.NotEmpty(_updates);
+                update = _updates.Dequeue();
+            }
+
+            await update();
+        }
     }
 
     private static string CreateTempDatabasePath()

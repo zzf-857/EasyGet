@@ -117,8 +117,10 @@ public sealed class BrowserCookieLoginDetector : IBrowserCookieLoginDetector
         var cacheKey = new ProfileCacheKey(profile.StableId, platformSignature);
         if (_cache.TryGetValue(cacheKey, out var cached)
             && cached.LastActivityUtc == profile.LastActivityUtc
-            && (cached.Result.WasReadable
-                || DateTime.UtcNow - cached.CapturedUtc < UnreadableCacheDuration))
+            && ((cached.Result.WasReadable
+                 && cached.Result.AuthenticatedPlatformStorageKeys.Count == platforms.Count)
+                || (!cached.Result.WasReadable
+                    && DateTime.UtcNow - cached.CapturedUtc < UnreadableCacheDuration)))
         {
             return cached.Result;
         }

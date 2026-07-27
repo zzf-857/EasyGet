@@ -19,11 +19,11 @@ public static class ThemeManager
     public static readonly List<ThemePalette> Palettes = new()
     {
         // Keep the legacy "Indigo" key so existing user configuration migrates without reset.
-        new ThemePalette { Name = "Indigo", DisplayName = "系统蓝 (默认)", AccentColor = "#0A84FF", AccentContainerColor = "#112A43", GradientStartColor = "#0A84FF", GradientEndColor = "#64D2FF" },
-        new ThemePalette { Name = "Teal", DisplayName = "极光青", AccentColor = "#2DD4BF", AccentContainerColor = "#0D2D27", GradientStartColor = "#2DD4BF", GradientEndColor = "#34D399" },
-        new ThemePalette { Name = "Rose", DisplayName = "玫瑰粉", AccentColor = "#FB7185", AccentContainerColor = "#3C161E", GradientStartColor = "#FB7185", GradientEndColor = "#F43F5E" },
-        new ThemePalette { Name = "Amber", DisplayName = "琥珀金", AccentColor = "#FBBF24", AccentContainerColor = "#382A0F", GradientStartColor = "#FBBF24", GradientEndColor = "#F97316" },
-        new ThemePalette { Name = "Blue", DisplayName = "经典浅蓝", AccentColor = "#60CDFF", AccentContainerColor = "#1A4250", GradientStartColor = "#89B4FA", GradientEndColor = "#74C7EC" }
+        new ThemePalette { Name = "Indigo", DisplayName = "工作台蓝 (默认)", AccentColor = "#5B9CFF", AccentContainerColor = "#203653", GradientStartColor = "#5B9CFF", GradientEndColor = "#5B9CFF" },
+        new ThemePalette { Name = "Teal", DisplayName = "清透青", AccentColor = "#38BFCE", AccentContainerColor = "#173A40", GradientStartColor = "#38BFCE", GradientEndColor = "#38BFCE" },
+        new ThemePalette { Name = "Rose", DisplayName = "柔和粉", AccentColor = "#E37FB4", AccentContainerColor = "#42273A", GradientStartColor = "#E37FB4", GradientEndColor = "#E37FB4" },
+        new ThemePalette { Name = "Amber", DisplayName = "琥珀金", AccentColor = "#DFA23F", AccentContainerColor = "#42331B", GradientStartColor = "#DFA23F", GradientEndColor = "#DFA23F" },
+        new ThemePalette { Name = "Blue", DisplayName = "工作台蓝", AccentColor = "#5B9CFF", AccentContainerColor = "#203653", GradientStartColor = "#5B9CFF", GradientEndColor = "#5B9CFF" }
     };
 
     public static void ApplyTheme(string? name)

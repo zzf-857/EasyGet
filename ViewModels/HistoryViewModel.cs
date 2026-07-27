@@ -19,8 +19,16 @@ public partial class HistoryViewModel : ObservableObject
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly Action<ProcessStartInfo> _startProcess;
+    private readonly Action<Func<Task>> _scheduleHistoryUpdate;
     private readonly SemaphoreSlim _historyLoadSemaphore = new(1, 1);
+    private readonly object _initialHistoryLoadGate = new();
+    private readonly object _historyAddedGate = new();
+    private readonly Dictionary<long, DownloadHistory> _pendingHistoryAdded = [];
+    private readonly HashSet<long> _recentlyCompletedHistoryIds = [];
     private CancellationTokenSource? _searchCts;
+    private Task? _initialHistoryLoadTask;
+    private bool _hasLoadedHistory;
+    private bool _historyAddedDrainScheduled;
     private int _historyLoadRequestVersion;
     private bool _suppressSelectionRefresh;
     private bool _suppressLocationRefresh;
@@ -45,6 +53,7 @@ public partial class HistoryViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
     [NotifyPropertyChangedFor(nameof(IsAtHistoryRoot))]
     [NotifyPropertyChangedFor(nameof(HasActiveLocation))]
+    [NotifyPropertyChangedFor(nameof(IsShowingAllFolders))]
     [NotifyPropertyChangedFor(nameof(SelectedFolderTitle))]
     private string? _selectedBatchKey;
 
@@ -61,7 +70,7 @@ public partial class HistoryViewModel : ObservableObject
            || SelectedFolderId is not null
            || !string.IsNullOrWhiteSpace(SelectedBatchKey);
 
-    public bool IsShowingAllFolders => SelectedFolderId is null;
+    public bool IsShowingAllFolders => IsAtHistoryRoot;
     public bool IsShowingUnfiled => SelectedFolderId == 0;
     public bool IsAtHistoryRoot => SelectedFolderId is null && string.IsNullOrWhiteSpace(SelectedBatchKey);
     public bool HasActiveLocation => !IsAtHistoryRoot;
@@ -97,12 +106,16 @@ public partial class HistoryViewModel : ObservableObject
             ? BatchFolderCards.FirstOrDefault(group => group.Key == SelectedBatchKey)?.Name ?? "批量文件夹"
             : SelectedFolderId switch
             {
-                null => "历史首页",
+                null => "全部下载",
                 0 => "未整理",
                 _ => HistoryFolders.FirstOrDefault(folder => folder.Id == SelectedFolderId)?.Name ?? "整理文件夹"
             };
     public string WorkspaceSummaryText
         => $"{HistoryFolders.Count} 个自定义文件夹 · {BatchFolderCards.Count} 个批量文件夹";
+    public string CurrentLocationPathText => ResolveCurrentLocationPath();
+    public string CurrentLocationFileCountText => GetCurrentLocationSummaryItems().Count.ToString("N0");
+    public string CurrentLocationSizeText
+        => ByteSizeFormatter.FormatClampZero(SumFileSizes(GetCurrentLocationSummaryItems()));
 
     [ObservableProperty] private int _totalHistoryCount;
     [ObservableProperty] private string _storageStatusText = "磁盘空间获取中";
@@ -191,12 +204,219 @@ public partial class HistoryViewModel : ObservableObject
     {
     }
 
-    internal HistoryViewModel(HistoryService historyService, ConfigService configService, Action<ProcessStartInfo> startProcess)
+    internal HistoryViewModel(
+        HistoryService historyService,
+        ConfigService configService,
+        Action<ProcessStartInfo> startProcess,
+        Action<Func<Task>>? scheduleHistoryUpdate = null)
     {
         _historyService = historyService;
         _configService = configService;
         _startProcess = startProcess;
+        _scheduleHistoryUpdate = scheduleHistoryUpdate ?? ScheduleHistoryUpdate;
+        _historyService.HistoryAdded += OnHistoryAdded;
     }
+
+    private static void ScheduleHistoryUpdate(Func<Task> update)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null)
+        {
+            _ = dispatcher.InvokeAsync(() => RunHistoryUpdateSafelyAsync(update));
+            return;
+        }
+
+        _ = Task.Run(() => RunHistoryUpdateSafelyAsync(update));
+    }
+
+    private static async Task RunHistoryUpdateSafelyAsync(Func<Task> update)
+    {
+        try
+        {
+            await update();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[HistoryViewModel] Incremental history update failed: {ex.Message}");
+        }
+    }
+
+    private void OnHistoryAdded(DownloadHistory history)
+    {
+        if (history.Id <= 0)
+            return;
+
+        lock (_historyAddedGate)
+        {
+            _pendingHistoryAdded[history.Id] = history;
+            _recentlyCompletedHistoryIds.Add(history.Id);
+        }
+
+        SchedulePendingHistoryAdded();
+    }
+
+    private void SchedulePendingHistoryAdded()
+    {
+        var shouldSchedule = false;
+        lock (_historyAddedGate)
+        {
+            if (Volatile.Read(ref _hasLoadedHistory)
+                && _pendingHistoryAdded.Count > 0
+                && !_historyAddedDrainScheduled)
+            {
+                _historyAddedDrainScheduled = true;
+                shouldSchedule = true;
+            }
+        }
+
+        if (!shouldSchedule)
+            return;
+
+        try
+        {
+            _scheduleHistoryUpdate(DrainPendingHistoryAddedAsync);
+        }
+        catch
+        {
+            lock (_historyAddedGate)
+                _historyAddedDrainScheduled = false;
+            throw;
+        }
+    }
+
+    private async Task DrainPendingHistoryAddedAsync()
+    {
+        try
+        {
+            while (await ApplyPendingHistoryAddedAsync())
+            {
+            }
+        }
+        finally
+        {
+            var shouldReschedule = false;
+            lock (_historyAddedGate)
+            {
+                _historyAddedDrainScheduled = false;
+                if (Volatile.Read(ref _hasLoadedHistory) && _pendingHistoryAdded.Count > 0)
+                {
+                    _historyAddedDrainScheduled = true;
+                    shouldReschedule = true;
+                }
+            }
+
+            if (shouldReschedule)
+                _scheduleHistoryUpdate(DrainPendingHistoryAddedAsync);
+        }
+    }
+
+    private async Task<bool> ApplyPendingHistoryAddedAsync()
+    {
+        await _historyLoadSemaphore.WaitAsync();
+        try
+        {
+            List<DownloadHistory> pendingItems;
+            lock (_historyAddedGate)
+            {
+                if (_pendingHistoryAdded.Count == 0)
+                    return false;
+
+                pendingItems = _pendingHistoryAdded.Values.ToList();
+                _pendingHistoryAdded.Clear();
+            }
+
+            TotalHistoryCount = await _historyService.GetCountAsync();
+            UnfiledHistoryCount = await _historyService.GetUnfiledCountAsync();
+            var folders = await _historyService.GetFoldersAsync();
+            var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
+
+            foreach (var folder in HistoryFolders)
+            {
+                var refreshedFolder = folders.FirstOrDefault(candidate => candidate.Id == folder.Id);
+                if (refreshedFolder is not null)
+                    folder.ItemCount = refreshedFolder.ItemCount;
+            }
+
+            var existingIds = HistoryItems.Select(item => item.Id).ToHashSet();
+            var candidates = pendingItems
+                .Where(item => item.Id > 0 && !existingIds.Contains(item.Id))
+                .GroupBy(item => item.Id)
+                .Select(group => group.Last())
+                .ToList();
+            var enrichedItems = await Task.Run(() => candidates
+                .Select(EnrichHistoryItem)
+                .ToList());
+
+            var shouldRebuild = false;
+            foreach (var pendingItem in pendingItems)
+            {
+                var existingItem = HistoryItems.FirstOrDefault(item => item.Id == pendingItem.Id);
+                if (existingItem is null || existingItem.IsRecentlyCompleted)
+                    continue;
+
+                existingItem.IsRecentlyCompleted = true;
+                shouldRebuild = true;
+            }
+
+            foreach (var result in enrichedItems)
+            {
+                if (!MatchesCurrentHistoryQuery(result.Item)
+                    || HistoryItems.Any(item => item.Id == result.Item.Id))
+                {
+                    continue;
+                }
+
+                ApplyHistoryItemEnrichment(result, folderNames);
+                result.Item.IsRecentlyCompleted = true;
+                result.Item.PropertyChanged += OnHistoryItemPropertyChanged;
+                HistoryItems.Add(result.Item);
+                shouldRebuild = true;
+            }
+
+            if (shouldRebuild)
+            {
+                var orderedItems = HistoryItems
+                    .GroupBy(item => item.Id)
+                    .Select(group => group.First())
+                    .OrderByDescending(item => item.DownloadTime)
+                    .ThenByDescending(item => item.Id)
+                    .ToList();
+                HistoryItems.Clear();
+                foreach (var item in orderedItems)
+                    HistoryItems.Add(item);
+
+                RebuildHistoryGroups();
+            }
+            else
+            {
+                NotifyLocationState();
+            }
+
+            return true;
+        }
+        finally
+        {
+            _historyLoadSemaphore.Release();
+        }
+    }
+
+    private bool MatchesCurrentHistoryQuery(DownloadHistory item)
+        => MatchesSearchKeyword(item, SearchKeyword)
+           && MatchesMediaFilter(item, SelectedMediaFilter);
+
+    private static bool MatchesSearchKeyword(DownloadHistory item, string? searchKeyword)
+    {
+        if (string.IsNullOrWhiteSpace(searchKeyword))
+            return true;
+
+        return ContainsSearchKeyword(item.Title, searchKeyword)
+               || ContainsSearchKeyword(item.Url, searchKeyword)
+               || ContainsSearchKeyword(item.Platform, searchKeyword)
+               || ContainsSearchKeyword(item.BatchName, searchKeyword);
+    }
+
+    private static bool ContainsSearchKeyword(string? value, string keyword)
+        => value?.Contains(keyword, StringComparison.OrdinalIgnoreCase) == true;
 
     public void RefreshStorageStatus()
     {
@@ -255,6 +475,20 @@ public partial class HistoryViewModel : ObservableObject
             SelectedMediaFilter);
     }
 
+    public Task EnsureHistoryLoadedAsync()
+    {
+        lock (_initialHistoryLoadGate)
+        {
+            if (_hasLoadedHistory)
+                return Task.CompletedTask;
+
+            if (_initialHistoryLoadTask is null || _initialHistoryLoadTask.IsCompleted)
+                _initialHistoryLoadTask = LoadHistory();
+
+            return _initialHistoryLoadTask;
+        }
+    }
+
     public Task LoadAllHistoryForWorkspace()
     {
         CancelPendingSearch();
@@ -272,6 +506,7 @@ public partial class HistoryViewModel : ObservableObject
     private async Task LoadHistoryCore(string? searchKeyword, string mediaFilter)
     {
         var requestVersion = Interlocked.Increment(ref _historyLoadRequestVersion);
+        var loadedSuccessfully = false;
         await _historyLoadSemaphore.WaitAsync();
         IsLoadingHistory = true;
         try
@@ -285,16 +520,15 @@ public partial class HistoryViewModel : ObservableObject
             var items = await _historyService.GetAllAsync(searchKeyword);
             var filteredItems = items
                 .Where(item => MatchesMediaFilter(item, mediaFilter))
+                .GroupBy(item => item.Id)
+                .Select(group => group.First())
+                .OrderByDescending(item => item.DownloadTime)
+                .ThenByDescending(item => item.Id)
                 .ToList();
             var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
 
             var fileExistsResults = await Task.Run(() => filteredItems
-                .Select(item => new
-                {
-                    Item = item,
-                    AvailableFilePath = ResolveExistingHistoryPath(item),
-                    DouyinManifestSummary = BuildDouyinManifestSummary(item)
-                })
+                .Select(EnrichHistoryItem)
                 .ToList());
 
             if (requestVersion != Volatile.Read(ref _historyLoadRequestVersion))
@@ -306,11 +540,9 @@ public partial class HistoryViewModel : ObservableObject
             HistoryItems.Clear();
             foreach (var result in fileExistsResults)
             {
-                result.Item.AvailableFilePath = result.AvailableFilePath;
-                result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
-                result.Item.DouyinManifestSummary = result.DouyinManifestSummary.Summary;
-                result.Item.DouyinManifestSummaryText = result.DouyinManifestSummary.SummaryText;
-                result.Item.OrganizerFolderName = folderNames.GetValueOrDefault(result.Item.FolderId, "");
+                ApplyHistoryItemEnrichment(result, folderNames);
+                lock (_historyAddedGate)
+                    result.Item.IsRecentlyCompleted = _recentlyCompletedHistoryIds.Contains(result.Item.Id);
                 result.Item.PropertyChanged += OnHistoryItemPropertyChanged;
                 HistoryItems.Add(result.Item);
             }
@@ -338,6 +570,9 @@ public partial class HistoryViewModel : ObservableObject
             OnPropertyChanged(nameof(BulkTargetFolderPlaceholderText));
             ClearSelection();
             RebuildHistoryGroups();
+            lock (_initialHistoryLoadGate)
+                Volatile.Write(ref _hasLoadedHistory, true);
+            loadedSuccessfully = true;
         }
         catch (Exception ex)
         {
@@ -348,6 +583,8 @@ public partial class HistoryViewModel : ObservableObject
         {
             IsLoadingHistory = false;
             _historyLoadSemaphore.Release();
+            if (loadedSuccessfully)
+                SchedulePendingHistoryAdded();
         }
     }
 
@@ -468,6 +705,66 @@ public partial class HistoryViewModel : ObservableObject
     private IEnumerable<DownloadHistory> GetCurrentLocationItems()
         => HistoryGroups.SelectMany(group => group.Items);
 
+    private IReadOnlyList<DownloadHistory> GetCurrentLocationSummaryItems()
+    {
+        if (!string.IsNullOrWhiteSpace(SelectedBatchKey))
+        {
+            var selectedBatch = BatchFolderCards.FirstOrDefault(
+                group => string.Equals(group.Key, SelectedBatchKey, StringComparison.Ordinal));
+            if (selectedBatch is not null)
+                return selectedBatch.Items;
+        }
+
+        if (SelectedFolderId is null)
+            return HistoryItems.ToList();
+
+        return HistoryItems
+            .Where(item => item.FolderId == SelectedFolderId.Value)
+            .ToList();
+    }
+
+    private string ResolveCurrentLocationPath()
+    {
+        var items = GetCurrentLocationSummaryItems();
+        if (!string.IsNullOrWhiteSpace(SelectedBatchKey))
+        {
+            var selectedBatch = BatchFolderCards.FirstOrDefault(
+                group => string.Equals(group.Key, SelectedBatchKey, StringComparison.Ordinal));
+            if (!string.IsNullOrWhiteSpace(selectedBatch?.Directory))
+                return selectedBatch.Directory.Trim();
+
+            var inferredDirectory = ResolveCommonOutputDirectory(items);
+            return !string.IsNullOrWhiteSpace(inferredDirectory)
+                ? inferredDirectory
+                : items.Count == 0 ? "暂无本地路径" : "多个本地位置";
+        }
+
+        if (SelectedFolderId > 0)
+        {
+            var commonDirectory = ResolveCommonOutputDirectory(items);
+            return !string.IsNullOrWhiteSpace(commonDirectory)
+                ? commonDirectory
+                : items.Count == 0 ? "暂无本地路径" : "多个本地位置";
+        }
+
+        return string.IsNullOrWhiteSpace(_configService.Config.DefaultDownloadPath)
+            ? "未设置下载路径"
+            : _configService.Config.DefaultDownloadPath;
+    }
+
+    private static long SumFileSizes(IEnumerable<DownloadHistory> items)
+    {
+        var total = 0L;
+        foreach (var item in items)
+        {
+            var size = Math.Max(0, item.FileSize);
+            if (total > long.MaxValue - size)
+                return long.MaxValue;
+            total += size;
+        }
+        return total;
+    }
+
     public void SetHistoryCardColumnCount(int columnCount)
     {
         var normalized = Math.Clamp(columnCount, 1, 8);
@@ -499,6 +796,9 @@ public partial class HistoryViewModel : ObservableObject
         OnPropertyChanged(nameof(IsAtHistoryRoot));
         OnPropertyChanged(nameof(HasActiveLocation));
         OnPropertyChanged(nameof(SelectedFolderTitle));
+        OnPropertyChanged(nameof(CurrentLocationPathText));
+        OnPropertyChanged(nameof(CurrentLocationFileCountText));
+        OnPropertyChanged(nameof(CurrentLocationSizeText));
         OnPropertyChanged(nameof(IsSearchOrFilterActive));
     }
 
@@ -883,25 +1183,42 @@ public partial class HistoryViewModel : ObservableObject
         {
             return;
         }
-        await _historyService.ClearAllAsync();
-        UnsubscribeHistoryItems();
-        HistoryItems.Clear();
-        ReturnToHistoryRoot();
-        HistoryGroups.Clear();
-        HistoryCardRows.Clear();
-        BatchFolderCards.Clear();
-        TotalHistoryCount = 0;
-        VisibleHistoryCount = 0;
-        UnfiledHistoryCount = 0;
-        foreach (var folder in HistoryFolders)
-            folder.ItemCount = 0;
-        ClearSelection();
-        OnPropertyChanged(nameof(HasVisibleHistory));
-        OnPropertyChanged(nameof(HasBatchFolders));
-        OnPropertyChanged(nameof(HasWorkspaceFolders));
-        OnPropertyChanged(nameof(WorkspaceSummaryText));
-        OnPropertyChanged(nameof(HasDisplayedHistoryCards));
-        OnPropertyChanged(nameof(ShouldShowFolderOnlyHint));
+
+        await _historyLoadSemaphore.WaitAsync();
+        try
+        {
+            await _historyService.ClearAllAsync();
+            lock (_historyAddedGate)
+            {
+                _pendingHistoryAdded.Clear();
+                _recentlyCompletedHistoryIds.Clear();
+                _historyAddedDrainScheduled = false;
+            }
+
+            UnsubscribeHistoryItems();
+            HistoryItems.Clear();
+            ReturnToHistoryRoot();
+            HistoryGroups.Clear();
+            HistoryCardRows.Clear();
+            BatchFolderCards.Clear();
+            TotalHistoryCount = 0;
+            VisibleHistoryCount = 0;
+            UnfiledHistoryCount = 0;
+            foreach (var folder in HistoryFolders)
+                folder.ItemCount = 0;
+            ClearSelection();
+            OnPropertyChanged(nameof(HasVisibleHistory));
+            OnPropertyChanged(nameof(HasBatchFolders));
+            OnPropertyChanged(nameof(HasWorkspaceFolders));
+            OnPropertyChanged(nameof(WorkspaceSummaryText));
+            OnPropertyChanged(nameof(HasDisplayedHistoryCards));
+            OnPropertyChanged(nameof(ShouldShowFolderOnlyHint));
+            NotifyLocationState();
+        }
+        finally
+        {
+            _historyLoadSemaphore.Release();
+        }
     }
 
     /// <summary>
@@ -1128,13 +1445,30 @@ public partial class HistoryViewModel : ObservableObject
         };
     }
 
-    private static bool IsAudioFormat(string format)
+    private static bool IsAudioFormat(string? format)
     {
-        return format.Trim().ToLowerInvariant() switch
+        return format?.Trim().ToLowerInvariant() switch
         {
             "mp3" or "m4a" or "wav" or "flac" or "aac" or "opus" or "ogg" => true,
             _ => false
         };
+    }
+
+    private static HistoryItemEnrichment EnrichHistoryItem(DownloadHistory item)
+        => new(
+            item,
+            ResolveExistingHistoryPath(item),
+            BuildDouyinManifestSummary(item));
+
+    private static void ApplyHistoryItemEnrichment(
+        HistoryItemEnrichment result,
+        IReadOnlyDictionary<long, string> folderNames)
+    {
+        result.Item.AvailableFilePath = result.AvailableFilePath;
+        result.Item.FileExists = !string.IsNullOrWhiteSpace(result.AvailableFilePath);
+        result.Item.DouyinManifestSummary = result.DouyinManifestSummary.Summary;
+        result.Item.DouyinManifestSummaryText = result.DouyinManifestSummary.SummaryText;
+        result.Item.OrganizerFolderName = folderNames.GetValueOrDefault(result.Item.FolderId, "");
     }
 
     private static string ResolveExistingHistoryPath(DownloadHistory item)
@@ -1321,6 +1655,11 @@ public partial class HistoryViewModel : ObservableObject
     private static bool PathExists(string path)
         => !string.IsNullOrWhiteSpace(path)
            && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path));
+
+    private sealed record HistoryItemEnrichment(
+        DownloadHistory Item,
+        string AvailableFilePath,
+        DouyinManifestSummaryResult DouyinManifestSummary);
 
     private sealed record DouyinManifestSummaryResult(
         string SummaryText,

@@ -1,6 +1,8 @@
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Input;
+using EasyGet.Models;
 using EasyGet.ViewModels;
 
 namespace EasyGet.Views;
@@ -10,6 +12,52 @@ public partial class BatchDownloadView : System.Windows.Controls.UserControl
     public BatchDownloadView()
     {
         InitializeComponent();
+    }
+
+    public bool TryHandleQueueShortcut(Key key)
+    {
+        if (QueueList.SelectedItem is not DownloadTask task
+            || DataContext is not BatchDownloadViewModel vm)
+        {
+            return false;
+        }
+
+        if (key == Key.Space)
+        {
+            if (task.Status == DownloadStatus.Downloading
+                && vm.PauseTaskCommand.CanExecute(task.Id))
+            {
+                vm.PauseTaskCommand.Execute(task.Id);
+                return true;
+            }
+
+            if (task.Status == DownloadStatus.Paused
+                && vm.ResumeTaskCommand.CanExecute(task.Id))
+            {
+                vm.ResumeTaskCommand.Execute(task.Id);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (key == Key.Delete && vm.CancelTaskCommand.CanExecute(task.Id))
+        {
+            vm.CancelTaskCommand.Execute(task.Id);
+            return true;
+        }
+
+        return false;
+    }
+
+    private void OverflowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu } button)
+            return;
+
+        menu.PlacementTarget = button;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
 
     private void UserControl_DragOver(object sender, System.Windows.DragEventArgs e)

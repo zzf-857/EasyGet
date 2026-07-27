@@ -24,6 +24,7 @@ public partial class DownloadHistoryGroup : ObservableObject
 
     public string ExpandGlyph => IsExpanded ? "▾" : "▸";
     public int ItemCount => Items.Count;
+    public bool HasRecentCompletion => Items.Any(item => item.IsRecentlyCompleted);
     public bool? SelectionState
     {
         get

@@ -5,55 +5,20 @@ namespace EasyGet.Tests;
 
 public class XamlBindingTests
 {
-    [Fact]
-    public void DownloadViewUsesModernToolPanelStyleForPrimaryPanels()
+    [Theory]
+    [InlineData("DownloadView.xaml")]
+    [InlineData("BatchDownloadView.xaml")]
+    [InlineData("HistoryView.xaml")]
+    [InlineData("SettingsView.xaml")]
+    public void PrimaryViewsUseDesignerWorkbenchSurfacesWithoutLegacyPanelCards(string viewFileName)
     {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-
-        var styledPanels = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "Border")
-            .Select(element => element.Attribute("Style")?.Value ?? "")
-            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
-            .ToList();
+        var source = File.ReadAllText(GetViewPath(viewFileName));
 
         Assert.True(
-            styledPanels.Count >= 3,
-            $"DownloadView should use ToolPanelBorder for option, progress, and log panels. Found {styledPanels.Count}.");
-    }
-
-    [Fact]
-    public void SettingsViewUsesModernToolPanelStyleForPrimarySections()
-    {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-
-        var styledPanels = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "Border")
-            .Select(element => element.Attribute("Style")?.Value ?? "")
-            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
-            .ToList();
-
-        Assert.True(
-            styledPanels.Count >= 5,
-            $"SettingsView should use ToolPanelBorder for environment, download, proxy, cookie, and performance sections. Found {styledPanels.Count}.");
-    }
-
-    [Fact]
-    public void BatchDownloadViewUsesModernToolPanelStyleForPrimarySections()
-    {
-        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
-
-        var styledPanels = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "Border")
-            .Select(element => element.Attribute("Style")?.Value ?? "")
-            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
-            .ToList();
-
-        Assert.True(
-            styledPanels.Count >= 2,
-            $"BatchDownloadView should use ToolPanelBorder for URL input and queue panels. Found {styledPanels.Count}.");
+            source.Contains("BgPrimaryBrush", StringComparison.Ordinal)
+            || source.Contains("BgSurfaceBrush", StringComparison.Ordinal)
+            || source.Contains("BgSidebarBrush", StringComparison.Ordinal));
+        Assert.DoesNotContain("ToolPanelBorder", source, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -74,74 +39,8 @@ public class XamlBindingTests
 
         Assert.True(
             unsafeBindings.Count == 0,
-            $"Run.Text binds two-way by default. Output bindings in {viewFileName} must declare Mode=OneWay: "
+            $"Run.Text output bindings in {viewFileName} must be one-way: "
                 + string.Join("; ", unsafeBindings));
-    }
-
-    [Fact]
-    public void HistoryViewUsesModernToolPanelStyleForHistoryCards()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-
-        var styledPanels = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "Border")
-            .Select(element => element.Attribute("Style")?.Value ?? "")
-            .Where(value => value.Contains("ToolPanelBorder", StringComparison.Ordinal))
-            .ToList();
-
-        Assert.True(
-            styledPanels.Count >= 1,
-            $"HistoryView should use ToolPanelBorder for history item cards. Found {styledPanels.Count}.");
-    }
-
-    [Fact]
-    public void HistoryViewGroupsBatchDownloadsWithFolderAndGroupActions()
-    {
-        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
-
-        Assert.Contains("ItemsSource=\"{Binding HistoryCardRows}\"", source, StringComparison.Ordinal);
-        Assert.Contains("SelectBatchFolderCommand", source, StringComparison.Ordinal);
-        Assert.Contains("OpenDirectoryCommand", source, StringComparison.Ordinal);
-        Assert.Contains("DeleteBatchCommand", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewQuickActionsUseAvailableFilePath()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-
-        var quickActionButtons = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "Button")
-            .Where(element =>
-            {
-                var automationName = element.Attributes()
-                    .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
-                    ?.Value;
-                return automationName is "打开文件夹" or "预览文件";
-            })
-            .ToList();
-
-        Assert.Equal(2, quickActionButtons.Count);
-        Assert.All(quickActionButtons, button =>
-            Assert.Equal("{Binding AvailableFilePath}", button.Attribute("CommandParameter")?.Value));
-    }
-
-    [Fact]
-    public void MainWindowSidebarUsesSubtleContentDivider()
-    {
-        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
-
-        var sidebar = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Border"
-                && element.Attribute("Background")?.Value.Contains("BgSidebarBrush", StringComparison.Ordinal) == true);
-
-        Assert.NotNull(sidebar);
-        Assert.Contains("BorderSubtleBrush", sidebar!.Attribute("BorderBrush")?.Value ?? "");
-        Assert.Equal("0,0,1,0", sidebar.Attribute("BorderThickness")?.Value);
     }
 
     [Theory]
@@ -149,815 +48,117 @@ public class XamlBindingTests
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]
     [InlineData("SettingsView.xaml")]
-    public void PageRootUsesMotionPageEnterBehavior(string viewFileName)
+    public void PrimaryPageRootsDoNotReplayEntryMotionOnNavigation(string viewFileName)
     {
         var document = XDocument.Load(GetViewPath(viewFileName));
 
         Assert.Equal("UserControl", document.Root?.Name.LocalName);
-        Assert.Contains(document.Root!.Attributes(), attribute =>
-            attribute.Name.LocalName == "Motion.PageEnter"
-            && attribute.Value == "True");
+        Assert.DoesNotContain(document.Root!.Attributes(), attribute =>
+            attribute.Name.LocalName == "Motion.PageEnter");
     }
 
     [Fact]
-    public void MainWindowToastUsesAnimatedVisibilityStates()
+    public void MainWindowMatchesDesignerShellDimensionsAndTruthfulStatusBindings()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var window = document.Root!;
+        var source = document.ToString(SaveOptions.DisableFormatting);
 
-        var itemsControl = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "ItemsControl"
-                && element.Attribute("ItemsSource")?.Value == "{Binding Notifications}");
+        Assert.Equal("1360", window.Attribute("Width")?.Value);
+        Assert.Equal("840", window.Attribute("Height")?.Value);
+        Assert.Equal("1080", window.Attribute("MinWidth")?.Value);
+        Assert.Equal("680", window.Attribute("MinHeight")?.Value);
+        Assert.Equal("None", window.Attribute("WindowStyle")?.Value);
 
-        Assert.NotNull(itemsControl);
-
-        var dataTemplates = itemsControl.Descendants()
-            .Where(element => element.Name.LocalName == "DataTemplate")
-            .ToList();
-
-        Assert.NotEmpty(dataTemplates);
-
-        var dataTriggers = itemsControl.Descendants()
-            .Where(element => element.Name.LocalName == "DataTrigger")
-            .ToList();
-
-        Assert.Contains(dataTriggers, trigger =>
-            trigger.Attribute("Binding")?.Value == "{Binding IsSuccess}");
-    }
-
-    [Fact]
-    public void MainWindowUsesAppleInspiredSourceListAndCompactTitleBar()
-    {
-        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
-
-        var columns = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "ColumnDefinition")
-            .ToList();
-
-        Assert.NotEmpty(columns);
-        Assert.Equal("216", columns[0].Attribute("Width")?.Value);
-
-        var rows = document
-            .Descendants()
+        var rowHeights = document.Descendants()
             .Where(element => element.Name.LocalName == "RowDefinition")
+            .Select(element => element.Attribute("Height")?.Value)
             .ToList();
+        Assert.Contains("48", rowHeights);
+        Assert.Contains("32", rowHeights);
 
-        Assert.Contains(rows, row => row.Attribute("Height")?.Value == "46");
-        Assert.Equal("None", document.Root?.Attribute("WindowStyle")?.Value);
+        Assert.Contains("Width=\"{Binding SidebarWidth}\"", source, StringComparison.Ordinal);
+        Assert.Contains("TaskStatusText", source, StringComparison.Ordinal);
+        Assert.Contains("AggregateSpeedText", source, StringComparison.Ordinal);
+        Assert.Contains("DiskStatusText", source, StringComparison.Ordinal);
+        Assert.Contains("EngineVersionText", source, StringComparison.Ordinal);
+        Assert.Contains("ToolStatusText", source, StringComparison.Ordinal);
+        Assert.Contains("AppVersion", source, StringComparison.Ordinal);
+    }
 
-        var logoMark = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Border"
-                && element.Attributes().Any(attribute =>
-                    attribute.Name.LocalName == "Name"
-                    && attribute.Value == "SidebarLogoMark"));
+    [Fact]
+    public void MainWindowUsesResponsive216And56PixelSidebarAt1280Breakpoint()
+    {
+        var viewModel = File.ReadAllText(GetRootPath(Path.Combine("ViewModels", "MainViewModel.cs")));
+        var codeBehind = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
 
-        Assert.NotNull(logoMark);
-        Assert.Equal("36", logoMark!.Attribute("Width")?.Value);
-        Assert.Equal("36", logoMark.Attribute("Height")?.Value);
+        Assert.Contains("IsCompactLayout ? 56 : 216", viewModel, StringComparison.Ordinal);
+        Assert.Contains("ActualWidth < 1280", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Width < 1280", codeBehind, StringComparison.Ordinal);
+    }
 
-        Assert.Contains(
-            document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
-            text => text == "EasyGet");
-        Assert.Contains(
-            document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
-            text => text.Contains("AppVersion", StringComparison.Ordinal));
+    [Fact]
+    public void MainWindowCachesPrimaryPagesAndKeepsLayoutDiagnosticsOptIn()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var window = document.Root!;
+        var cachedHost = document.Descendants().Single(element =>
+            element.Name.LocalName == "CachedPageHost");
 
-        var navItems = document
-            .Descendants()
-            .Where(element => element.Name.LocalName == "RadioButton")
-            .Where(element => element.Attribute("CommandParameter") is not null)
-            .ToList();
-
-        Assert.Equal(4, navItems.Count);
-        Assert.All(navItems, item =>
-        {
-            var textBlocks = item.Descendants().Where(element => element.Name.LocalName == "TextBlock").ToList();
-            Assert.True(textBlocks.Count >= 2, "Sidebar items should include an icon and a visible text label.");
-            Assert.Contains(textBlocks, textBlock =>
-                (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
-                || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
-            Assert.Contains(textBlocks, textBlock =>
-                (textBlock.Attribute("Text")?.Value ?? "") == item.Attribute("ToolTip")?.Value);
-        });
-
+        Assert.Equal("False", window.Attributes().Single(attribute =>
+            attribute.Name.LocalName == "LayoutDiagnostics.IsEnabled").Value);
+        Assert.Equal("{Binding CurrentPage}", cachedHost.Attribute("Page")?.Value);
         Assert.DoesNotContain(document.Descendants(), element =>
             element.Name.LocalName == "ContentControl"
-            && (element.Attribute("Content")?.Value ?? "").Contains("CurrentPageTitle", StringComparison.Ordinal));
-        Assert.Contains(document.Descendants().Attributes("Text"), attribute => attribute.Value == "媒体工具");
+            && element.Attribute("Content")?.Value == "{Binding CurrentPage}");
     }
 
     [Fact]
-    public void MainWindowSidebarDoesNotRenderAccountStatusFooter()
+    public void MainWindowSidebarUsesSubtleDividerAndRealEngineFooter()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var sidebar = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute("Background")?.Value == "{StaticResource BgSidebarBrush}"
+            && element.Attribute("BorderThickness")?.Value == "0,0,1,0");
 
-        var sidebarDockPanel = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "DockPanel"
-                && element.Attribute("LastChildFill") is not null
-                && element.Attribute("Margin")?.Value == "12,14");
+        Assert.NotNull(sidebar);
+        Assert.Equal("{StaticResource BorderSubtleBrush}", sidebar!.Attribute("BorderBrush")?.Value);
+        Assert.DoesNotContain(sidebar.Descendants().Attributes("Text"), attribute =>
+            attribute.Value.Contains("Power User", StringComparison.OrdinalIgnoreCase));
 
-        Assert.NotNull(sidebarDockPanel);
-        Assert.Equal("False", sidebarDockPanel!.Attribute("LastChildFill")?.Value);
+        var statusRow = document.Descendants().First(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Grid.Row")?.Value == "2");
+        var engineFooter = statusRow.Elements().First(element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute("Grid.Column")?.Value == "0");
 
-        var textAttributes = document.Descendants()
-            .Attributes("Text")
-            .Select(attribute => attribute.Value)
-            .ToList();
-
-        Assert.DoesNotContain("Power User", textAttributes);
-        Assert.DoesNotContain(textAttributes, text => text.Contains("StatusMessage", StringComparison.Ordinal));
+        Assert.Contains(engineFooter.Descendants().Attributes("Text"), attribute =>
+            attribute.Value.Contains("ToolStatusText", StringComparison.Ordinal));
+        Assert.Contains(engineFooter.Descendants(), element =>
+            element.Name.LocalName == "Button"
+            && element.Attribute("CommandParameter")?.Value == "settings");
     }
 
     [Fact]
-    public void MainWindowSidebarLogoUsesApplicationIconAsset()
+    public void MainWindowTitleBarUsesApplicationBrandAsset()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
-
-        var logoMark = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Border"
-                && element.Attributes().Any(attribute =>
-                    attribute.Name.LocalName == "Name"
-                    && attribute.Value == "SidebarLogoMark"));
-
-        Assert.NotNull(logoMark);
-
-        var image = logoMark!
-            .Descendants()
-            .FirstOrDefault(element => element.Name.LocalName == "Image");
+        var image = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Image"
+            && element.Attribute("Source")?.Value == "/Assets/app.png");
 
         Assert.NotNull(image);
-        Assert.Equal("/Assets/app.png", image!.Attribute("Source")?.Value);
-        Assert.Equal("Uniform", image.Attribute("Stretch")?.Value);
-
-        Assert.DoesNotContain(logoMark.Descendants(), element =>
-            element.Name.LocalName == "TextBlock"
-            && (element.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal));
+        Assert.Equal("Uniform", image!.Attribute("Stretch")?.Value);
+        Assert.Contains(document.Descendants().Attributes("Text"), attribute => attribute.Value == "EasyGet");
     }
 
     [Fact]
-    public void MainWindowRequestsDarkSystemTitleBar()
-    {
-        var source = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
-
-        Assert.Contains("SourceInitialized", source, StringComparison.Ordinal);
-        Assert.Contains("DwmSetWindowAttribute", source, StringComparison.Ordinal);
-        Assert.Contains("DWMWA_USE_IMMERSIVE_DARK_MODE", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void MainWindowDownloadNavigationUsesCleanerDownloadGlyph()
+    public void MainWindowNavigationContainsOnlyFourOrderedDestinations()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
-
-        var downloadNavItem = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "RadioButton"
-                && element.Attribute("CommandParameter")?.Value == "download");
-
-        Assert.NotNull(downloadNavItem);
-        var icon = downloadNavItem!
-            .Descendants()
-            .FirstOrDefault(element => element.Name.LocalName == "TextBlock");
-
-        Assert.NotNull(icon);
-        Assert.Equal("\uE118", icon!.Attribute("Text")?.Value);
-        Assert.True((icon.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
-            || (icon.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void DownloadViewLogViewerSupportsMouseTextSelection()
-    {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-
-        var logTextBox = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBox"
-                && element.Attributes().Any(attribute =>
-                    attribute.Name.LocalName == "Name"
-                    && attribute.Value == "LogTextBox"));
-
-        Assert.NotNull(logTextBox);
-        Assert.Equal("True", logTextBox!.Attribute("IsReadOnly")?.Value);
-        Assert.Equal("True", logTextBox.Attribute("AcceptsReturn")?.Value);
-        Assert.Contains("LogText", logTextBox.Attribute("Text")?.Value ?? "");
-        Assert.Equal("Auto", logTextBox.Attribute("VerticalScrollBarVisibility")?.Value);
-        Assert.Equal("Auto", logTextBox.Attribute("HorizontalScrollBarVisibility")?.Value);
-
-        Assert.DoesNotContain(document.Descendants(), element =>
-            element.Name.LocalName == "ListBox"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "LogList"));
-    }
-
-    [Fact]
-    public void DownloadViewLogAreaAllocatesMoreVerticalSpace()
-    {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-
-        var logBorder = document
-            .Descendants()
-            .FirstOrDefault(element => element.Name.LocalName == "Border"
-                && element.Attribute("Background")?.Value == "{StaticResource BgConsoleBrush}"
-                && element.Attribute("Height")?.Value is string height
-                && int.TryParse(height, out var value)
-                && value >= 300);
-
-        Assert.NotNull(logBorder);
-    }
-
-    [Fact]
-    public void DownloadProgressCardStaysVisibleForCompletedAndFailedStates()
-    {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-
-        Assert.Contains("IsProgressCardVisible", source);
-        Assert.DoesNotContain("Visibility=\"{Binding IsDownloading", source);
-        Assert.Contains("IsCompleted", source);
-        Assert.Contains("IsTaskFailed", source);
-        Assert.Contains("OpenCurrentFolderCommand", source);
-        Assert.Contains("PlayCurrentFileCommand", source);
-        Assert.Contains("RetryCurrentDownloadCommand", source);
-        Assert.Contains("SuccessBrush", source);
-        Assert.Contains("ErrorContainerBrush", source);
-    }
-
-    [Fact]
-    public void DownloadViewUsesStitchSingleDownloadWorkspaceCopy()
-    {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains("粘贴视频链接", texts);
-        Assert.Contains(texts, text => text.Contains("YouTube", StringComparison.Ordinal)
-            && text.Contains("Bilibili", StringComparison.Ordinal));
-        Assert.Contains("开始下载", texts);
-        Assert.Contains("详细日志", texts);
-        Assert.Contains("并发分片", texts);
-        Assert.Contains("保存目录", texts);
-        Assert.Contains("代理状态", texts);
-        Assert.DoesNotContain("无限制", texts);
-        Assert.DoesNotContain("系统默认", texts);
-    }
-
-    [Fact]
-    public void DownloadViewExposesParsePreviewWorkflow()
-    {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains("解析视频", texts);
-        Assert.Contains("开始下载", texts);
-        Assert.Contains("视频预览", texts);
-        Assert.Contains("解析失败", texts);
-        Assert.Contains("ParseCommand", source);
-        Assert.Contains("StartDownloadCommand", source);
-        Assert.Contains("PreviewInfo", source);
-        Assert.Contains("IsParsing", source);
-        Assert.Contains("IsReady", source);
-        Assert.Contains("IsFailed", source);
-        Assert.Contains("PreviewDurationText, Mode=OneWay", source);
-        Assert.Contains("PreviewFileSizeText, Mode=OneWay", source);
-    }
-
-    [Fact]
-    public void BatchDownloadViewUsesStitchQueueConsoleCopy()
-    {
-        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains(texts, text => text.Contains("输入多个视频链接", StringComparison.Ordinal));
-        Assert.Contains(texts, text => text.Contains("已检测到", StringComparison.Ordinal));
-        Assert.Contains("开始批量下载", texts);
-        Assert.Contains("下载队列", texts);
-        Assert.Contains("暂停全部", texts);
-        Assert.Contains("停止未完成", texts);
-        Assert.Contains("清理已结束", texts);
-        Assert.DoesNotContain(texts, text => text.Contains("SERVER STATUS", StringComparison.Ordinal));
-        Assert.DoesNotContain(texts, text => text.Contains("ACTIVE THREADS", StringComparison.Ordinal));
-        Assert.DoesNotContain(texts, text => text.Contains("V1.0.8", StringComparison.Ordinal));
-
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "Button"
-            && element.Attributes("Command").Any(attribute =>
-                attribute.Value.Contains("PauseAllCommand", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void ViewsDoNotRenderStitchPlaceholderStatusCopy()
-    {
-        var files = new[]
-        {
-            GetRootPath("MainWindow.xaml"),
-            GetViewPath("DownloadView.xaml"),
-            GetViewPath("BatchDownloadView.xaml"),
-            GetViewPath("HistoryView.xaml")
-        };
-
-        var forbidden = new[]
-        {
-            "PRO ACCOUNT",
-            "SERVER STATUS",
-            "V1.0.8",
-            "v1.2.4",
-            "磁盘空间充足",
-            "Batch Operations",
-            "无限制",
-            "系统默认"
-        };
-
-        foreach (var file in files)
-        {
-            var source = File.ReadAllText(file);
-            foreach (var text in forbidden)
-                Assert.DoesNotContain(text, source, StringComparison.Ordinal);
-        }
-    }
-
-    [Theory]
-    [InlineData("BatchDownloadView.xaml", "PasteUrlsCommand")]
-    [InlineData("BatchDownloadView.xaml", "StartBatchDownloadCommand")]
-    [InlineData("BatchDownloadView.xaml", "CancelAllCommand")]
-    public void BatchDownloadPrimaryActionButtonsUseFluentIconTextContent(string viewFileName, string commandName)
-    {
-        var document = XDocument.Load(GetViewPath(viewFileName));
-
-        var button = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
-
-        Assert.NotNull(button);
-        Assert.Null(button!.Attribute("Content"));
-
-        var textBlocks = button.Descendants()
-            .Where(element => element.Name.LocalName == "TextBlock")
-            .ToList();
-
-        Assert.Contains(textBlocks, textBlock =>
-            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
-            || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
-        Assert.Contains(textBlocks, textBlock =>
-            !string.IsNullOrWhiteSpace(textBlock.Attribute("Text")?.Value)
-            && (!textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily")
-                || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void HistoryViewUsesStitchMediaLibraryGrid()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains("下载历史", texts);
-        Assert.Contains(texts, text => text.Contains("已完成任务", StringComparison.Ordinal));
-        Assert.Contains("全部", texts);
-        Assert.Contains("视频", texts);
-        Assert.Contains("音频", texts);
-
-        Assert.Contains(document.Descendants(), element => element.Name.LocalName == "WrapPanel");
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "RadioButton"
-            && element.Attributes("Command").Any(attribute =>
-                attribute.Value.Contains("SetMediaFilterCommand", StringComparison.Ordinal)));
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "Image"
-            && element.Attributes("Source").Any(attribute =>
-                attribute.Value.Contains("ThumbnailUrl", StringComparison.Ordinal)));
-    }
-
-    [Fact]
-    public void HistoryViewExposesFolderWorkspaceSelectionAndDragDropActions()
-    {
-        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
-        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
-
-        Assert.Contains("HistoryFolders", source, StringComparison.Ordinal);
-        Assert.Contains("CreateFolderCommand", source, StringComparison.Ordinal);
-        Assert.Contains("MoveSelectedToFolderCommand", source, StringComparison.Ordinal);
-        Assert.Contains("RemoveSelectedFromFolderCommand", source, StringComparison.Ordinal);
-        Assert.Contains("DeleteSelectedCommand", source, StringComparison.Ordinal);
-        Assert.Contains("Visibility=\"{Binding HasSelection", source, StringComparison.Ordinal);
-        Assert.Contains("IsSelected, Mode=TwoWay", source, StringComparison.Ordinal);
-        Assert.Contains("HistoryFolder_Drop", source, StringComparison.Ordinal);
-        Assert.Contains("HistoryCard_PreviewMouseMove", source, StringComparison.Ordinal);
-        Assert.Contains("HistoryCard_PreviewMouseLeftButtonUp", source, StringComparison.Ordinal);
-        Assert.Contains("FolderRenameTextBox_IsVisibleChanged", source, StringComparison.Ordinal);
-        Assert.Contains("FolderRenameTextBox_PreviewKeyDown", source, StringComparison.Ordinal);
-        Assert.Contains("DragDrop.DoDragDrop", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("textBox.SelectAll()", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("本地文件未移动", File.ReadAllText(TestRepositoryPaths.GetRootPath(
-            Path.Combine("ViewModels", "HistoryViewModel.cs"))), StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewCardSurfaceTogglesSelectionWithoutHijackingCardButtonsOrDrag()
-    {
-        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
-        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
-
-        Assert.Contains(
-            "PreviewMouseLeftButtonUp=\"HistoryCard_PreviewMouseLeftButtonUp\"",
-            source,
-            StringComparison.Ordinal);
-        Assert.Contains("history.IsSelected = !history.IsSelected", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("IsInteractiveCardElement", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("current is ButtonBase", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("_historyDragWasInitiated", codeBehind, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewKeepsTheFolderToCardTransitionCompactAndHidesRawPathTooltips()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
-
-        var workspacePanel = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "Border"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "FolderWorkspacePanel"));
-        Assert.NotNull(workspacePanel);
-        Assert.Equal("18,16,18,12", workspacePanel!.Attribute("Padding")?.Value);
-        Assert.Equal("0,0,0,12", workspacePanel.Attribute("Margin")?.Value);
-
-        var batchFolders = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "ItemsControl"
-            && element.Attribute("ItemsSource")?.Value == "{Binding BatchFolderCards}");
-        Assert.NotNull(batchFolders);
-        Assert.Contains(batchFolders!.Descendants(), element =>
-            element.Name.LocalName == "Setter"
-            && element.Attribute("Property")?.Value == "Margin"
-            && element.Attribute("Value")?.Value == "0,0,12,0");
-
-        var historyCard = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "Border"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "HistoryCard"));
-        Assert.NotNull(historyCard);
-        Assert.Null(historyCard!.Attribute("ToolTip"));
-        Assert.Contains(historyCard.Attributes(), attribute =>
-            attribute.Name.LocalName == "AutomationProperties.HelpText"
-            && attribute.Value == "{Binding FilePath}");
-        Assert.DoesNotContain("element.Focus()", codeBehind, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewUsesPopoverCreationAndFloatingContextualSelectionBar()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
-
-        var newFolderPopup = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "Popup"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "NewFolderPopup"));
-
-        Assert.NotNull(newFolderPopup);
-        Assert.Equal("Fade", newFolderPopup!.Attribute("PopupAnimation")?.Value);
-        Assert.Contains("NewFolderToggle_Checked", source, StringComparison.Ordinal);
-        Assert.Contains("NewFolderToggle_Unchecked", source, StringComparison.Ordinal);
-        Assert.Contains("NewFolderPopup_Closed", source, StringComparison.Ordinal);
-        Assert.Contains("PopoverBorder", source, StringComparison.Ordinal);
-        Assert.Contains("FloatingActionBar", source, StringComparison.Ordinal);
-        Assert.Contains("CircularCheckBox", source, StringComparison.Ordinal);
-        Assert.Contains("HistoryContentTranslate", source, StringComparison.Ordinal);
-        Assert.Contains("AnimateContentTransition", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("_scrollResetTimer", codeBehind, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewUsesReversibleSelectionLeadingGroupCheckboxAndUpwardFolderPicker()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
-
-        Assert.True(
-            source.Split("ToggleSelectAllVisibleCommand", StringSplitOptions.None).Length >= 3,
-            "Both the workspace and floating toolbar should expose the reversible select-all action.");
-        Assert.Contains("SelectAllVisibleActionText", source, StringComparison.Ordinal);
-        Assert.Contains("Content=\"清除选择\"", source, StringComparison.Ordinal);
-
-        var targetFolderPicker = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "ComboBox"
-            && element.Attribute("ItemsSource")?.Value == "{Binding HistoryFolders}"
-            && element.Attribute("SelectedItem")?.Value == "{Binding BulkTargetFolder}");
-        Assert.NotNull(targetFolderPicker);
-        Assert.Contains(targetFolderPicker!.Attributes(), attribute =>
-            attribute.Name.LocalName == "PopupPlacement.Placement" && attribute.Value == "Top");
-        Assert.Contains(targetFolderPicker.Attributes(), attribute =>
-            attribute.Name.LocalName == "PopupPlacement.VerticalOffset" && attribute.Value == "-8");
-        Assert.Equal("{Binding HasHistoryFolders}", targetFolderPicker.Attribute("IsEnabled")?.Value);
-        Assert.Equal("220", targetFolderPicker.Attribute("MaxDropDownHeight")?.Value);
-        Assert.Contains("BulkTargetFolderPlaceholderText", source, StringComparison.Ordinal);
-
-        var batchSelection = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "CheckBox"
-            && element.Attribute("Command")?.Value?.Contains(
-                "SelectHistoryGroupCommand",
-                StringComparison.Ordinal) == true);
-        Assert.NotNull(batchSelection);
-        Assert.Contains("CircularCheckBox", batchSelection!.Attribute("Style")?.Value ?? "");
-        Assert.Equal("True", batchSelection.Attribute("IsThreeState")?.Value);
-        Assert.Equal("{Binding SelectionState, Mode=OneWay}", batchSelection.Attribute("IsChecked")?.Value);
-
-        var batchActionPanel = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "StackPanel"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "BatchActionPanel"));
-        Assert.NotNull(batchActionPanel);
-        Assert.DoesNotContain(batchActionPanel!.Descendants().Attributes("Command"), attribute =>
-            attribute.Value.Contains("SelectHistoryGroupCommand", StringComparison.Ordinal));
-
-        Assert.DoesNotContain(document.Descendants(), element =>
-            element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetName")?.Value is "FolderTranslate" or "BatchTranslate");
-        Assert.Contains("PreviewKeyDown=\"HistoryView_PreviewKeyDown\"", source, StringComparison.Ordinal);
-        Assert.Contains("Key.Escape", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("ModifierKeys.Control", codeBehind, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewUsesPixelVirtualizationAndUnifiedWorkspaceFolderCards()
-    {
-        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
-        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
-
-        Assert.Contains("ItemsSource=\"{Binding HistoryFolders}\"", source, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding BatchFolderCards}\"", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("ItemsSource=\"{Binding FolderCards}\"", source, StringComparison.Ordinal);
-        Assert.Contains("Text=\"整理与批量管理\"", source, StringComparison.Ordinal);
-        Assert.Contains("ToggleSelectAllVisibleCommand", source, StringComparison.Ordinal);
-        Assert.Contains("SelectAllVisibleActionText", source, StringComparison.Ordinal);
-        Assert.Contains("DataContext.SelectBatchFolderCommand", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("<TextBlock Text=\"批量整理\"", source, StringComparison.Ordinal);
-        Assert.Contains("<WrapPanel/>", source, StringComparison.Ordinal);
-        Assert.Contains("ItemsSource=\"{Binding HistoryCardRows}\"", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.CanContentScroll=\"True\"", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.IsDeferredScrollingEnabled=\"False\"", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollViewer.PanningMode=\"VerticalOnly\"", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.IsVirtualizing=\"True\"", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.VirtualizationMode=\"Recycling\"", source, StringComparison.Ordinal);
-        Assert.Contains("VirtualizingPanel.ScrollUnit=\"Pixel\"", source, StringComparison.Ordinal);
-        Assert.Contains("<VirtualizingStackPanel/>", source, StringComparison.Ordinal);
-        Assert.Contains("SizeChanged=\"HistoryList_SizeChanged\"", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("HorizontalScrollBarVisibility=\"Auto\"", source, StringComparison.Ordinal);
-        Assert.Contains("x:Name=\"HistoryList\"", source, StringComparison.Ordinal);
-        Assert.Contains("ScrollHistoryToTop", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("ScrollToTop()", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("SetHistoryCardColumnCount", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("LargeFolderAnimationThreshold", codeBehind, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ConfirmationDialogUsesEasyGetThemeInsteadOfNativeHistoryMessageBoxes()
-    {
-        var dialog = File.ReadAllText(GetViewPath("ConfirmationDialog.xaml"));
-        var historyViewModel = File.ReadAllText(TestRepositoryPaths.GetRootPath(
-            Path.Combine("ViewModels", "HistoryViewModel.cs")));
-        var batchViewModel = File.ReadAllText(TestRepositoryPaths.GetRootPath(
-            Path.Combine("ViewModels", "BatchDownloadViewModel.cs")));
-
-        Assert.Contains("WindowStyle=\"None\"", dialog, StringComparison.Ordinal);
-        Assert.Contains("AllowsTransparency=\"True\"", dialog, StringComparison.Ordinal);
-        Assert.Contains("BgSurfaceHighBrush", dialog, StringComparison.Ordinal);
-        Assert.Contains("ConfirmText", dialog, StringComparison.Ordinal);
-        Assert.Contains("ConfirmationDialogService.Show", historyViewModel, StringComparison.Ordinal);
-        Assert.Contains("ConfirmationDialogService.Show", batchViewModel, StringComparison.Ordinal);
-        Assert.DoesNotContain("MessageBox.Show", historyViewModel, StringComparison.Ordinal);
-        Assert.DoesNotContain("MessageBox.Show", batchViewModel, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void BatchDownloadViewShowsAggregateProgressFiltersAndQueueCleanupActions()
-    {
-        var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
-
-        Assert.Contains("OverallProgress", source, StringComparison.Ordinal);
-        Assert.Contains("QueueSummaryText", source, StringComparison.Ordinal);
-        Assert.Contains("VisibleQueueTasks", source, StringComparison.Ordinal);
-        Assert.Contains("SetQueueFilterCommand", source, StringComparison.Ordinal);
-        Assert.Contains("RetryFailedCommand", source, StringComparison.Ordinal);
-        Assert.Contains("ClearFinishedCommand", source, StringComparison.Ordinal);
-        Assert.Contains("AggregateSpeedText", source, StringComparison.Ordinal);
-        Assert.Contains("EtaText, Mode=OneWay", source, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void HistoryViewSearchBoxKeepsStableWideSearchField()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-
-        var searchBox = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Border"
-                && element.Attributes().Any(attribute =>
-                    attribute.Name.LocalName == "Name"
-                    && attribute.Value == "HistorySearchBox"));
-
-        Assert.NotNull(searchBox);
-        Assert.Equal("520", searchBox!.Attribute("MaxWidth")?.Value);
-        Assert.Contains("SearchFieldBorder", searchBox.Attribute("Style")?.Value ?? "");
-    }
-
-    [Fact]
-    public void HistoryViewCardsRevealFullQuickActionsOnHover()
-    {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
-
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "Trigger"
-            && element.Attribute("SourceName")?.Value == "HistoryCard"
-            && element.Attribute("Property")?.Value == "IsMouseOver"
-            && element.Attribute("Value")?.Value == "True");
-        var historyList = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "ListBox"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "HistoryList"));
-        Assert.NotNull(historyList);
-        Assert.Equal("0,12,0,0", historyList!.Attribute("Padding")?.Value);
-
-        var selectionRing = document.Descendants().FirstOrDefault(element =>
-            element.Name.LocalName == "Border"
-            && element.Attributes().Any(attribute =>
-                attribute.Name.LocalName == "Name"
-                && attribute.Value == "SelectionRing"));
-        Assert.NotNull(selectionRing);
-        Assert.Equal("2", selectionRing!.Attribute("BorderThickness")?.Value);
-        Assert.Equal("False", selectionRing.Attribute("IsHitTestVisible")?.Value);
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "Setter"
-            && element.Attribute("TargetName")?.Value == "SelectionRing"
-            && element.Attribute("Property")?.Value == "Opacity"
-            && element.Attribute("Value")?.Value == "1");
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "Setter"
-            && element.Attribute("TargetName")?.Value == "HoverOverlay"
-            && element.Attribute("Property")?.Value == "IsHitTestVisible"
-            && element.Attribute("Value")?.Value == "True");
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetName")?.Value == "HoverOverlay"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity"
-            && element.Attribute("To")?.Value == "1"
-            && element.Attribute("Duration")?.Value?.Contains("MotionDurationFast", StringComparison.Ordinal) == true);
-        Assert.DoesNotContain(document.Descendants(), element =>
-            element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetName")?.Value == "CardTranslate"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Y");
-        Assert.Contains(document.Descendants(), element =>
-            element.Name.LocalName == "DoubleAnimation"
-            && element.Attribute("Storyboard.TargetName")?.Value == "CardShadow"
-            && element.Attribute("Storyboard.TargetProperty")?.Value == "Opacity"
-            && element.Attribute("To")?.Value == "0.85");
-
-        var commands = document.Descendants()
-            .Attributes("Command")
-            .Select(attribute => attribute.Value)
-            .ToList();
-
-        Assert.Contains(commands, command => command.Contains("OpenFolderCommand", StringComparison.Ordinal));
-        Assert.Contains(commands, command => command.Contains("PreviewFileCommand", StringComparison.Ordinal));
-        Assert.Contains(commands, command => command.Contains("OpenSourceUrlCommand", StringComparison.Ordinal));
-        Assert.Contains(commands, command => command.Contains("DeleteItemCommand", StringComparison.Ordinal));
-
-        var previewButton = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains("PreviewFileCommand", StringComparison.Ordinal)));
-
-        Assert.NotNull(previewButton);
-        Assert.Equal("预览文件", previewButton!.Attribute("ToolTip")?.Value);
-        Assert.Contains("FileExists", previewButton.Attribute("IsEnabled")?.Value ?? "");
-
-        var sourceButton = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains("OpenSourceUrlCommand", StringComparison.Ordinal)));
-
-        Assert.NotNull(sourceButton);
-        Assert.Equal("打开原网页", sourceButton!.Attribute("ToolTip")?.Value);
-        Assert.Contains("HttpUrlToBool", sourceButton.Attribute("IsEnabled")?.Value ?? "");
-    }
-
-    [Fact]
-    public void HistoryViewShowsAttachmentSummaryOnHistoryCards()
-    {
-        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
-
-        Assert.Contains("AttachmentSummaryText", source, StringComparison.Ordinal);
-        Assert.Contains("HasAttachmentSummary", source, StringComparison.Ordinal);
-        Assert.Contains("附属", source, StringComparison.Ordinal);
-    }
-
-    [Theory]
-    [InlineData("DownloadView.xaml", "粘贴视频链接", "支持抖音、YouTube、Bilibili、Twitter、TikTok 等平台")]
-    [InlineData("BatchDownloadView.xaml", "批量下载", "输入多个视频链接")]
-    [InlineData("HistoryView.xaml", "下载历史", "共计")]
-    [InlineData("SettingsView.xaml", "系统设置", "管理下载环境")]
-    public void PageMainTitlesUseUnifiedTypography(string viewFileName, string titleText, string subtitleText)
-    {
-        var document = XDocument.Load(GetViewPath(viewFileName));
-
-        var title = FindTextBlockByText(document, titleText);
-
-        Assert.NotNull(title);
-        var fontSize = title!.Attribute("FontSize")?.Value;
-        var fontWeight = title.Attribute("FontWeight")?.Value;
-        var style = title.Attribute("Style")?.Value ?? "";
-        Assert.True(fontSize == "28" || style.Contains("TextPageTitle", StringComparison.Ordinal));
-        Assert.True(fontWeight == "SemiBold" || style.Contains("TextPageTitle", StringComparison.Ordinal));
-
-        var subtitle = FindTextBlockByText(document, subtitleText);
-
-        Assert.NotNull(subtitle);
-        var subFontSize = subtitle!.Attribute("FontSize")?.Value;
-        var subStyle = subtitle.Attribute("Style")?.Value ?? "";
-        Assert.True(subFontSize == "14" || subStyle.Contains("TextBodyStrong", StringComparison.Ordinal) || subStyle.Contains("TextBody", StringComparison.Ordinal));
-        var subForeground = subtitle.Attribute("Foreground")?.Value ?? "";
-        Assert.True(
-            subForeground.Contains("TextSecondaryBrush", StringComparison.Ordinal)
-            || subStyle.Contains("TextBodyStrong", StringComparison.Ordinal)
-            || subStyle.Contains("TextBody", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void SettingsViewUsesStitchSettingsCenterInformationArchitecture()
-    {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
-
-        Assert.Contains("系统设置", texts);
-        Assert.Contains(texts, text => text.Contains("管理下载环境", StringComparison.Ordinal));
-        Assert.Contains("环境检测", texts);
-        Assert.Contains("下载设置", texts);
-        Assert.Contains("代理设置", texts);
-        Assert.Contains("智能登录与 Cookie", texts);
-        Assert.Contains("性能设置", texts);
-        Assert.Contains("默认保存目录", texts);
-        Assert.Contains("默认下载格式", texts);
-        Assert.Contains("最大下载分辨率", texts);
-        Assert.Contains("启用网络代理", texts);
-        Assert.Contains("启用 aria2c 外部下载器", texts);
-        Assert.Contains("保存配置", texts);
-    }
-
-    [Theory]
-    [InlineData("download")]
-    [InlineData("batch")]
-    [InlineData("history")]
-    [InlineData("settings")]
-    public void MainWindowNavigationItemsExposeTooltipAndAutomationName(string commandParameter)
-    {
-        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
-
-        var navItem = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "RadioButton"
-                && element.Attribute("CommandParameter")?.Value == commandParameter);
-
-        Assert.NotNull(navItem);
-        Assert.False(string.IsNullOrWhiteSpace(navItem!.Attribute("ToolTip")?.Value));
-        Assert.False(string.IsNullOrWhiteSpace(navItem
-            .Attributes()
-            .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
-            ?.Value));
-    }
-
-    [Fact]
-    public void MainWindowNavigationOrderMatchesSelectedIndexAndShortcutOrder()
-    {
-        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
-        var navItems = document
-            .Descendants()
+        var navItems = document.Descendants()
             .Where(element => element.Name.LocalName == "RadioButton")
             .Where(element => element.Attribute("CommandParameter") is not null)
             .Select(element => new
@@ -982,6 +183,133 @@ public class XamlBindingTests
             Assert.Contains(expected[i].Item2, navItems[i].Binding);
         }
     }
+
+    [Theory]
+    [InlineData("download")]
+    [InlineData("batch")]
+    [InlineData("history")]
+    [InlineData("settings")]
+    public void MainWindowNavigationItemsExposeTooltipAndAutomationName(string commandParameter)
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var navItem = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "RadioButton"
+            && element.Attribute("CommandParameter")?.Value == commandParameter);
+
+        Assert.NotNull(navItem);
+        Assert.False(string.IsNullOrWhiteSpace(navItem!.Attribute("ToolTip")?.Value));
+        Assert.False(string.IsNullOrWhiteSpace(AutomationName(navItem)));
+    }
+
+    [Fact]
+    public void MainWindowToastStackIsTopRightAndSupportsRecoveryActions()
+    {
+        var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
+        var itemsControl = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "ItemsControl"
+            && element.Attribute("ItemsSource")?.Value == "{Binding Notifications}");
+
+        Assert.NotNull(itemsControl);
+        Assert.Equal("Right", itemsControl!.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("Top", itemsControl.Attribute("VerticalAlignment")?.Value);
+        Assert.Contains("ExecuteActionCommand", itemsControl.ToString(), StringComparison.Ordinal);
+        Assert.Contains("ActionLabel", itemsControl.ToString(), StringComparison.Ordinal);
+        Assert.Contains("CloseCommand", itemsControl.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindowRequestsDarkSystemTitleBar()
+    {
+        var source = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
+
+        Assert.Contains("SourceInitialized", source, StringComparison.Ordinal);
+        Assert.Contains("DwmSetWindowAttribute", source, StringComparison.Ordinal);
+        Assert.Contains("DWMWA_USE_IMMERSIVE_DARK_MODE", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DownloadViewUsesProgressiveSingleWorkspaceStates()
+    {
+        var source = File.ReadAllText(GetViewPath("DownloadView.xaml"));
+
+        Assert.Contains("IsIdle", source, StringComparison.Ordinal);
+        Assert.Contains("IsParsing", source, StringComparison.Ordinal);
+        Assert.Contains("IsReady", source, StringComparison.Ordinal);
+        Assert.Contains("IsDownloadActive", source, StringComparison.Ordinal);
+        Assert.Contains("IsCompleted", source, StringComparison.Ordinal);
+        Assert.Contains("IsFailed", source, StringComparison.Ordinal);
+        Assert.Contains("StartDownloadCommand", source, StringComparison.Ordinal);
+        Assert.Contains("OpenCurrentFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("PlayCurrentFileCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RetryCurrentDownloadCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DownloadViewUsesReadableParameterToolbarAndGlobalClipboardState()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var optionsPanel = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute(x + "Name")?.Value == "DownloadOptionsPanel");
+
+        Assert.NotNull(optionsPanel);
+        Assert.Null(optionsPanel!.Attribute("Height"));
+        Assert.True(optionsPanel.Descendants().Count(element =>
+            element.Name.LocalName == "RowDefinition") >= 2);
+        Assert.DoesNotContain(optionsPanel.Descendants(), element =>
+            element.Name.LocalName == "DockPanel");
+        Assert.Contains("ConcurrentFragmentsText", source, StringComparison.Ordinal);
+        Assert.Contains("ProxyStatusText", source, StringComparison.Ordinal);
+        Assert.Contains("DownloadDirectory", source, StringComparison.Ordinal);
+        Assert.Contains("ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("RunPrimaryActionCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowClipboardPrompt", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MainWindowToastSupportsInformationNotificationsAndActions()
+    {
+        var source = File.ReadAllText(GetRootPath("MainWindow.xaml"));
+
+        Assert.Contains("IsInfo", source, StringComparison.Ordinal);
+        Assert.Contains("检测到链接", source, StringComparison.Ordinal);
+        Assert.Contains("ExecuteActionCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DownloadViewLogDrawerSupportsSelectionCopyAndClear()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var logTextBox = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "TextBox"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Name" && attribute.Value == "LogTextBox"));
+
+        Assert.NotNull(logTextBox);
+        Assert.Equal("True", logTextBox!.Attribute("IsReadOnly")?.Value);
+        Assert.Equal("Auto", logTextBox.Attribute("VerticalScrollBarVisibility")?.Value);
+        Assert.Equal("Auto", logTextBox.Attribute("HorizontalScrollBarVisibility")?.Value);
+        Assert.Contains("LogExpander", source, StringComparison.Ordinal);
+        Assert.Contains("CopyLogCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ClearLogCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void DownloadViewRecentHistoryOpenActionPassesAvailableFilePath()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var button = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Button"
+            && (element.Attribute("Command")?.Value ?? "")
+                .Contains("HistoryVM.OpenFolderCommand", StringComparison.Ordinal));
+
+        Assert.NotNull(button);
+        Assert.Equal("{Binding AvailableFilePath}", button!.Attribute("CommandParameter")?.Value);
+    }
+
     [Theory]
     [InlineData("PasteUrlCommand")]
     [InlineData("StartDownloadCommand")]
@@ -992,101 +320,483 @@ public class XamlBindingTests
     public void DownloadViewActionButtonsExposeTooltipAndAutomationName(string commandName)
     {
         var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
-
-        var button = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+        var button = FindButtonByCommand(document, commandName);
 
         Assert.NotNull(button);
         Assert.False(string.IsNullOrWhiteSpace(button!.Attribute("ToolTip")?.Value));
-        Assert.False(string.IsNullOrWhiteSpace(button
-            .Attributes()
-            .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
-            ?.Value));
+        Assert.False(string.IsNullOrWhiteSpace(AutomationName(button)));
     }
 
-    [Theory]
-    [InlineData("PasteUrlCommand")]
-    [InlineData("StartDownloadCommand")]
-    [InlineData("BrowseDirectoryCommand")]
-    [InlineData("CopyLogCommand")]
-    public void DownloadViewPrimaryActionButtonsUseFluentIconTextContent(string commandName)
+    [Fact]
+    public void BatchDownloadViewUsesResizableImportRailAndReadableQueueRows()
     {
-        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var rootGrid = document.Root!.Elements()
+            .Single(element => element.Name.LocalName == "Grid");
+        var columns = rootGrid.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .ToArray();
 
-        var button = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+        Assert.Collection(
+            columns,
+            column =>
+            {
+                Assert.Equal("400", column.Attribute("Width")?.Value);
+                Assert.Equal("320", column.Attribute("MinWidth")?.Value);
+                Assert.Equal("520", column.Attribute("MaxWidth")?.Value);
+            },
+            column => Assert.Equal("6", column.Attribute("Width")?.Value),
+            column =>
+            {
+                Assert.Equal("*", column.Attribute("Width")?.Value);
+                Assert.Equal("560", column.Attribute("MinWidth")?.Value);
+            });
 
-        Assert.NotNull(button);
-        Assert.Null(button!.Attribute("Content"));
+        var splitter = rootGrid.Elements()
+            .Single(element => element.Name.LocalName == "GridSplitter");
+        Assert.Equal("1", splitter.Attribute("Grid.Column")?.Value);
+        Assert.Equal("Columns", splitter.Attribute("ResizeDirection")?.Value);
+        Assert.Equal("PreviousAndNext", splitter.Attribute("ResizeBehavior")?.Value);
+        Assert.Equal("True", splitter.Attribute("ShowsPreview")?.Value);
+        Assert.Equal("16", splitter.Attribute("KeyboardIncrement")?.Value);
+        Assert.Equal("True", splitter.Attribute("IsTabStop")?.Value);
 
-        var textBlocks = button.Descendants()
-            .Where(element => element.Name.LocalName == "TextBlock")
+        var queueSurface = rootGrid.Elements()
+            .Single(element => element.Name.LocalName == "Grid"
+                               && element.Attribute("Grid.Column")?.Value == "2");
+        Assert.NotNull(queueSurface);
+        var overlay = rootGrid.Elements()
+            .Single(element => element.Attribute(XName.Get("Name", "http://schemas.microsoft.com/winfx/2006/xaml"))?.Value == "DragDropOverlay");
+        Assert.Equal("3", overlay.Attribute("Grid.ColumnSpan")?.Value);
+        Assert.Contains("VisibleQueueTasks", source, StringComparison.Ordinal);
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Height"
+            && element.Attribute("Value")?.Value == "68");
+
+        var queueSummary = document.Descendants().Single(element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Text")?.Value == "{Binding QueueSummaryText}");
+        Assert.Equal("NoWrap", queueSummary.Attribute("TextWrapping")?.Value);
+        Assert.Equal("CharacterEllipsis", queueSummary.Attribute("TextTrimming")?.Value);
+        Assert.Equal("{Binding QueueSummaryText}", queueSummary.Attribute("ToolTip")?.Value);
+        Assert.NotEqual("Horizontal", queueSummary.Parent?.Attribute("Orientation")?.Value);
+    }
+
+    [Fact]
+    public void BatchDownloadQueueUsesRecyclingAndDedicatedThumbnailColumn()
+    {
+        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
+        var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        var queue = document.Descendants()
+            .Single(element => element.Name.LocalName == "ListBox"
+                               && element.Attribute(x + "Name")?.Value == "QueueList");
+
+        Assert.Equal("True", queue.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.Equal("Recycling", queue.Attribute("VirtualizingPanel.VirtualizationMode")?.Value);
+        Assert.Equal("True", queue.Attribute("ScrollViewer.CanContentScroll")?.Value);
+
+        var itemGrid = queue.Descendants()
+            .First(element => element.Name.LocalName == "Grid"
+                              && element.Elements().Any(child => child.Name.LocalName == "Grid.ColumnDefinitions"));
+        var columns = itemGrid.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .Select(element => element.Attribute("Width")?.Value)
+            .ToArray();
+        Assert.Equal(new[] { "20", "92", "*", "168", "120" }, columns);
+
+        var thumbnail = itemGrid.Descendants()
+            .Single(element => element.Name.LocalName == "Image"
+                               && element.Attribute("Source")?.Value == "{Binding ThumbnailUrl}");
+        Assert.Equal("80", thumbnail.Attribute("Width")?.Value);
+        Assert.Equal("45", thumbnail.Attribute("Height")?.Value);
+        Assert.Equal("UniformToFill", thumbnail.Attribute("Stretch")?.Value);
+        Assert.Equal("Center", thumbnail.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("Center", thumbnail.Attribute("VerticalAlignment")?.Value);
+        Assert.Equal("HighQuality", thumbnail.Attribute("RenderOptions.BitmapScalingMode")?.Value);
+        Assert.Equal("1", thumbnail.Parent?.Parent?.Attribute("Grid.Column")?.Value);
+        Assert.Equal("True", thumbnail.Parent?.Attribute("ClipToBounds")?.Value);
+        Assert.Equal("True", thumbnail.Parent?.Parent?.Attribute("ClipToBounds")?.Value);
+
+        var progressHost = itemGrid.Elements().Single(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Grid.Column")?.Value == "3");
+        var progressColumns = progressHost.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Select(element => element.Attribute("Width")?.Value)
+            .ToArray();
+        var progressRows = progressHost.Elements()
+            .Single(element => element.Name.LocalName == "Grid.RowDefinitions")
+            .Elements()
+            .Select(element => element.Attribute("Height")?.Value)
+            .ToArray();
+        Assert.Equal(new[] { "*", "44" }, progressColumns);
+        Assert.Equal(new[] { "18", "*" }, progressRows);
+
+        var progressBar = progressHost.Elements().Single(element => element.Name.LocalName == "ProgressBar");
+        Assert.Equal("1", progressBar.Attribute("Grid.Row")?.Value);
+        Assert.Equal("2", progressBar.Attribute("Grid.ColumnSpan")?.Value);
+        Assert.Equal("Stretch", progressBar.Attribute("HorizontalAlignment")?.Value);
+
+        var actionHost = itemGrid.Elements().Single(element =>
+            element.Name.LocalName == "StackPanel"
+            && element.Attribute("Grid.Column")?.Value == "4");
+        Assert.Equal("Right", actionHost.Attribute("HorizontalAlignment")?.Value);
+    }
+
+    [Fact]
+    public void BatchDownloadViewExposesSixDesignerQueueFilters()
+    {
+        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
+        var filters = document.Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => (element.Attribute("Command")?.Value ?? "")
+                .Contains("SetQueueFilterCommand", StringComparison.Ordinal))
+            .Select(element => element.Attribute("CommandParameter")?.Value)
             .ToList();
 
-        Assert.Contains(textBlocks, textBlock =>
-            (textBlock.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
-            || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal));
-        Assert.Contains(textBlocks, textBlock =>
-            !string.IsNullOrWhiteSpace(textBlock.Attribute("Text")?.Value)
-            && (!textBlock.Attributes().Any(attribute => attribute.Name.LocalName == "FontFamily")
-                || (textBlock.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal)));
+        Assert.Equal(new[] { "全部", "进行中", "等待", "已暂停", "失败", "已完成" }, filters);
     }
 
-    [Theory]
-    [InlineData("ClearAllCommand")]
-    [InlineData("OpenFolderCommand")]
-    [InlineData("PreviewFileCommand")]
-    [InlineData("OpenSourceUrlCommand")]
-    [InlineData("DeleteItemCommand")]
-    public void HistoryViewActionButtonsUseFluentIconContent(string commandName)
+    [Fact]
+    public void BatchDownloadViewUsesStatusRelevantRowActions()
     {
-        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
 
-        var button = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+        Assert.Contains("OpenTaskFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("PauseTaskCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ResumeTaskCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RetryTaskCommand", source, StringComparison.Ordinal);
+        Assert.Contains("CancelTaskCommand", source, StringComparison.Ordinal);
+        Assert.Contains("Value=\"Downloading\"", source, StringComparison.Ordinal);
+        Assert.Contains("Value=\"Paused\"", source, StringComparison.Ordinal);
+        Assert.Contains("Value=\"Failed\"", source, StringComparison.Ordinal);
+        Assert.Contains("Value=\"Completed\"", source, StringComparison.Ordinal);
+    }
 
-        Assert.NotNull(button);
-        Assert.Null(button!.Attribute("Content"));
+    [Fact]
+    public void BatchDownloadViewShowsAggregateProgressAndOverflowCleanupActions()
+    {
+        var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
 
-        var icon = button.Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBlock"
-                && ((element.Attribute("FontFamily")?.Value ?? "").Contains("Segoe", StringComparison.Ordinal)
-                    || (element.Attribute("Style")?.Value ?? "").Contains("IconGlyph", StringComparison.Ordinal)));
-
-        Assert.NotNull(icon);
+        Assert.Contains("OverallProgress", source, StringComparison.Ordinal);
+        Assert.Contains("QueueSummaryText", source, StringComparison.Ordinal);
+        Assert.Contains("AggregateSpeedText", source, StringComparison.Ordinal);
+        Assert.Contains("RetryFailedCommand", source, StringComparison.Ordinal);
+        Assert.Contains("CancelAllCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ClearFinishedCommand", source, StringComparison.Ordinal);
+        Assert.Contains("Value=\"{Binding OverallProgress, Mode=OneWay}\"", source, StringComparison.Ordinal);
     }
 
     [Theory]
     [InlineData("BatchDownloadView.xaml")]
     [InlineData("HistoryView.xaml")]
-    public void PlatformLabelsUseStringVisibilityConverter(string viewFileName)
+    public void PlatformLabelsHideWhenPlatformIsEmpty(string viewFileName)
     {
         var document = XDocument.Load(GetViewPath(viewFileName));
-
-        var platformVisibilityBindings = document
-            .Descendants()
+        var bindings = document.Descendants()
             .Attributes("Visibility")
             .Select(attribute => attribute.Value)
-            .Where(value => value.Contains("Binding Platform", StringComparison.Ordinal)
-                && value.Contains("Converter=", StringComparison.Ordinal))
+            .Where(value => value.Contains("Binding Platform", StringComparison.Ordinal))
             .ToList();
 
-        Assert.NotEmpty(platformVisibilityBindings);
-        Assert.All(platformVisibilityBindings, binding =>
-            Assert.Contains("StringToVisibility", binding));
+        Assert.NotEmpty(bindings);
+        Assert.All(bindings, binding => Assert.Contains("StringToVisibility", binding));
+    }
+
+    [Fact]
+    public void HistoryViewUsesReadableFolderRailAndCompactDropdownFallback()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        var rail = document.Descendants().Single(element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute(x + "Name")?.Value == "HistoryFolderRailHost");
+        Assert.Equal("268", rail.Attribute("Width")?.Value);
+        Assert.Equal("240", rail.Attribute("MinWidth")?.Value);
+        Assert.Equal("420", rail.Attribute("MaxWidth")?.Value);
+        Assert.Contains("HistoryFolderRail", rail.Attribute("Style")?.Value ?? "", StringComparison.Ordinal);
+
+        var resizeThumb = document.Descendants().Single(element =>
+            element.Name.LocalName == "Thumb"
+            && element.Attribute(x + "Name")?.Value == "HistoryFolderRailResizeThumb");
+        Assert.Equal("6", resizeThumb.Attribute("Width")?.Value);
+        Assert.Equal("HistoryFolderRailResizeThumb_DragDelta", resizeThumb.Attribute("DragDelta")?.Value);
+        Assert.Equal("HistoryFolderRailResizeThumb_PreviewKeyDown", resizeThumb.Attribute("PreviewKeyDown")?.Value);
+        Assert.Equal("True", resizeThumb.Attribute("IsTabStop")?.Value);
+        Assert.Contains("HistoryFolderRailResizeThumb", resizeThumb.Attribute("Style")?.Value ?? "", StringComparison.Ordinal);
+        Assert.Contains("Cursor=\"SizeWE\"", source, StringComparison.Ordinal);
+        Assert.Contains("Math.Clamp", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("HistoryFolderRailMinWidth = 240", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("HistoryFolderRailMaxWidth = 420", codeBehind, StringComparison.Ordinal);
+
+        var compactFolders = document.Descendants().Single(element =>
+            element.Name.LocalName == "Grid"
+            && (element.Attribute("Style")?.Value ?? "").Contains("CompactHistoryFolders", StringComparison.Ordinal));
+        var compactColumns = compactFolders.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .Select(element => element.Attribute("Width")?.Value)
+            .ToArray();
+        Assert.Equal(new[] { "Auto", "16", "*" }, compactColumns);
+
+        var compactTitle = compactFolders.Elements().Single(element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Text")?.Value == "{Binding SelectedFolderTitle}");
+        Assert.Equal("2", compactTitle.Attribute("Grid.Column")?.Value);
+        Assert.Equal("CharacterEllipsis", compactTitle.Attribute("TextTrimming")?.Value);
+        Assert.Equal("False", compactTitle.Attribute("IsHitTestVisible")?.Value);
+
+        var historyContentHost = document.Descendants().Single(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute(x + "Name")?.Value == "HistoryContentHost");
+        var historyContentStyle = historyContentHost.Elements()
+            .Single(element => element.Name.LocalName == "Grid.Style")
+            .Elements()
+            .Single(element => element.Name.LocalName == "Style");
+        Assert.Contains(historyContentStyle.Elements(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Margin"
+            && element.Attribute("Value")?.Value == "16,0,0,0");
+        Assert.Contains(historyContentStyle.Descendants(), element =>
+            element.Name.LocalName == "DataTrigger"
+            && (element.Attribute("Binding")?.Value ?? "").Contains("IsCompactLayout", StringComparison.Ordinal)
+            && element.Descendants().Any(setter =>
+                setter.Name.LocalName == "Setter"
+                && setter.Attribute("Property")?.Value == "Margin"
+                && setter.Attribute("Value")?.Value == "0"));
+        Assert.Contains("CompactHistoryFolders", source, StringComparison.Ordinal);
+        Assert.Contains("IsCompactLayout", source, StringComparison.Ordinal);
+        Assert.Contains("CompactFolderCombo_SelectionChanged", source, StringComparison.Ordinal);
+        Assert.Contains("CompactBatchCombo_SelectionChanged", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HistoryViewLeftAlignsFolderRowsAndPulsesLeadingRecentDot()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var recentDotStyle = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style"
+            && element.Attribute(x + "Key")?.Value == "RecentFolderDot");
+
+        Assert.Contains(recentDotStyle.Elements(), setter =>
+            setter.Name.LocalName == "Setter"
+            && setter.Attribute("Property")?.Value == "Width"
+            && setter.Attribute("Value")?.Value == "8");
+        Assert.Contains(recentDotStyle.Elements(), setter =>
+            setter.Name.LocalName == "Setter"
+            && setter.Attribute("Property")?.Value == "Height"
+            && setter.Attribute("Value")?.Value == "8");
+
+        var recentTrigger = recentDotStyle.Descendants().Single(element =>
+            element.Name.LocalName == "DataTrigger"
+            && element.Attribute("Binding")?.Value == "{Binding HasRecentCompletion}"
+            && element.Attribute("Value")?.Value == "True");
+        var pulseStoryboard = recentTrigger.Descendants().Single(element => element.Name.LocalName == "Storyboard");
+        var pulseAnimation = pulseStoryboard.Elements().Single(element => element.Name.LocalName == "DoubleAnimation");
+        Assert.Equal("Forever", pulseStoryboard.Attribute("RepeatBehavior")?.Value);
+        Assert.Equal("True", pulseStoryboard.Attribute("AutoReverse")?.Value);
+        Assert.Equal("Opacity", pulseAnimation.Attribute("Storyboard.TargetProperty")?.Value);
+        Assert.Equal("0.58", pulseAnimation.Attribute("From")?.Value);
+        Assert.Equal("1", pulseAnimation.Attribute("To")?.Value);
+        Assert.Equal("0:0:1.4", pulseAnimation.Attribute("Duration")?.Value);
+
+        var leadingDot = document.Descendants().Single(element =>
+            element.Name.LocalName == "Ellipse"
+            && element.Attribute("Style")?.Value == "{StaticResource RecentFolderDot}");
+        var batchRow = leadingDot.Parent!;
+        var batchColumns = batchRow.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Select(element => element.Attribute("Width")?.Value)
+            .ToArray();
+        Assert.Equal("0", leadingDot.Attribute("Grid.Column")?.Value);
+        Assert.Equal(new[] { "16", "20", "8", "*", "Auto", "4" }, batchColumns);
+        Assert.Contains(batchRow.Elements(), element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Grid.Column")?.Value == "1"
+            && element.Attribute("Text")?.Value == "\uE8D5");
+        Assert.Contains(batchRow.Elements(), element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Grid.Column")?.Value == "3"
+            && element.Attribute("Text")?.Value == "{Binding Name}"
+            && element.Attribute("HorizontalAlignment")?.Value == "Left"
+            && element.Attribute("TextAlignment")?.Value == "Left");
+
+        var historyFolders = document.Descendants().Single(element =>
+            element.Name.LocalName == "ItemsControl"
+            && element.Attribute("ItemsSource")?.Value == "{Binding HistoryFolders}");
+        var organizerName = historyFolders.Descendants().Single(element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Text")?.Value == "{Binding Name}");
+        Assert.Equal("Left", organizerName.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("Left", organizerName.Attribute("TextAlignment")?.Value);
+
+        var cardIndicator = document.Descendants().Single(element =>
+            element.Name.LocalName == "Ellipse"
+            && (element.Attribute("Visibility")?.Value ?? "").Contains("IsRecentlyCompleted", StringComparison.Ordinal));
+        Assert.Equal("8", cardIndicator.Attribute("Width")?.Value);
+        Assert.Equal("8", cardIndicator.Attribute("Height")?.Value);
+    }
+
+    [Fact]
+    public void HistoryViewUsesResponsiveMediaGridAndVirtualizedRows()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+        var card = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Width")?.Value == "252"
+            && element.Attribute("Height")?.Value == "240");
+
+        Assert.Contains("HistoryCardRows", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryList_SizeChanged", source, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding HistoryCardRows}\"", source, StringComparison.Ordinal);
+        Assert.NotNull(card);
+        Assert.Equal("0,0,16,16", card!.Attribute("Margin")?.Value);
+        Assert.Contains("private const double HistoryCardSlotWidth = 268;", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HistoryViewExposesSearchMediaFiltersAndSelectionToolbar()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var searchColumn = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "ColumnDefinition"
+            && element.Attribute("Width")?.Value == "280");
+
+        Assert.NotNull(searchColumn);
+        Assert.Contains("SearchKeyword", source, StringComparison.Ordinal);
+        Assert.Contains("SetMediaFilterCommand", source, StringComparison.Ordinal);
+        Assert.Contains("SelectionHistoryToolbar", source, StringComparison.Ordinal);
+        Assert.Contains("ToggleSelectAllVisibleCommand", source, StringComparison.Ordinal);
+        Assert.Contains("MoveSelectedToFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("RemoveSelectedFromFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("DeleteSelectedCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HistoryViewKeepsFolderOrganizationAndDragDropBehavior()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+        var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
+
+        Assert.Contains("HistoryFolders", source, StringComparison.Ordinal);
+        Assert.Contains("BatchFolderCards", source, StringComparison.Ordinal);
+        Assert.Contains("BulkTargetFolderPlaceholderText", source, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding HasHistoryFolders}\"", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentLocationPathText", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentLocationFileCountText", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentLocationSizeText", source, StringComparison.Ordinal);
+        Assert.Contains("CreateFolderCommand", source, StringComparison.Ordinal);
+        Assert.Contains("DeleteBatchCommand", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryFolder_Drop", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryCard_PreviewMouseMove", source, StringComparison.Ordinal);
+        Assert.Contains("HistoryCard_PreviewMouseLeftButtonUp", source, StringComparison.Ordinal);
+        Assert.Contains("DragDrop.DoDragDrop", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("history.IsSelected = !history.IsSelected", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HistoryBatchFolderDeletionIsAvailableFromTheRowContextMenuOnly()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var batchFolders = document.Descendants().First(element =>
+            element.Name.LocalName == "ItemsControl"
+            && element.Attribute("ItemsSource")?.Value == "{Binding BatchFolderCards}");
+        var contextMenu = Assert.Single(
+            batchFolders.Descendants(),
+            element => element.Name.LocalName == "ContextMenu");
+        var deleteMenuItem = Assert.Single(
+            contextMenu.Descendants(),
+            element => element.Name.LocalName == "MenuItem");
+
+        Assert.Equal(
+            "{Binding PlacementTarget, RelativeSource={RelativeSource Self}}",
+            contextMenu.Attribute("DataContext")?.Value);
+        Assert.Equal("{Binding Tag.DeleteBatchCommand}", deleteMenuItem.Attribute("Command")?.Value);
+        Assert.Equal("{Binding DataContext}", deleteMenuItem.Attribute("CommandParameter")?.Value);
+        Assert.DoesNotContain(batchFolders.Descendants()
+            .Where(element => element.Name.LocalName == "Button"),
+            button => (button.Attribute("Command")?.Value ?? "")
+                .Contains("DeleteBatchCommand", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void HistoryViewQuickActionsUseAvailableFilePath()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var quickActions = document.Descendants()
+            .Where(element => element.Name.LocalName == "Button")
+            .Where(element => AutomationName(element) is "打开文件夹" or "预览文件")
+            .ToList();
+
+        Assert.Equal(2, quickActions.Count);
+        Assert.All(quickActions, button =>
+            Assert.Equal("{Binding AvailableFilePath}", button.Attribute("CommandParameter")?.Value));
+    }
+
+    [Fact]
+    public void HistoryCardsShowAttachmentSummaryAndMissingFileRecovery()
+    {
+        var source = File.ReadAllText(GetViewPath("HistoryView.xaml"));
+
+        Assert.Contains("AttachmentSummaryText", source, StringComparison.Ordinal);
+        Assert.Contains("HasAttachmentSummary", source, StringComparison.Ordinal);
+        Assert.Contains("FileExists", source, StringComparison.Ordinal);
+        Assert.Contains("文件缺失", source, StringComparison.Ordinal);
+        Assert.Contains("RedownloadHistoryItemCommand", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsViewUsesSevenCategoryInformationArchitecture()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        var categories = document.Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => (element.Attribute("Command")?.Value ?? "")
+                .Contains("SelectCategoryCommand", StringComparison.Ordinal))
+            .Select(element => element.Attribute("CommandParameter")?.Value)
+            .ToList();
+
+        Assert.Equal(new[]
+        {
+            "常规", "下载", "网络", "账号与 Cookie", "集成", "更新与环境", "数据管理"
+        }, categories);
+    }
+
+    [Fact]
+    public void SettingsViewStretchesReadableContentAndKeepsInputsUsable()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        var content = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("MaxWidth")?.Value == "1080");
+        var telegramInputs = document.Descendants()
+            .Where(element => element.Name.LocalName == "TextBox")
+            .Where(element => (element.Attribute("Text")?.Value ?? "")
+                .Contains("Tg", StringComparison.Ordinal))
+            .ToList();
+        var ffmpegButton = FindButtonByCommand(document, "CheckEnvironmentCommand");
+
+        Assert.NotNull(content);
+        Assert.Equal("Left", content!.Attribute("HorizontalAlignment")?.Value);
+        Assert.NotEmpty(telegramInputs);
+        Assert.All(telegramInputs, input => Assert.Equal("320", input.Attribute("MinWidth")?.Value));
+        Assert.Equal("1", ffmpegButton?.Attribute("Grid.Column")?.Value);
     }
 
     [Theory]
@@ -1096,110 +806,101 @@ public class XamlBindingTests
     public void SettingsEnvironmentButtonsBindExpectedEnabledState(string commandName, string enabledProperty)
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-
-        var button = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attributes("Command").Any(attribute =>
-                    attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+        var button = FindButtonByCommand(document, commandName);
 
         Assert.NotNull(button);
-        var isEnabled = button!.Attribute("IsEnabled")?.Value ?? "";
-        Assert.Contains(enabledProperty, isEnabled);
-    }
-    [Fact]
-    public void SettingsUpdateStatusMessageVisibilityUsesMessageContent()
-    {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-
-        var statusTextBlock = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBlock"
-                && element.Attributes("Text").Any(attribute =>
-                    attribute.Value.Contains("UpdateStatusMessage", StringComparison.Ordinal)));
-
-        Assert.NotNull(statusTextBlock);
-        var visibility = statusTextBlock!.Attribute("Visibility")?.Value ?? "";
-        Assert.Contains("UpdateStatusMessage", visibility);
-        Assert.Contains("StringToVisibility", visibility);
-    }
-
-    [Fact]
-    public void SettingsInstallStatusStageVisibilityUsesStageContent()
-    {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-
-        var stageTextBlock = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBlock"
-                && element.Attributes("Text").Any(attribute =>
-                    attribute.Value.Contains("InstallStatusStage", StringComparison.Ordinal)));
-
-        Assert.NotNull(stageTextBlock);
-        var visibility = stageTextBlock!.Attribute("Visibility")?.Value ?? "";
-        Assert.Contains("InstallStatusStage", visibility);
-        Assert.Contains("StringToVisibility", visibility);
-    }
-
-    [Fact]
-    public void SettingsViewExposesAria2cToggle()
-    {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-
-        var aria2cToggle = document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "ToggleButton"
-                && element.Attributes("IsChecked").Any(attribute =>
-                    attribute.Value.Contains("UseAria2c", StringComparison.Ordinal)));
-
-        Assert.NotNull(aria2cToggle);
-        Assert.Contains(
-            document.Descendants().Attributes("Text").Select(attribute => attribute.Value),
-            text => text.Contains("aria2c", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(enabledProperty, button!.Attribute("IsEnabled")?.Value ?? "");
     }
 
     [Fact]
     public void SettingsViewExposesApplicationUpdateControls()
     {
-        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
-        var texts = document.Descendants().Attributes("Text").Select(attribute => attribute.Value).ToList();
+        var source = File.ReadAllText(GetViewPath("SettingsView.xaml"));
 
-        Assert.Contains("版本与更新", texts);
-        Assert.Contains("当前软件版本", texts);
-        Assert.Contains("检查新版本", texts);
-        Assert.Contains("下载更新包", texts);
-        Assert.Contains("安装更新", texts);
-        Assert.Contains("AppVersionText", source);
-        Assert.Contains("CheckAppUpdateCommand", source);
-        Assert.Contains("DownloadAppUpdateCommand", source);
-        Assert.Contains("InstallAppUpdateCommand", source);
-        Assert.Contains("AppUpdateProgress", source);
-        Assert.Contains("AccentProgressBar", source);
+        Assert.Contains("CheckAppUpdateCommand", source, StringComparison.Ordinal);
+        Assert.Contains("DownloadAppUpdateCommand", source, StringComparison.Ordinal);
+        Assert.Contains("InstallAppUpdateCommand", source, StringComparison.Ordinal);
+        Assert.Contains("AppUpdateProgress", source, StringComparison.Ordinal);
+        Assert.Contains("AppVersionText", source, StringComparison.Ordinal);
+        Assert.Contains("AppRuntimeText", source, StringComparison.Ordinal);
     }
-    [Fact]
-    public void BatchDownloadViewUsesStatefulQueueCards()
-    {
-        var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
-        var source = document.ToString(SaveOptions.DisableFormatting);
 
-        // Verify left status line presence
-        Assert.Contains("4px left status line", source);
-        // Verify stateful button commands
-        Assert.Contains("PauseTaskCommand", source);
-        Assert.Contains("ResumeTaskCommand", source);
-        Assert.Contains("RetryTaskCommand", source);
-        Assert.Contains("CancelTaskCommand", source);
-        // Verify playback scrim has been removed from ListBox.ItemTemplate
-        var itemTemplate = document.Descendants()
-            .FirstOrDefault(e => e.Name.LocalName == "ListBox.ItemTemplate");
-        Assert.NotNull(itemTemplate);
-        var itemTemplateSource = itemTemplate!.ToString(SaveOptions.DisableFormatting);
-        Assert.DoesNotContain("ScrimBrush", itemTemplateSource);
+    [Fact]
+    public void SettingsViewExposesPersistedClipboardAndAria2cToggles()
+    {
+        var source = File.ReadAllText(GetViewPath("SettingsView.xaml"));
+
+        Assert.Contains("ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("UseAria2c", source, StringComparison.Ordinal);
+        Assert.Contains("aria2c 外部下载器", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsDataManagementUsesConfirmationCommands()
+    {
+        var source = File.ReadAllText(GetViewPath("SettingsView.xaml"));
+
+        Assert.Contains("ConfirmClearAllManagedSessionsCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ConfirmClearCookieCommand", source, StringComparison.Ordinal);
+        Assert.Contains("ConfirmTgLogOutCommand", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Command=\"{Binding ClearAllManagedSessionsCommand}\"", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ConfirmationDialogDefaultsToCancelAndUsesDestructiveBrush()
+    {
+        var document = XDocument.Load(GetViewPath("ConfirmationDialog.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+        var cancel = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Button"
+            && element.Attribute("IsCancel")?.Value == "True");
+
+        Assert.Equal("None", document.Root?.Attribute("WindowStyle")?.Value);
+        Assert.Equal("True", document.Root?.Attribute("AllowsTransparency")?.Value);
+        Assert.NotNull(cancel);
+        Assert.Equal("True", cancel!.Attribute("IsDefault")?.Value);
+        Assert.Contains("DestructiveBrush", source, StringComparison.Ordinal);
+        Assert.Contains("ConfirmText", source, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("DownloadView.xaml", "单个下载")]
+    [InlineData("BatchDownloadView.xaml", "批量下载")]
+    [InlineData("HistoryView.xaml", "下载历史")]
+    [InlineData("SettingsView.xaml", "设置")]
+    public void MainPageTitlesUseCompactDesignerTypography(string viewFileName, string titleText)
+    {
+        var document = XDocument.Load(GetViewPath(viewFileName));
+        var title = document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Text")?.Value == titleText);
+
+        Assert.NotNull(title);
+        Assert.Contains("TextPageTitle", title!.Attribute("Style")?.Value ?? "");
+    }
+
+    [Fact]
+    public void ViewsDoNotRenderPrototypePlaceholderStatusCopy()
+    {
+        var files = new[]
+        {
+            GetRootPath("MainWindow.xaml"),
+            GetViewPath("DownloadView.xaml"),
+            GetViewPath("BatchDownloadView.xaml"),
+            GetViewPath("HistoryView.xaml")
+        };
+        var forbidden = new[]
+        {
+            "PRO ACCOUNT", "SERVER STATUS", "V1.0.8", "v1.2.4",
+            "磁盘空间充足", "Batch Operations", "无限制", "系统默认"
+        };
+
+        foreach (var file in files)
+        {
+            var source = File.ReadAllText(file);
+            foreach (var text in forbidden)
+                Assert.DoesNotContain(text, source, StringComparison.Ordinal);
+        }
     }
 
     [Theory]
@@ -1209,69 +910,29 @@ public class XamlBindingTests
     public void IconOnlyButtonsExposeTooltipAndAutomationName(string viewFileName)
     {
         var document = XDocument.Load(GetViewPath(viewFileName));
-
-        var missingHints = document
-            .Descendants()
+        var missingHints = document.Descendants()
             .Where(element => element.Name.LocalName == "Button")
             .Where(element => IsIconOnlyContent(element.Attribute("Content")?.Value))
-            .Select(element => new
-            {
-                Content = element.Attribute("Content")?.Value ?? "",
-                ToolTip = element.Attribute("ToolTip")?.Value ?? "",
-                AutomationName = element
-                    .Attributes()
-                    .FirstOrDefault(attribute =>
-                        attribute.Name.LocalName == "AutomationProperties.Name")
-                    ?.Value ?? ""
-            })
-            .Where(button =>
-                string.IsNullOrWhiteSpace(button.ToolTip)
-                || string.IsNullOrWhiteSpace(button.AutomationName))
-            .Select(button =>
-                $"{viewFileName} Content=\"{button.Content}\" ToolTip=\"{button.ToolTip}\" AutomationProperties.Name=\"{button.AutomationName}\"")
+            .Where(element => string.IsNullOrWhiteSpace(element.Attribute("ToolTip")?.Value)
+                || string.IsNullOrWhiteSpace(AutomationName(element)))
+            .Select(element => element.Attribute("Content")?.Value ?? "")
             .ToList();
 
-        Assert.True(
-            missingHints.Count == 0,
-            "Icon-only buttons must expose ToolTip and AutomationProperties.Name. Missing: "
+        Assert.True(missingHints.Count == 0,
+            "Icon-only buttons must expose ToolTip and AutomationProperties.Name: "
                 + string.Join("; ", missingHints));
     }
 
-    [Fact]
-    public void DeadControlsAreCompletelyRemovedFromXaml()
-    {
-        var mainDocument = XDocument.Load(GetRootPath("MainWindow.xaml"));
-        var toast = mainDocument
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Border"
-                && element.Attribute("Name")?.Value == "NotificationToast");
-        Assert.Null(toast);
+    private static XElement? FindButtonByCommand(XDocument document, string commandName)
+        => document.Descendants().FirstOrDefault(element =>
+            element.Name.LocalName == "Button"
+            && element.Attributes("Command").Any(attribute =>
+                attribute.Value.Contains(commandName, StringComparison.Ordinal)));
 
-        var historyDocument = XDocument.Load(GetViewPath("HistoryView.xaml"));
-        var searchButton = historyDocument
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "Button"
-                && element.Attribute("Command")?.Value == "{Binding SearchCommand}");
-        Assert.Null(searchButton);
-
-        var collapsedFilterStack = historyDocument
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "StackPanel"
-                && element.Attribute("Visibility")?.Value == "Collapsed"
-                && element.Descendants().Any(child =>
-                    child.Name.LocalName == "Button"
-                    && child.Attribute("Command")?.Value == "{Binding SetMediaFilterCommand}"));
-        Assert.Null(collapsedFilterStack);
-    }
-
-    private static string GetViewPath(string fileName)
-        => TestRepositoryPaths.GetViewPath(fileName);
-
-    private static string GetRootPath(string fileName)
-        => TestRepositoryPaths.GetRootPath(fileName);
+    private static string AutomationName(XElement element)
+        => element.Attributes()
+            .FirstOrDefault(attribute => attribute.Name.LocalName == "AutomationProperties.Name")
+            ?.Value ?? "";
 
     private static bool IsIconOnlyContent(string? content)
     {
@@ -1282,23 +943,9 @@ public class XamlBindingTests
         return value.Length <= 3 && value.All(character => !char.IsLetterOrDigit(character));
     }
 
-    private static XElement? FindTextBlockByText(XDocument document, string text)
-    {
-        return document
-            .Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "TextBlock"
-                && TextBlockText(element).Contains(text, StringComparison.Ordinal));
-    }
+    private static string GetViewPath(string fileName)
+        => TestRepositoryPaths.GetViewPath(fileName);
 
-    private static string TextBlockText(XElement textBlock)
-    {
-        var directText = textBlock.Attribute("Text")?.Value ?? "";
-        var runText = string.Concat(textBlock
-            .Descendants()
-            .Where(element => element.Name.LocalName == "Run")
-            .Select(element => element.Attribute("Text")?.Value ?? ""));
-
-        return directText + runText;
-    }
+    private static string GetRootPath(string fileName)
+        => TestRepositoryPaths.GetRootPath(fileName);
 }
