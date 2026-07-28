@@ -20,6 +20,9 @@ public partial class DownloadViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly IVideoInfoProvider _videoInfoProvider;
+    private readonly DownloadPreflightService _preflightService;
+    private readonly HistoryService? _historyService;
+    private readonly DownloadDuplicateDetector? _duplicateDetector;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
     private CancellationTokenSource? _parseCts;
@@ -59,6 +62,7 @@ public partial class DownloadViewModel : ObservableObject
     private string _lastClipboardPromptUrl = "";
 
     public event Action<string>? ClipboardLinkDetected;
+    public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
 
     // 当前任务状态
     [ObservableProperty]
@@ -100,8 +104,22 @@ public partial class DownloadViewModel : ObservableObject
         : CurrentTask.OutputFilePath;
     public string CurrentErrorMessage => CurrentTask?.ErrorMessage ?? "";
 
-    public DownloadViewModel(DownloadManager downloadManager, ConfigService configService, IVideoInfoProvider videoInfoProvider)
-        : this(downloadManager, configService, videoInfoProvider, StartProcess)
+    public DownloadViewModel(
+        DownloadManager downloadManager,
+        ConfigService configService,
+        IVideoInfoProvider videoInfoProvider,
+        DownloadPreflightService? preflightService = null,
+        HistoryService? historyService = null,
+        DownloadDuplicateDetector? duplicateDetector = null)
+        : this(
+            downloadManager,
+            configService,
+            videoInfoProvider,
+            StartProcess,
+            null,
+            preflightService,
+            historyService,
+            duplicateDetector)
     {
     }
 
@@ -110,11 +128,17 @@ public partial class DownloadViewModel : ObservableObject
         ConfigService configService,
         IVideoInfoProvider videoInfoProvider,
         Action<ProcessStartInfo> startProcess,
-        Func<string?>? readClipboardText = null)
+        Func<string?>? readClipboardText = null,
+        DownloadPreflightService? preflightService = null,
+        HistoryService? historyService = null,
+        DownloadDuplicateDetector? duplicateDetector = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _videoInfoProvider = videoInfoProvider;
+        _preflightService = preflightService ?? new DownloadPreflightService();
+        _historyService = historyService;
+        _duplicateDetector = duplicateDetector;
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
@@ -316,6 +340,35 @@ public partial class DownloadViewModel : ObservableObject
         {
             UrlError = "未能从输入中识别出有效链接";
             return;
+        }
+
+        if (_historyService is not null && _duplicateDetector is not null)
+        {
+            var duplicate = await _duplicateDetector.DetectAsync(cleanUrl, _historyService);
+            if (duplicate.IsDuplicate)
+            {
+                var locationHint = string.IsNullOrWhiteSpace(duplicate.ExistingPath)
+                    ? "下载历史中已有相同链接。"
+                    : $"本地已有文件：{duplicate.ExistingPath}";
+                if (ConfirmFunc?.Invoke($"{locationHint}\n是否仍然重新下载？", "重复下载确认") != true)
+                    return;
+            }
+        }
+
+        var preflight = _preflightService.Check(
+            DownloadDirectory,
+            PreviewInfo?.FileSize ?? 0);
+        if (!preflight.CanProceed)
+        {
+            UrlError = preflight.BlockingMessage;
+            return;
+        }
+
+        DownloadDirectory = preflight.OutputDirectory;
+        foreach (var warning in preflight.Issues.Where(issue =>
+                     issue.Severity == DownloadPreflightSeverity.Warning))
+        {
+            LogLines.Add($"[{DateTime.Now:HH:mm:ss}] 提示: {warning.Message}");
         }
 
         IsDownloading = true;

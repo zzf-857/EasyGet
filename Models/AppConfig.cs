@@ -144,6 +144,24 @@ public class AppConfig
     /// <summary>窗口激活时是否检测剪贴板中的媒体链接</summary>
     public bool ClipboardMonitoringEnabled { get; set; } = true;
 
+    /// <summary>首次运行就绪检查是否已经成功完成</summary>
+    public bool FirstRunCompleted { get; set; }
+
+    /// <summary>下载活动期间是否阻止 Windows 自动休眠</summary>
+    public bool PreventSleepDuringDownloads { get; set; } = true;
+
+    /// <summary>最小化主窗口时是否收纳到系统托盘</summary>
+    public bool MinimizeToTray { get; set; } = true;
+
+    /// <summary>下载完成或失败时是否显示系统托盘通知</summary>
+    public bool SystemNotificationsEnabled { get; set; } = true;
+
+    /// <summary>是否在后台定期检查 EasyGet 更新</summary>
+    public bool AutomaticUpdateChecksEnabled { get; set; } = true;
+
+    /// <summary>最近一次后台更新检查时间</summary>
+    public DateTimeOffset? LastAutomaticUpdateCheckUtc { get; set; }
+
     /// <summary>主题配色名称 (Indigo, Teal, Rose, Amber, Blue)</summary>
     public string ThemeColor { get; set; } = "Indigo";
 

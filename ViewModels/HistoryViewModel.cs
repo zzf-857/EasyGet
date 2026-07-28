@@ -20,6 +20,7 @@ public partial class HistoryViewModel : ObservableObject
     private readonly ConfigService _configService;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Action<Func<Task>> _scheduleHistoryUpdate;
+    private readonly DownloadFileDeletionService _fileDeletionService;
     private readonly SemaphoreSlim _historyLoadSemaphore = new(1, 1);
     private readonly object _initialHistoryLoadGate = new();
     private readonly object _historyAddedGate = new();
@@ -194,8 +195,11 @@ public partial class HistoryViewModel : ObservableObject
     {
     }
 
-    public HistoryViewModel(HistoryService historyService, ConfigService configService)
-        : this(historyService, configService, StartProcess)
+    public HistoryViewModel(
+        HistoryService historyService,
+        ConfigService configService,
+        DownloadFileDeletionService? fileDeletionService = null)
+        : this(historyService, configService, StartProcess, null, fileDeletionService)
     {
     }
 
@@ -208,12 +212,14 @@ public partial class HistoryViewModel : ObservableObject
         HistoryService historyService,
         ConfigService configService,
         Action<ProcessStartInfo> startProcess,
-        Action<Func<Task>>? scheduleHistoryUpdate = null)
+        Action<Func<Task>>? scheduleHistoryUpdate = null,
+        DownloadFileDeletionService? fileDeletionService = null)
     {
         _historyService = historyService;
         _configService = configService;
         _startProcess = startProcess;
         _scheduleHistoryUpdate = scheduleHistoryUpdate ?? ScheduleHistoryUpdate;
+        _fileDeletionService = fileDeletionService ?? new DownloadFileDeletionService();
         _historyService.HistoryAdded += OnHistoryAdded;
     }
 
@@ -1130,6 +1136,72 @@ public partial class HistoryViewModel : ObservableObject
         await _historyService.DeleteManyAsync(selected.Select(item => item.Id));
         await LoadHistory();
         RequestShowNotification?.Invoke($"已删除 {selected.Count} 条历史记录，本地文件未受影响", true);
+    }
+
+    [RelayCommand(CanExecute = nameof(HasSelection))]
+    private async Task DeleteSelectedFilesAndRecords()
+    {
+        var selected = GetSelectedItems();
+        if (selected.Count == 0)
+            return;
+
+        if (ConfirmFunc?.Invoke(
+                $"将永久删除选中 {selected.Count} 项的本地文件，并删除对应历史记录。此操作不可恢复。是否继续？",
+                "删除本地文件和历史") != true)
+        {
+            return;
+        }
+
+        var allowedRoots = new[] { _configService.Config.DefaultDownloadPath }
+            .Concat(selected.Select(item => item.BatchDirectory));
+        var result = await Task.Run(() => _fileDeletionService.DeleteFiles(selected, allowedRoots));
+        await _historyService.DeleteManyAsync(selected.Select(item => item.Id));
+        await LoadHistory();
+
+        var message = $"已删除 {result.DeletedFileCount} 个本地文件和 {selected.Count} 条历史记录";
+        if (result.SkippedUnsafePathCount > 0 || result.Errors.Count > 0)
+            message += $"；{result.SkippedUnsafePathCount + result.Errors.Count} 个文件因路径或权限问题未删除";
+        RequestShowNotification?.Invoke(message, result.Errors.Count == 0);
+    }
+
+    [RelayCommand]
+    private async Task CleanMissingHistoryRecords()
+    {
+        var allItems = await _historyService.GetAllAsync();
+        var missing = allItems.Where(item =>
+            {
+                var candidates = EnumerateExistingCandidates(item).ToArray();
+                return candidates.Length > 0
+                       && candidates.All(path => !File.Exists(path) && !Directory.Exists(path));
+            })
+            .ToList();
+        if (missing.Count == 0)
+        {
+            RequestShowNotification?.Invoke("没有发现失效的历史记录。", true);
+            return;
+        }
+
+        if (ConfirmFunc?.Invoke(
+                $"发现 {missing.Count} 条记录对应的本地文件已不存在。是否清理这些记录？",
+                "清理失效历史") != true)
+        {
+            return;
+        }
+
+        await _historyService.DeleteManyAsync(missing.Select(item => item.Id));
+        await LoadHistory();
+        RequestShowNotification?.Invoke($"已清理 {missing.Count} 条失效历史记录。", true);
+    }
+
+    private static IEnumerable<string> EnumerateExistingCandidates(DownloadHistory item)
+    {
+        if (!string.IsNullOrWhiteSpace(item.FilePath))
+            yield return item.FilePath;
+        foreach (var path in item.AttachmentFilePaths)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+                yield return path;
+        }
     }
 
     public IReadOnlyList<long> PrepareHistoryDrag(long itemId)

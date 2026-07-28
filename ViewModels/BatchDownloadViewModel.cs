@@ -20,6 +20,9 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly YtDlpService _ytDlpService;
+    private readonly DownloadPreflightService _preflightService;
+    private readonly HistoryService? _historyService;
+    private readonly DownloadDuplicateDetector? _duplicateDetector;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
     private readonly HashSet<DownloadTask> _trackedQueueTasks = [];
@@ -132,8 +135,22 @@ public partial class BatchDownloadViewModel : ObservableObject
         RequestShowNotification?.Invoke(string.Join("，", details), validUrls.Count > 0);
     }
 
-    public BatchDownloadViewModel(DownloadManager downloadManager, ConfigService configService, YtDlpService ytDlpService)
-        : this(downloadManager, configService, ytDlpService, StartProcess)
+    public BatchDownloadViewModel(
+        DownloadManager downloadManager,
+        ConfigService configService,
+        YtDlpService ytDlpService,
+        DownloadPreflightService? preflightService = null,
+        HistoryService? historyService = null,
+        DownloadDuplicateDetector? duplicateDetector = null)
+        : this(
+            downloadManager,
+            configService,
+            ytDlpService,
+            StartProcess,
+            null,
+            preflightService,
+            historyService,
+            duplicateDetector)
     {
     }
 
@@ -142,11 +159,17 @@ public partial class BatchDownloadViewModel : ObservableObject
         ConfigService configService,
         YtDlpService ytDlpService,
         Action<ProcessStartInfo> startProcess,
-        Func<string?>? readClipboardText = null)
+        Func<string?>? readClipboardText = null,
+        DownloadPreflightService? preflightService = null,
+        HistoryService? historyService = null,
+        DownloadDuplicateDetector? duplicateDetector = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _ytDlpService = ytDlpService;
+        _preflightService = preflightService ?? new DownloadPreflightService();
+        _historyService = historyService;
+        _duplicateDetector = duplicateDetector;
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
@@ -349,6 +372,26 @@ public partial class BatchDownloadViewModel : ObservableObject
                 return;
             }
 
+            if (_historyService is not null && _duplicateDetector is not null)
+            {
+                var history = await _historyService.GetAllAsync();
+                var duplicateUrls = urls
+                    .Where(url => _duplicateDetector.Detect(url, history).IsDuplicate)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                if (duplicateUrls.Count > 0
+                    && ConfirmFunc?.Invoke(
+                        $"发现 {duplicateUrls.Count} 个链接已在历史或本地文件中。\n是否仍然全部重新下载？选择“否”将跳过重复项。",
+                        "批量重复下载确认") != true)
+                {
+                    urls = urls.Where(url => !duplicateUrls.Contains(url)).ToList();
+                    if (urls.Count == 0)
+                    {
+                        RequestShowNotification?.Invoke("已跳过全部重复链接，没有新增任务。", true);
+                        return;
+                    }
+                }
+            }
+
             var batch = BatchDownloadOrganizer.Create(
                 _configService.Config.DefaultDownloadPath,
                 urls,
@@ -356,6 +399,19 @@ public partial class BatchDownloadViewModel : ObservableObject
                 collectionTitle: isExactCollectionImport ? _pendingCollectionTitle : "");
             var outputDirectory = batch?.Directory
                 ?? _configService.Config.DefaultDownloadPath;
+
+            var preflight = _preflightService.Check(outputDirectory);
+            if (!preflight.CanProceed)
+            {
+                RequestShowNotification?.Invoke(preflight.BlockingMessage, false);
+                return;
+            }
+            outputDirectory = preflight.OutputDirectory;
+            foreach (var warning in preflight.Issues.Where(issue =>
+                         issue.Severity == DownloadPreflightSeverity.Warning))
+            {
+                RequestShowNotification?.Invoke(warning.Message, false);
+            }
 
             var format = SelectedFormat switch
             {

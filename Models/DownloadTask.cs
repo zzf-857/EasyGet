@@ -112,8 +112,15 @@ public partial class DownloadTask : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private DownloadStatus _status = DownloadStatus.Waiting;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private bool _wasRestoredFromPreviousSession;
+
     partial void OnStatusChanged(DownloadStatus value)
     {
+        if (value != DownloadStatus.Paused && WasRestoredFromPreviousSession)
+            WasRestoredFromPreviousSession = false;
+
         if (value == DownloadStatus.Downloading)
             return;
 
@@ -139,6 +146,7 @@ public partial class DownloadTask : ObservableObject
         DownloadStatus.Completed => "已完成",
         DownloadStatus.Failed => "失败",
         DownloadStatus.Cancelled => "已取消",
+        DownloadStatus.Paused when WasRestoredFromPreviousSession => "已暂停（会话恢复）",
         DownloadStatus.Paused => "已暂停",
         _ => "未知"
     };

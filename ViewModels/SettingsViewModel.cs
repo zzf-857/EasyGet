@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EasyGet.Models;
@@ -25,7 +26,7 @@ public partial class SettingsViewModel : ObservableObject
         "账号与 Cookie" => "平台登录状态与 Cookie 获取策略",
         "集成" => "Telegram 账号绑定与外部服务",
         "更新与环境" => "EasyGet、yt-dlp、ffmpeg 与运行环境",
-        "数据管理" => "清理本地历史、登录状态与会话数据",
+        "数据管理" => "备份、恢复、诊断与清理本地数据",
         _ => "EasyGet 设置"
     };
 
@@ -72,6 +73,8 @@ public partial class SettingsViewModel : ObservableObject
     private readonly IBrowserCookieLoginDetector _browserLoginDetector;
     private readonly CookieAcquisitionCoordinator? _cookieCoordinator;
     private readonly PlatformCookieVault _cookieVault;
+    private readonly SupportBundleService _supportBundleService;
+    private readonly UserDataBackupService _userDataBackupService;
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _browserLoginCancellations =
         new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
@@ -184,6 +187,16 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool _autoCategorizeByPlatform = true;
     [ObservableProperty] private bool _clipboardMonitoringEnabled = true;
+    [ObservableProperty] private bool _preventSleepDuringDownloads = true;
+    [ObservableProperty] private bool _minimizeToTray = true;
+    [ObservableProperty] private bool _systemNotificationsEnabled = true;
+    [ObservableProperty] private bool _automaticUpdateChecksEnabled = true;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanManageUserData))]
+    private bool _isDataManagementOperating;
+    [ObservableProperty] private string _dataManagementStatusMessage = "";
+
+    public bool CanManageUserData => !IsDataManagementOperating;
 
     [ObservableProperty] private bool _isUpdatingYtDlp;
     [ObservableProperty] private string _updateStatusMessage = "";
@@ -272,7 +285,9 @@ public partial class SettingsViewModel : ObservableObject
         CookieAcquisitionCoordinator? cookieCoordinator = null,
         PlatformCookieVault? cookieVault = null,
         IDefaultBrowserLauncher? defaultBrowserLauncher = null,
-        IBrowserCookieLoginDetector? browserLoginDetector = null)
+        IBrowserCookieLoginDetector? browserLoginDetector = null,
+        SupportBundleService? supportBundleService = null,
+        UserDataBackupService? userDataBackupService = null)
     {
         _configService = configService;
         _envService = envService;
@@ -287,6 +302,11 @@ public partial class SettingsViewModel : ObservableObject
         _browserLoginDetector = browserLoginDetector ?? new BrowserCookieLoginDetector();
         _cookieCoordinator = cookieCoordinator;
         _cookieVault = cookieVault ?? new PlatformCookieVault(configService.ConfigDirectory);
+        _supportBundleService = supportBundleService ?? new SupportBundleService(
+            configService.ConfigDirectory,
+            [Path.Combine(AppContext.BaseDirectory, "logs")]);
+        _userDataBackupService = userDataBackupService ?? new UserDataBackupService(
+            UserDataBackupPaths.FromConfigDirectory(configService.ConfigDirectory));
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
     }
@@ -354,6 +374,10 @@ public partial class SettingsViewModel : ObservableObject
             DouyinLiveIdleTimeoutSeconds = c.DouyinLiveIdleTimeoutSeconds;
             AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
             ClipboardMonitoringEnabled = c.ClipboardMonitoringEnabled;
+            PreventSleepDuringDownloads = c.PreventSleepDuringDownloads;
+            MinimizeToTray = c.MinimizeToTray;
+            SystemNotificationsEnabled = c.SystemNotificationsEnabled;
+            AutomaticUpdateChecksEnabled = c.AutomaticUpdateChecksEnabled;
             SelectedThemeColor = c.ThemeColor;
             TgApiId = c.TgApiId;
             TgApiHash = c.TgApiHash;
@@ -1012,6 +1036,10 @@ public partial class SettingsViewModel : ObservableObject
             c.DouyinLiveIdleTimeoutSeconds = DouyinLiveIdleTimeoutSeconds;
             c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
             c.ClipboardMonitoringEnabled = ClipboardMonitoringEnabled;
+            c.PreventSleepDuringDownloads = PreventSleepDuringDownloads;
+            c.MinimizeToTray = MinimizeToTray;
+            c.SystemNotificationsEnabled = SystemNotificationsEnabled;
+            c.AutomaticUpdateChecksEnabled = AutomaticUpdateChecksEnabled;
             c.ThemeColor = SelectedThemeColor;
             c.TgApiId = TgApiId;
             c.TgApiHash = TgApiHash;
@@ -1138,6 +1166,10 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinLiveIdleTimeoutSecondsChanged(int value) => AutoSave();
     partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
     partial void OnClipboardMonitoringEnabledChanged(bool value) => AutoSave();
+    partial void OnPreventSleepDuringDownloadsChanged(bool value) => AutoSave();
+    partial void OnMinimizeToTrayChanged(bool value) => AutoSave();
+    partial void OnSystemNotificationsEnabledChanged(bool value) => AutoSave();
+    partial void OnAutomaticUpdateChecksEnabledChanged(bool value) => AutoSave();
     partial void OnTgApiIdChanged(string value) => AutoSave();
     partial void OnTgApiHashChanged(string value) => AutoSave();
     partial void OnTgPhoneNumberChanged(string value) => AutoSave();
@@ -1163,6 +1195,12 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnIsAppUpdateDownloadedChanged(bool value) => NotifyAppUpdateActionStateChanged();
     partial void OnIsCheckingAppUpdateChanged(bool value) => NotifyAppUpdateActionStateChanged();
     partial void OnIsDownloadingAppUpdateChanged(bool value) => NotifyAppUpdateActionStateChanged();
+    partial void OnIsDataManagementOperatingChanged(bool value)
+    {
+        CreateDataBackupCommand.NotifyCanExecuteChanged();
+        RestoreDataBackupCommand.NotifyCanExecuteChanged();
+        CreateSupportBundleCommand.NotifyCanExecuteChanged();
+    }
 
     private void AutoSave()
     {
@@ -1448,6 +1486,113 @@ public partial class SettingsViewModel : ObservableObject
             : $"{platform.DisplayName} 的加密手动 Cookie 已清除。";
         ManualCookieStatusText = "未配置 Cookie";
         IsManualCookieMessageSuccess = true;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageUserData))]
+    private async Task CreateDataBackup()
+    {
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "备份 EasyGet 用户数据",
+            Filter = "EasyGet 备份 (*.zip)|*.zip",
+            DefaultExt = ".zip",
+            AddExtension = true,
+            FileName = $"EasyGet-backup-{DateTime.Now:yyyyMMdd-HHmm}.zip"
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        IsDataManagementOperating = true;
+        DataManagementStatusMessage = "正在创建脱敏备份...";
+        try
+        {
+            var preview = await _userDataBackupService.CreateBackupAsync(dialog.FileName);
+            DataManagementStatusMessage = $"备份完成：{preview.HistoryRecordCount} 条历史记录。";
+        }
+        catch (Exception ex)
+        {
+            DataManagementStatusMessage = $"备份失败：{ex.Message}";
+        }
+        finally
+        {
+            IsDataManagementOperating = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageUserData))]
+    private async Task RestoreDataBackup()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "恢复 EasyGet 用户数据",
+            Filter = "EasyGet 备份 (*.zip)|*.zip",
+            CheckFileExists = true
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+
+        var validation = await _userDataBackupService.ValidateBackupAsync(dialog.FileName);
+        if (!validation.IsValid || validation.Preview is null)
+        {
+            DataManagementStatusMessage = "备份校验失败：" + string.Join("；", validation.Errors);
+            return;
+        }
+
+        if (ConfirmFunc?.Invoke(
+                $"将恢复 {validation.Preview.HistoryRecordCount} 条历史记录和非敏感设置。\n当前 Cookie、登录会话和 Telegram 凭据不会被覆盖。是否继续？",
+                "恢复用户数据") != true)
+        {
+            return;
+        }
+
+        IsDataManagementOperating = true;
+        DataManagementStatusMessage = "正在校验并恢复备份...";
+        try
+        {
+            await _userDataBackupService.RestoreBackupAsync(dialog.FileName);
+            DataManagementStatusMessage = "恢复完成，请重启 EasyGet 载入数据。";
+        }
+        catch (Exception ex)
+        {
+            DataManagementStatusMessage = $"恢复失败：{ex.Message}";
+        }
+        finally
+        {
+            IsDataManagementOperating = false;
+        }
+    }
+
+    [RelayCommand(CanExecute = nameof(CanManageUserData))]
+    private async Task CreateSupportBundle()
+    {
+        IsDataManagementOperating = true;
+        DataManagementStatusMessage = "正在收集并脱敏诊断信息...";
+        try
+        {
+            var bundlePath = await _supportBundleService.CreateAsync(
+                _appUpdateService.CurrentVersion,
+                new Dictionary<string, string>
+                {
+                    ["runtime"] = _appUpdateService.RuntimeDescription,
+                    ["yt-dlp"] = YtDlpVersion,
+                    ["ffmpeg"] = FfmpegVersion
+                });
+            DataManagementStatusMessage = $"诊断包已生成：{bundlePath}";
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = $"/select,\"{bundlePath}\"",
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            DataManagementStatusMessage = $"诊断包生成失败：{ex.Message}";
+        }
+        finally
+        {
+            IsDataManagementOperating = false;
+        }
     }
 
     [RelayCommand]

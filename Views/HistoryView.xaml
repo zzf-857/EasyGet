@@ -224,7 +224,15 @@
                         Style="{StaticResource SurfaceButton}" Command="{Binding RemoveSelectedFromFolderCommand}" Content="移出文件夹"/>
                 <Button Grid.Column="6" Height="32" Padding="12,4" Margin="8,0,0,0"
                         Style="{StaticResource SurfaceButton}" Foreground="{StaticResource ErrorBrush}"
-                        Command="{Binding DeleteSelectedCommand}" Content="删除"/>
+                        Command="{Binding DeleteSelectedCommand}" Content="删除"
+                        ToolTip="左键仅删除记录；右键可同时删除本地文件">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="同时删除本地文件"
+                                      Command="{Binding PlacementTarget.DataContext.DeleteSelectedFilesAndRecordsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
             </Grid>
         </Grid>
 

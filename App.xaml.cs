@@ -54,6 +54,27 @@ public partial class App : System.Windows.Application
             services.AddSingleton<ConfigService>();
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
+            services.AddSingleton<DownloadPreflightService>();
+            services.AddSingleton<FirstRunReadinessService>();
+            services.AddSingleton<LongRunningSessionService>();
+            services.AddSingleton<TrayIconService>();
+            services.AddSingleton<TaskQueuePersistenceService>();
+            services.AddSingleton<FailureRecoveryAdvisor>();
+            services.AddSingleton<DownloadDuplicateDetector>();
+            services.AddSingleton<DownloadFileDeletionService>();
+            services.AddSingleton<SupportBundleService>(provider =>
+            {
+                var configDirectory = provider.GetRequiredService<ConfigService>().ConfigDirectory;
+                return new SupportBundleService(
+                    configDirectory,
+                    [
+                        Path.Combine(configDirectory, "logs"),
+                        Path.Combine(AppContext.BaseDirectory, "logs")
+                    ]);
+            });
+            services.AddSingleton<UserDataBackupService>(provider =>
+                new UserDataBackupService(UserDataBackupPaths.FromConfigDirectory(
+                    provider.GetRequiredService<ConfigService>().ConfigDirectory)));
             services.AddSingleton<IBrowserProfileDiscoveryService, BrowserProfileDiscoveryService>();
             services.AddSingleton<IBrowserCookieLoginDetector, BrowserCookieLoginDetector>();
             services.AddSingleton<IDefaultBrowserLauncher, DefaultBrowserLauncher>();
@@ -84,6 +105,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<M3u8DownloadService>();
             services.AddSingleton<TelegramDownloadService>();
             services.AddSingleton<IAppUpdateService, AppUpdateService>();
+            services.AddSingleton<BackgroundUpdateCoordinator>();
             services.AddSingleton<IVideoInfoProvider, YtDlpVideoInfoProvider>();
             services.AddSingleton<DownloadManager>();
 
@@ -103,6 +125,9 @@ public partial class App : System.Windows.Application
             var configService = _serviceProvider.GetRequiredService<ConfigService>();
             await configService.LoadAsync();
             ThemeManager.ApplyTheme(configService.Config.ThemeColor);
+
+            var downloadManager = _serviceProvider.GetRequiredService<DownloadManager>();
+            await downloadManager.RestoreAsync();
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
             mainWindow.Show();

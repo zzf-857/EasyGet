@@ -130,6 +130,32 @@
                                               IsChecked="{Binding ClipboardMonitoringEnabled}"/>
                             </Grid>
                         </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="下载时防止休眠" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="存在活动下载时保持 Windows 唤醒，完成后自动恢复" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              Style="{StaticResource ToggleSwitch}"
+                                              IsChecked="{Binding PreventSleepDuringDownloads}"/>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="最小化到系统托盘" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="最小化后继续在后台运行下载任务" Margin="0,4,0,0" Style="{StaticResource TextCaption}"/></StackPanel>
+                                <ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding MinimizeToTray}"/>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="系统下载通知" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="任务完成或失败时显示系统托盘通知" Margin="0,4,0,0" Style="{StaticResource TextCaption}"/></StackPanel>
+                                <ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding SystemNotificationsEnabled}"/>
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
                     <!-- Download -->
@@ -336,6 +362,13 @@
                         <Border Style="{StaticResource SettingsRow}">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="自动检查更新" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="每天后台检查一次，仅提示，不会自动安装" Margin="0,4,0,0" Style="{StaticResource TextCaption}"/></StackPanel>
+                                <ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AutomaticUpdateChecksEnabled}"/>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="EasyGet" Style="{StaticResource TextBodyStrong}"/><TextBlock Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis"><Run Text="{Binding AppVersionText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding AppRuntimeText, Mode=OneWay}"/></TextBlock></StackPanel>
                                 <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding CheckAppUpdateCommand}" Content="检查更新"/>
                             </Grid>
@@ -377,12 +410,33 @@
 
                     <!-- Data management -->
                     <StackPanel Visibility="{Binding SelectedCategory, Converter={StaticResource EqualsToVisibilityConverter}, ConverterParameter=数据管理}">
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="用户数据备份" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="备份历史记录、整理文件夹和非敏感设置；不包含 Cookie 与登录凭据" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding RestoreDataBackupCommand}" Content="恢复"/>
+                                    <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource AccentButton}" Command="{Binding CreateDataBackupCommand}" Content="创建备份"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="诊断与支持" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="生成脱敏诊断包，用于排查环境、更新和下载失败" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
+                                <Button Grid.Column="1" Height="32" Padding="12,4" HorizontalAlignment="Right" Style="{StaticResource SurfaceButton}" Command="{Binding CreateSupportBundleCommand}" Content="生成诊断包"/>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="{Binding DataManagementStatusMessage}" Margin="0,8,0,12" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding DataManagementStatusMessage, Converter={StaticResource StringToVisibility}}"/>
                         <Border Padding="12,8" Margin="0,0,0,12" Background="{StaticResource ErrorContainerBrush}"
                                 BorderBrush="{StaticResource ErrorBrush}" BorderThickness="1" CornerRadius="6">
                             <TextBlock Text="这些操作会删除本机数据,执行前将再次确认。" Style="{StaticResource TextBody}" Foreground="{StaticResource ErrorBrush}"/>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="下载历史" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="删除资料库中的全部历史记录,不会删除媒体文件" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource DangerActionButton}" Command="{Binding DataContext.HistoryVM.ClearAllCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="清空历史"/></Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="失效历史记录" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="清理本地文件已不存在的历史记录" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource SurfaceButton}" Command="{Binding DataContext.HistoryVM.CleanMissingHistoryRecordsCommand, RelativeSource={RelativeSource AncestorType=Window}}" Content="扫描并清理"/></Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="EasyGet 登录数据" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="清除所有平台的兼容登录与加密 Cookie" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource DangerActionButton}" Command="{Binding ConfirmClearAllManagedSessionsCommand}" Content="清除全部登录"/></Grid>

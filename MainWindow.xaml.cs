@@ -18,14 +18,19 @@ public partial class MainWindow : Window
     private readonly MainViewModel _viewModel;
     private readonly ConfigService _configService;
     private readonly WindowPlacementManager _windowPlacement;
+    private readonly TrayIconService? _trayIconService;
     private bool _closeInProgress;
     private bool _closeCommitted;
 
-    public MainWindow(MainViewModel viewModel, ConfigService configService)
+    public MainWindow(
+        MainViewModel viewModel,
+        ConfigService configService,
+        TrayIconService? trayIconService = null)
     {
         InitializeComponent();
         _viewModel = viewModel;
         _configService = configService;
+        _trayIconService = trayIconService;
         DataContext = _viewModel;
         _windowPlacement = new WindowPlacementManager(this, _configService.Config.Window);
         _windowPlacement.PrepareInitialBounds();
@@ -34,6 +39,7 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
+            _trayIconService?.Initialize();
             await _viewModel.InitializeAsync();
         };
 
@@ -43,6 +49,12 @@ public partial class MainWindow : Window
         Activated += MainWindow_Activated;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
         SizeChanged += (_, _) => _viewModel.IsCompactLayout = ActualWidth < 1280;
+        StateChanged += MainWindow_StateChanged;
+        if (_trayIconService is not null)
+        {
+            _trayIconService.ShowRequested += RestoreFromTray;
+            _trayIconService.ExitRequested += ExitFromTray;
+        }
         _viewModel.IsCompactLayout = Width < 1280;
     }
 
@@ -311,7 +323,43 @@ public partial class MainWindow : Window
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_configService.Config.MinimizeToTray && _trayIconService is not null)
+        {
+            Hide();
+            _trayIconService.ShowNotification("EasyGet", "EasyGet 正在系统托盘中运行。");
+            return;
+        }
+
         WindowState = System.Windows.WindowState.Minimized;
+    }
+
+    private void MainWindow_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == System.Windows.WindowState.Minimized
+            && _configService.Config.MinimizeToTray
+            && _trayIconService is not null)
+        {
+            Hide();
+        }
+    }
+
+    private void RestoreFromTray()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            Show();
+            WindowState = System.Windows.WindowState.Normal;
+            Activate();
+        });
+    }
+
+    private void ExitFromTray()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            Show();
+            Close();
+        });
     }
 
     private void MaximizeButton_Click(object sender, RoutedEventArgs e)

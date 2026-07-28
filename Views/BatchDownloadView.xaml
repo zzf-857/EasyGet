@@ -254,7 +254,11 @@
                             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
                             <Setter Property="behaviors:Motion.PageEnter" Value="True"/>
                             <Setter Property="Template">
-                                <Setter.Value><ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate></Setter.Value>
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                    </ControlTemplate>
+                                </Setter.Value>
                             </Setter>
                         </Style>
                     </ListBox.ItemContainerStyle>

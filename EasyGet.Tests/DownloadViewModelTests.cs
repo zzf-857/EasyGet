@@ -414,6 +414,7 @@ public class DownloadViewModelTests
     {
         var root = new TestDirectory();
         var configService = new ConfigService(root.Path("config"));
+        configService.Config.DefaultDownloadPath = root.Path("downloads");
         var historyService = new HistoryService(root.Path("history.db"));
         var manager = downloadService is null
             ? new DownloadManager(
@@ -430,6 +431,7 @@ public class DownloadViewModelTests
                 videoInfoProvider,
                 startProcess ?? (_ => { }),
                 readClipboardText);
+        viewModel.Initialize();
 
         return new DownloadContext(root, historyService, manager, viewModel, videoInfoProvider);
     }

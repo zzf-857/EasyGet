@@ -12,6 +12,12 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly EnvironmentService _envService;
     private readonly DownloadManager _downloadManager;
+    private readonly ConfigService? _configService;
+    private readonly FirstRunReadinessService? _readinessService;
+    private readonly LongRunningSessionService? _longRunningSession;
+    private readonly FailureRecoveryAdvisor _failureRecoveryAdvisor;
+    private readonly TrayIconService? _trayIconService;
+    private readonly BackgroundUpdateCoordinator? _backgroundUpdateCoordinator;
 
     [ObservableProperty] private ObservableObject? _currentPage;
     [ObservableProperty] private int _selectedNavIndex;
@@ -78,10 +84,22 @@ public partial class MainViewModel : ObservableObject
         DownloadViewModel downloadVm,
         BatchDownloadViewModel batchDownloadVm,
         HistoryViewModel historyVm,
-        SettingsViewModel settingsVm)
+        SettingsViewModel settingsVm,
+        ConfigService? configService = null,
+        FirstRunReadinessService? readinessService = null,
+        LongRunningSessionService? longRunningSession = null,
+        FailureRecoveryAdvisor? failureRecoveryAdvisor = null,
+        TrayIconService? trayIconService = null,
+        BackgroundUpdateCoordinator? backgroundUpdateCoordinator = null)
     {
         _envService = envService;
         _downloadManager = downloadManager;
+        _configService = configService;
+        _readinessService = readinessService;
+        _longRunningSession = longRunningSession;
+        _failureRecoveryAdvisor = failureRecoveryAdvisor ?? new FailureRecoveryAdvisor();
+        _trayIconService = trayIconService;
+        _backgroundUpdateCoordinator = backgroundUpdateCoordinator;
 
         DownloadVM = downloadVm;
         BatchDownloadVM = batchDownloadVm;
@@ -227,6 +245,7 @@ public partial class MainViewModel : ObservableObject
     {
         DownloadVM.RefreshRuntimeConfigDisplay();
         HistoryVM.RefreshStorageStatus();
+        UpdateLongRunningSession();
     }
 
     private void OnTaskFinished(DownloadTask task)
@@ -235,14 +254,18 @@ public partial class MainViewModel : ObservableObject
         switch (task.Status)
         {
             case DownloadStatus.Completed:
-                ShowToast($"下载完成: {title}", true);
+                ShowToast($"下载完成: {title}", true, "查看历史", () => Navigate("history"));
+                ShowSystemNotification("下载完成", title, false);
                 break;
             case DownloadStatus.Failed:
+                var advice = _failureRecoveryAdvisor.Advise(task.ErrorMessage);
+                var (actionLabel, action) = CreateFailureRecoveryAction(task, advice);
                 ShowToast(
-                    BuildTaskFailureMessage(task),
+                    $"下载失败: {title}\n{advice.UserMessage}",
                     false,
-                    "查看队列",
-                    () => Navigate("batch"));
+                    actionLabel,
+                    action);
+                ShowSystemNotification("下载失败", advice.UserMessage, true);
                 break;
             case DownloadStatus.Cancelled:
                 ShowInfoToast(
@@ -252,6 +275,34 @@ public partial class MainViewModel : ObservableObject
                 break;
         }
     }
+
+    private void ShowSystemNotification(string title, string message, bool isError)
+    {
+        if (_trayIconService is null || _configService?.Config.SystemNotificationsEnabled == false)
+            return;
+
+        try
+        {
+            _trayIconService.ShowNotification(title, message, isError);
+        }
+        catch
+        {
+        }
+    }
+
+    private (string Label, Action Action) CreateFailureRecoveryAction(
+        DownloadTask task,
+        FailureRecoveryAdvice advice)
+        => advice.SuggestedActionKey switch
+        {
+            FailureRecoveryActionKeys.OpenAccountSettings => ("重新登录", () => Navigate("settings")),
+            FailureRecoveryActionKeys.OpenProxySettings => ("检查代理", () => Navigate("settings")),
+            FailureRecoveryActionKeys.RepairTools => ("修复组件", () => Navigate("settings")),
+            FailureRecoveryActionKeys.ChooseOutputFolder => ("更换目录", () => Navigate("download")),
+            FailureRecoveryActionKeys.Retry or FailureRecoveryActionKeys.RetryLater =>
+                ("重新尝试", () => _ = _downloadManager.RetryAsync(task.Id)),
+            _ => ("查看队列", () => Navigate("batch"))
+        };
 
     internal static string BuildTaskFailureMessage(DownloadTask task)
     {
@@ -313,21 +364,33 @@ public partial class MainViewModel : ObservableObject
         await HistoryVM.EnsureHistoryLoadedAsync();
 
         StatusMessage = "正在检查运行环境...";
-        var status = await _envService.CheckEnvironmentAsync();
+        var report = _readinessService is null || _configService is null
+            ? null
+            : await _readinessService.CheckAsync(_configService.Config.DefaultDownloadPath);
+        var status = report?.Environment ?? await _envService.CheckEnvironmentAsync();
 
-        if (!status.IsReady)
+        if (report is not null && !report.IsReady)
         {
-            var missingTools = string.Join("、", EnvironmentService.GetMissingToolNames(status));
-            StatusMessage = $"正在安装缺失组件: {missingTools}";
-            try
+            StatusMessage = report.Summary;
+            if (report.MissingTools.Count > 0)
             {
-                status = await _envService.InstallMissingToolsAsync(new Progress<string>(s => StatusMessage = s));
+                ShowInfoToast(
+                    $"首次使用需要安装：{string.Join("、", report.MissingTools)}",
+                    "安装并继续",
+                    () => _ = InstallRequiredComponentsAsync());
             }
-            catch (Exception ex)
-            {
-                StatusMessage = "环境安装失败，请在设置页重试或手动安装。";
-                ShowToast($"环境安装失败: {ex.Message}", false, "前往设置", () => Navigate("settings"));
-            }
+            else
+                ShowToast(report.Summary, false, "前往设置", () => Navigate("settings"));
+        }
+        else if (!status.IsReady)
+        {
+            StatusMessage = "环境未就绪，请在设置页安装缺失组件。";
+            ShowToast(StatusMessage, false, "前往设置", () => Navigate("settings"));
+        }
+        else if (_configService is not null && !_configService.Config.FirstRunCompleted)
+        {
+            _configService.Config.FirstRunCompleted = true;
+            _ = await _configService.SaveAsync();
         }
 
         SettingsVM.RefreshEnvironmentStatus();
@@ -335,6 +398,58 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = status.IsReady
             ? "Ready"
             : "环境未就绪，请检查设置。";
+        _ = CheckForBackgroundUpdateAsync();
+    }
+
+    private async Task CheckForBackgroundUpdateAsync()
+    {
+        if (_backgroundUpdateCoordinator is null)
+            return;
+
+        try
+        {
+            var update = await _backgroundUpdateCoordinator.CheckIfDueAsync();
+            if (update?.IsUpdateAvailable == true)
+            {
+                ShowInfoToast(
+                    $"发现 EasyGet v{update.LatestVersion}",
+                    "查看更新",
+                    () => Navigate("settings"));
+            }
+        }
+        catch
+        {
+            // Background checks stay silent; manual checks expose detailed errors.
+        }
+    }
+
+    private async Task InstallRequiredComponentsAsync()
+    {
+        StatusMessage = "正在安装运行组件...";
+        try
+        {
+            var status = await _envService.InstallMissingToolsAsync(
+                new Progress<string>(message => StatusMessage = message));
+            SettingsVM.RefreshEnvironmentStatus();
+            if (!status.IsReady)
+            {
+                ShowToast("运行组件安装未完成，请检查网络后重试。", false, "前往设置", () => Navigate("settings"));
+                return;
+            }
+
+            if (_configService is not null)
+            {
+                _configService.Config.FirstRunCompleted = true;
+                _ = await _configService.SaveAsync();
+            }
+            StatusMessage = "Ready";
+            ShowToast("运行组件安装完成，可以开始下载。", true);
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "环境安装失败，请在设置页重试或手动安装。";
+            ShowToast($"环境安装失败: {ex.Message}", false, "前往设置", () => Navigate("settings"));
+        }
     }
 
     private void OnTasksCollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
@@ -400,6 +515,24 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasQueueBadge));
         OnPropertyChanged(nameof(TaskStatusText));
         OnPropertyChanged(nameof(AggregateSpeedText));
+        UpdateLongRunningSession();
+    }
+
+    private void UpdateLongRunningSession()
+    {
+        if (_longRunningSession is not null)
+        {
+            try
+            {
+                var shouldPreventSleep = _configService?.Config.PreventSleepDuringDownloads != false
+                    && RunningTaskCount > 0;
+                _longRunningSession.SetActive(shouldPreventSleep);
+            }
+            catch
+            {
+                // Power-session integration must never interrupt downloads.
+            }
+        }
     }
 
     private void UpdateTaskbarProgress()

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.Threading.Channels;
 using EasyGet.Models;
 
@@ -14,15 +16,18 @@ public class DownloadManager : IDisposable
     private readonly TelegramDownloadService _telegramDownloadService;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
+    private readonly TaskQueuePersistenceService? _taskQueuePersistence;
     private readonly DynamicConcurrencyGate _downloadGate;
     private readonly SemaphoreSlim _historyWriteSemaphore = new(1, 1);
     private readonly Channel<DownloadAttempt> _metadataQueue;
     private readonly Task[] _metadataWorkers;
     private readonly object _attemptLock = new();
     private readonly Dictionary<DownloadTask, DownloadAttempt> _activeAttempts = [];
+    private readonly HashSet<DownloadTask> _persistenceTrackedTasks = [];
     private readonly object _idleLock = new();
     private int _activeTaskCount;
     private int _disposed;
+    private int _suppressQueuePersistence;
     private TaskCompletionSource _idleSignal = CreateCompletedSignal();
     private const int MetadataWorkerCount = 4;
     private const int MetadataQueueCapacity = 128;
@@ -41,13 +46,15 @@ public class DownloadManager : IDisposable
         HistoryService historyService,
         ConfigService configService,
         M3u8DownloadService? m3u8DownloadService = null,
-        TelegramDownloadService? telegramDownloadService = null)
+        TelegramDownloadService? telegramDownloadService = null,
+        TaskQueuePersistenceService? taskQueuePersistence = null)
         : this(
             new YtDlpDownloadServiceAdapter(ytDlpService),
             historyService,
             configService,
             m3u8DownloadService,
-            telegramDownloadService)
+            telegramDownloadService,
+            taskQueuePersistence)
     {
     }
 
@@ -56,13 +63,15 @@ public class DownloadManager : IDisposable
         HistoryService historyService,
         ConfigService configService,
         M3u8DownloadService? m3u8DownloadService = null,
-        TelegramDownloadService? telegramDownloadService = null)
+        TelegramDownloadService? telegramDownloadService = null,
+        TaskQueuePersistenceService? taskQueuePersistence = null)
     {
         _ytDlpService = ytDlpService;
         _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());
         _telegramDownloadService = telegramDownloadService ?? new TelegramDownloadService(configService);
         _historyService = historyService;
         _configService = configService;
+        _taskQueuePersistence = taskQueuePersistence;
         _downloadGate = new DynamicConcurrencyGate(
             NormalizeConcurrencyLimit(configService.Config.MaxConcurrentDownloads));
         _metadataQueue = Channel.CreateBounded<DownloadAttempt>(new BoundedChannelOptions(
@@ -76,6 +85,143 @@ public class DownloadManager : IDisposable
         _metadataWorkers = Enumerable.Range(0, MetadataWorkerCount)
             .Select(_ => Task.Run(ProcessMetadataQueueAsync))
             .ToArray();
+
+        if (_taskQueuePersistence is not null)
+            Tasks.CollectionChanged += OnTasksCollectionChangedForPersistence;
+    }
+
+    /// <summary>
+    /// Restores the previous session without automatically starting network work.
+    /// </summary>
+    public async Task<int> RestoreAsync(CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (_taskQueuePersistence is null)
+            return 0;
+
+        var restoredTasks = await _taskQueuePersistence
+            .RestoreAsync(cancellationToken)
+            .ConfigureAwait(true);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+        var addedCount = 0;
+        Interlocked.Increment(ref _suppressQueuePersistence);
+        try
+        {
+            var existingIds = Tasks.Select(task => task.Id).ToHashSet(StringComparer.Ordinal);
+            foreach (var task in restoredTasks)
+            {
+                if (!existingIds.Add(task.Id))
+                    continue;
+
+                Tasks.Add(task);
+                addedCount++;
+            }
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _suppressQueuePersistence);
+        }
+
+        ScheduleQueuePersistence();
+        return addedCount;
+    }
+
+    /// <summary>Immediately writes the latest recoverable queue snapshot.</summary>
+    public Task FlushAsync(CancellationToken cancellationToken = default)
+    {
+        if (_taskQueuePersistence is null)
+            return Task.CompletedTask;
+
+        return _taskQueuePersistence.FlushAsync(Tasks.ToArray(), cancellationToken);
+    }
+
+    private void OnTasksCollectionChangedForPersistence(
+        object? sender,
+        NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems is not null)
+        {
+            foreach (DownloadTask task in e.OldItems)
+            {
+                task.PropertyChanged -= OnPersistedTaskPropertyChanged;
+                _persistenceTrackedTasks.Remove(task);
+            }
+        }
+
+        if (e.NewItems is not null)
+        {
+            foreach (DownloadTask task in e.NewItems)
+            {
+                if (_persistenceTrackedTasks.Add(task))
+                    task.PropertyChanged += OnPersistedTaskPropertyChanged;
+            }
+        }
+
+        if (e.Action == NotifyCollectionChangedAction.Reset)
+        {
+            foreach (var task in _persistenceTrackedTasks)
+                task.PropertyChanged -= OnPersistedTaskPropertyChanged;
+            _persistenceTrackedTasks.Clear();
+            foreach (var task in Tasks)
+            {
+                _persistenceTrackedTasks.Add(task);
+                task.PropertyChanged += OnPersistedTaskPropertyChanged;
+            }
+        }
+
+        ScheduleQueuePersistence();
+    }
+
+    private void OnPersistedTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(DownloadTask.Status))
+            ScheduleQueuePersistence();
+    }
+
+    private void ScheduleQueuePersistence()
+    {
+        if (_taskQueuePersistence is null
+            || Volatile.Read(ref _disposed) != 0
+            || Volatile.Read(ref _suppressQueuePersistence) != 0)
+        {
+            return;
+        }
+
+        void ScheduleCore()
+        {
+            if (Volatile.Read(ref _disposed) != 0
+                || Volatile.Read(ref _suppressQueuePersistence) != 0)
+            {
+                return;
+            }
+
+            try
+            {
+                _taskQueuePersistence.ScheduleSave(Tasks.ToArray());
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or ObjectDisposedException)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[DownloadManager] Queue persistence scheduling skipped: {ex.Message}");
+            }
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            try
+            {
+                _ = dispatcher.BeginInvoke(ScheduleCore);
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+        else
+        {
+            ScheduleCore();
+        }
     }
 
     /// <summary>
@@ -860,6 +1006,23 @@ public class DownloadManager : IDisposable
         if (Interlocked.Exchange(ref _disposed, 1) != 0)
             return;
 
+        Interlocked.Exchange(ref _suppressQueuePersistence, 1);
+        if (_taskQueuePersistence is not null)
+        {
+            try
+            {
+                _taskQueuePersistence
+                    .FlushAsync(Tasks.ToArray())
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[DownloadManager] Final queue persistence failed: {ex.Message}");
+            }
+        }
+
         CancelAll();
 
         DownloadAttempt[] attemptsToCancel;
@@ -903,6 +1066,14 @@ public class DownloadManager : IDisposable
         }
 
         _metadataQueue.Writer.TryComplete();
+
+        if (_taskQueuePersistence is not null)
+        {
+            Tasks.CollectionChanged -= OnTasksCollectionChangedForPersistence;
+            foreach (var task in _persistenceTrackedTasks)
+                task.PropertyChanged -= OnPersistedTaskPropertyChanged;
+            _persistenceTrackedTasks.Clear();
+        }
     }
 
     private void CancelAttemptSource(
