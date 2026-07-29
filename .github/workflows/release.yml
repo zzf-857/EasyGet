@@ -204,7 +204,15 @@ jobs:
       - name: Prepare release notes
         shell: bash
         run: |
-          git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > release-notes.md
+          version="${GITHUB_REF_NAME#v}"
+          awk -v version="$version" '
+            index($0, "## " version " - ") == 1 { capture = 1 }
+            capture && /^## / && index($0, "## " version " - ") != 1 { exit }
+            capture { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            git for-each-ref "refs/tags/${GITHUB_REF_NAME}" --format='%(contents)' > release-notes.md
+          fi
           if [ ! -s release-notes.md ]; then
             echo "EasyGet ${GITHUB_REF_NAME}" > release-notes.md
           fi

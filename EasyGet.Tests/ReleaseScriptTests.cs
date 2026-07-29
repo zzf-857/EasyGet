@@ -761,6 +761,25 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void GitHubReleaseWorkflowExtractsVersionedNotesFromChangelogBeforeTagFallback()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("version=\"${GITHUB_REF_NAME#v}\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("index($0, \"## \" version \" - \") == 1", workflow, StringComparison.Ordinal);
+        Assert.Contains("CHANGELOG.md > release-notes.md", workflow, StringComparison.Ordinal);
+        Assert.Contains("git for-each-ref \"refs/tags/${GITHUB_REF_NAME}\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("body_path: release-notes.md", workflow, StringComparison.Ordinal);
+
+        var changelogIndex = workflow.IndexOf("CHANGELOG.md > release-notes.md", StringComparison.Ordinal);
+        var tagFallbackIndex = workflow.IndexOf("git for-each-ref", StringComparison.Ordinal);
+        var releaseIndex = workflow.IndexOf("Create GitHub Release", StringComparison.Ordinal);
+        Assert.True(changelogIndex >= 0 && changelogIndex < tagFallbackIndex && tagFallbackIndex < releaseIndex);
+    }
+
+    [Fact]
     public void ManualPackagingGuideMentionsPublishScript()
     {
         var root = TestRepositoryPaths.Root;
