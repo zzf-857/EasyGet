@@ -54,6 +54,7 @@ public class StatusToColorConverter : IValueConverter
                 DownloadStatus.Downloading => DownloadingBrush,
                 DownloadStatus.Failed => FailedBrush,
                 DownloadStatus.Waiting => MutedBrush,
+                DownloadStatus.Scheduled => DefaultBrush,
                 DownloadStatus.Cancelled => MutedBrush,
                 _ => DefaultBrush
             };
@@ -83,6 +84,7 @@ public class StatusToTextConverter : IValueConverter
             DownloadStatus.Failed => "失败",
             DownloadStatus.Cancelled => "已取消",
             DownloadStatus.Paused => "已暂停",
+            DownloadStatus.Scheduled => "计划下载",
             _ => ""
         } : "";
     }

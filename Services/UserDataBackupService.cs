@@ -839,6 +839,7 @@ public sealed class UserDataBackupService
             nameof(AppConfig.DefaultSubtitle),
             nameof(AppConfig.ConcurrentFragments),
             nameof(AppConfig.MaxConcurrentDownloads),
+            nameof(AppConfig.GlobalDownloadRateLimitKilobytesPerSecond),
             nameof(AppConfig.UseAria2c),
             nameof(AppConfig.EnableDouyinSpecialEngine),
             nameof(AppConfig.DouyinMode),

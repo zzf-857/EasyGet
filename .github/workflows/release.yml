@@ -7,6 +7,9 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
 
 jobs:
   release:
@@ -67,6 +70,47 @@ jobs:
           $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
           ./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -Version $version -SkipTests
 
+      - name: Detect code signing configuration
+        id: code_signing
+        shell: pwsh
+        env:
+          WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $hasCertificate = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64)
+          $hasPassword = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD)
+          if ($hasCertificate -xor $hasPassword) {
+            throw "Code signing is partially configured. Set both WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 and WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD, or remove both."
+          }
+
+          if (-not $hasCertificate) {
+            "enabled=false" >> $env:GITHUB_OUTPUT
+            Write-Host "::notice title=Code signing disabled::No code-signing certificate secrets are configured; release artifacts will remain unsigned."
+            return
+          }
+
+          "enabled=true" >> $env:GITHUB_OUTPUT
+
+      - name: Sign Windows release artifacts
+        if: steps.code_signing.outputs.enabled == 'true'
+        shell: pwsh
+        env:
+          WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
+          WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: |
+          $certificatePath = Join-Path $env:RUNNER_TEMP "easyget-code-signing.pfx"
+          try {
+            $certificateBytes = [Convert]::FromBase64String($env:WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64)
+            [System.IO.File]::WriteAllBytes($certificatePath, $certificateBytes)
+            $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+            ./scripts/sign-release.ps1 -Version $version -CertificatePath $certificatePath
+          }
+          finally {
+            if (Test-Path -LiteralPath $certificatePath) {
+              Remove-Item -LiteralPath $certificatePath -Force
+            }
+          }
+
       - name: Verify update manifest
         shell: pwsh
         run: |
@@ -101,6 +145,62 @@ jobs:
             throw "Manifest zip hash does not match generated portable zip."
           }
 
+      - name: Generate SPDX SBOM
+        shell: pwsh
+        run: |
+          $sbomToolVersion = "4.1.5"
+          $sbomToolSha256 = "625767B371B7FDD58F40F618B8A86DA0247A33C89E419039C86B4EDBA1DAD4B5"
+          $sbomToolPath = Join-Path $env:RUNNER_TEMP "sbom-tool-win-x64.exe"
+          $sbomToolUrl = "https://github.com/microsoft/sbom-tool/releases/download/v$sbomToolVersion/sbom-tool-win-x64.exe"
+          Invoke-WebRequest -Uri $sbomToolUrl -OutFile $sbomToolPath
+          $actualToolHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $sbomToolPath).Hash
+          if ($actualToolHash -ne $sbomToolSha256) {
+            throw "Microsoft SBOM Tool checksum verification failed."
+          }
+
+          $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          $publishDir = Join-Path $env:GITHUB_WORKSPACE "artifacts/publish/Release/win-x64"
+          & $sbomToolPath generate `
+            -b $publishDir `
+            -bc $env:GITHUB_WORKSPACE `
+            -pn "EasyGet" `
+            -pv $version `
+            -ps "zzf-857" `
+            -nsb "https://github.com/${env:GITHUB_REPOSITORY}" `
+            -V Verbose
+          if ($LASTEXITCODE -ne 0) {
+            throw "Microsoft SBOM Tool failed with exit code $LASTEXITCODE."
+          }
+
+          $generatedSbom = Join-Path $publishDir "_manifest/spdx_2.2/manifest.spdx.json"
+          $releaseSbom = Join-Path $env:GITHUB_WORKSPACE "artifacts/publish/Release/EasyGet-v$version.spdx.json"
+          if (-not (Test-Path -LiteralPath $generatedSbom -PathType Leaf)) {
+            throw "Microsoft SBOM Tool did not produce the expected SPDX document."
+          }
+          $sbom = Get-Content -Raw -Encoding UTF8 -LiteralPath $generatedSbom | ConvertFrom-Json
+          if ($sbom.spdxVersion -ne "SPDX-2.2" -or -not $sbom.packages) {
+            throw "Generated SBOM is not a populated SPDX 2.2 document."
+          }
+          Copy-Item -LiteralPath $generatedSbom -Destination $releaseSbom -Force
+          Remove-Item -LiteralPath (Join-Path $publishDir "_manifest") -Recurse -Force
+
+      - name: Attest release provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ github.workspace }}/artifacts/publish/Release/EasyGet-Setup-${{ github.ref_name }}.exe
+            ${{ github.workspace }}/artifacts/publish/Release/EasyGet-win-x64-Release.zip
+            ${{ github.workspace }}/artifacts/publish/Release/easyget-update.json
+            ${{ github.workspace }}/artifacts/publish/Release/EasyGet-${{ github.ref_name }}.spdx.json
+
+      - name: Attest release SBOM
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ github.workspace }}/artifacts/publish/Release/EasyGet-Setup-${{ github.ref_name }}.exe
+            ${{ github.workspace }}/artifacts/publish/Release/EasyGet-win-x64-Release.zip
+          sbom-path: ${{ github.workspace }}/artifacts/publish/Release/EasyGet-${{ github.ref_name }}.spdx.json
+
       - name: Prepare release notes
         shell: bash
         run: |
@@ -117,6 +217,7 @@ jobs:
             artifacts/publish/Release/EasyGet-Setup-${{ github.ref_name }}.exe
             artifacts/publish/Release/EasyGet-win-x64-Release.zip
             artifacts/publish/Release/easyget-update.json
+            artifacts/publish/Release/EasyGet-${{ github.ref_name }}.spdx.json
           draft: false
           prerelease: false
         env:

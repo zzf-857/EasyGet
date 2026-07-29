@@ -655,6 +655,112 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void GitHubReleaseWorkflowOnlySignsWhenBothCertificateSecretsAreConfigured()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("id: code_signing", workflow, StringComparison.Ordinal);
+        Assert.Contains("secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64", workflow, StringComparison.Ordinal);
+        Assert.Contains("secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD", workflow, StringComparison.Ordinal);
+        Assert.Contains("if ($hasCertificate -xor $hasPassword)", workflow, StringComparison.Ordinal);
+        Assert.Contains("Code signing is partially configured.", workflow, StringComparison.Ordinal);
+        Assert.Contains("\"enabled=false\" >> $env:GITHUB_OUTPUT", workflow, StringComparison.Ordinal);
+        Assert.Contains("release artifacts will remain unsigned", workflow, StringComparison.Ordinal);
+        Assert.Contains("if: steps.code_signing.outputs.enabled == 'true'", workflow, StringComparison.Ordinal);
+        Assert.Contains("./scripts/sign-release.ps1", workflow, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -LiteralPath $certificatePath -Force", workflow, StringComparison.Ordinal);
+
+        var buildIndex = workflow.IndexOf("Build installer and portable zip", StringComparison.Ordinal);
+        var detectIndex = workflow.IndexOf("Detect code signing configuration", StringComparison.Ordinal);
+        var signIndex = workflow.IndexOf("Sign Windows release artifacts", StringComparison.Ordinal);
+        var verifyIndex = workflow.IndexOf("Verify update manifest", StringComparison.Ordinal);
+        Assert.True(buildIndex >= 0 && buildIndex < detectIndex && detectIndex < signIndex && signIndex < verifyIndex);
+    }
+
+    [Fact]
+    public void ReleaseSigningScriptSignsFirstPartyExecutablesAndRefreshesFinalHashes()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "sign-release.ps1");
+
+        Assert.True(File.Exists(scriptPath), "Expected scripts/sign-release.ps1 to exist.");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD", script, StringComparison.Ordinal);
+        Assert.Contains("Windows SDK SignTool", script, StringComparison.Ordinal);
+        Assert.Contains("/fd SHA256", script, StringComparison.Ordinal);
+        Assert.Contains("/td SHA256", script, StringComparison.Ordinal);
+        Assert.Contains("/tr $TimestampUrl", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.exe", script, StringComparison.Ordinal);
+        Assert.Contains("EasyGet.DouyinSidecar.exe", script, StringComparison.Ordinal);
+        Assert.Contains("& $SignToolPath verify /pa /all /v $FilePath", script, StringComparison.Ordinal);
+        Assert.Contains("Compress-Archive", script, StringComparison.Ordinal);
+        Assert.Contains("& $iscc \"/DMyAppVersion=$Version\" $innoScript", script, StringComparison.Ordinal);
+        Assert.Contains("Invoke-CodeSign -FilePath $setupPath", script, StringComparison.Ordinal);
+        Assert.Contains("$manifest.setupSha256 = (Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("$manifest.zipSha256 = (Get-FileHash", script, StringComparison.Ordinal);
+        Assert.Contains("Authenticode signatures verified and release manifest hashes refreshed.", script, StringComparison.Ordinal);
+
+        var executableSigningIndex = script.IndexOf("foreach ($executable in $firstPartyExecutables)", StringComparison.Ordinal);
+        var zipIndex = script.IndexOf("Compress-Archive", StringComparison.Ordinal);
+        var installerIndex = script.IndexOf("& $iscc", StringComparison.Ordinal);
+        var installerSigningIndex = script.IndexOf("Invoke-CodeSign -FilePath $setupPath", StringComparison.Ordinal);
+        var manifestHashIndex = script.IndexOf("$manifest.setupSha256", StringComparison.Ordinal);
+        Assert.True(
+            executableSigningIndex >= 0
+            && executableSigningIndex < zipIndex
+            && zipIndex < installerIndex
+            && installerIndex < installerSigningIndex
+            && installerSigningIndex < manifestHashIndex);
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowGeneratesVerifiedSpdxSbomAndPublishesIt()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("Generate SPDX SBOM", workflow, StringComparison.Ordinal);
+        Assert.Contains("microsoft/sbom-tool/releases/download/v$sbomToolVersion/sbom-tool-win-x64.exe", workflow, StringComparison.Ordinal);
+        Assert.Contains("$sbomToolVersion = \"4.1.5\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("625767B371B7FDD58F40F618B8A86DA0247A33C89E419039C86B4EDBA1DAD4B5", workflow, StringComparison.Ordinal);
+        Assert.Contains("Microsoft SBOM Tool checksum verification failed.", workflow, StringComparison.Ordinal);
+        Assert.Contains("_manifest/spdx_2.2/manifest.spdx.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("$sbom.spdxVersion -ne \"SPDX-2.2\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-${{ github.ref_name }}.spdx.json", workflow, StringComparison.Ordinal);
+
+        var sbomIndex = workflow.IndexOf("Generate SPDX SBOM", StringComparison.Ordinal);
+        var releaseIndex = workflow.IndexOf("Create GitHub Release", StringComparison.Ordinal);
+        Assert.True(sbomIndex >= 0 && sbomIndex < releaseIndex);
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowAttestsProvenanceAndSbomWithGitHubAction()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("id-token: write", workflow, StringComparison.Ordinal);
+        Assert.Contains("attestations: write", workflow, StringComparison.Ordinal);
+        Assert.Contains("artifact-metadata: write", workflow, StringComparison.Ordinal);
+        Assert.Equal(2, workflow.Split("uses: actions/attest@v4", StringSplitOptions.None).Length - 1);
+        Assert.Contains("Attest release provenance", workflow, StringComparison.Ordinal);
+        Assert.Contains("Attest release SBOM", workflow, StringComparison.Ordinal);
+        Assert.Contains("sbom-path: ${{ github.workspace }}/artifacts/publish/Release/EasyGet-${{ github.ref_name }}.spdx.json", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("actions/attest-sbom", workflow, StringComparison.Ordinal);
+
+        var sbomIndex = workflow.IndexOf("Generate SPDX SBOM", StringComparison.Ordinal);
+        var provenanceIndex = workflow.IndexOf("Attest release provenance", StringComparison.Ordinal);
+        var sbomAttestationIndex = workflow.IndexOf("Attest release SBOM", StringComparison.Ordinal);
+        var releaseIndex = workflow.IndexOf("Create GitHub Release", StringComparison.Ordinal);
+        Assert.True(sbomIndex >= 0 && sbomIndex < provenanceIndex && provenanceIndex < sbomAttestationIndex && sbomAttestationIndex < releaseIndex);
+    }
+
+    [Fact]
     public void ManualPackagingGuideMentionsPublishScript()
     {
         var root = TestRepositoryPaths.Root;

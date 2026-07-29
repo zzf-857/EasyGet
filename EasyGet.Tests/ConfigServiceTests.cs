@@ -393,13 +393,68 @@ public class ConfigServiceTests
         var config = new AppConfig
         {
             ConcurrentFragments = 0,
-            MaxConcurrentDownloads = 99
+            MaxConcurrentDownloads = 99,
+            GlobalDownloadRateLimitKilobytesPerSecond = int.MaxValue
         };
 
         ConfigService.NormalizeRuntimeConfig(config);
 
         Assert.Equal(AppConfig.MinConcurrentFragments, config.ConcurrentFragments);
         Assert.Equal(AppConfig.MaxConcurrentDownloadLimit, config.MaxConcurrentDownloads);
+        Assert.Equal(
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond,
+            config.GlobalDownloadRateLimitKilobytesPerSecond);
+
+        config.GlobalDownloadRateLimitKilobytesPerSecond = -1;
+        ConfigService.NormalizeRuntimeConfig(config);
+        Assert.Equal(
+            AppConfig.MinGlobalDownloadRateLimitKilobytesPerSecond,
+            config.GlobalDownloadRateLimitKilobytesPerSecond);
+    }
+
+    [Fact]
+    public async Task LoadAsync_MigratesVersion3WithoutGlobalDownloadRateLimit()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var configPath = Path.Combine(_tempDir, "config.json");
+        await File.WriteAllTextAsync(
+            configPath,
+            """
+            {
+              "configVersion": 3,
+              "defaultFormat": "mkv"
+            }
+            """);
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+
+        Assert.Equal(AppConfig.CurrentConfigVersion, service.Config.ConfigVersion);
+        Assert.Equal(0, service.Config.GlobalDownloadRateLimitKilobytesPerSecond);
+
+        using var migrated = JsonDocument.Parse(await File.ReadAllTextAsync(configPath));
+        Assert.Equal(
+            AppConfig.CurrentConfigVersion,
+            migrated.RootElement.GetProperty("configVersion").GetInt32());
+        Assert.Equal(
+            0,
+            migrated.RootElement
+                .GetProperty("globalDownloadRateLimitKilobytesPerSecond")
+                .GetInt32());
+    }
+
+    [Fact]
+    public async Task SaveAsync_RoundTripsGlobalDownloadRateLimit()
+    {
+        var service = new ConfigService(_tempDir);
+        service.Config.GlobalDownloadRateLimitKilobytesPerSecond = 2048;
+
+        Assert.True(await service.SaveAsync());
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+
+        Assert.Equal(2048, reloaded.Config.GlobalDownloadRateLimitKilobytesPerSecond);
     }
 
     [Fact]

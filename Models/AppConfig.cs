@@ -8,11 +8,13 @@ namespace EasyGet.Models;
 /// </summary>
 public class AppConfig
 {
-    public const int CurrentConfigVersion = 3;
+    public const int CurrentConfigVersion = 4;
     public const int MinConcurrentFragments = 1;
     public const int MaxConcurrentFragments = 32;
     public const int MinConcurrentDownloadLimit = 1;
     public const int MaxConcurrentDownloadLimit = 12;
+    public const int MinGlobalDownloadRateLimitKilobytesPerSecond = 0;
+    public const int MaxGlobalDownloadRateLimitKilobytesPerSecond = 1_048_576;
     public const string DefaultDouyinTemplate = "{date}_{title}_{id}";
     public const int MaxDouyinCommentPageSize = 20;
     public const int DefaultDouyinLiveChunkSize = 65536;
@@ -39,6 +41,9 @@ public class AppConfig
 
     /// <summary>批量下载同时任务数</summary>
     public int MaxConcurrentDownloads { get; set; } = GetDefaultConcurrentDownloadLimit();
+
+    /// <summary>所有 yt-dlp 下载任务的速度上限（KB/s）；0 表示不限速</summary>
+    public int GlobalDownloadRateLimitKilobytesPerSecond { get; set; }
 
     internal static int GetDefaultConcurrentDownloadLimit()
         => Math.Clamp(Environment.ProcessorCount / 2, 3, 10);

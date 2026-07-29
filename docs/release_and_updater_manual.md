@@ -13,17 +13,20 @@ graph TD
     E --> F["运行 dotnet test"]
     F --> G["发布 win-x64 自包含目录和 zip"]
     G --> H["Inno Setup 生成安装包"]
-    H --> I["上传 GitHub Release 资产"]
-    I --> J["客户端设置页检查并下载更新"]
+    H --> I["按证书配置执行 Authenticode 签名"]
+    I --> J["生成 SBOM 与 GitHub 产物证明"]
+    J --> K["上传 GitHub Release 资产"]
+    K --> L["客户端设置页检查并下载更新"]
 ```
 
 ## Release 资产
 
-每个正式版本会上传三类资产：
+每个正式版本会上传四类资产：
 
 - `EasyGet-Setup-vX.Y.Z.exe`：安装版安装包。
 - `EasyGet-win-x64-Release.zip`：便携 zip。
 - `easyget-update.json`：版本、tag、资产名、大小和 SHA-256 的轻量 manifest。
+- `EasyGet-vX.Y.Z.spdx.json`：由 Microsoft SBOM Tool 生成的 SPDX 2.2 软件物料清单。
 
 ## 本地构建
 
@@ -53,6 +56,32 @@ git push origin v1.2.0
 ```
 
 推送 tag 后，`.github/workflows/release.yml` 会在 `windows-latest` 上构建并创建 GitHub Release。
+
+### Windows 代码签名
+
+仓库同时配置以下两个 GitHub Actions Secrets 时，Release workflow 会签署 EasyGet 自有可执行文件，重新生成便携包和安装包，验证 Authenticode 签名，再刷新 `easyget-update.json` 的大小和 SHA-256：
+
+- `WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64`：PFX 证书文件的 Base64 内容。
+- `WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD`：PFX 密码。
+
+可以在本地生成第一个 Secret 的值：
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\secure\easyget-code-signing.pfx"))
+```
+
+两个 Secret 都不存在时，workflow 会明确记录产物未签名并继续发布；只配置其中一个时会终止发布，避免把不完整配置误认为已签名。证书由项目维护者向可信代码签名证书提供商申请，仓库和 workflow 不会生成或伪造发布证书。
+
+### SBOM 与产物证明
+
+SBOM 生成后，workflow 使用 GitHub 官方 `actions/attest` 分别为 Release 资产创建构建来源证明和 SBOM 证明。这些基于 GitHub OIDC 的证明用于确认产物来自指定 workflow，不等同于 Windows Authenticode 代码签名。
+
+下载 Release 资产后可以验证其 GitHub 证明：
+
+```powershell
+gh attestation verify .\EasyGet-Setup-vX.Y.Z.exe --repo zzf-857/EasyGet
+gh attestation verify .\EasyGet-win-x64-Release.zip --repo zzf-857/EasyGet
+```
 
 ## 客户端更新
 

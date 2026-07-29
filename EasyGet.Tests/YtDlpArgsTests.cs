@@ -64,6 +64,81 @@ public class YtDlpArgsTests
         AssertOptionValue(args, "--buffer-size", "1M");
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void AddGlobalDownloadRateLimitArgs_SkipsUnlimitedOrInvalidValues(int rateLimit)
+    {
+        var args = new List<string>();
+
+        YtDlpService.AddGlobalDownloadRateLimitArgs(args, rateLimit);
+
+        Assert.DoesNotContain("--limit-rate", args);
+    }
+
+    [Fact]
+    public void AddGlobalDownloadRateLimitArgs_UsesYtDlpKilobyteSyntax()
+    {
+        var args = new List<string>();
+
+        YtDlpService.AddGlobalDownloadRateLimitArgs(args, 2048);
+
+        AssertOptionValue(args, "--limit-rate", "2048K");
+    }
+
+    [Fact]
+    public void BuildDownloadArgs_AppliesPersistedGlobalDownloadRateLimit()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        config.Config.GlobalDownloadRateLimitKilobytesPerSecond = 4096;
+        var service = new YtDlpService(config, new EnvironmentService());
+        var method = typeof(YtDlpService).GetMethod(
+            "BuildDownloadArgs",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+        var task = new DownloadTask
+        {
+            Url = "https://example.test/video",
+            OutputDirectory = root.DirectoryPath,
+            Format = "mp4",
+            Quality = "best"
+        };
+
+        var args = (List<string>)method!.Invoke(
+            service,
+            [task, Array.Empty<string>(), null])!;
+
+        AssertOptionValue(args, "--limit-rate", "4096K");
+    }
+
+    [Fact]
+    public void BuildDownloadArgs_UsesResolvedSourceFormatSelector()
+    {
+        using var root = new TestDirectory();
+        var service = new YtDlpService(
+            new ConfigService(root.Path("config")),
+            new EnvironmentService());
+        var method = typeof(YtDlpService).GetMethod(
+            "BuildDownloadArgs",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+        var task = new DownloadTask
+        {
+            Url = "https://example.test/video",
+            OutputDirectory = root.DirectoryPath,
+            Format = "mp4",
+            Quality = "best",
+            SourceFormatSelector = "137+ba/b"
+        };
+
+        var args = (List<string>)method!.Invoke(
+            service,
+            [task, Array.Empty<string>(), null])!;
+
+        AssertOptionValue(args, "-f", "137+ba/b");
+    }
+
     [Fact]
     public void BuildFormatString_PrefersMp4AndM4aStreamsForMp4Downloads()
     {

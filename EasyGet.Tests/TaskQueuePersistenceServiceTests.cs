@@ -24,6 +24,7 @@ public sealed class TaskQueuePersistenceServiceTests
             ThumbnailUrl = "https://example.com/thumb.jpg",
             Format = "mkv",
             Quality = "1080",
+            SourceFormatSelector = "137+ba/b",
             Subtitle = "auto",
             OutputDirectory = root.Path("downloads"),
             BatchId = "batch-1",
@@ -58,6 +59,7 @@ public sealed class TaskQueuePersistenceServiceTests
         Assert.Equal(task.Id, restoredTask.Id);
         Assert.Equal(task.Url, restoredTask.Url);
         Assert.Equal(task.OutputFilePaths, restoredTask.OutputFilePaths);
+        Assert.Equal("137+ba/b", restoredTask.SourceFormatSelector);
         Assert.Equal(42.5, restoredTask.Progress);
         Assert.Equal(123_456, restoredTask.DownloadedSize);
         Assert.Equal(DownloadStatus.Paused, restoredTask.Status);

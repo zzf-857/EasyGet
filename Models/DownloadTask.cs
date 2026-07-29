@@ -15,7 +15,8 @@ public enum DownloadStatus
     Completed,
     Failed,
     Cancelled,
-    Paused
+    Paused,
+    Scheduled
 }
 
 /// <summary>
@@ -57,6 +58,9 @@ public partial class DownloadTask : ObservableObject
 
     /// <summary>下载画质</summary>
     public string Quality { get; set; } = "best";
+
+    /// <summary>解析后由用户选择的 yt-dlp 源格式选择器；为空时按画质自动选择。</summary>
+    public string SourceFormatSelector { get; set; } = "";
 
     /// <summary>字幕选项</summary>
     public string Subtitle { get; set; } = "none";
@@ -116,6 +120,11 @@ public partial class DownloadTask : ObservableObject
     [NotifyPropertyChangedFor(nameof(StatusText))]
     private bool _wasRestoredFromPreviousSession;
 
+    /// <summary>计划开始时间，始终以 UTC 保存；为空表示立即下载。</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StatusText))]
+    private DateTimeOffset? _scheduledStartTimeUtc;
+
     partial void OnStatusChanged(DownloadStatus value)
     {
         if (value != DownloadStatus.Paused && WasRestoredFromPreviousSession)
@@ -148,6 +157,9 @@ public partial class DownloadTask : ObservableObject
         DownloadStatus.Cancelled => "已取消",
         DownloadStatus.Paused when WasRestoredFromPreviousSession => "已暂停（会话恢复）",
         DownloadStatus.Paused => "已暂停",
+        DownloadStatus.Scheduled when ScheduledStartTimeUtc is { } scheduledAt
+            => $"计划于 {scheduledAt.ToLocalTime():MM-dd HH:mm} 下载",
+        DownloadStatus.Scheduled => "计划下载",
         _ => "未知"
     };
 

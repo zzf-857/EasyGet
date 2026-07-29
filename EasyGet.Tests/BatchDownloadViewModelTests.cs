@@ -24,7 +24,7 @@ public class BatchDownloadViewModelTests
         var viewModel = new BatchDownloadViewModel(manager, config, ytDlp);
 
         Assert.Equal(
-            new[] { "全部", "进行中", "等待", "已暂停", "失败", "已完成" },
+            new[] { "全部", "进行中", "等待", "计划", "已暂停", "失败", "已完成" },
             viewModel.QueueFilterOptions);
     }
 
@@ -72,6 +72,40 @@ public class BatchDownloadViewModelTests
         viewModel.ClearFinishedCommand.Execute(null);
         Assert.Single(manager.Tasks);
         Assert.Equal(0, viewModel.FinishedTaskCount);
+    }
+
+    [Fact]
+    public async Task ScheduledTask_IsCountedFilteredAndStoppedAsUnfinished()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            ConfirmFunc = (_, _) => true
+        };
+        var task = new DownloadTask { Url = "https://example.com/scheduled" };
+
+        await manager.ScheduleAsync(task, DateTimeOffset.UtcNow.AddHours(1));
+
+        Assert.Equal(1, viewModel.ScheduledTaskCount);
+        Assert.Equal(1, viewModel.RemainingTaskCount);
+        Assert.Equal(0, viewModel.FinishedTaskCount);
+        Assert.True(viewModel.CanStopAll);
+        Assert.Contains("计划 1", viewModel.QueueSummaryText, StringComparison.Ordinal);
+
+        viewModel.SetQueueFilterCommand.Execute("计划");
+        Assert.Same(task, Assert.Single(viewModel.VisibleQueueTasks));
+
+        viewModel.CancelAllCommand.Execute(null);
+
+        Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        Assert.Null(task.ScheduledStartTimeUtc);
+        Assert.Equal(0, viewModel.ScheduledTaskCount);
+        Assert.Equal(0, viewModel.RemainingTaskCount);
+        Assert.Equal(1, viewModel.FinishedTaskCount);
     }
 
     private static string CreateTempDatabasePath()

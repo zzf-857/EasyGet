@@ -187,6 +187,45 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void Initialize_LoadsGlobalDownloadRateLimitFromConfig()
+    {
+        var config = CreateTempConfigService();
+        config.Config.GlobalDownloadRateLimitKilobytesPerSecond = 4096;
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+
+        viewModel.Initialize();
+
+        Assert.Equal(4096, viewModel.GlobalDownloadRateLimitKilobytesPerSecond);
+    }
+
+    [Fact]
+    public async Task GlobalDownloadRateLimitChange_AutoSavesNormalizedValue()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.Initialize();
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        viewModel.GlobalDownloadRateLimitKilobytesPerSecond = int.MaxValue;
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        Assert.Equal(
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond,
+            config.Config.GlobalDownloadRateLimitKilobytesPerSecond);
+        Assert.Equal(
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond,
+            viewModel.GlobalDownloadRateLimitKilobytesPerSecond);
+
+        var reloaded = new ConfigService(config.ConfigDirectory);
+        await reloaded.LoadAsync();
+        Assert.Equal(
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond,
+            reloaded.Config.GlobalDownloadRateLimitKilobytesPerSecond);
+    }
+
+    [Fact]
     public void Initialize_LoadsDouyinTemplateSettingsFromConfig()
     {
         var config = CreateTempConfigService();

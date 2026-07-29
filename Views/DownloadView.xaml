@@ -99,6 +99,8 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0">
@@ -124,7 +126,8 @@
                         <TextBlock Text="画质上限" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
                         <ComboBox Width="132" Height="32" Margin="8,0,0,0"
                                   Style="{StaticResource DarkComboBox}" ItemsSource="{Binding QualityOptions}"
-                                  SelectedItem="{Binding SelectedQuality}"/>
+                                  SelectedItem="{Binding SelectedQuality}"
+                                  IsEnabled="{Binding UsesAutomaticSourceFormat}"/>
                     </StackPanel>
                     <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                         <TextBlock Text="字幕" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
@@ -162,6 +165,51 @@
                             Background="Transparent" BorderThickness="0"
                             Command="{Binding BrowseDirectoryCommand}" Content="更改"
                             ToolTip="更改下载保存位置" AutomationProperties.Name="更改下载保存位置"/>
+                </Grid>
+
+                <Grid Grid.Row="2" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="源流" Style="{StaticResource TextCaption}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox Grid.Column="1" Height="32" MinWidth="280" MaxWidth="680"
+                              HorizontalAlignment="Stretch" Style="{StaticResource DarkComboBox}"
+                              ItemsSource="{Binding SourceFormatOptions}"
+                              SelectedItem="{Binding SelectedSourceFormat}"
+                              IsEnabled="{Binding HasResolvedSourceFormats}"
+                              AutomationProperties.Name="选择解析到的真实媒体源流">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <TextBlock Text="{Binding DisplayName}" MaxWidth="640"
+                                           TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayName}"/>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+
+                <Grid Grid.Row="3" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="定时下载" Style="{StaticResource TextCaption}"
+                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ToggleButton Grid.Column="1" Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding IsScheduledDownloadEnabled}"
+                                  VerticalAlignment="Center" AutomationProperties.Name="启用定时下载"/>
+                    <TextBox Grid.Column="2" Width="168" Height="32" Margin="12,0,0,0"
+                             VerticalContentAlignment="Center" Style="{StaticResource DarkTextBox}"
+                             IsEnabled="{Binding IsScheduledDownloadEnabled}"
+                             Text="{Binding ScheduledStartText, UpdateSourceTrigger=PropertyChanged}"
+                             AutomationProperties.Name="计划开始时间"/>
+                    <TextBlock Grid.Column="3" Text="{Binding ScheduleValidationMessage}" Margin="12,0,0,0"
+                               VerticalAlignment="Center" Style="{StaticResource TextCaption}"
+                               Foreground="{StaticResource ErrorBrush}" TextWrapping="Wrap"
+                               Visibility="{Binding ScheduleValidationMessage, Converter={StaticResource StringToVisibility}}"/>
                 </Grid>
             </Grid>
         </Border>
@@ -286,13 +334,29 @@
                         </StackPanel>
                         <Button Grid.Row="1" HorizontalAlignment="Right" Height="36" Padding="24,4"
                                 Style="{StaticResource AccentButton}" Command="{Binding StartDownloadCommand}"
-                                ToolTip="开始下载" AutomationProperties.Name="开始下载">
+                                ToolTip="{Binding StartDownloadButtonText}" AutomationProperties.Name="{Binding StartDownloadButtonText}">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE118;" Style="{StaticResource IconGlyph}" Margin="0,0,8,0"/>
-                                <TextBlock Text="开始下载"/>
+                                <TextBlock Text="{Binding StartDownloadButtonText}"/>
                             </StackPanel>
                         </Button>
                     </Grid>
+                </Grid>
+
+                <Grid Margin="24" Visibility="{Binding IsScheduled, Converter={StaticResource BoolToVisibility}}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <TextBlock Text="&#xE823;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizePreview}"
+                                   Foreground="{StaticResource WarningBrush}"/>
+                        <TextBlock Text="已加入下载计划" Margin="0,8,0,0" HorizontalAlignment="Center"
+                                   Style="{StaticResource TextSection}"/>
+                        <TextBlock Text="{Binding CurrentTask.DisplayTitle}" Margin="0,4,0,0"
+                                   Style="{StaticResource TextBody}" MaxWidth="620" TextTrimming="CharacterEllipsis"/>
+                        <TextBlock Text="{Binding CurrentTask.StatusText}" Margin="0,4,0,0"
+                                   Style="{StaticResource TextMono}" Foreground="{StaticResource WarningBrush}"/>
+                        <Button Height="32" Padding="16,4" Margin="0,16,0,0"
+                                Style="{StaticResource SurfaceButton}" Command="{Binding CancelDownloadCommand}"
+                                Content="取消计划" ToolTip="取消计划下载" AutomationProperties.Name="取消计划下载"/>
+                    </StackPanel>
                 </Grid>
 
                 <Grid Margin="24" Visibility="{Binding IsDownloadActive, Converter={StaticResource BoolToVisibility}}">

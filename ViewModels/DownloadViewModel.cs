@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -9,6 +10,8 @@ using EasyGet.Models;
 using EasyGet.Services;
 
 namespace EasyGet.ViewModels;
+
+public sealed record SourceFormatChoice(string DisplayName, string Selector, long ExpectedBytes = 0);
 
 /// <summary>
 /// 单视频下载页 ViewModel
@@ -33,7 +36,13 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string _selectedFormat = "mp4";
     [ObservableProperty] private string _selectedQuality = "best";
     [ObservableProperty] private string _selectedSubtitle = "none";
+    [ObservableProperty] private SourceFormatChoice? _selectedSourceFormat;
     [ObservableProperty] private string _downloadDirectory = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(StartDownloadButtonText))]
+    private bool _isScheduledDownloadEnabled;
+    [ObservableProperty] private string _scheduledStartText = CreateDefaultScheduledStartText();
+    [ObservableProperty] private string _scheduleValidationMessage = "";
     [ObservableProperty] private string _proxyStatusText = "未启用";
     [ObservableProperty] private string _concurrentFragmentsText = "";
     [ObservableProperty]
@@ -43,6 +52,7 @@ public partial class DownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsFailed))]
     [NotifyPropertyChangedFor(nameof(IsParseActionVisible))]
     [NotifyPropertyChangedFor(nameof(IsDownloadActive))]
+    [NotifyPropertyChangedFor(nameof(IsScheduled))]
     [NotifyPropertyChangedFor(nameof(IsCompleted))]
     [NotifyPropertyChangedFor(nameof(IsTaskFailed))]
     [NotifyPropertyChangedFor(nameof(IsProgressCardVisible))]
@@ -76,6 +86,7 @@ public partial class DownloadViewModel : ObservableObject
 
     // 日志
     public ObservableCollection<string> LogLines { get; } = [];
+    public ObservableCollection<SourceFormatChoice> SourceFormatOptions { get; } = [];
     public string LogText => string.Join(Environment.NewLine, LogLines);
 
     // 选项列表
@@ -89,11 +100,13 @@ public partial class DownloadViewModel : ObservableObject
     public bool IsFailed => PageState == DownloadPageState.Failed;
     public bool IsParseActionVisible => PageState is DownloadPageState.Idle or DownloadPageState.Parsing or DownloadPageState.Failed;
     public bool IsDownloadActive => PageState == DownloadPageState.Downloading;
+    public bool IsScheduled => PageState == DownloadPageState.Scheduled;
     public bool IsCompleted => CurrentTask is not null && PageState == DownloadPageState.Completed;
     public bool IsTaskFailed => CurrentTask is not null && PageState == DownloadPageState.Failed;
     public bool CanParse => !IsParsing && ExtractUrl(Url) is not null;
     public bool IsProgressCardVisible => CurrentTask is not null
-        && PageState is DownloadPageState.Downloading or DownloadPageState.Completed or DownloadPageState.Failed;
+        && PageState is DownloadPageState.Scheduled or DownloadPageState.Downloading
+            or DownloadPageState.Completed or DownloadPageState.Failed;
     public string PreviewTitle => PreviewInfo?.Title ?? "";
     public string PreviewPlatform => PreviewInfo?.Platform ?? "";
     public string PreviewThumbnailUrl => PreviewInfo?.Thumbnail ?? "";
@@ -103,6 +116,9 @@ public partial class DownloadViewModel : ObservableObject
         ? CurrentTask?.OutputDirectory ?? ""
         : CurrentTask.OutputFilePath;
     public string CurrentErrorMessage => CurrentTask?.ErrorMessage ?? "";
+    public bool HasResolvedSourceFormats => SourceFormatOptions.Count > 1;
+    public bool UsesAutomaticSourceFormat => string.IsNullOrWhiteSpace(SelectedSourceFormat?.Selector);
+    public string StartDownloadButtonText => IsScheduledDownloadEnabled ? "加入计划" : "开始下载";
 
     public DownloadViewModel(
         DownloadManager downloadManager,
@@ -142,6 +158,7 @@ public partial class DownloadViewModel : ObservableObject
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
+        RebuildSourceFormatOptions();
 
         // 转发下载管理器的日志
         _downloadManager.LogReceived += line =>
@@ -184,6 +201,21 @@ public partial class DownloadViewModel : ObservableObject
 
     partial void OnPageStateChanged(DownloadPageState value)
         => ParseCommand.NotifyCanExecuteChanged();
+
+    partial void OnPreviewInfoChanged(VideoInfo? value)
+        => RebuildSourceFormatOptions();
+
+    partial void OnSelectedFormatChanged(string value)
+        => RebuildSourceFormatOptions();
+
+    partial void OnIsScheduledDownloadEnabledChanged(bool value)
+        => ScheduleValidationMessage = "";
+
+    partial void OnScheduledStartTextChanged(string value)
+        => ScheduleValidationMessage = "";
+
+    partial void OnSelectedSourceFormatChanged(SourceFormatChoice? value)
+        => OnPropertyChanged(nameof(UsesAutomaticSourceFormat));
 
     /// <summary>
     /// 初始化默认值
@@ -342,6 +374,22 @@ public partial class DownloadViewModel : ObservableObject
             return;
         }
 
+        DateTimeOffset? scheduledStartUtc = null;
+        if (IsScheduledDownloadEnabled)
+        {
+            if (!TryParseScheduledStart(
+                    ScheduledStartText,
+                    DateTimeOffset.Now,
+                    out var scheduledStart,
+                    out var scheduleError))
+            {
+                ScheduleValidationMessage = scheduleError;
+                return;
+            }
+
+            scheduledStartUtc = scheduledStart.ToUniversalTime();
+        }
+
         if (_historyService is not null && _duplicateDetector is not null)
         {
             var duplicate = await _duplicateDetector.DetectAsync(cleanUrl, _historyService);
@@ -357,7 +405,9 @@ public partial class DownloadViewModel : ObservableObject
 
         var preflight = _preflightService.Check(
             DownloadDirectory,
-            PreviewInfo?.FileSize ?? 0);
+            SelectedSourceFormat?.ExpectedBytes > 0
+                ? SelectedSourceFormat.ExpectedBytes
+                : PreviewInfo?.FileSize ?? 0);
         if (!preflight.CanProceed)
         {
             UrlError = preflight.BlockingMessage;
@@ -371,17 +421,21 @@ public partial class DownloadViewModel : ObservableObject
             LogLines.Add($"[{DateTime.Now:HH:mm:ss}] 提示: {warning.Message}");
         }
 
-        IsDownloading = true;
-        PageState = DownloadPageState.Downloading;
-
         var task = new DownloadTask
         {
             Url = cleanUrl,
             Format = ParseFormat(SelectedFormat),
             Quality = ParseQuality(SelectedQuality),
+            SourceFormatSelector = SelectedSourceFormat?.Selector ?? "",
             Subtitle = ParseSubtitle(SelectedSubtitle),
-            OutputDirectory = DownloadDirectory
+            OutputDirectory = DownloadDirectory,
+            ScheduledStartTimeUtc = scheduledStartUtc
         };
+
+        IsDownloading = scheduledStartUtc is null;
+        PageState = scheduledStartUtc is null
+            ? DownloadPageState.Downloading
+            : DownloadPageState.Scheduled;
 
         // 监听任务状态变化以准确更新 IsDownloading
         task.PropertyChanged += (s, e) =>
@@ -409,6 +463,7 @@ public partial class DownloadViewModel : ObservableObject
                         or DownloadStatus.Merging;
                     PageState = status switch
                     {
+                        DownloadStatus.Scheduled => DownloadPageState.Scheduled,
                         DownloadStatus.Completed => DownloadPageState.Completed,
                         DownloadStatus.Failed => DownloadPageState.Failed,
                         DownloadStatus.Cancelled => DownloadPageState.Idle,
@@ -576,6 +631,188 @@ public partial class DownloadViewModel : ObservableObject
         "m4a (仅音频)" => "m4a",
         _ => display
     };
+
+    internal static bool TryParseScheduledStart(
+        string text,
+        DateTimeOffset now,
+        out DateTimeOffset scheduledStart,
+        out string error)
+    {
+        scheduledStart = default;
+        error = "";
+        var formats = new[]
+        {
+            "yyyy-MM-dd HH:mm",
+            "yyyy/M/d H:mm",
+            "yyyy-M-d H:mm"
+        };
+        if (!DateTime.TryParseExact(
+                text?.Trim(),
+                formats,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces,
+                out var localTime))
+        {
+            error = "请输入有效时间，例如 2026-07-29 18:30。";
+            return false;
+        }
+
+        localTime = DateTime.SpecifyKind(localTime, DateTimeKind.Unspecified);
+        if (TimeZoneInfo.Local.IsInvalidTime(localTime))
+        {
+            error = "该本地时间不存在，请避开夏令时切换时段。";
+            return false;
+        }
+
+        scheduledStart = new DateTimeOffset(localTime, TimeZoneInfo.Local.GetUtcOffset(localTime));
+        if (scheduledStart <= now)
+        {
+            error = "计划时间必须晚于当前时间。";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string CreateDefaultScheduledStartText()
+        => DateTime.Now.AddMinutes(30).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+    internal static IReadOnlyList<SourceFormatChoice> BuildSourceFormatChoices(
+        VideoInfo? videoInfo,
+        string outputFormat)
+    {
+        var audioOnly = outputFormat.StartsWith("mp3", StringComparison.OrdinalIgnoreCase)
+                        || outputFormat.StartsWith("m4a", StringComparison.OrdinalIgnoreCase);
+        var choices = new List<SourceFormatChoice>
+        {
+            new(
+                audioOnly ? "自动选择最佳音频" : "自动选择（按画质上限）",
+                "")
+        };
+        if (videoInfo?.AvailableFormats is not { Count: > 0 } formats)
+            return choices;
+
+        IEnumerable<VideoFormatInfo> candidates;
+        if (audioOnly)
+        {
+            var audioOnlyFormats = formats.Where(format => format.HasAudio && !format.HasVideo).ToArray();
+            candidates = audioOnlyFormats.Length > 0
+                ? audioOnlyFormats
+                : formats.Where(format => format.HasAudio);
+        }
+        else
+        {
+            candidates = formats.Where(format => format.HasVideo);
+        }
+
+        choices.AddRange(candidates
+            .Select(format => new SourceFormatChoice(
+                BuildSourceFormatDisplayName(format, audioOnly),
+                audioOnly || format.IsCombined
+                    ? format.FormatId
+                    : $"{format.FormatId}+ba/b",
+                format.FileSize))
+            .DistinctBy(choice => choice.Selector, StringComparer.Ordinal));
+        return choices;
+    }
+
+    private void RebuildSourceFormatOptions()
+    {
+        var previousSelector = SelectedSourceFormat?.Selector;
+        var choices = BuildSourceFormatChoices(PreviewInfo, SelectedFormat);
+        SourceFormatOptions.Clear();
+        foreach (var choice in choices)
+            SourceFormatOptions.Add(choice);
+
+        SelectedSourceFormat = SourceFormatOptions.FirstOrDefault(choice =>
+                                   string.Equals(choice.Selector, previousSelector, StringComparison.Ordinal))
+                               ?? SourceFormatOptions.FirstOrDefault();
+        OnPropertyChanged(nameof(HasResolvedSourceFormats));
+    }
+
+    private static string BuildSourceFormatDisplayName(VideoFormatInfo format, bool audioOnly)
+    {
+        var parts = new List<string>();
+        if (audioOnly)
+        {
+            parts.Add(format.AudioBitrateKilobytesPerSecond > 0
+                ? $"音频 {format.AudioBitrateKilobytesPerSecond:0.#} kbps"
+                : "音频");
+            AddIfPresent(parts, NormalizeContainer(format.Extension));
+            AddIfPresent(parts, NormalizeCodec(format.AudioCodec));
+        }
+        else
+        {
+            var dimensions = format.Height > 0
+                ? $"{format.Height}p"
+                : format.Width > 0
+                    ? $"{format.Width}px"
+                    : "视频";
+            if (format.FramesPerSecond > 0)
+                dimensions += $" {format.FramesPerSecond:0.#}fps";
+            parts.Add(dimensions);
+            AddIfPresent(parts, NormalizeContainer(format.Extension));
+            AddIfPresent(parts, NormalizeCodec(format.VideoCodec));
+            parts.Add(format.HasAudio
+                ? NormalizeCodec(format.AudioCodec)
+                : "自动匹配音频");
+        }
+
+        if (!string.IsNullOrWhiteSpace(format.FormatNote)
+            && !parts.Any(part => part.Contains(format.FormatNote, StringComparison.OrdinalIgnoreCase)))
+        {
+            parts.Add(format.FormatNote);
+        }
+        if (format.FileSize > 0)
+            parts.Add(ByteSizeFormatter.FormatClampZero(format.FileSize));
+        parts.Add($"ID {format.FormatId}");
+        return string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private static void AddIfPresent(ICollection<string> parts, string value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            parts.Add(value);
+    }
+
+    private static string NormalizeContainer(string extension)
+        => string.IsNullOrWhiteSpace(extension) ? "" : extension.ToUpperInvariant();
+
+    private static string NormalizeCodec(string codec)
+    {
+        if (string.IsNullOrWhiteSpace(codec) || codec.Equals("none", StringComparison.OrdinalIgnoreCase))
+            return "";
+
+        var normalized = codec.ToLowerInvariant();
+        if (normalized.StartsWith("avc1", StringComparison.Ordinal)
+            || normalized.StartsWith("h264", StringComparison.Ordinal))
+            return "H.264";
+        if (normalized.StartsWith("hev1", StringComparison.Ordinal)
+            || normalized.StartsWith("hvc1", StringComparison.Ordinal)
+            || normalized.StartsWith("hevc", StringComparison.Ordinal))
+            return "H.265";
+        if (normalized.StartsWith("av01", StringComparison.Ordinal))
+            return "AV1";
+        if (normalized.StartsWith("vp9", StringComparison.Ordinal))
+            return "VP9";
+        if (normalized.StartsWith("vp8", StringComparison.Ordinal))
+            return "VP8";
+        if (normalized.StartsWith("mp4a", StringComparison.Ordinal)
+            || normalized.StartsWith("aac", StringComparison.Ordinal))
+            return "AAC";
+        if (normalized.StartsWith("opus", StringComparison.Ordinal))
+            return "Opus";
+        if (normalized.StartsWith("vorbis", StringComparison.Ordinal))
+            return "Vorbis";
+        if (normalized.StartsWith("eac3", StringComparison.Ordinal))
+            return "E-AC-3";
+        if (normalized.StartsWith("ac3", StringComparison.Ordinal))
+            return "AC-3";
+
+        var separator = codec.IndexOf('.');
+        var shortName = separator > 0 ? codec[..separator] : codec;
+        return shortName.Length <= 16 ? shortName : shortName[..16];
+    }
 
     internal static string DescribeProxyStatus(AppConfig config)
     {

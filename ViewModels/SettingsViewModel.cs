@@ -131,6 +131,7 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _defaultQuality = "最高画质";
     [ObservableProperty] private int _maxConcurrentDownloads = AppConfig.GetDefaultConcurrentDownloadLimit();
     [ObservableProperty] private int _concurrentFragments = AppConfig.GetDefaultConcurrentFragments();
+    [ObservableProperty] private int _globalDownloadRateLimitKilobytesPerSecond;
     [ObservableProperty] private string _settingsSaveStatusMessage = "";
 
     [ObservableProperty] private bool _useProxy;
@@ -338,6 +339,7 @@ public partial class SettingsViewModel : ObservableObject
             };
             MaxConcurrentDownloads = c.MaxConcurrentDownloads;
             ConcurrentFragments = c.ConcurrentFragments;
+            GlobalDownloadRateLimitKilobytesPerSecond = c.GlobalDownloadRateLimitKilobytesPerSecond;
             UseProxy = c.UseProxy;
             ProxyAddress = c.ProxyAddress;
             UseAria2c = c.UseAria2c;
@@ -969,6 +971,7 @@ public partial class SettingsViewModel : ObservableObject
             };
             c.MaxConcurrentDownloads = MaxConcurrentDownloads;
             c.ConcurrentFragments = ConcurrentFragments;
+            c.GlobalDownloadRateLimitKilobytesPerSecond = GlobalDownloadRateLimitKilobytesPerSecond;
             c.UseProxy = UseProxy;
             c.ProxyAddress = ProxyAddress;
             c.UseAria2c = UseAria2c;
@@ -1126,6 +1129,7 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDefaultQualityChanged(string value) => AutoSave();
     partial void OnMaxConcurrentDownloadsChanged(int value) => AutoSave();
     partial void OnConcurrentFragmentsChanged(int value) => AutoSave();
+    partial void OnGlobalDownloadRateLimitKilobytesPerSecondChanged(int value) => AutoSave();
     partial void OnUseProxyChanged(bool value) => AutoSave();
     partial void OnProxyAddressChanged(string value) => AutoSave();
     partial void OnUseAria2cChanged(bool value) => AutoSave();
@@ -1319,7 +1323,8 @@ public partial class SettingsViewModel : ObservableObject
     private void SyncNormalizedPerformanceValues(EasyGet.Models.AppConfig config)
     {
         if (MaxConcurrentDownloads == config.MaxConcurrentDownloads
-            && ConcurrentFragments == config.ConcurrentFragments)
+            && ConcurrentFragments == config.ConcurrentFragments
+            && GlobalDownloadRateLimitKilobytesPerSecond == config.GlobalDownloadRateLimitKilobytesPerSecond)
         {
             return;
         }
@@ -1329,6 +1334,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             MaxConcurrentDownloads = config.MaxConcurrentDownloads;
             ConcurrentFragments = config.ConcurrentFragments;
+            GlobalDownloadRateLimitKilobytesPerSecond = config.GlobalDownloadRateLimitKilobytesPerSecond;
         }
         finally
         {

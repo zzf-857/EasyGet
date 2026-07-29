@@ -207,6 +207,21 @@
                             </Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="全局下载限速" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="应用于所有 yt-dlp 下载任务；设为 0 时不限速" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <Grid Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="110"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Height="32" VerticalContentAlignment="Center" Style="{StaticResource DarkTextBox}"
+                                             Text="{Binding GlobalDownloadRateLimitKilobytesPerSecond, UpdateSourceTrigger=LostFocus}" TextAlignment="Center"/>
+                                    <TextBlock Grid.Column="1" Text="KB/s" Margin="8,0,0,0" VerticalAlignment="Center" Style="{StaticResource TextCaption}"/>
+                                </Grid>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="自动按平台归类" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="下载后存入对应平台子目录" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel><ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding AutoCategorizeByPlatform}"/></Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">

@@ -50,6 +50,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     public int FailedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Failed);
     public int CancelledTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Cancelled);
     public int PausedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Paused);
+    public int ScheduledTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Scheduled);
     public int RunningTaskCount => QueueTasks.Count(task => task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging);
     public int RemainingTaskCount => QueueTasks.Count(task => task.Status is not (DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled));
     public int FinishedTaskCount => TotalTaskCount - RemainingTaskCount;
@@ -57,7 +58,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     public bool HasVisibleQueueTasks => VisibleQueueTasks.Count > 0;
     public bool CanPauseAll => QueueTasks.Any(task => task.Status == DownloadStatus.Downloading);
     public bool CanResumeAll => QueueTasks.Any(task => task.Status == DownloadStatus.Paused);
-    public bool CanStopAll => QueueTasks.Any(task => task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging or DownloadStatus.Paused);
+    public bool CanStopAll => QueueTasks.Any(task => task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging or DownloadStatus.Paused or DownloadStatus.Scheduled);
     public bool CanClearFinished => QueueTasks.Any(task => task.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled);
     public bool CanRetryFailed => FailedTaskCount > 0;
     public double OverallProgress => TotalTaskCount == 0
@@ -70,12 +71,13 @@ public partial class BatchDownloadViewModel : ObservableObject
     public string OverallProgressText => $"{OverallProgress:F0}%";
     public string QueueSummaryText => TotalTaskCount == 0
         ? "暂无任务"
-        : $"已完成 {CompletedTaskCount}/{TotalTaskCount} · 进行中 {RunningTaskCount} · 剩余 {RemainingTaskCount} · 失败 {FailedTaskCount}";
+        : $"已完成 {CompletedTaskCount}/{TotalTaskCount} · 进行中 {RunningTaskCount} · 计划 {ScheduledTaskCount} · 剩余 {RemainingTaskCount} · 失败 {FailedTaskCount}";
     public string EmptyQueueFilterText => SelectedQueueFilter switch
     {
         "进行中" => "当前没有正在处理的任务",
         "等待" => "当前没有等待中的任务",
         "已暂停" => "当前没有暂停的任务",
+        "计划" => "当前没有计划任务",
         "失败" => "当前没有失败任务",
         "已完成" => "当前没有已完成任务",
         "全部" => "暂无下载任务",
@@ -84,7 +86,7 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3 (仅音频)"];
     public string[] QualityOptions { get; } = ["最高画质", "1080p", "720p", "480p"];
-    public string[] QueueFilterOptions { get; } = ["全部", "进行中", "等待", "已暂停", "失败", "已完成"];
+    public string[] QueueFilterOptions { get; } = ["全部", "进行中", "等待", "计划", "已暂停", "失败", "已完成"];
 
     public event Action<string, bool>? RequestShowNotification;
 
@@ -241,7 +243,7 @@ public partial class BatchDownloadViewModel : ObservableObject
             foreach (var propertyName in new[]
                      {
                          nameof(ActiveDownloadCount), nameof(WaitingTaskCount), nameof(TotalTaskCount), nameof(CompletedTaskCount),
-                         nameof(FailedTaskCount), nameof(CancelledTaskCount), nameof(PausedTaskCount),
+                         nameof(FailedTaskCount), nameof(CancelledTaskCount), nameof(PausedTaskCount), nameof(ScheduledTaskCount),
                          nameof(RunningTaskCount), nameof(RemainingTaskCount), nameof(FinishedTaskCount),
                          nameof(HasQueueTasks), nameof(HasVisibleQueueTasks),
                          nameof(QueueSummaryText), nameof(EmptyQueueFilterText)
@@ -275,6 +277,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         {
             "进行中" => task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging,
             "等待" => task.Status == DownloadStatus.Waiting,
+            "计划" => task.Status == DownloadStatus.Scheduled,
             "已暂停" => task.Status == DownloadStatus.Paused,
             "失败" => task.Status == DownloadStatus.Failed,
             "已完成" => task.Status == DownloadStatus.Completed,
@@ -579,7 +582,8 @@ public partial class BatchDownloadViewModel : ObservableObject
                 or DownloadStatus.Waiting
                 or DownloadStatus.Resolving
                 or DownloadStatus.Merging
-                or DownloadStatus.Paused)
+                or DownloadStatus.Paused
+                or DownloadStatus.Scheduled)
             {
                 _downloadManager.Cancel(taskId);
             }

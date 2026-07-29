@@ -42,10 +42,11 @@ public partial class MainViewModel : ObservableObject
     public int RunningTaskCount => _downloadManager.Tasks.Count(task =>
         task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging);
     public int WaitingTaskCount => _downloadManager.Tasks.Count(task => task.Status == DownloadStatus.Waiting);
+    public int ScheduledTaskCount => _downloadManager.Tasks.Count(task => task.Status == DownloadStatus.Scheduled);
     public int FailedTaskCount => _downloadManager.Tasks.Count(task => task.Status == DownloadStatus.Failed);
     public int QueueTaskCount => _downloadManager.Tasks.Count;
     public bool HasQueueBadge => QueueTaskCount > 0;
-    public string TaskStatusText => $"{RunningTaskCount} 进行中 · {WaitingTaskCount} 等待 · {FailedTaskCount} 失败";
+    public string TaskStatusText => $"{RunningTaskCount} 进行中 · {WaitingTaskCount} 等待 · {ScheduledTaskCount} 计划 · {FailedTaskCount} 失败";
     public string AggregateSpeedText => $"↓ {ByteSizeFormatter.FormatClampZero((long)_downloadManager.Tasks
         .Where(task => task.Status == DownloadStatus.Downloading)
         .Sum(task => double.IsFinite(task.Speed) ? Math.Max(0, task.Speed) : 0))}/s";
@@ -510,6 +511,7 @@ public partial class MainViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(RunningTaskCount));
         OnPropertyChanged(nameof(WaitingTaskCount));
+        OnPropertyChanged(nameof(ScheduledTaskCount));
         OnPropertyChanged(nameof(FailedTaskCount));
         OnPropertyChanged(nameof(QueueTaskCount));
         OnPropertyChanged(nameof(HasQueueBadge));

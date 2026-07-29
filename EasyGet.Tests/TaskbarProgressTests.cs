@@ -36,6 +36,18 @@ public class TaskbarProgressTests
         Assert.Equal(TaskbarItemProgressState.None, main.TaskbarState);
         Assert.Equal(0.0, main.TaskbarValue);
 
+        var scheduledTask = new DownloadTask
+        {
+            Status = DownloadStatus.Scheduled,
+            ScheduledStartTimeUtc = DateTimeOffset.UtcNow.AddHours(1)
+        };
+        manager.Tasks.Add(scheduledTask);
+
+        Assert.Equal(1, main.ScheduledTaskCount);
+        Assert.Contains("1 计划", main.TaskStatusText, StringComparison.Ordinal);
+        Assert.Equal(TaskbarItemProgressState.None, main.TaskbarState);
+        Assert.Equal(0.0, main.TaskbarValue);
+
         // 2. 插入活跃任务：Normal 状态，进度对应
         var task1 = new DownloadTask { Status = DownloadStatus.Downloading, Progress = 40.0 };
         manager.Tasks.Add(task1);

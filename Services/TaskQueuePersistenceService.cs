@@ -285,6 +285,7 @@ public sealed class TaskQueuePersistenceService : IDisposable
             ThumbnailUrl = Limit(persisted.ThumbnailUrl, 32_768),
             Format = Limit(persisted.Format, 64, "mp4"),
             Quality = Limit(persisted.Quality, 64, "best"),
+            SourceFormatSelector = Limit(persisted.SourceFormatSelector, 256),
             Subtitle = Limit(persisted.Subtitle, 64, "none"),
             OutputDirectory = Limit(persisted.OutputDirectory, 32_768),
             BatchId = Limit(persisted.BatchId, 256),
@@ -301,7 +302,13 @@ public sealed class TaskQueuePersistenceService : IDisposable
                 .ToList(),
             Progress = Math.Clamp(NormalizeFiniteNonNegative(persisted.Progress), 0, 100),
             DownloadedSize = Math.Max(0, persisted.DownloadedSize),
-            Status = restoredStatus,
+            Status = restoredStatus == DownloadStatus.Scheduled
+                     && persisted.ScheduledStartTimeUtc is null
+                ? DownloadStatus.Paused
+                : restoredStatus,
+            ScheduledStartTimeUtc = restoredStatus == DownloadStatus.Scheduled
+                ? persisted.ScheduledStartTimeUtc?.ToUniversalTime()
+                : null,
             WasRestoredFromPreviousSession = recoveredOperationalState
                                                  || persisted.WasRestoredFromPreviousSession
         };
@@ -394,6 +401,7 @@ internal sealed class PersistedDownloadTask
     public string ThumbnailUrl { get; set; } = "";
     public string Format { get; set; } = "mp4";
     public string Quality { get; set; } = "best";
+    public string SourceFormatSelector { get; set; } = "";
     public string Subtitle { get; set; } = "none";
     public string OutputDirectory { get; set; } = "";
     public string BatchId { get; set; } = "";
@@ -408,6 +416,7 @@ internal sealed class PersistedDownloadTask
     public long DownloadedSize { get; set; }
     public DownloadStatus Status { get; set; }
     public bool WasRestoredFromPreviousSession { get; set; }
+    public DateTimeOffset? ScheduledStartTimeUtc { get; set; }
 
     internal static PersistedDownloadTask FromModel(DownloadTask task)
         => new()
@@ -421,6 +430,7 @@ internal sealed class PersistedDownloadTask
             ThumbnailUrl = task.ThumbnailUrl,
             Format = task.Format,
             Quality = task.Quality,
+            SourceFormatSelector = task.SourceFormatSelector,
             Subtitle = task.Subtitle,
             OutputDirectory = task.OutputDirectory,
             BatchId = task.BatchId,
@@ -434,6 +444,9 @@ internal sealed class PersistedDownloadTask
             Progress = double.IsFinite(task.Progress) ? Math.Clamp(task.Progress, 0, 100) : 0,
             DownloadedSize = Math.Max(0, task.DownloadedSize),
             Status = task.Status,
-            WasRestoredFromPreviousSession = task.WasRestoredFromPreviousSession
+            WasRestoredFromPreviousSession = task.WasRestoredFromPreviousSession,
+            ScheduledStartTimeUtc = task.Status == DownloadStatus.Scheduled
+                ? task.ScheduledStartTimeUtc?.ToUniversalTime()
+                : null
         };
 }

@@ -195,6 +195,11 @@
                             <StackPanel Orientation="Horizontal"><TextBlock Text="等待"/><TextBlock Text="{Binding WaitingTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
                         </RadioButton>
                         <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
+                                     Command="{Binding SetQueueFilterCommand}" CommandParameter="计划"
+                                     IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=计划}">
+                            <StackPanel Orientation="Horizontal"><TextBlock Text="计划"/><TextBlock Text="{Binding ScheduledTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
+                        </RadioButton>
+                        <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
                                      Command="{Binding SetQueueFilterCommand}" CommandParameter="已暂停"
                                      IsChecked="{Binding SelectedQueueFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=已暂停}">
                             <StackPanel Orientation="Horizontal"><TextBlock Text="已暂停"/><TextBlock Text="{Binding PausedTaskCount}" Margin="4,0,0,0" Opacity="0.6"/></StackPanel>
@@ -285,6 +290,7 @@
                                                     <DataTrigger Binding="{Binding Status}" Value="Downloading"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Status}" Value="Merging"><Setter Property="Fill" Value="{DynamicResource AccentBrush}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Status}" Value="Paused"><Setter Property="Fill" Value="{StaticResource WarningBrush}"/></DataTrigger>
+                                                    <DataTrigger Binding="{Binding Status}" Value="Scheduled"><Setter Property="Fill" Value="{StaticResource WarningBrush}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Fill" Value="{StaticResource SuccessBrush}"/></DataTrigger>
                                                     <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Fill" Value="{StaticResource ErrorBrush}"/></DataTrigger>
                                                 </Style.Triggers>
@@ -359,6 +365,7 @@
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding Status}" Value="Completed"><Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/></DataTrigger>
                                                         <DataTrigger Binding="{Binding Status}" Value="Paused"><Setter Property="Foreground" Value="{StaticResource WarningBrush}"/></DataTrigger>
+                                                        <DataTrigger Binding="{Binding Status}" Value="Scheduled"><Setter Property="Foreground" Value="{StaticResource WarningBrush}"/></DataTrigger>
                                                         <DataTrigger Binding="{Binding Status}" Value="Failed"><Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/></DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>

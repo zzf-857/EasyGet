@@ -97,4 +97,69 @@ public class YtDlpMetadataTests
         Assert.Equal(12, info.Duration);
         Assert.Equal("https://example.test/watch", info.Url);
     }
+
+    [Fact]
+    public void ParseVideoInfoJson_ExposesOnlyDownloadableFormatsWithRealMetadata()
+    {
+        const string json = """
+            {
+              "title": "Formats",
+              "formats": [
+                {
+                  "format_id": "137",
+                  "ext": "mp4",
+                  "vcodec": "avc1.640028",
+                  "acodec": "none",
+                  "width": 1920,
+                  "height": 1080,
+                  "fps": 30,
+                  "tbr": 4500,
+                  "filesize_approx": 104857600,
+                  "format_note": "1080p"
+                },
+                {
+                  "format_id": "140",
+                  "ext": "m4a",
+                  "vcodec": "none",
+                  "acodec": "mp4a.40.2",
+                  "abr": 129
+                },
+                {
+                  "format_id": "story board",
+                  "ext": "mhtml",
+                  "vcodec": "none",
+                  "acodec": "none"
+                },
+                {
+                  "format_id": "137",
+                  "ext": "webm",
+                  "vcodec": "vp9",
+                  "acodec": "none"
+                }
+              ]
+            }
+            """;
+
+        var info = YtDlpService.ParseVideoInfoJson(json, "https://example.test/watch");
+
+        Assert.NotNull(info);
+        Assert.Collection(
+            info!.AvailableFormats,
+            video =>
+            {
+                Assert.Equal("137", video.FormatId);
+                Assert.Equal("mp4", video.Extension);
+                Assert.Equal(1080, video.Height);
+                Assert.True(video.HasVideo);
+                Assert.False(video.HasAudio);
+                Assert.Equal(104857600, video.FileSize);
+            },
+            audio =>
+            {
+                Assert.Equal("140", audio.FormatId);
+                Assert.False(audio.HasVideo);
+                Assert.True(audio.HasAudio);
+                Assert.Equal(129, audio.AudioBitrateKilobytesPerSecond);
+            });
+    }
 }

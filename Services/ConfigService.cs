@@ -656,6 +656,11 @@ public class ConfigService
             AppConfig.MinConcurrentDownloadLimit,
             AppConfig.MaxConcurrentDownloadLimit);
 
+        config.GlobalDownloadRateLimitKilobytesPerSecond = Math.Clamp(
+            config.GlobalDownloadRateLimitKilobytesPerSecond,
+            AppConfig.MinGlobalDownloadRateLimitKilobytesPerSecond,
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond);
+
         NormalizeWindowState(config);
     }
 

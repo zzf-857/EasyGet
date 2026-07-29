@@ -23,6 +23,8 @@ public class DownloadManager : IDisposable
     private readonly Task[] _metadataWorkers;
     private readonly object _attemptLock = new();
     private readonly Dictionary<DownloadTask, DownloadAttempt> _activeAttempts = [];
+    private readonly Dictionary<DownloadTask, ScheduledDownload> _scheduledDownloads = [];
+    private readonly HashSet<DownloadTask> _queuedTasks = [];
     private readonly HashSet<DownloadTask> _persistenceTrackedTasks = [];
     private readonly object _idleLock = new();
     private int _activeTaskCount;
@@ -31,6 +33,7 @@ public class DownloadManager : IDisposable
     private TaskCompletionSource _idleSignal = CreateCompletedSignal();
     private const int MetadataWorkerCount = 4;
     private const int MetadataQueueCapacity = 128;
+    private static readonly TimeSpan MaximumScheduleDelay = TimeSpan.FromDays(20);
 
     /// <summary>所有任务</summary>
     public ObservableCollection<DownloadTask> Tasks { get; } = [];
@@ -86,12 +89,13 @@ public class DownloadManager : IDisposable
             .Select(_ => Task.Run(ProcessMetadataQueueAsync))
             .ToArray();
 
+        Tasks.CollectionChanged += OnTasksCollectionChangedForScheduling;
         if (_taskQueuePersistence is not null)
             Tasks.CollectionChanged += OnTasksCollectionChangedForPersistence;
     }
 
     /// <summary>
-    /// Restores the previous session without automatically starting network work.
+    /// Restores the previous session. Interrupted work remains paused; due scheduled work starts promptly.
     /// </summary>
     public async Task<int> RestoreAsync(CancellationToken cancellationToken = default)
     {
@@ -122,6 +126,9 @@ public class DownloadManager : IDisposable
         {
             Interlocked.Decrement(ref _suppressQueuePersistence);
         }
+
+        foreach (var task in Tasks.Where(task => task.Status == DownloadStatus.Scheduled).ToArray())
+            RegisterRestoredScheduledDownload(task);
 
         ScheduleQueuePersistence();
         return addedCount;
@@ -175,8 +182,46 @@ public class DownloadManager : IDisposable
 
     private void OnPersistedTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DownloadTask.Status))
+        if (e.PropertyName is nameof(DownloadTask.Status)
+            or nameof(DownloadTask.ScheduledStartTimeUtc))
+        {
             ScheduleQueuePersistence();
+        }
+    }
+
+    private void OnTasksCollectionChangedForScheduling(
+        object? sender,
+        NotifyCollectionChangedEventArgs e)
+    {
+        DownloadTask[] removedTasks = e.OldItems?
+            .Cast<DownloadTask>()
+            .ToArray() ?? [];
+        DownloadTask[] removedScheduledTasks = [];
+        lock (_attemptLock)
+        {
+            foreach (var task in removedTasks)
+                _queuedTasks.Remove(task);
+            if (e.NewItems is not null)
+            {
+                foreach (DownloadTask task in e.NewItems)
+                    _queuedTasks.Add(task);
+            }
+
+            if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                _queuedTasks.Clear();
+                foreach (var task in Tasks)
+                    _queuedTasks.Add(task);
+                removedScheduledTasks = _scheduledDownloads.Keys
+                    .Where(task => !_queuedTasks.Contains(task))
+                    .ToArray();
+            }
+        }
+
+        foreach (var task in removedTasks)
+            CancelScheduledDownload(task, clearScheduledTime: true);
+        foreach (var task in removedScheduledTasks)
+            CancelScheduledDownload(task, clearScheduledTime: true);
     }
 
     private void ScheduleQueuePersistence()
@@ -245,6 +290,17 @@ public class DownloadManager : IDisposable
     /// </summary>
     public async Task EnqueueAsync(DownloadTask task, VideoInfo? resolvedInfo = null)
     {
+        ArgumentNullException.ThrowIfNull(task);
+        if (task.ScheduledStartTimeUtc is { } scheduledAt)
+        {
+            if (resolvedInfo is not null)
+                ApplyVideoInfoMetadata(task, resolvedInfo);
+
+            await ScheduleAsync(task, scheduledAt).ConfigureAwait(true);
+            return;
+        }
+
+        task.ScheduledStartTimeUtc = null;
         ObjectDisposedException.ThrowIf(
             Volatile.Read(ref _disposed) != 0,
             this);
@@ -253,6 +309,272 @@ public class DownloadManager : IDisposable
         ObjectDisposedException.ThrowIf(
             !StartEnqueuedAttempt(task, attempt, resolvedInfo),
             this);
+    }
+
+    /// <summary>
+    /// Schedules a task using an absolute time with an explicit UTC offset.
+    /// Past times are enqueued immediately.
+    /// </summary>
+    public Task ScheduleAsync(DownloadTask task, DateTimeOffset scheduledStartTime)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        var scheduledUtc = scheduledStartTime.ToUniversalTime();
+        RegisterScheduledDownload(task, scheduledUtc, requireNewTask: true);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Schedules a task using a local or UTC <see cref="DateTime"/>. An unspecified kind is local time.
+    /// </summary>
+    public Task ScheduleAsync(DownloadTask task, DateTime scheduledStartTime)
+        => ScheduleAsync(task, NormalizeScheduledStartTime(scheduledStartTime));
+
+    internal static DateTimeOffset NormalizeScheduledStartTime(DateTime scheduledStartTime)
+    {
+        var utc = scheduledStartTime.Kind switch
+        {
+            DateTimeKind.Utc => scheduledStartTime,
+            DateTimeKind.Local => scheduledStartTime.ToUniversalTime(),
+            _ => TimeZoneInfo.ConvertTimeToUtc(
+                DateTime.SpecifyKind(scheduledStartTime, DateTimeKind.Unspecified),
+                TimeZoneInfo.Local)
+        };
+        return new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc));
+    }
+
+    private void RegisterRestoredScheduledDownload(DownloadTask task)
+    {
+        if (task.ScheduledStartTimeUtc is not { } scheduledAt)
+        {
+            task.Status = DownloadStatus.Paused;
+            return;
+        }
+
+        RegisterScheduledDownload(task, scheduledAt.ToUniversalTime(), requireNewTask: false);
+    }
+
+    private void RegisterScheduledDownload(
+        DownloadTask task,
+        DateTimeOffset scheduledUtc,
+        bool requireNewTask)
+    {
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (string.IsNullOrWhiteSpace(task.Url))
+            throw new ArgumentException("A scheduled download requires a URL.", nameof(task));
+
+        ScheduledDownload? replaced = null;
+        ScheduledDownload registration;
+        lock (_attemptLock)
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            if (_activeAttempts.ContainsKey(task))
+                throw new InvalidOperationException("An active download cannot be scheduled.");
+            if (requireNewTask
+                && _queuedTasks.Contains(task)
+                && task.Status != DownloadStatus.Scheduled)
+            {
+                throw new InvalidOperationException(
+                    "Only a new or already scheduled download can be scheduled.");
+            }
+
+            if (_scheduledDownloads.Remove(task, out var existing))
+                replaced = existing;
+
+            if (string.IsNullOrWhiteSpace(task.OutputDirectory))
+                task.OutputDirectory = _configService.Config.DefaultDownloadPath;
+
+            task.ScheduledStartTimeUtc = scheduledUtc;
+            task.Status = DownloadStatus.Scheduled;
+            if (!_queuedTasks.Contains(task))
+                Tasks.Add(task);
+
+            registration = new ScheduledDownload(task, scheduledUtc);
+            _scheduledDownloads.Add(task, registration);
+        }
+
+        replaced?.Cancel();
+        _ = RunScheduledDownloadAsync(registration);
+        WriteScheduleLogSafely(
+            $"[{DateTime.Now:HH:mm:ss}] 已计划: {task.Url}（{scheduledUtc.ToLocalTime():yyyy-MM-dd HH:mm}）");
+    }
+
+    private async Task RunScheduledDownloadAsync(ScheduledDownload registration)
+    {
+        try
+        {
+            await DelayUntilScheduledTimeAsync(
+                    registration.ScheduledStartTimeUtc,
+                    registration.Source.Token)
+                .ConfigureAwait(false);
+            await ActivateScheduledDownloadOnDispatcherAsync(registration).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (registration.Source.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            FailScheduledDownload(registration, ex);
+        }
+        finally
+        {
+            registration.Dispose();
+        }
+    }
+
+    private static async Task DelayUntilScheduledTimeAsync(
+        DateTimeOffset scheduledUtc,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var remaining = scheduledUtc - DateTimeOffset.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                return;
+
+            await Task.Delay(
+                    remaining > MaximumScheduleDelay ? MaximumScheduleDelay : remaining,
+                    cancellationToken)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private Task ActivateScheduledDownloadOnDispatcherAsync(ScheduledDownload registration)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+            return ActivateScheduledDownloadAsync(registration);
+        if (dispatcher.HasShutdownStarted || dispatcher.HasShutdownFinished)
+            return Task.CompletedTask;
+
+        return dispatcher
+            .InvokeAsync(() => ActivateScheduledDownloadAsync(registration))
+            .Task
+            .Unwrap();
+    }
+
+    private async Task ActivateScheduledDownloadAsync(ScheduledDownload registration)
+    {
+        DownloadAttempt? attempt = null;
+        try
+        {
+            lock (_attemptLock)
+            {
+                if (Volatile.Read(ref _disposed) != 0
+                    || registration.Source.IsCancellationRequested
+                    || !_scheduledDownloads.TryGetValue(registration.Task, out var current)
+                    || !ReferenceEquals(current, registration)
+                    || registration.Task.Status != DownloadStatus.Scheduled
+                    || !_queuedTasks.Contains(registration.Task))
+                {
+                    return;
+                }
+
+                _scheduledDownloads.Remove(registration.Task);
+                attempt = CreateAttemptLocked(registration.Task);
+                registration.Task.ScheduledStartTimeUtc = null;
+                registration.Task.Status = DownloadStatus.Resolving;
+                RegisterActiveTask();
+                attempt.MarkRegistered();
+            }
+
+            WriteScheduleLogSafely(
+                $"[{DateTime.Now:HH:mm:ss}] 计划任务到点，正在解析: {registration.Task.Url}");
+
+            if (_taskQueuePersistence is not null)
+            {
+                try
+                {
+                    await _taskQueuePersistence
+                        .FlushAsync(Tasks.ToArray(), attempt.Token)
+                        .ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (attempt.Token.IsCancellationRequested)
+                {
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[DownloadManager] Scheduled activation persistence failed: {ex.Message}");
+                }
+            }
+
+            if (!IsCurrentAttempt(attempt))
+            {
+                FinishAttempt(attempt, currentTask => ApplyCancellationStatus(attempt, currentTask));
+                return;
+            }
+
+            await QueueMetadataAsync(attempt).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            if (attempt is null)
+                throw;
+
+            var cancelled = attempt.IsCancellationRequested;
+            FinishAttempt(attempt, currentTask =>
+            {
+                if (cancelled)
+                {
+                    ApplyCancellationStatus(attempt, currentTask);
+                }
+                else
+                {
+                    currentTask.Status = DownloadStatus.Failed;
+                    currentTask.ErrorMessage = "启动计划下载失败，请重新设置计划";
+                }
+            });
+            System.Diagnostics.Debug.WriteLine(
+                $"[DownloadManager] Scheduled activation failed: {ex.Message}");
+        }
+    }
+
+    private void FailScheduledDownload(ScheduledDownload registration, Exception exception)
+    {
+        var isCurrent = false;
+        lock (_attemptLock)
+        {
+            if (_scheduledDownloads.TryGetValue(registration.Task, out var current)
+                && ReferenceEquals(current, registration))
+            {
+                _scheduledDownloads.Remove(registration.Task);
+                isCurrent = true;
+            }
+        }
+
+        if (!isCurrent)
+            return;
+
+        registration.Task.ScheduledStartTimeUtc = null;
+        registration.Task.Status = DownloadStatus.Failed;
+        registration.Task.ErrorMessage = "启动计划下载失败，请重新设置计划";
+        System.Diagnostics.Debug.WriteLine(
+            $"[DownloadManager] Scheduled download failed: {exception.Message}");
+        NotifyTaskFinished(registration.Task);
+    }
+
+    private void WriteScheduleLogSafely(string message)
+    {
+        try
+        {
+            LogReceived?.Invoke(message);
+        }
+        catch (Exception)
+        {
+            // UI log subscribers must not alter scheduler state.
+        }
+    }
+
+    private void CancelScheduledDownload(DownloadTask task, bool clearScheduledTime)
+    {
+        ScheduledDownload? registration;
+        lock (_attemptLock)
+            _scheduledDownloads.Remove(task, out registration);
+
+        registration?.Cancel();
+        if (clearScheduledTime && registration is not null)
+            task.ScheduledStartTimeUtc = null;
     }
 
     private bool StartEnqueuedAttempt(
@@ -799,11 +1121,13 @@ public class DownloadManager : IDisposable
             return;
 
         DownloadAttempt? attempt = null;
+        ScheduledDownload? scheduledDownload = null;
         CancellationTokenSource? source;
         bool shouldMarkCancelled;
         var notifyFinishingCancellation = false;
         lock (_attemptLock)
         {
+            _scheduledDownloads.Remove(task, out scheduledDownload);
             if (_activeAttempts.TryGetValue(task, out var activeAttempt))
             {
                 if (activeAttempt.IsFinishing
@@ -822,11 +1146,15 @@ public class DownloadManager : IDisposable
             shouldMarkCancelled = notifyFinishingCancellation
                 || task.Status is DownloadStatus.Waiting
                 or DownloadStatus.Resolving
-                or DownloadStatus.Paused;
+                or DownloadStatus.Paused
+                or DownloadStatus.Scheduled;
         }
 
         try
         {
+            scheduledDownload?.Cancel();
+            if (scheduledDownload is not null)
+                task.ScheduledStartTimeUtc = null;
             if (shouldMarkCancelled)
                 task.Status = DownloadStatus.Cancelled;
         }
@@ -1074,6 +1402,7 @@ public class DownloadManager : IDisposable
                 task.PropertyChanged -= OnPersistedTaskPropertyChanged;
             _persistenceTrackedTasks.Clear();
         }
+        Tasks.CollectionChanged -= OnTasksCollectionChangedForScheduling;
     }
 
     private void CancelAttemptSource(
@@ -1385,6 +1714,38 @@ public class DownloadManager : IDisposable
         var invalid = System.IO.Path.GetInvalidFileNameChars();
         var sanitized = new string(value.Where(c => !invalid.Contains(c)).ToArray());
         return string.IsNullOrWhiteSpace(sanitized) ? "Item" : sanitized;
+    }
+
+    private sealed class ScheduledDownload : IDisposable
+    {
+        private int _disposed;
+
+        public ScheduledDownload(DownloadTask task, DateTimeOffset scheduledStartTimeUtc)
+        {
+            Task = task;
+            ScheduledStartTimeUtc = scheduledStartTimeUtc;
+        }
+
+        public DownloadTask Task { get; }
+        public DateTimeOffset ScheduledStartTimeUtc { get; }
+        public CancellationTokenSource Source { get; } = new();
+
+        public void Cancel()
+        {
+            try
+            {
+                Source.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 0)
+                Source.Dispose();
+        }
     }
 
     private sealed class DownloadAttempt

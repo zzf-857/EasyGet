@@ -2,10 +2,11 @@
 
 ## 本轮状态
 
-- 本轮已停止继续扩展功能，工作区只保留已经完成并通过回归测试的改动。
-- 基线提交：`77827dd`（v1.3.10）。
+- 本轮已完成上一轮记录的四项产品加固，工作区只保留已经完成并通过回归测试的改动。
+- 本轮开发基线：`ced5f96`（位于 v1.3.10 之后）。
 - 构建验证：`dotnet build EasyGet.csproj -c Debug --no-restore --nologo`，0 警告、0 错误。
-- 完整回归：`dotnet test EasyGet.Tests/EasyGet.Tests.csproj -c Release --no-restore --nologo`，1070 通过、1 个既有联网测试跳过、0 失败。
+- 定向回归：限速、定时下载、动态格式、发布供应链及相关 UI 契约共 321 项通过。
+- 完整回归：`dotnet test EasyGet.Tests/EasyGet.Tests.csproj -c Release --no-restore --nologo`，1101 通过、1 个既有联网测试跳过、0 失败。
 - 用户负责后续视觉验收；本轮没有将视觉主观判断作为发布门槛。
 
 ## 已完成
@@ -54,15 +55,26 @@
     - 批量下载队列行横向铺满，进度条按统一列对齐。
     - 本轮只保留已经完成的 UI 修改，没有纳入中止任务的半成品。
 
+11. 全局下载限速
+    - 配置版本升级至 v4，设置页支持输入全局 `KB/s` 上限，`0` 表示不限速。
+    - yt-dlp 下载统一加入 `--limit-rate`，配置迁移、范围归一化、自动保存和备份白名单均已覆盖。
+
+12. 定时下载与重启恢复
+    - 单下载页支持设置本地计划时间、校验过去或无效时间，并可在计划执行前取消。
+    - 计划任务使用可取消延时，到点进入现有下载管线；支持持久化、重启恢复、逾期启动、重新计划和队列筛选。
+
+13. 动态源格式选择
+    - 从 yt-dlp 解析结果展示真实分辨率、帧率、容器、编码、预估大小和格式 ID。
+    - 具体视频源流自动匹配音频，选择结果随队列持久化，并用于下载参数和磁盘预检。
+
+14. 发布供应链
+    - GitHub Actions 支持可选 Authenticode 签名；Secrets 缺失时明确发布未签名产物，配置不完整时阻止发布。
+    - 使用 Microsoft SBOM Tool 4.1.5 生成 SPDX 2.2，固定 SHA-256 已由官方 API 与微软 SPDX 清单双重核对。
+    - 使用 `actions/attest@v4` 生成来源证明和 SBOM 证明，并将 SBOM 加入 Release 资产。
+
 ## 下次继续
 
-以下事项本轮明确未开始或已中止，工作区没有保留半成品：
-
-1. 全局下载限速，以及设置到 yt-dlp 参数的完整链路。
-2. 可持久化的定时下载和重启恢复。
-3. 根据解析结果展示真实容器、编码和音视频格式组合。
-4. GitHub Actions 的条件式代码签名、SBOM 和 artifact attestation。
-5. 用户继续提供视觉问题截图后，再逐项调整字号、间距、对齐和控件边界。
+本轮计划内功能已经闭环。下次只在用户提供新的视觉问题截图后，再逐项调整字号、间距、对齐和控件边界；不做未经确认的主观视觉重构。
 
 ## 继续开发前检查
 
@@ -72,4 +84,4 @@ dotnet build EasyGet.csproj -c Debug --no-restore --nologo
 dotnet test EasyGet.Tests\EasyGet.Tests.csproj -c Release --no-restore --nologo
 ```
 
-新一轮优先从“限速与定时下载”或“动态格式列表”中只选一项完成闭环，避免同时修改 `AppConfig`、设置页和下载任务模型造成集成冲突。
+继续开发前先确认工作区干净并保持完整回归通过；涉及发布流程时，真实证书签名和 GitHub attestation 仍需在 tag 触发的 GitHub Actions 环境验证。

@@ -16,6 +16,7 @@ public class VideoInfo
     public string Thumbnail { get; set; } = "";
     public long FileSize { get; set; }
     public string Url { get; set; } = "";
+    public IReadOnlyList<VideoFormatInfo> AvailableFormats { get; set; } = [];
 }
 
 public class PlaylistInfo
@@ -293,7 +294,8 @@ public partial class YtDlpService
             Duration = GetOptionalDouble(root, "duration"),
             Thumbnail = GetThumbnail(root),
             FileSize = GetFileSize(root),
-            Url = url
+            Url = url,
+            AvailableFormats = GetAvailableFormats(root)
         };
     }
 
@@ -326,6 +328,62 @@ public partial class YtDlpService
         return fileSize > 0 ? fileSize : GetOptionalInt64(root, "filesize");
     }
 
+    private static IReadOnlyList<VideoFormatInfo> GetAvailableFormats(JsonElement root)
+    {
+        if (!root.TryGetProperty("formats", out var formatsElement)
+            || formatsElement.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var formats = new List<VideoFormatInfo>();
+        var seenIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in formatsElement.EnumerateArray())
+        {
+            var formatId = GetOptionalString(item, "format_id").Trim();
+            if (!IsSafeFormatId(formatId) || !seenIds.Add(formatId))
+                continue;
+
+            var format = new VideoFormatInfo(
+                formatId,
+                GetOptionalString(item, "ext").Trim().ToLowerInvariant(),
+                GetOptionalString(item, "vcodec").Trim(),
+                GetOptionalString(item, "acodec").Trim(),
+                GetOptionalInt32(item, "width"),
+                GetOptionalInt32(item, "height"),
+                GetOptionalDouble(item, "fps"),
+                GetOptionalDouble(item, "tbr"),
+                GetOptionalDouble(item, "abr"),
+                GetFileSize(item),
+                GetOptionalString(item, "format_note").Trim());
+            if (format.HasVideo || format.HasAudio)
+                formats.Add(format);
+        }
+
+        var videoFormats = formats
+            .Where(format => format.HasVideo)
+            .OrderByDescending(format => format.Height)
+            .ThenByDescending(format => format.FramesPerSecond)
+            .ThenByDescending(format => format.TotalBitrateKilobytesPerSecond)
+            .ThenByDescending(format => format.IsCombined)
+            .Take(36);
+        var audioFormats = formats
+            .Where(format => format.HasAudio && !format.HasVideo)
+            .OrderByDescending(format => format.AudioBitrateKilobytesPerSecond)
+            .ThenByDescending(format => format.TotalBitrateKilobytesPerSecond)
+            .Take(16);
+
+        return videoFormats
+            .Concat(audioFormats)
+            .DistinctBy(format => format.FormatId, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    private static bool IsSafeFormatId(string formatId)
+        => formatId.Length is > 0 and <= 80
+           && formatId.All(character => char.IsAsciiLetterOrDigit(character)
+                                        || character is '.' or '_' or '-');
+
     private static string GetOptionalString(JsonElement element, string propertyName)
     {
         if (element.ValueKind != JsonValueKind.Object
@@ -349,6 +407,12 @@ public partial class YtDlpService
         }
 
         return Math.Max(0, number);
+    }
+
+    private static int GetOptionalInt32(JsonElement element, string propertyName)
+    {
+        var number = GetOptionalInt64(element, propertyName);
+        return number > int.MaxValue ? int.MaxValue : (int)number;
     }
 
     private static double GetOptionalDouble(JsonElement element, string propertyName)
@@ -708,7 +772,9 @@ public partial class YtDlpService
             "--ignore-config",
             "--no-playlist",
             "-f",
-            BuildFormatString(task.Format, task.Quality)
+            string.IsNullOrWhiteSpace(task.SourceFormatSelector)
+                ? BuildFormatString(task.Format, task.Quality)
+                : task.SourceFormatSelector.Trim()
         };
 
         if (task.Format is "mp3" or "m4a")
@@ -737,6 +803,9 @@ public partial class YtDlpService
         args.Add("download:%(progress._percent_str)s %(progress._speed_str)s ETA %(progress._eta_str)s");
 
         AddDownloadThroughputArgs(args);
+        AddGlobalDownloadRateLimitArgs(
+            args,
+            _configService.Config.GlobalDownloadRateLimitKilobytesPerSecond);
         AddNetworkReliabilityArgs(args);
 
         var fragments = ResolveConcurrentFragments(
@@ -819,6 +888,21 @@ public partial class YtDlpService
     {
         args.Add("--buffer-size");
         args.Add("1M");
+    }
+
+    internal static void AddGlobalDownloadRateLimitArgs(
+        List<string> args,
+        int kilobytesPerSecond)
+    {
+        var normalizedLimit = Math.Clamp(
+            kilobytesPerSecond,
+            AppConfig.MinGlobalDownloadRateLimitKilobytesPerSecond,
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond);
+        if (normalizedLimit == 0)
+            return;
+
+        args.Add("--limit-rate");
+        args.Add($"{normalizedLimit}K");
     }
 
     internal static void AddSiteCompatibilityArgs(List<string> args, string url)

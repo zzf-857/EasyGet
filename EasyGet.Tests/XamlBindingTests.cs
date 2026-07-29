@@ -235,6 +235,7 @@ public class XamlBindingTests
         Assert.Contains("IsIdle", source, StringComparison.Ordinal);
         Assert.Contains("IsParsing", source, StringComparison.Ordinal);
         Assert.Contains("IsReady", source, StringComparison.Ordinal);
+        Assert.Contains("IsScheduled", source, StringComparison.Ordinal);
         Assert.Contains("IsDownloadActive", source, StringComparison.Ordinal);
         Assert.Contains("IsCompleted", source, StringComparison.Ordinal);
         Assert.Contains("IsFailed", source, StringComparison.Ordinal);
@@ -263,6 +264,11 @@ public class XamlBindingTests
         Assert.Contains("ConcurrentFragmentsText", source, StringComparison.Ordinal);
         Assert.Contains("ProxyStatusText", source, StringComparison.Ordinal);
         Assert.Contains("DownloadDirectory", source, StringComparison.Ordinal);
+        Assert.Contains("SourceFormatOptions", source, StringComparison.Ordinal);
+        Assert.Contains("SelectedSourceFormat", source, StringComparison.Ordinal);
+        Assert.Contains("IsScheduledDownloadEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("ScheduledStartText", source, StringComparison.Ordinal);
+        Assert.Contains("ScheduleValidationMessage", source, StringComparison.Ordinal);
         Assert.Contains("ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
         Assert.Contains("RunPrimaryActionCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowClipboardPrompt", source, StringComparison.Ordinal);
@@ -451,7 +457,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void BatchDownloadViewExposesSixDesignerQueueFilters()
+    public void BatchDownloadViewExposesAllDesignerQueueFilters()
     {
         var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
         var filters = document.Descendants()
@@ -461,7 +467,7 @@ public class XamlBindingTests
             .Select(element => element.Attribute("CommandParameter")?.Value)
             .ToList();
 
-        Assert.Equal(new[] { "全部", "进行中", "等待", "已暂停", "失败", "已完成" }, filters);
+        Assert.Equal(new[] { "全部", "进行中", "等待", "计划", "已暂停", "失败", "已完成" }, filters);
     }
 
     [Fact]
@@ -833,6 +839,9 @@ public class XamlBindingTests
         Assert.Contains("ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
         Assert.Contains("UseAria2c", source, StringComparison.Ordinal);
         Assert.Contains("aria2c 外部下载器", source, StringComparison.Ordinal);
+        Assert.Contains("GlobalDownloadRateLimitKilobytesPerSecond", source, StringComparison.Ordinal);
+        Assert.Contains("全局下载限速", source, StringComparison.Ordinal);
+        Assert.Contains("KB/s", source, StringComparison.Ordinal);
     }
 
     [Fact]

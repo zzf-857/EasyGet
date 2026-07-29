@@ -109,6 +109,54 @@ public class DownloadViewModelTests
     }
 
     [Fact]
+    public void BuildSourceFormatChoices_MapsRealVideoAndAudioStreamsToYtDlpSelectors()
+    {
+        var info = new VideoInfo
+        {
+            AvailableFormats =
+            [
+                new VideoFormatInfo(
+                    "137", "mp4", "avc1.640028", "none", 1920, 1080, 30,
+                    4500, 0, 104857600, "1080p"),
+                new VideoFormatInfo(
+                    "22", "mp4", "avc1.64001F", "mp4a.40.2", 1280, 720, 30,
+                    1800, 128, 52428800, "720p"),
+                new VideoFormatInfo(
+                    "140", "m4a", "none", "mp4a.40.2", 0, 0, 0,
+                    129, 129, 4194304, "medium")
+            ]
+        };
+
+        var videoChoices = DownloadViewModel.BuildSourceFormatChoices(info, "mp4");
+        var audioChoices = DownloadViewModel.BuildSourceFormatChoices(info, "mp3 (仅音频)");
+
+        Assert.Equal("", videoChoices[0].Selector);
+        Assert.Contains(videoChoices, choice =>
+            choice.Selector == "137+ba/b"
+            && choice.DisplayName.Contains("1080p", StringComparison.Ordinal)
+            && choice.DisplayName.Contains("H.264", StringComparison.Ordinal)
+            && choice.DisplayName.Contains("ID 137", StringComparison.Ordinal));
+        Assert.Contains(videoChoices, choice => choice.Selector == "22");
+        Assert.Equal(2, audioChoices.Count);
+        Assert.Equal("140", audioChoices[1].Selector);
+        Assert.Contains("AAC", audioChoices[1].DisplayName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SelectingExactSourceFormat_DisablesAutomaticQualityLimit()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+        var exact = new SourceFormatChoice("1080p · MP4 · ID 137", "137+ba/b");
+
+        viewModel.SelectedSourceFormat = exact;
+        Assert.False(viewModel.UsesAutomaticSourceFormat);
+
+        viewModel.SelectedSourceFormat = new SourceFormatChoice("自动选择", "");
+        Assert.True(viewModel.UsesAutomaticSourceFormat);
+    }
+
+    [Fact]
     public async Task StartDownloadReusesResolvedPreviewWithoutRequestingMetadataAgain()
     {
         var downloadService = new CompletingDownloadService();
@@ -178,6 +226,7 @@ public class DownloadViewModelTests
     }
 
     [Theory]
+    [InlineData(DownloadPageState.Scheduled, true, false, false)]
     [InlineData(DownloadPageState.Downloading, true, false, false)]
     [InlineData(DownloadPageState.Completed, true, true, false)]
     [InlineData(DownloadPageState.Failed, true, false, true)]
@@ -199,6 +248,58 @@ public class DownloadViewModelTests
         Assert.Equal(isProgressVisible, viewModel.IsProgressCardVisible);
         Assert.Equal(isCompleted, viewModel.IsCompleted);
         Assert.Equal(isTaskFailed, viewModel.IsTaskFailed);
+    }
+
+    [Fact]
+    public void TryParseScheduledStart_RejectsPastAndAcceptsFutureLocalTime()
+    {
+        var now = DateTimeOffset.Now;
+        var futureText = now.AddHours(2).ToString("yyyy-MM-dd HH:mm");
+        var pastText = now.AddHours(-2).ToString("yyyy-MM-dd HH:mm");
+
+        var futureResult = DownloadViewModel.TryParseScheduledStart(
+            futureText,
+            now,
+            out var scheduled,
+            out var futureError);
+        var pastResult = DownloadViewModel.TryParseScheduledStart(
+            pastText,
+            now,
+            out _,
+            out var pastError);
+
+        Assert.True(futureResult, futureError);
+        Assert.True(scheduled > now);
+        Assert.False(pastResult);
+        Assert.Contains("晚于当前时间", pastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartDownload_WithFutureSchedule_QueuesWithoutStartingNetworkWork()
+    {
+        var downloadService = new CompletingDownloadService();
+        using var context = CreateDownloadContext(downloadService: downloadService);
+        var viewModel = context.ViewModel;
+        context.VideoInfoProvider.Enqueue(new VideoInfo
+        {
+            Title = "计划视频",
+            Platform = "YouTube",
+            Url = "https://example.test/scheduled"
+        });
+        viewModel.Url = "https://example.test/scheduled";
+        await viewModel.ParseCommand.ExecuteAsync(null);
+        viewModel.IsScheduledDownloadEnabled = true;
+        viewModel.ScheduledStartText = DateTime.Now.AddHours(2).ToString("yyyy-MM-dd HH:mm");
+
+        await viewModel.StartDownloadCommand.ExecuteAsync(null);
+
+        var task = Assert.Single(context.Manager.Tasks);
+        Assert.Equal(DownloadStatus.Scheduled, task.Status);
+        Assert.NotNull(task.ScheduledStartTimeUtc);
+        Assert.Equal("计划视频", task.Title);
+        Assert.Equal(DownloadPageState.Scheduled, viewModel.PageState);
+        Assert.False(viewModel.IsDownloading);
+        Assert.Equal(0, downloadService.DownloadCallCount);
     }
 
     [Fact]

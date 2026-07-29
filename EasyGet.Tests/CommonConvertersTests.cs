@@ -35,4 +35,25 @@ public class CommonConvertersTests
         Assert.Same(first, second);
         Assert.True(first.IsFrozen);
     }
+
+    [Fact]
+    public void StatusConverters_RepresentScheduledTasksExplicitly()
+    {
+        var textConverter = new StatusToTextConverter();
+        var colorConverter = new StatusToColorConverter();
+
+        Assert.Equal(
+            "计划下载",
+            textConverter.Convert(
+                DownloadStatus.Scheduled,
+                typeof(string),
+                null!,
+                CultureInfo.InvariantCulture));
+        Assert.IsAssignableFrom<Brush>(
+            colorConverter.Convert(
+                DownloadStatus.Scheduled,
+                typeof(Brush),
+                null!,
+                CultureInfo.InvariantCulture));
+    }
 }
