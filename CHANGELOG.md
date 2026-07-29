@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.4.0 - 2026-07-29
+
+### Download Safety and Recovery
+- Persist unfinished queues across restarts while restoring interrupted work in a paused state, and add download-directory, write-access, disk-space, and duplicate-download checks before work starts.
+- Add guided first-run dependency readiness, categorized failure recovery actions, privacy-safe diagnostic bundles, and verified user-data backup and restore.
+
+### Download Controls
+- Add a configurable global yt-dlp rate limit, persistent scheduled downloads with restart recovery, and queue filtering and cancellation for planned work.
+- Expose parsed source streams with real resolution, frame rate, container, codecs, estimated size, and yt-dlp format identifiers, while preserving exact selections in the queue.
+
+### Desktop Operations
+- Add tray controls, completion and failure notifications, optional sleep prevention during active downloads, periodic update checks, stale-package cleanup, and safe history-file lifecycle actions.
+
+### Release Security
+- Add optional Authenticode signing for first-party executables and installers, SPDX 2.2 SBOM generation with a pinned Microsoft tool checksum, and GitHub provenance and SBOM attestations.
+
+### Tests
+- Add focused coverage for recovery, persistence, scheduling, format selection, rate limiting, desktop operations, and release contracts.
+- Verified 1101 automated tests pass; 1 live or environment-dependent test remains explicitly skipped.
+
 ## 1.3.10 - 2026-07-28
 
 ### Desktop Interface
