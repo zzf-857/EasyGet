@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.1 - 2026-07-29
+
+### Startup Reliability
+- Correct the Windows tray integration to call `Shell_NotifyIconW`, preventing the v1.4.0 startup error and allowing yt-dlp and ffmpeg readiness initialization to complete.
+- Make tray initialization, notifications, and cleanup fail safely, while retaining normal taskbar minimization when tray integration is unavailable.
+
+### Release Reliability
+- Preserve version-specific changelog notes when GitHub Actions publishes tagged releases.
+
+### Tests
+- Add regression coverage for the native tray export, startup ordering, and isolation of tray failures from core initialization.
+- Verified 1106 automated tests pass; 1 live network test remains explicitly skipped.
+
 ## 1.4.0 - 2026-07-29
 
 ### Download Safety and Recovery
