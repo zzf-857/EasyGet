@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -33,19 +34,38 @@ public sealed class TrayIconService : IDisposable
     public event Action? ShowRequested;
     public event Action? ExitRequested;
 
-    public void Initialize()
+    public bool TryInitialize()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-        if (_isAdded || !OperatingSystem.IsWindows())
-            return;
+        if (_disposed || !OperatingSystem.IsWindows())
+            return false;
 
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is not null && !dispatcher.CheckAccess())
+        if (_isAdded)
+            return true;
+
+        try
         {
-            dispatcher.Invoke(Initialize);
-            return;
-        }
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is not null && !dispatcher.CheckAccess())
+            {
+                if (dispatcher.HasShutdownStarted)
+                    return false;
 
+                return dispatcher.Invoke(() => TryInitialize());
+            }
+
+            InitializeCore();
+            return _isAdded;
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[TrayIconService] Tray initialization failed: {ex.Message}");
+            CleanupResourcesSafely();
+            return false;
+        }
+    }
+
+    private void InitializeCore()
+    {
         var parameters = new HwndSourceParameters("EasyGet.TrayIcon")
         {
             ParentWindow = new IntPtr(-3),
@@ -61,7 +81,7 @@ public sealed class TrayIconService : IDisposable
         data.Tooltip = TrimBalloonText("EasyGet", 127);
         if (!ShellNotifyIcon(NotifyIconAdd, ref data))
         {
-            CleanupResources();
+            CleanupResourcesSafely();
             return;
         }
 
@@ -70,23 +90,43 @@ public sealed class TrayIconService : IDisposable
 
     public void ShowNotification(string title, string message, bool isError = false)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_disposed)
+            return;
+
         var dispatcher = Application.Current?.Dispatcher;
         if (dispatcher is not null && !dispatcher.CheckAccess())
         {
-            dispatcher.BeginInvoke(() => ShowNotification(title, message, isError));
+            if (dispatcher.HasShutdownStarted)
+                return;
+
+            try
+            {
+                _ = dispatcher.BeginInvoke(() => ShowNotification(title, message, isError));
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[TrayIconService] Tray notification dispatch failed: {ex.Message}");
+            }
+
             return;
         }
 
-        Initialize();
-        if (!_isAdded)
+        if (!TryInitialize())
             return;
 
         var data = CreateNotifyData(NotifyIconInfo);
         data.InfoTitle = TrimBalloonText(title, 63);
         data.Info = TrimBalloonText(message, 255);
         data.InfoFlags = isError ? NotifyError : NotifyInfo;
-        _ = ShellNotifyIcon(NotifyIconModify, ref data);
+        try
+        {
+            _ = ShellNotifyIcon(NotifyIconModify, ref data);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[TrayIconService] Tray notification failed: {ex.Message}");
+            CleanupResourcesSafely();
+        }
     }
 
     internal static string TrimBalloonText(string? value, int maximumLength)
@@ -175,14 +215,37 @@ public sealed class TrayIconService : IDisposable
             return;
 
         _disposed = true;
-        var dispatcher = Application.Current?.Dispatcher;
-        if (dispatcher is not null && !dispatcher.CheckAccess() && !dispatcher.HasShutdownStarted)
+        try
         {
-            dispatcher.Invoke(CleanupResources);
-            return;
+            var dispatcher = Application.Current?.Dispatcher;
+            if (dispatcher is not null && !dispatcher.CheckAccess())
+            {
+                if (dispatcher.HasShutdownStarted)
+                    return;
+
+                dispatcher.Invoke(CleanupResourcesSafely);
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[TrayIconService] Tray cleanup dispatch failed: {ex.Message}");
         }
 
-        CleanupResources();
+        CleanupResourcesSafely();
+    }
+
+    private void CleanupResourcesSafely()
+    {
+        try
+        {
+            CleanupResources();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[TrayIconService] Tray cleanup failed: {ex.Message}");
+            _isAdded = false;
+        }
     }
 
     private void CleanupResources()
@@ -231,7 +294,12 @@ public sealed class TrayIconService : IDisposable
         public IntPtr BalloonIconHandle;
     }
 
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [DllImport(
+        "shell32.dll",
+        EntryPoint = "Shell_NotifyIconW",
+        CharSet = CharSet.Unicode,
+        SetLastError = true,
+        ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ShellNotifyIcon(uint message, ref NotifyIconData data);
 

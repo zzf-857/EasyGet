@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -39,8 +40,9 @@ public partial class MainWindow : Window
 
         Loaded += async (_, _) =>
         {
-            _trayIconService?.Initialize();
-            await _viewModel.InitializeAsync();
+            await InitializeLoadedServicesAsync(
+                _viewModel.InitializeAsync,
+                _trayIconService is null ? null : () => _trayIconService.TryInitialize());
         };
 
         Closing += MainWindow_Closing;
@@ -56,6 +58,26 @@ public partial class MainWindow : Window
             _trayIconService.ExitRequested += ExitFromTray;
         }
         _viewModel.IsCompactLayout = Width < 1280;
+    }
+
+    internal static async Task InitializeLoadedServicesAsync(
+        Func<Task> initializeMainViewModel,
+        Func<bool>? tryInitializeTrayIcon)
+    {
+        ArgumentNullException.ThrowIfNull(initializeMainViewModel);
+
+        await initializeMainViewModel();
+        if (tryInitializeTrayIcon is null)
+            return;
+
+        try
+        {
+            _ = tryInitializeTrayIcon();
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[MainWindow] Tray initialization was skipped: {ex.Message}");
+        }
     }
 
     private void MainWindow_SourceInitialized(object? sender, EventArgs e)
@@ -323,7 +345,8 @@ public partial class MainWindow : Window
 
     private void MinimizeButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_configService.Config.MinimizeToTray && _trayIconService is not null)
+        if (_configService.Config.MinimizeToTray
+            && _trayIconService?.TryInitialize() == true)
         {
             Hide();
             _trayIconService.ShowNotification("EasyGet", "EasyGet 正在系统托盘中运行。");
@@ -337,7 +360,7 @@ public partial class MainWindow : Window
     {
         if (WindowState == System.Windows.WindowState.Minimized
             && _configService.Config.MinimizeToTray
-            && _trayIconService is not null)
+            && _trayIconService?.TryInitialize() == true)
         {
             Hide();
         }
