@@ -649,6 +649,22 @@ public class DouyinSpecialDownloadServiceTests
     }
 
     [Fact]
+    public void FormatUserFacingError_ReportsCliArgumentFailureWithoutCookieMisdiagnosis()
+    {
+        const string rawMessage = """
+            usage: sidecar.py [-h] [--cookie-env COOKIE_ENV]
+            sidecar.py: error: the following arguments are required: --output-dir
+            """;
+
+        var message = DouyinSpecialDownloadService.FormatUserFacingError(rawMessage);
+
+        Assert.Contains("启动参数异常", message, StringComparison.Ordinal);
+        Assert.Contains("--output-dir", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Cookie 或登录态", message, StringComparison.Ordinal);
+        Assert.DoesNotContain("usage:", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task DownloadAsync_WithAppConfig_MapsSettingsIntoSidecarRequest()
     {
         var runner = new CapturingSidecarRunner(
@@ -1099,6 +1115,7 @@ public class DouyinSpecialDownloadServiceTests
 
         Assert.Equal("python", psi.FileName);
         Assert.Equal(sidecarPath, args[0]);
+        AssertArgument(args, "--output-dir", Path.GetTempPath());
         Assert.Contains("--self-test-imports", args);
         Assert.DoesNotContain("--url", args);
         Assert.DoesNotContain("--cookie-env", args);

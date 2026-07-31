@@ -1228,6 +1228,15 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 
         var normalized = message.ToLowerInvariant();
         var prefix = "";
+        if (IsCommandLineArgumentError(normalized))
+        {
+            var detail = message
+                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .LastOrDefault(line => line.Contains(": error:", StringComparison.OrdinalIgnoreCase))
+                ?? message;
+            return $"抖音专项组件启动参数异常，请更新或重新安装 EasyGet 后重试。原始信息：{detail}";
+        }
+
         if (ContainsAny(normalized, "sidecar was not found", "failed to start douyin sidecar", "no such file"))
         {
             prefix = "抖音专项引擎不可用，请确认 sidecar 已随 EasyGet 发布或重新运行发布构建。";
@@ -1254,7 +1263,16 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         => message.StartsWith("抖音 Cookie", StringComparison.Ordinal)
            || message.StartsWith("抖音请求", StringComparison.Ordinal)
            || message.StartsWith("抖音网络", StringComparison.Ordinal)
-           || message.StartsWith("抖音专项引擎", StringComparison.Ordinal);
+           || message.StartsWith("抖音专项引擎", StringComparison.Ordinal)
+           || message.StartsWith("抖音专项组件启动参数", StringComparison.Ordinal);
+
+    private static bool IsCommandLineArgumentError(string normalizedMessage)
+        => ContainsAny(
+            normalizedMessage,
+            "the following arguments are required:",
+            "unrecognized arguments:",
+            "invalid choice:",
+            "expected one argument");
 
     private static bool ContainsAny(string value, params string[] needles)
         => needles.Any(needle => value.Contains(needle, StringComparison.Ordinal));
@@ -1591,6 +1609,7 @@ internal sealed class DouyinSidecarProcessRunner : IDouyinSidecarProcessRunner
     private ProcessStartInfo CreateSelfTestProcessStartInfo()
     {
         var psi = CreateBaseProcessStartInfo();
+        AddArgument(psi, "--output-dir", Path.GetTempPath());
         psi.ArgumentList.Add("--self-test-imports");
         return psi;
     }
