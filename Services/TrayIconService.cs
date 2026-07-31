@@ -9,6 +9,12 @@ namespace EasyGet.Services;
 
 public sealed class TrayIconService : IDisposable
 {
+    internal const string TrayContextMenuStyleKey = "TrayContextMenu";
+    internal const string TrayMenuItemStyleKey = "TrayMenuItem";
+    internal const string TrayMenuSeparatorStyleKey = "TrayMenuSeparator";
+    internal const string OpenMenuGlyph = "\uE8A7";
+    internal const string ExitMenuGlyph = "\uE8BB";
+
     private const int WmApp = 0x8000;
     private const int TrayCallbackMessage = WmApp + 1;
     private const int WmContextMenu = 0x007B;
@@ -142,16 +148,36 @@ public sealed class TrayIconService : IDisposable
 
     private ContextMenu CreateContextMenu()
     {
-        var openItem = new MenuItem { Header = "打开 EasyGet" };
+        var openItem = CreateContextMenuItem("打开 EasyGet", OpenMenuGlyph);
         openItem.Click += (_, _) => ShowRequested?.Invoke();
-        var exitItem = new MenuItem { Header = "退出" };
+        var exitItem = CreateContextMenuItem("退出", ExitMenuGlyph);
         exitItem.Click += (_, _) => ExitRequested?.Invoke();
 
         var menu = new ContextMenu { Placement = PlacementMode.MousePoint };
+        ApplyThemeStyle(menu, TrayContextMenuStyleKey);
         menu.Items.Add(openItem);
-        menu.Items.Add(new Separator());
+        var separator = new Separator();
+        ApplyThemeStyle(separator, TrayMenuSeparatorStyleKey);
+        menu.Items.Add(separator);
         menu.Items.Add(exitItem);
         return menu;
+    }
+
+    private static MenuItem CreateContextMenuItem(string header, string glyph)
+    {
+        var item = new MenuItem
+        {
+            Header = header,
+            Tag = glyph
+        };
+        ApplyThemeStyle(item, TrayMenuItemStyleKey);
+        return item;
+    }
+
+    private static void ApplyThemeStyle(FrameworkElement element, string resourceKey)
+    {
+        if (Application.Current?.TryFindResource(resourceKey) is Style style)
+            element.Style = style;
     }
 
     private IntPtr WindowProc(

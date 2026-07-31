@@ -20,6 +20,16 @@ public class TrayIconServiceTests
             TrayIconService.TrimBalloonText("text", 0));
 
     [Fact]
+    public void TrayContextMenuUsesNamedThemeStylesAndFluentGlyphs()
+    {
+        Assert.Equal("TrayContextMenu", TrayIconService.TrayContextMenuStyleKey);
+        Assert.Equal("TrayMenuItem", TrayIconService.TrayMenuItemStyleKey);
+        Assert.Equal("TrayMenuSeparator", TrayIconService.TrayMenuSeparatorStyleKey);
+        Assert.Equal("\uE8A7", TrayIconService.OpenMenuGlyph);
+        Assert.Equal("\uE8BB", TrayIconService.ExitMenuGlyph);
+    }
+
+    [Fact]
     public void ShellNotifyIcon_UsesTheUnicodeWindowsEntryPoint()
     {
         var method = typeof(TrayIconService).GetMethod(

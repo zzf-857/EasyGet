@@ -154,6 +154,52 @@ public class ThemeStyleTests
         AssertStyleSetter(toggleSwitch, "Height", "24");
     }
 
+    [Fact]
+    public void TrayContextMenuUsesCompactDarkFluentTreatment()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+
+        var menu = FindStyle(document, x, "TrayContextMenu");
+        AssertStyleSetter(menu, "MinWidth", "152");
+        AssertStyleSetter(menu, "Padding", "4");
+        AssertStyleSetter(menu, "Background", "{StaticResource BgSurfaceHighBrush}");
+        AssertStyleSetter(menu, "BorderBrush", "{StaticResource BorderStrongBrush}");
+        AssertStyleSetter(menu, "Effect", "{DynamicResource SoftShadow}");
+
+        var item = FindStyle(document, x, "TrayMenuItem");
+        AssertStyleSetter(item, "MinHeight", "32");
+        AssertStyleSetter(item, "Padding", "8,0");
+        AssertStyleSetter(item, "FontSize", "{StaticResource FontSizeCaption}");
+        AssertStyleSetter(item, "Foreground", "{StaticResource TextSecondaryBrush}");
+        Assert.Contains(item.Descendants(), element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute("CornerRadius")?.Value == "5");
+
+        var highlighted = item.Descendants().First(element =>
+            element.Name.LocalName == "Trigger"
+            && element.Attribute("Property")?.Value == "IsHighlighted"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Contains(highlighted.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("TargetName")?.Value == "ItemBackground"
+            && element.Attribute("Property")?.Value == "Background"
+            && element.Attribute("Value")?.Value == "{StaticResource BgHoverBrush}");
+        Assert.Contains(highlighted.Descendants(), element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("TargetName")?.Value == "ItemIcon"
+            && element.Attribute("Property")?.Value == "Foreground"
+            && element.Attribute("Value")?.Value == "{DynamicResource AccentBrush}");
+
+        var separator = FindStyle(document, x, "TrayMenuSeparator");
+        AssertStyleSetter(separator, "Height", "5");
+        AssertStyleSetter(separator, "Margin", "8,0");
+        Assert.Contains(separator.Descendants(), element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute("Height")?.Value == "1"
+            && element.Attribute("Background")?.Value == "{StaticResource BorderSubtleBrush}");
+    }
+
     [Theory]
     [InlineData("TextPageTitle")]
     [InlineData("TextCardTitle")]
@@ -172,6 +218,9 @@ public class ThemeStyleTests
     [InlineData("ToolbarIconButton")]
     [InlineData("ToolbarToggleButton")]
     [InlineData("CircularCheckBox")]
+    [InlineData("TrayContextMenu")]
+    [InlineData("TrayMenuItem")]
+    [InlineData("TrayMenuSeparator")]
     public void ThemeDefinesNamedStyles(string styleKey)
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
