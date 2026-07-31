@@ -26,7 +26,7 @@
 
                 <StackPanel Grid.Row="0" Margin="0,0,0,12">
                     <TextBlock Text="批量下载" Style="{StaticResource TextPageTitle}"/>
-                    <TextBlock Text="每行一个链接,解析后按并发自动开始" Margin="0,4,0,0"
+                    <TextBlock Text="每行一个链接，支持自定义名称，格式：链接 | 自定义名称" Margin="0,4,0,0"
                                Style="{StaticResource TextCaption}"/>
                 </StackPanel>
 
@@ -317,8 +317,45 @@
 
                                     <Grid Grid.Column="2" Margin="0,8,12,8">
                                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                                        <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource TextBodyStrong}"
-                                                   TextTrimming="CharacterEllipsis"/>
+                                        <Grid Grid.Row="0">
+                                            <TextBlock Text="等待解析..." IsHitTestVisible="False" Margin="6,2,0,0"
+                                                       Foreground="{StaticResource TextDisabledBrush}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBodyStrong}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Title}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Title}" Value="{x:Null}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBox Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
+                                                     Background="Transparent"
+                                                     BorderThickness="0" Padding="4,0,4,0"
+                                                     Foreground="{StaticResource TextPrimaryBrush}"
+                                                     FontSize="{StaticResource FontSizeBodyStrong}"
+                                                     FontWeight="SemiBold"
+                                                     ToolTip="点击可自定义修改视频名称">
+                                                <TextBox.Style>
+                                                    <Style TargetType="TextBox" BasedOn="{StaticResource DarkTextBox}">
+                                                        <Setter Property="IsReadOnly" Value="True"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Waiting">
+                                                                <Setter Property="IsReadOnly" Value="False"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Status}" Value="Resolving">
+                                                                <Setter Property="IsReadOnly" Value="False"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
+                                        </Grid>
                                         <StackPanel Grid.Row="1" Margin="0,4,0,0" Orientation="Horizontal">
                                             <StackPanel.Style>
                                                 <Style TargetType="StackPanel">

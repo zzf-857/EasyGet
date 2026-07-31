@@ -352,12 +352,20 @@ public partial class BatchDownloadViewModel : ObservableObject
         var enqueuedCount = 0;
         try
         {
-            var parsedUrls = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                               .Select(line => DownloadViewModel.ExtractUrl(line))
-                               .Where(url => url is not null)
-                               .Cast<string>()
-                               .Distinct(StringComparer.OrdinalIgnoreCase)
+            var parsedItems = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                               .Select(line =>
+                               {
+                                   var parts = line.Split(new[] { '|', '｜' }, 2, StringSplitOptions.TrimEntries);
+                                   var urlStr = DownloadViewModel.ExtractUrl(parts[0]);
+                                   return urlStr is not null ? new { Url = urlStr, Title = parts.Length == 2 ? parts[1] : "" } : null;
+                               })
+                               .Where(x => x is not null)
+                               .GroupBy(x => x!.Url, StringComparer.OrdinalIgnoreCase)
+                               .Select(g => g.First()!)
                                .ToList();
+
+            var parsedUrls = parsedItems.Select(x => x.Url).ToList();
+
             var isExactCollectionImport = _pendingCollectionUrls.Count > 0
                                           && parsedUrls.Count == _pendingCollectionUrls.Count
                                           && parsedUrls.ToHashSet(StringComparer.OrdinalIgnoreCase)
@@ -365,9 +373,9 @@ public partial class BatchDownloadViewModel : ObservableObject
             var knownUrls = new HashSet<string>(
                 _downloadManager.Tasks.Select(task => task.Url),
                 StringComparer.OrdinalIgnoreCase);
-            var urls = parsedUrls
-                               .Where(knownUrls.Add)
-                               .ToList();
+            
+            var validItems = parsedItems.Where(x => knownUrls.Add(x.Url)).ToList();
+            var urls = validItems.Select(x => x.Url).ToList();
 
             if (urls.Count == 0)
             {
@@ -386,7 +394,8 @@ public partial class BatchDownloadViewModel : ObservableObject
                         $"发现 {duplicateUrls.Count} 个链接已在历史或本地文件中。\n是否仍然全部重新下载？选择“否”将跳过重复项。",
                         "批量重复下载确认") != true)
                 {
-                    urls = urls.Where(url => !duplicateUrls.Contains(url)).ToList();
+                    validItems = validItems.Where(x => !duplicateUrls.Contains(x.Url)).ToList();
+                    urls = validItems.Select(x => x.Url).ToList();
                     if (urls.Count == 0)
                     {
                         RequestShowNotification?.Invoke("已跳过全部重复链接，没有新增任务。", true);
@@ -431,17 +440,19 @@ public partial class BatchDownloadViewModel : ObservableObject
                 _ => "best"
             };
 
-            for (var index = 0; index < urls.Count; index++)
+            for (var index = 0; index < validItems.Count; index++)
             {
+                var item = validItems[index];
                 var collectionItemIndex = isExactCollectionImport
                     ? _pendingCollectionUrls.FindIndex(url => string.Equals(
                         url,
-                        urls[index],
+                        item.Url,
                         StringComparison.OrdinalIgnoreCase)) + 1
                     : index + 1;
                 var task = new DownloadTask
                 {
-                    Url = urls[index],
+                    Url = item.Url,
+                    Title = item.Title,
                     Format = format,
                     Quality = quality,
                     OutputDirectory = outputDirectory,

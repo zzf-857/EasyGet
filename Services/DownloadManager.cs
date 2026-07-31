@@ -1559,8 +1559,18 @@ public class DownloadManager : IDisposable
 
         if (M3u8DownloadService.IsM3u8Url(task.Url))
         {
-            await _m3u8DownloadService.DownloadAsync(task, progress, log, token);
-            return;
+            try
+            {
+                await _m3u8DownloadService.DownloadAsync(task, progress, log, token);
+                return;
+            }
+            catch (NotSupportedException ex)
+            {
+                log($"[m3u8] {ex.Message}");
+                log("[m3u8] 尝试自动回退到默认下载器 (yt-dlp)...");
+                task.Status = DownloadStatus.Downloading;
+                task.ErrorMessage = string.Empty; // 必须清空错误信息，否则 UI 会一直显示红字导致用户误解
+            }
         }
 
         if (TelegramDownloadService.IsTelegramUrl(task.Url))
@@ -1670,13 +1680,16 @@ public class DownloadManager : IDisposable
 
     private void ApplyVideoInfoMetadata(DownloadTask task, VideoInfo info)
     {
-        task.Title = string.IsNullOrWhiteSpace(task.CollectionTitle)
-            ? info.Title
-            : CollectionNamingService.BuildItemTitle(
-                info.Title,
-                task.CollectionTitle,
-                task.CollectionItemIndex,
-                task.CollectionItemCount);
+        if (string.IsNullOrWhiteSpace(task.Title))
+        {
+            task.Title = string.IsNullOrWhiteSpace(task.CollectionTitle)
+                ? info.Title
+                : CollectionNamingService.BuildItemTitle(
+                    info.Title,
+                    task.CollectionTitle,
+                    task.CollectionItemIndex,
+                    task.CollectionItemCount);
+        }
         task.Platform = info.Platform;
         task.Duration = info.Duration;
         task.ThumbnailUrl = info.Thumbnail;

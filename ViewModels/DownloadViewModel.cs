@@ -64,6 +64,7 @@ public partial class DownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(PreviewDurationText))]
     [NotifyPropertyChangedFor(nameof(PreviewFileSizeText))]
     private VideoInfo? _previewInfo;
+    [ObservableProperty] private string _customFileName = "";
     [ObservableProperty] private string _parseErrorMessage = "";
     [ObservableProperty] private string? _urlError;
     [ObservableProperty] private bool _isLogExpanded; // Default is false (collapsed)
@@ -177,6 +178,7 @@ public partial class DownloadViewModel : ObservableObject
     {
         CancelParse();
         PreviewInfo = null;
+        CustomFileName = "";
         ParseErrorMessage = "";
         UrlError = null;
 
@@ -312,6 +314,7 @@ public partial class DownloadViewModel : ObservableObject
         using var cts = new CancellationTokenSource();
         _parseCts = cts;
         PreviewInfo = null;
+        CustomFileName = "";
         ParseErrorMessage = "";
         CurrentTask = null;
         PageState = DownloadPageState.Parsing;
@@ -332,6 +335,7 @@ public partial class DownloadViewModel : ObservableObject
                 info.Url = cleanUrl;
 
             PreviewInfo = info;
+            CustomFileName = PreviewInfo.Title;
             PageState = DownloadPageState.Ready;
         }
         catch (OperationCanceledException)
@@ -424,6 +428,7 @@ public partial class DownloadViewModel : ObservableObject
         var task = new DownloadTask
         {
             Url = cleanUrl,
+            Title = string.IsNullOrWhiteSpace(CustomFileName) ? PreviewInfo!.Title : CustomFileName,
             Format = ParseFormat(SelectedFormat),
             Quality = ParseQuality(SelectedQuality),
             SourceFormatSelector = SelectedSourceFormat?.Selector ?? "",
@@ -616,6 +621,7 @@ public partial class DownloadViewModel : ObservableObject
         {
             PageState = DownloadPageState.Idle;
         }
+        CustomFileName = "";
     }
 
     private void ShowParseError(string message)

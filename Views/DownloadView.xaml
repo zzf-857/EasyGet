@@ -326,8 +326,10 @@
                                 <TextBlock Text="{Binding PreviewPlatform}" Style="{StaticResource TextCaption}"
                                            Foreground="{StaticResource TextPrimaryBrush}"/>
                             </Border>
-                            <TextBlock Text="{Binding PreviewTitle}" Margin="0,8,0,0" Style="{StaticResource TextSection}"
-                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="48"/>
+                            <TextBox Text="{Binding CustomFileName, UpdateSourceTrigger=PropertyChanged}" Margin="0,8,0,0"
+                                     Style="{StaticResource DarkTextBox}" Background="{StaticResource BgInputBrush}"
+                                     TextWrapping="Wrap" MaxHeight="64" ToolTip="可自定义保存文件名"
+                                     AutomationProperties.Name="自定义视频名称"/>
                             <TextBlock Margin="0,8,0,0" Style="{StaticResource TextMono}">
                                 <Run Text="{Binding PreviewDurationText, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding PreviewFileSizeText, Mode=OneWay}"/>
                             </TextBlock>
