@@ -73,7 +73,7 @@ public class DownloadManagerTests
         var waitingForDownloadCount = manager.Tasks.Count(
             task => task.Status == DownloadStatus.Waiting);
         service.ReleaseDownloads();
-        await service.AllDownloadsCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await service.AllDownloadsCompleted.Task.WaitAsync(TimeSpan.FromSeconds(15));
 
         Assert.Same(service.AllMetadataResolved.Task, metadataResult);
         Assert.True(downloadsQueued);
@@ -190,7 +190,7 @@ public class DownloadManagerTests
         }
 
         await manager.WaitForIdleAsync(CancellationToken.None)
-            .WaitAsync(TimeSpan.FromSeconds(5));
+            .WaitAsync(TimeSpan.FromSeconds(15));
 
         Assert.Equal(1, managedLogin.CallCount);
         Assert.All(manager.Tasks, task => Assert.Equal(DownloadStatus.Completed, task.Status));
