@@ -39,4 +39,43 @@ public class MainWindowStartupTests
 
         Assert.True(mainInitialized);
     }
+
+    [Fact]
+    public void ShouldHideWindowOnClose_HidesForOrdinaryCloseWhenTrayIsAvailable()
+    {
+        var shouldHide = MainWindow.ShouldHideWindowOnClose(
+            explicitExitRequested: false,
+            trayAvailable: true);
+
+        Assert.True(shouldHide);
+    }
+
+    [Fact]
+    public void ShouldHideWindowOnClose_DoesNotHideForExplicitTrayExit()
+    {
+        var shouldHide = MainWindow.ShouldHideWindowOnClose(
+            explicitExitRequested: true,
+            trayAvailable: true);
+
+        Assert.False(shouldHide);
+    }
+
+    [Fact]
+    public void ShouldHideWindowOnClose_DoesNotHideWhenTrayIsUnavailable()
+    {
+        var shouldHide = MainWindow.ShouldHideWindowOnClose(
+            explicitExitRequested: false,
+            trayAvailable: false);
+
+        Assert.False(shouldHide);
+    }
+
+    [Fact]
+    public void TrayExit_RequestsExplicitApplicationShutdown()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath("MainWindow.xaml.cs"));
+
+        Assert.Contains("_exitRequested = true;", source, StringComparison.Ordinal);
+        Assert.Contains("application.Shutdown();", source, StringComparison.Ordinal);
+    }
 }

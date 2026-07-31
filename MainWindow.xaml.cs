@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly ConfigService _configService;
     private readonly WindowPlacementManager _windowPlacement;
     private readonly TrayIconService? _trayIconService;
+    private bool _exitRequested;
     private bool _closeInProgress;
     private bool _closeCommitted;
 
@@ -95,6 +96,15 @@ public partial class MainWindow : Window
         if (_closeInProgress)
             return;
 
+        var trayAvailable = !_exitRequested
+                            && _trayIconService?.TryInitialize() == true;
+        if (ShouldHideWindowOnClose(_exitRequested, trayAvailable))
+        {
+            SaveWindowState();
+            Hide();
+            return;
+        }
+
         _closeInProgress = true;
         try
         {
@@ -103,22 +113,29 @@ public partial class MainWindow : Window
             var configSaved = await _configService.SaveAsync();
             if (!settingsSaved || !configSaved)
             {
+                _exitRequested = false;
+                _closeInProgress = false;
+                RestoreFromTray();
                 System.Windows.MessageBox.Show(
                     this,
                     "设置保存失败，EasyGet 暂未退出。请检查配置目录权限后重试。",
                     "EasyGet",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
-                _closeInProgress = false;
                 return;
             }
 
             _closeCommitted = true;
-            Close();
+            if (System.Windows.Application.Current is { } application)
+                application.Shutdown();
+            else
+                Close();
         }
         catch (Exception)
         {
+            _exitRequested = false;
             _closeInProgress = false;
+            RestoreFromTray();
             System.Windows.MessageBox.Show(
                 this,
                 "设置保存时发生异常，EasyGet 暂未退出，请重试。",
@@ -127,6 +144,9 @@ public partial class MainWindow : Window
                 MessageBoxImage.Warning);
         }
     }
+
+    internal static bool ShouldHideWindowOnClose(bool explicitExitRequested, bool trayAvailable)
+        => !explicitExitRequested && trayAvailable;
 
     private void MainWindow_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
@@ -371,7 +391,8 @@ public partial class MainWindow : Window
         Dispatcher.Invoke(() =>
         {
             Show();
-            WindowState = System.Windows.WindowState.Normal;
+            if (WindowState == System.Windows.WindowState.Minimized)
+                WindowState = System.Windows.WindowState.Normal;
             Activate();
         });
     }
@@ -380,7 +401,7 @@ public partial class MainWindow : Window
     {
         Dispatcher.Invoke(() =>
         {
-            Show();
+            _exitRequested = true;
             Close();
         });
     }
