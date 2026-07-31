@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: easyget-release
+  queue: max
+  cancel-in-progress: false
+
 permissions:
   contents: write
   id-token: write
@@ -21,6 +26,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Verify tagged commit belongs to origin/main
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to fetch origin/main for release ancestry validation."
+          }
+
+          git merge-base --is-ancestor $env:GITHUB_SHA refs/remotes/origin/main
+          if ($LASTEXITCODE -eq 1) {
+            throw "Release commit '$($env:GITHUB_SHA)' is not reachable from origin/main. Formal releases must originate from main."
+          }
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to validate release commit ancestry against origin/main."
+          }
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -217,8 +238,44 @@ jobs:
             echo "EasyGet ${GITHUB_REF_NAME}" > release-notes.md
           fi
 
+      - name: Verify remote tag still targets this commit
+        shell: pwsh
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $directRef = "refs/tags/$tag"
+          $peeledRef = "$directRef^{}"
+          $remoteRefs = @(git ls-remote --tags origin $directRef $peeledRef)
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to read remote release tag '$tag'."
+          }
+
+          $remoteTagCommit = $null
+          foreach ($line in $remoteRefs) {
+            $parts = $line -split "`t", 2
+            if ($parts.Count -eq 2 -and $parts[1] -eq $peeledRef) {
+              $remoteTagCommit = $parts[0]
+              break
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($remoteTagCommit)) {
+            foreach ($line in $remoteRefs) {
+              $parts = $line -split "`t", 2
+              if ($parts.Count -eq 2 -and $parts[1] -eq $directRef) {
+                $remoteTagCommit = $parts[0]
+                break
+              }
+            }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($remoteTagCommit)) {
+            throw "Remote release tag '$tag' no longer exists."
+          }
+          if (-not $remoteTagCommit.Equals($env:GITHUB_SHA, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Remote release tag '$tag' targets '$remoteTagCommit', not workflow commit '$($env:GITHUB_SHA)'. Refusing to publish a moved tag."
+          }
+
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           body_path: release-notes.md
           files: |
@@ -226,7 +283,134 @@ jobs:
             artifacts/publish/Release/EasyGet-win-x64-Release.zip
             artifacts/publish/Release/easyget-update.json
             artifacts/publish/Release/EasyGet-${{ github.ref_name }}.spdx.json
+          fail_on_unmatched_files: true
           draft: false
           prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify published release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = $tag.Substring(1)
+          $expectedSetupAsset = "EasyGet-Setup-v$version.exe"
+          $expectedZipAsset = "EasyGet-win-x64-Release.zip"
+          $expectedManifestAsset = "easyget-update.json"
+          $expectedSbomAsset = "EasyGet-v$version.spdx.json"
+          $requiredAssets = @(
+            $expectedSetupAsset,
+            $expectedZipAsset,
+            $expectedManifestAsset,
+            $expectedSbomAsset
+          )
+          $maxAttempts = 12
+
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+              $tagReleaseJson = @(gh api "repos/$($env:GITHUB_REPOSITORY)/releases/tags/$tag" 2>&1)
+              if ($LASTEXITCODE -ne 0) {
+                throw "GitHub API could not read release '$tag': $($tagReleaseJson -join ' ')"
+              }
+              $tagRelease = ($tagReleaseJson -join "`n") | ConvertFrom-Json
+              if ($tagRelease.draft -or -not $tagRelease.immutable -or $tagRelease.tag_name -ne $tag) {
+                throw "Release '$tag' is missing, mutable, still a draft, or points at a different tag."
+              }
+
+              $latestJson = @(gh api "repos/$($env:GITHUB_REPOSITORY)/releases/latest" 2>&1)
+              if ($LASTEXITCODE -ne 0) {
+                throw "GitHub API could not read the latest release: $($latestJson -join ' ')"
+              }
+              $latestRelease = ($latestJson -join "`n") | ConvertFrom-Json
+              if ($latestRelease.draft -or -not $latestRelease.immutable -or $latestRelease.tag_name -ne $tag) {
+                throw "Latest release is '$($latestRelease.tag_name)' instead of immutable '$tag', or it is still a draft."
+              }
+
+              $assetNames = @($latestRelease.assets | ForEach-Object { $_.name })
+              foreach ($requiredAsset in $requiredAssets) {
+                if ($requiredAsset -notin $assetNames) {
+                  throw "Latest release '$tag' does not contain required asset '$requiredAsset'."
+                }
+              }
+
+              $cacheBuster = "$($env:GITHUB_RUN_ID)-$attempt"
+              $manifestUri = "https://github.com/$($env:GITHUB_REPOSITORY)/releases/latest/download/easyget-update.json?release-check=$cacheBuster"
+              $manifest = Invoke-RestMethod `
+                -Method Get `
+                -Uri $manifestUri `
+                -Headers @{
+                  "Cache-Control" = "no-cache"
+                  "Pragma" = "no-cache"
+                  "User-Agent" = "EasyGet-release-verifier"
+                } `
+                -TimeoutSec 30 `
+                -ErrorAction Stop
+              if ($manifest.version -ne $version) {
+                throw "Latest manifest version is '$($manifest.version)' instead of '$version'."
+              }
+              if ($manifest.tag -ne $tag) {
+                throw "Latest manifest tag is '$($manifest.tag)' instead of '$tag'."
+              }
+              if ($manifest.setupAsset -ne $expectedSetupAsset -or $manifest.zipAsset -ne $expectedZipAsset) {
+                throw "Latest manifest asset names do not match release '$tag'."
+              }
+              if ([long]$manifest.setupSize -le 0 -or [long]$manifest.zipSize -le 0) {
+                throw "Latest manifest contains an invalid asset size."
+              }
+              if ($manifest.setupSha256 -notmatch '^[A-Fa-f0-9]{64}$' -or
+                  $manifest.zipSha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+                throw "Latest manifest contains an invalid SHA-256 value."
+              }
+
+              $setupReleaseAsset = $latestRelease.assets |
+                Where-Object { $_.name -eq $expectedSetupAsset } |
+                Select-Object -First 1
+              $zipReleaseAsset = $latestRelease.assets |
+                Where-Object { $_.name -eq $expectedZipAsset } |
+                Select-Object -First 1
+              if ([long]$manifest.setupSize -ne [long]$setupReleaseAsset.size -or
+                  [long]$manifest.zipSize -ne [long]$zipReleaseAsset.size) {
+                throw "Latest manifest sizes do not match the GitHub Release assets."
+              }
+
+              $setupDigest = [string]$setupReleaseAsset.digest
+              $zipDigest = [string]$zipReleaseAsset.digest
+              if ([string]::IsNullOrWhiteSpace($setupDigest) -or
+                  [string]::IsNullOrWhiteSpace($zipDigest)) {
+                throw "GitHub Release assets do not expose SHA-256 digests."
+              }
+              if (-not $setupDigest.Equals("sha256:$($manifest.setupSha256)", [StringComparison]::OrdinalIgnoreCase) -or
+                  -not $zipDigest.Equals("sha256:$($manifest.zipSha256)", [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Latest manifest SHA-256 values do not match the GitHub Release asset digests."
+              }
+
+              $clientManifestUri = "https://github.com/$($env:GITHUB_REPOSITORY)/releases/latest/download/easyget-update.json"
+              $clientManifest = Invoke-RestMethod `
+                -Method Get `
+                -Uri $clientManifestUri `
+                -Headers @{
+                  "Cache-Control" = "no-cache"
+                  "Pragma" = "no-cache"
+                  "User-Agent" = "EasyGet-release-verifier"
+                } `
+                -TimeoutSec 30 `
+                -ErrorAction Stop
+              if ($clientManifest.version -ne $version -or $clientManifest.tag -ne $tag) {
+                throw "The exact manifest URL used by installed clients still reports '$($clientManifest.tag)' / '$($clientManifest.version)' instead of '$tag' / '$version'."
+              }
+
+              Write-Host "Published release '$tag' is immutable, public, latest, and the exact client manifest URL exposes the new version."
+              return
+            }
+            catch {
+              if ($attempt -eq $maxAttempts) {
+                throw "Published release verification failed after $maxAttempts attempts: $($_.Exception.Message)"
+              }
+
+              Write-Warning "Published release is not consistent yet (attempt $attempt/$maxAttempts): $($_.Exception.Message)"
+              Start-Sleep -Seconds 10
+            }
+          }

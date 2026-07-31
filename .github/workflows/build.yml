@@ -44,8 +44,8 @@ jobs:
       - name: Build installer and portable zip
         shell: pwsh
         run: |
-          # Use a placeholder version for continuous builds
-          ./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -Version "0.0.0-ci" -SkipTests
+          # The packaging script reads the authoritative version from EasyGet.csproj.
+          ./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -SkipTests
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4

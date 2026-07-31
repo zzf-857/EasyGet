@@ -601,6 +601,22 @@ public class ReleaseScriptTests
     }
 
     [Fact]
+    public void GitHubBuildWorkflowPackagesWithTheAuthoritativeProjectVersion()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "build.yml");
+
+        Assert.True(File.Exists(workflowPath), "Expected .github/workflows/build.yml to exist.");
+
+        var workflow = File.ReadAllText(workflowPath);
+        Assert.Contains(
+            "./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -SkipTests",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("0.0.0-ci", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void GitHubReleaseWorkflowPublishesInstallerZipAndManifest()
     {
         var root = TestRepositoryPaths.Root;
@@ -623,7 +639,114 @@ public class ReleaseScriptTests
         Assert.Contains("EasyGet-Setup-${{ github.ref_name }}.exe", workflow, StringComparison.Ordinal);
         Assert.Contains("EasyGet-win-x64-Release.zip", workflow, StringComparison.Ordinal);
         Assert.Contains("easyget-update.json", workflow, StringComparison.Ordinal);
-        Assert.Contains("softprops/action-gh-release", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains("fail_on_unmatched_files: true", workflow, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowSerializesAllReleasesWithoutCancellingActiveRuns()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("concurrency:", workflow, StringComparison.Ordinal);
+        Assert.Contains("group: easyget-release", workflow, StringComparison.Ordinal);
+        Assert.Contains("queue: max", workflow, StringComparison.Ordinal);
+        Assert.Contains("cancel-in-progress: false", workflow, StringComparison.Ordinal);
+
+        var concurrencyIndex = workflow.IndexOf("concurrency:", StringComparison.Ordinal);
+        var jobsIndex = workflow.IndexOf("jobs:", StringComparison.Ordinal);
+        Assert.True(concurrencyIndex >= 0 && concurrencyIndex < jobsIndex,
+            "Release concurrency must be workflow-wide so all release tags share one serial queue.");
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowRejectsMovedRemoteTagImmediatelyBeforePublishing()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("Verify remote tag still targets this commit", workflow, StringComparison.Ordinal);
+        Assert.Contains("git ls-remote --tags origin", workflow, StringComparison.Ordinal);
+        Assert.Contains("$peeledRef = \"$directRef^{}\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("$env:GITHUB_SHA", workflow, StringComparison.Ordinal);
+        Assert.Contains("Refusing to publish a moved tag.", workflow, StringComparison.Ordinal);
+
+        var notesIndex = workflow.IndexOf("Prepare release notes", StringComparison.Ordinal);
+        var remoteTagCheckIndex = workflow.IndexOf("Verify remote tag still targets this commit", StringComparison.Ordinal);
+        var releaseIndex = workflow.IndexOf("Create GitHub Release", StringComparison.Ordinal);
+        Assert.True(notesIndex >= 0 && notesIndex < remoteTagCheckIndex && remoteTagCheckIndex < releaseIndex,
+            "The remote tag must be checked again immediately before publishing the GitHub Release.");
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowRequiresTaggedCommitToBelongToOriginMain()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("Verify tagged commit belongs to origin/main", workflow, StringComparison.Ordinal);
+        Assert.Contains(
+            "+refs/heads/main:refs/remotes/origin/main",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "git merge-base --is-ancestor $env:GITHUB_SHA refs/remotes/origin/main",
+            workflow,
+            StringComparison.Ordinal);
+        Assert.Contains("Formal releases must originate from main.", workflow, StringComparison.Ordinal);
+
+        var checkoutIndex = workflow.IndexOf("Checkout code", StringComparison.Ordinal);
+        var ancestryIndex = workflow.IndexOf("Verify tagged commit belongs to origin/main", StringComparison.Ordinal);
+        var versionIndex = workflow.IndexOf("Validate release version", StringComparison.Ordinal);
+        Assert.True(checkoutIndex >= 0 && checkoutIndex < ancestryIndex && ancestryIndex < versionIndex,
+            "Release ancestry must be validated immediately after checkout and before build work begins.");
+    }
+
+    [Fact]
+    public void GitHubReleaseWorkflowMakesLatestAndVerifiesPublishedUpdateContractWithRetry()
+    {
+        var root = TestRepositoryPaths.Root;
+        var workflowPath = Path.Combine(root, ".github", "workflows", "release.yml");
+        var workflow = File.ReadAllText(workflowPath);
+
+        Assert.Contains("make_latest: true", workflow, StringComparison.Ordinal);
+        Assert.Contains("Verify published release", workflow, StringComparison.Ordinal);
+        Assert.Contains("releases/tags/$tag", workflow, StringComparison.Ordinal);
+        Assert.Contains("releases/latest", workflow, StringComparison.Ordinal);
+        Assert.Contains("$tagRelease.draft", workflow, StringComparison.Ordinal);
+        Assert.Contains("$latestRelease.draft", workflow, StringComparison.Ordinal);
+        Assert.Contains("$tagRelease.immutable", workflow, StringComparison.Ordinal);
+        Assert.Contains("$latestRelease.immutable", workflow, StringComparison.Ordinal);
+        Assert.Contains("easyget-update.json", workflow, StringComparison.Ordinal);
+        Assert.Contains("releases/latest/download/easyget-update.json?release-check=", workflow, StringComparison.Ordinal);
+        Assert.Contains("Invoke-RestMethod", workflow, StringComparison.Ordinal);
+        Assert.Contains("Cache-Control", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.version -ne $version", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.tag -ne $tag", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.setupAsset -ne $expectedSetupAsset", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.zipAsset -ne $expectedZipAsset", workflow, StringComparison.Ordinal);
+        Assert.Contains("$expectedSbomAsset", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.setupSize -ne [long]$setupReleaseAsset.size", workflow, StringComparison.Ordinal);
+        Assert.Contains("$manifest.zipSize -ne [long]$zipReleaseAsset.size", workflow, StringComparison.Ordinal);
+        Assert.Contains("sha256:$($manifest.setupSha256)", workflow, StringComparison.Ordinal);
+        Assert.Contains("sha256:$($manifest.zipSha256)", workflow, StringComparison.Ordinal);
+        Assert.Contains("$clientManifestUri = \"https://github.com/$($env:GITHUB_REPOSITORY)/releases/latest/download/easyget-update.json\"", workflow, StringComparison.Ordinal);
+        Assert.Contains("$clientManifest.version -ne $version", workflow, StringComparison.Ordinal);
+        Assert.Contains("$clientManifest.tag -ne $tag", workflow, StringComparison.Ordinal);
+        Assert.Contains("$maxAttempts = 12", workflow, StringComparison.Ordinal);
+        Assert.Contains("Start-Sleep -Seconds 10", workflow, StringComparison.Ordinal);
+
+        var releaseIndex = workflow.IndexOf("Create GitHub Release", StringComparison.Ordinal);
+        var verificationIndex = workflow.IndexOf("Verify published release", StringComparison.Ordinal);
+        Assert.True(releaseIndex >= 0 && releaseIndex < verificationIndex,
+            "The public latest-release contract can only be verified after publishing finishes.");
     }
 
     [Fact]
@@ -777,6 +900,81 @@ public class ReleaseScriptTests
         var tagFallbackIndex = workflow.IndexOf("git for-each-ref", StringComparison.Ordinal);
         var releaseIndex = workflow.IndexOf("Create GitHub Release", StringComparison.Ordinal);
         Assert.True(changelogIndex >= 0 && changelogIndex < tagFallbackIndex && tagFallbackIndex < releaseIndex);
+    }
+
+    [Fact]
+    public void ReleaseEntrypointOwnsTheVersionCommitTagPushAndOnlineVerification()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "release.ps1");
+
+        Assert.True(File.Exists(scriptPath), "Expected scripts/release.ps1 to be the formal release entrypoint.");
+
+        var script = File.ReadAllText(scriptPath);
+        Assert.Contains("[switch]$Publish", script, StringComparison.Ordinal);
+        Assert.Contains("[switch]$DryRun", script, StringComparison.Ordinal);
+        Assert.Contains("-Publish and -DryRun are mutually exclusive", script, StringComparison.Ordinal);
+        Assert.Contains("The working tree must be clean before a release", script, StringComparison.Ordinal);
+        Assert.Contains("Local main must exactly match origin/main", script, StringComparison.Ordinal);
+        Assert.Contains("CHANGELOG.md must contain exactly one", script, StringComparison.Ordinal);
+        Assert.Contains("must be the newest version section", script, StringComparison.Ordinal);
+        Assert.Contains("repos/$Repository/immutable-releases", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ReleaseWorkflowActive -Repository $repository", script, StringComparison.Ordinal);
+        Assert.Contains("repos/$Repository/releases?per_page=100", script, StringComparison.Ordinal);
+        Assert.Contains("--paginate", script, StringComparison.Ordinal);
+        Assert.Contains("--slurp", script, StringComparison.Ordinal);
+        Assert.Contains("zzf-857/EasyGet", script, StringComparison.Ordinal);
+        Assert.Contains("Set-ProjectVersionPreservingWhitespace", script, StringComparison.Ordinal);
+        Assert.Contains("chore: release $tag", script, StringComparison.Ordinal);
+        Assert.Contains("@(\"tag\", \"-a\", $tag", script, StringComparison.Ordinal);
+        Assert.Contains("@(\"push\", \"--atomic\", \"origin\"", script, StringComparison.Ordinal);
+        Assert.Contains("-Command \"gh\"", script, StringComparison.Ordinal);
+        Assert.Contains("@(\"run\", \"watch\"", script, StringComparison.Ordinal);
+        Assert.Contains("releases/latest/download/easyget-update.json?cache-buster=", script, StringComparison.Ordinal);
+        Assert.Contains("$clientManifestUri = \"https://github.com/$Repository/releases/latest/download/easyget-update.json\"", script, StringComparison.Ordinal);
+        Assert.Contains("$clientManifest.version -ne $ReleaseVersion", script, StringComparison.Ordinal);
+        Assert.Contains("$clientManifest.tag -ne $Tag", script, StringComparison.Ordinal);
+        Assert.Contains("$latestRelease.immutable", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReleaseEntrypointCannotMutateBeforeValidationOnlyModeReturns()
+    {
+        var root = TestRepositoryPaths.Root;
+        var scriptPath = Path.Combine(root, "scripts", "release.ps1");
+        var script = File.ReadAllText(scriptPath);
+
+        var validationReturnIndex = script.IndexOf("if (-not $Publish)", StringComparison.Ordinal);
+        var versionMutationIndex = script.IndexOf("Set-ProjectVersionPreservingWhitespace -Path", StringComparison.Ordinal);
+        var commitIndex = script.IndexOf("Creating release commit", StringComparison.Ordinal);
+        var tagIndex = script.IndexOf("Creating annotated tag", StringComparison.Ordinal);
+        var pushIndex = script.IndexOf("Atomic push of main", StringComparison.Ordinal);
+
+        Assert.True(validationReturnIndex >= 0);
+        Assert.True(validationReturnIndex < versionMutationIndex);
+        Assert.True(versionMutationIndex < commitIndex && commitIndex < tagIndex && tagIndex < pushIndex);
+        Assert.Contains("No project version, commit, tag, remote ref, workflow, or GitHub Release was changed.", script, StringComparison.Ordinal);
+        Assert.Contains("The release version edit must change exactly one line", script, StringComparison.Ordinal);
+        Assert.Contains("@(\"diff\", \"--cached\", \"--check\")", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AgentInstructionsRequireTheSingleReleaseEntrypointAndImmutableVersions()
+    {
+        var root = TestRepositoryPaths.Root;
+        var instructionsPath = Path.Combine(root, "AGENTS.md");
+
+        Assert.True(File.Exists(instructionsPath), "Expected repository-wide AGENTS.md release instructions.");
+
+        var instructions = File.ReadAllText(instructionsPath);
+        Assert.Contains("do not use `git add .`", instructions, StringComparison.Ordinal);
+        Assert.Contains("Build and Package", instructions, StringComparison.Ordinal);
+        Assert.Contains("./scripts/release.ps1 -Version X.Y.Z", instructions, StringComparison.Ordinal);
+        Assert.Contains("./scripts/release.ps1 -Version X.Y.Z -Publish", instructions, StringComparison.Ordinal);
+        Assert.Contains("Do not use direct `git tag`", instructions, StringComparison.Ordinal);
+        Assert.Contains("Never delete, force-move, overwrite, or reuse", instructions, StringComparison.Ordinal);
+        Assert.Contains("immutable releases remain enabled", instructions, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("immutable: true", instructions, StringComparison.Ordinal);
     }
 
     [Fact]
