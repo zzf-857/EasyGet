@@ -7,6 +7,20 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         InitializeComponent();
     }
 
+    private void ShowPerformanceDetailsButton_Click(
+        object sender,
+        System.Windows.RoutedEventArgs e)
+    {
+        var dialog = new PerformanceRecommendationDialog
+        {
+            DataContext = DataContext
+        };
+        if (System.Windows.Window.GetWindow(this) is { } owner)
+            dialog.Owner = owner;
+
+        dialog.ShowDialog();
+    }
+
     private void Hyperlink_RequestNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
     {
         try

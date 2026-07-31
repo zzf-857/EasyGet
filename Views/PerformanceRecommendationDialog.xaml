@@ -1,0 +1,236 @@
+<Window x:Class="EasyGet.Views.PerformanceRecommendationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="详细性能建议"
+        Width="960"
+        Height="620"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display"
+        AutomationProperties.Name="详细性能建议弹窗">
+    <Window.Resources>
+        <Style x:Key="DialogRiskPanel" TargetType="Border">
+            <Setter Property="MinHeight" Value="40"/>
+            <Setter Property="Padding" Value="12,7"/>
+            <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="Warning">
+                    <Setter Property="BorderBrush" Value="{StaticResource WarningBrush}"/>
+                </Trigger>
+                <Trigger Property="Tag" Value="Critical">
+                    <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="DialogRiskIndicator" TargetType="Ellipse">
+            <Setter Property="Fill" Value="{StaticResource SuccessBrush}"/>
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="Warning">
+                    <Setter Property="Fill" Value="{StaticResource WarningBrush}"/>
+                </Trigger>
+                <Trigger Property="Tag" Value="Critical">
+                    <Setter Property="Fill" Value="{StaticResource ErrorBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="DialogRiskText" TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+            <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="Warning">
+                    <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                </Trigger>
+                <Trigger Property="Tag" Value="Critical">
+                    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="PerformanceTableHeaderText" TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="PerformanceTableMetricText" TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style x:Key="PerformanceTableValueText" TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+            <Style.Triggers>
+                <Trigger Property="Tag" Value="Warning">
+                    <Setter Property="Foreground" Value="{StaticResource WarningBrush}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
+                <Trigger Property="Tag" Value="Critical">
+                    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Border Background="{StaticResource BgSurfaceHighBrush}"
+                CornerRadius="8"
+                Effect="{StaticResource PopupShadow}"/>
+
+        <Border Background="{StaticResource BgSurfaceHighBrush}"
+                BorderBrush="{StaticResource BorderPrimaryBrush}"
+                BorderThickness="1"
+                CornerRadius="8"
+                ClipToBounds="True">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="4"/>
+                    <RowDefinition Height="64"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <Border Grid.Row="0" Background="{DynamicResource AccentBrush}"/>
+
+                <Border Grid.Row="1" Background="{StaticResource BgSurfaceHighBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                    <Grid Margin="24,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Border Width="36" Height="36" Margin="0,0,12,0" CornerRadius="6"
+                                Background="{DynamicResource AccentContainerBrush}" VerticalAlignment="Center">
+                            <TextBlock Text="&#xE8FD;" Style="{StaticResource IconGlyph}"
+                                       FontSize="{StaticResource IconSizeBody}" Foreground="{DynamicResource AccentBrush}"/>
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center"
+                                    MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                            <TextBlock Text="详细性能建议" Style="{StaticResource TextSection}"/>
+                            <TextBlock Text="查看估算依据、实际连接预算与手动调优边界"
+                                       Margin="0,2,0,0" Style="{StaticResource TextCaption}"/>
+                        </StackPanel>
+                        <Button Grid.Column="2" Width="32" Height="32" Padding="0"
+                                Style="{StaticResource SurfaceButton}" Click="CloseButton_Click"
+                                ToolTip="关闭" AutomationProperties.Name="关闭详细性能建议">
+                            <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}"/>
+                        </Button>
+                    </Grid>
+                </Border>
+
+                <ScrollViewer Grid.Row="2" Margin="24,16,24,12"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="320"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                <TextBlock Text="当前设备建议" Style="{StaticResource TextBodyStrong}"/>
+                                <TextBlock Text="{Binding PerformanceRecommendationText}" Margin="0,4,0,0"
+                                           Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Border Grid.Column="1" Tag="{Binding PerformanceRiskLevel}"
+                                    Style="{StaticResource DialogRiskPanel}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                    <Ellipse Width="8" Height="8" Margin="0,0,8,0" VerticalAlignment="Center"
+                                             Tag="{Binding PerformanceRiskLevel}" Style="{StaticResource DialogRiskIndicator}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding PerformanceStatusText}" TextWrapping="Wrap"
+                                               Tag="{Binding PerformanceRiskLevel}" Style="{StaticResource DialogRiskText}"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Text="性能评估明细" Margin="0,16,0,6" Style="{StaticResource TextBodyStrong}"/>
+                        <Border Background="{StaticResource BgInputBrush}" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="1" CornerRadius="5" ClipToBounds="True">
+                            <StackPanel>
+                                <Border Padding="10,7" Background="{StaticResource BgSurfaceHighestBrush}"
+                                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="1*"/>
+                                            <ColumnDefinition Width="1.4*"/>
+                                            <ColumnDefinition Width="1.8*"/>
+                                            <ColumnDefinition Width="2.4*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="评估项" Margin="0,0,12,0" TextWrapping="Wrap" Style="{StaticResource PerformanceTableHeaderText}"/>
+                                        <TextBlock Grid.Column="1" Text="本机 / 当前值" Margin="0,0,12,0" TextWrapping="Wrap" Style="{StaticResource PerformanceTableHeaderText}"/>
+                                        <TextBlock Grid.Column="2" Text="建议基线" Margin="0,0,12,0" TextWrapping="Wrap" Style="{StaticResource PerformanceTableHeaderText}"/>
+                                        <TextBlock Grid.Column="3" Text="判断依据" TextWrapping="Wrap" Style="{StaticResource PerformanceTableHeaderText}"/>
+                                    </Grid>
+                                </Border>
+                                <ItemsControl ItemsSource="{Binding PerformanceEvaluationRows}"
+                                              HorizontalContentAlignment="Stretch">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border MinHeight="40" Padding="10,7" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                                    BorderThickness="0,0,0,1">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="1*"/>
+                                                        <ColumnDefinition Width="1.4*"/>
+                                                        <ColumnDefinition Width="1.8*"/>
+                                                        <ColumnDefinition Width="2.4*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="{Binding Metric}" Margin="0,0,12,0"
+                                                               TextWrapping="Wrap" Style="{StaticResource PerformanceTableMetricText}"/>
+                                                    <TextBlock Grid.Column="1" Text="{Binding CurrentValue}" Margin="0,0,12,0"
+                                                               TextWrapping="Wrap" Tag="{Binding RiskLevel}"
+                                                               Style="{StaticResource PerformanceTableValueText}"/>
+                                                    <TextBlock Grid.Column="2" Text="{Binding ReferenceValue}" Margin="0,0,12,0"
+                                                               TextWrapping="Wrap" Style="{StaticResource TextCaption}"/>
+                                                    <TextBlock Grid.Column="3" Text="{Binding Rationale}"
+                                                               TextWrapping="Wrap" Style="{StaticResource TextCaption}"/>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Margin="0,12,0,0" Padding="12,10"
+                                Background="{StaticResource BgSurfaceBrush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="5">
+                            <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                       Text="估算口径：CPU 与运行时内存的静态分级；黄色上限为建议基线的 1.75 倍（向上取整）。不包含磁盘吞吐、网络速度、平台限流和其他前台负载。若磁盘满载、速度剧烈波动或失败率升高，应优先降低同时任务数。"/>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Border Grid.Row="3" Padding="24,12" Background="{StaticResource BgSurfaceBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Margin="0,0,16,0" VerticalAlignment="Center" Style="{StaticResource TextCaption}"
+                                   TextWrapping="Wrap"
+                                   Text="推荐配置是稳妥基线，可结合实际吞吐继续手动调整。"/>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button MinWidth="88" Height="32" Margin="0,0,8,0" Padding="14,4"
+                                    Style="{StaticResource SurfaceButton}" Content="关闭"
+                                    IsCancel="True" Click="CloseButton_Click"/>
+                            <Button MinWidth="128" Height="32" Padding="12,4"
+                                    Style="{StaticResource AccentButton}"
+                                    Command="{Binding ApplyRecommendedPerformanceSettingsCommand}"
+                                    ToolTip="应用当前设备建议的并发参数">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                                    <TextBlock Text="应用推荐配置" Margin="6,0,0,0"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

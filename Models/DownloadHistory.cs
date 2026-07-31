@@ -122,7 +122,8 @@ public partial class DownloadHistory : ObservableObject
     public DateTime DownloadTime { get; set; } = DateTime.Now;
 
     /// <summary>缩略图 URL</summary>
-    public string ThumbnailUrl { get; set; } = "";
+    [ObservableProperty]
+    private string _thumbnailUrl = "";
 
     /// <summary>文件是否存在（用于 UI 灰显判断，由 ViewModel 异步刷新）</summary>
     [ObservableProperty]

@@ -23,11 +23,16 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly DownloadPreflightService _preflightService;
     private readonly HistoryService? _historyService;
     private readonly DownloadDuplicateDetector? _duplicateDetector;
+    private readonly ExistingCollectionFolderStore _collectionFolderStore;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
+    private readonly Func<string, string?> _selectDirectory;
     private readonly HashSet<DownloadTask> _trackedQueueTasks = [];
     private readonly object _queueStateLock = new();
     private volatile bool _suppressQueueRefresh;
+    private string _configuredDownloadDirectory = "";
+    private string _downloadRootDirectory = "";
+    private string? _selectedCollectionDirectoryBeforeRefresh;
     private string _pendingCollectionSourceUrl = "";
     private string _pendingCollectionTitle = "";
     private List<string> _pendingCollectionUrls = [];
@@ -36,13 +41,21 @@ public partial class BatchDownloadViewModel : ObservableObject
     [ObservableProperty] private string _selectedFormat = "mp4";
     [ObservableProperty] private string _selectedQuality = "最高画质";
     [ObservableProperty] private int _linkCount;
-    [ObservableProperty] private bool _isDownloading;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanEditBatchDestination))]
+    [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
+    private bool _isDownloading;
     [ObservableProperty] private bool _isImportingPlaylist;
     [ObservableProperty] private string _playlistUrl = "";
     [ObservableProperty] private string _selectedQueueFilter = "全部";
+    [ObservableProperty] private string _downloadDirectory = "";
+    [ObservableProperty]
+    private ExistingCollectionFolder? _selectedCollectionFolder;
 
     public ObservableCollection<DownloadTask> QueueTasks => _downloadManager.Tasks;
     public ObservableCollection<DownloadTask> VisibleQueueTasks { get; } = [];
+    public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
+        => _collectionFolderStore.Folders;
     public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
     public int WaitingTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Waiting);
     public int TotalTaskCount => QueueTasks.Count;
@@ -61,6 +74,11 @@ public partial class BatchDownloadViewModel : ObservableObject
     public bool CanStopAll => QueueTasks.Any(task => task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging or DownloadStatus.Paused or DownloadStatus.Scheduled);
     public bool CanClearFinished => QueueTasks.Any(task => task.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled);
     public bool CanRetryFailed => FailedTaskCount > 0;
+    public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
+    public bool CanEditBatchDestination => !IsDownloading && !IsLoadingCollectionFolders;
+    public bool CanSelectExistingCollectionFolder
+        => _collectionFolderStore.HasFolders && CanEditBatchDestination;
+    public string ExistingCollectionFolderPlaceholder => _collectionFolderStore.Placeholder;
     public double OverallProgress => TotalTaskCount == 0
         ? 0
         : QueueTasks.Sum(task => task.Status == DownloadStatus.Completed ? 100 : Math.Clamp(task.Progress, 0, 100)) / TotalTaskCount;
@@ -143,7 +161,8 @@ public partial class BatchDownloadViewModel : ObservableObject
         YtDlpService ytDlpService,
         DownloadPreflightService? preflightService = null,
         HistoryService? historyService = null,
-        DownloadDuplicateDetector? duplicateDetector = null)
+        DownloadDuplicateDetector? duplicateDetector = null,
+        ExistingCollectionFolderStore? collectionFolderStore = null)
         : this(
             downloadManager,
             configService,
@@ -152,7 +171,9 @@ public partial class BatchDownloadViewModel : ObservableObject
             null,
             preflightService,
             historyService,
-            duplicateDetector)
+            duplicateDetector,
+            null,
+            collectionFolderStore)
     {
     }
 
@@ -164,7 +185,9 @@ public partial class BatchDownloadViewModel : ObservableObject
         Func<string?>? readClipboardText = null,
         DownloadPreflightService? preflightService = null,
         HistoryService? historyService = null,
-        DownloadDuplicateDetector? duplicateDetector = null)
+        DownloadDuplicateDetector? duplicateDetector = null,
+        Func<string, string?>? selectDirectory = null,
+        ExistingCollectionFolderStore? collectionFolderStore = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
@@ -172,11 +195,125 @@ public partial class BatchDownloadViewModel : ObservableObject
         _preflightService = preflightService ?? new DownloadPreflightService();
         _historyService = historyService;
         _duplicateDetector = duplicateDetector;
+        _collectionFolderStore = collectionFolderStore
+            ?? new ExistingCollectionFolderStore(historyService);
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
+        _selectDirectory = selectDirectory ?? SelectDirectory;
+        _configuredDownloadDirectory = _configService.Config.DefaultDownloadPath;
+        _downloadRootDirectory = _configuredDownloadDirectory;
+        DownloadDirectory = _downloadRootDirectory;
+        _collectionFolderStore.PropertyChanged += OnCollectionFolderStorePropertyChanged;
+        _collectionFolderStore.FoldersRefreshing += OnCollectionFoldersRefreshing;
+        _collectionFolderStore.FoldersRefreshed += OnCollectionFoldersRefreshed;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
         SynchronizeQueueSubscriptions();
         RefreshQueueState();
+    }
+
+    public Task InitializeAsync()
+        => LoadExistingCollectionFoldersAsync(forceRefresh: false);
+
+    public void RefreshRuntimeConfigDisplay()
+    {
+        var updatedDefault = _configService.Config.DefaultDownloadPath;
+        var followsConfiguredDefault = ExistingCollectionFolderStore.PathsEqual(
+            _downloadRootDirectory,
+            _configuredDownloadDirectory);
+        _configuredDownloadDirectory = updatedDefault;
+        if (followsConfiguredDefault)
+            _downloadRootDirectory = updatedDefault;
+        if (followsConfiguredDefault && SelectedCollectionFolder is null)
+            DownloadDirectory = _downloadRootDirectory;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanEditDestination))]
+    private void BrowseDirectory()
+    {
+        var selectedDirectory = _selectDirectory(DownloadDirectory);
+        if (string.IsNullOrWhiteSpace(selectedDirectory))
+            return;
+
+        _downloadRootDirectory = Path.GetFullPath(selectedDirectory.Trim());
+        SelectedCollectionFolder = null;
+        DownloadDirectory = _downloadRootDirectory;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanClearSelectedCollectionFolder))]
+    private void ClearSelectedCollectionFolder()
+        => SelectedCollectionFolder = null;
+
+    private bool CanClearSelectedCollectionFolder()
+        => SelectedCollectionFolder is not null && CanEditDestination();
+
+    private bool CanEditDestination()
+        => CanEditBatchDestination;
+
+    [RelayCommand(CanExecute = nameof(CanEditDestination))]
+    private Task RefreshExistingCollectionFolders()
+        => LoadExistingCollectionFoldersAsync(forceRefresh: true);
+
+    private async Task LoadExistingCollectionFoldersAsync(bool forceRefresh)
+    {
+        try
+        {
+            if (forceRefresh)
+                await _collectionFolderStore.RefreshAsync();
+            else
+                await _collectionFolderStore.EnsureLoadedAsync();
+        }
+        catch (Exception ex)
+        {
+            RequestShowNotification?.Invoke($"读取已有合集失败：{ex.Message}", false);
+        }
+    }
+
+    private void OnCollectionFolderStorePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(ExistingCollectionFolderStore.IsLoading):
+                OnPropertyChanged(nameof(IsLoadingCollectionFolders));
+                OnPropertyChanged(nameof(CanEditBatchDestination));
+                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
+                StartBatchDownloadCommand.NotifyCanExecuteChanged();
+                NotifyDestinationCommandsCanExecuteChanged();
+                break;
+            case nameof(ExistingCollectionFolderStore.HasFolders):
+                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
+                break;
+            case nameof(ExistingCollectionFolderStore.Placeholder):
+                OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
+                break;
+        }
+    }
+
+    private void OnCollectionFoldersRefreshing(object? sender, EventArgs e)
+        => _selectedCollectionDirectoryBeforeRefresh = SelectedCollectionFolder?.Directory;
+
+    private void OnCollectionFoldersRefreshed(object? sender, EventArgs e)
+    {
+        var selectedPath = _selectedCollectionDirectoryBeforeRefresh
+            ?? SelectedCollectionFolder?.Directory;
+        _selectedCollectionDirectoryBeforeRefresh = null;
+        if (!string.IsNullOrWhiteSpace(selectedPath))
+            SelectedCollectionFolder = _collectionFolderStore.FindByDirectory(selectedPath);
+    }
+
+    partial void OnSelectedCollectionFolderChanged(ExistingCollectionFolder? value)
+    {
+        DownloadDirectory = value?.Directory ?? _downloadRootDirectory;
+        ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
+    }
+
+    private static string? SelectDirectory(string currentDirectory)
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = "选择批量下载目录",
+            InitialDirectory = currentDirectory
+        };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
     private void OnQueueTasksChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -302,8 +439,8 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     partial void OnUrlsTextChanged(string value)
     {
-        LinkCount = string.IsNullOrWhiteSpace(value) 
-            ? 0 
+        LinkCount = string.IsNullOrWhiteSpace(value)
+            ? 0
             : value.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                    .Select(DownloadViewModel.ExtractUrl)
                    .Where(url => url is not null)
@@ -313,7 +450,17 @@ public partial class BatchDownloadViewModel : ObservableObject
     }
 
     partial void OnIsDownloadingChanged(bool value)
-        => StartBatchDownloadCommand.NotifyCanExecuteChanged();
+    {
+        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+        NotifyDestinationCommandsCanExecuteChanged();
+    }
+
+    private void NotifyDestinationCommandsCanExecuteChanged()
+    {
+        BrowseDirectoryCommand.NotifyCanExecuteChanged();
+        RefreshExistingCollectionFoldersCommand.NotifyCanExecuteChanged();
+        ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
+    }
 
     partial void OnPlaylistUrlChanged(string value)
         => ImportPlaylistCommand.NotifyCanExecuteChanged();
@@ -350,6 +497,8 @@ public partial class BatchDownloadViewModel : ObservableObject
 
         IsDownloading = true;
         var enqueuedCount = 0;
+        var existingCollection = SelectedCollectionFolder;
+        var requestedDownloadDirectory = DownloadDirectory;
         try
         {
             var parsedItems = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -373,7 +522,7 @@ public partial class BatchDownloadViewModel : ObservableObject
             var knownUrls = new HashSet<string>(
                 _downloadManager.Tasks.Select(task => task.Url),
                 StringComparer.OrdinalIgnoreCase);
-            
+
             var validItems = parsedItems.Where(x => knownUrls.Add(x.Url)).ToList();
             var urls = validItems.Select(x => x.Url).ToList();
 
@@ -404,13 +553,30 @@ public partial class BatchDownloadViewModel : ObservableObject
                 }
             }
 
-            var batch = BatchDownloadOrganizer.Create(
-                _configService.Config.DefaultDownloadPath,
-                urls,
-                isExactCollectionImport ? _pendingCollectionSourceUrl : "",
-                collectionTitle: isExactCollectionImport ? _pendingCollectionTitle : "");
-            var outputDirectory = batch?.Directory
-                ?? _configService.Config.DefaultDownloadPath;
+            if (existingCollection is not null && !Directory.Exists(existingCollection.Directory))
+            {
+                RequestShowNotification?.Invoke("所选合集文件夹已不存在，请刷新列表或重新选择。", false);
+                await RefreshExistingCollectionFolders();
+                return;
+            }
+
+            var isReusingExistingCollection = existingCollection is not null;
+            var collectionTitle = isExactCollectionImport
+                && !string.IsNullOrWhiteSpace(_pendingCollectionTitle)
+                    ? _pendingCollectionTitle
+                    : existingCollection?.Name ?? "";
+            var batch = existingCollection is null
+                ? BatchDownloadOrganizer.Create(
+                    requestedDownloadDirectory,
+                    urls,
+                    isExactCollectionImport ? _pendingCollectionSourceUrl : "",
+                    collectionTitle: isExactCollectionImport ? _pendingCollectionTitle : "")
+                : BatchDownloadOrganizer.ReuseExisting(
+                    existingCollection.Directory,
+                    existingCollection.BatchId,
+                    existingCollection.Name,
+                    collectionTitle);
+            var outputDirectory = batch?.Directory ?? requestedDownloadDirectory;
 
             var preflight = _preflightService.Check(outputDirectory);
             if (!preflight.CanProceed)
@@ -443,12 +609,23 @@ public partial class BatchDownloadViewModel : ObservableObject
             for (var index = 0; index < validItems.Count; index++)
             {
                 var item = validItems[index];
+                // History does not persist collection indexes, so manual appends stay unnumbered
+                // instead of guessing a next index from the number of completed history rows.
                 var collectionItemIndex = isExactCollectionImport
                     ? _pendingCollectionUrls.FindIndex(url => string.Equals(
                         url,
                         item.Url,
                         StringComparison.OrdinalIgnoreCase)) + 1
-                    : index + 1;
+                    : existingCollection is null
+                        ? index + 1
+                        : 0;
+                var collectionItemCount = batch is null
+                    ? 0
+                    : isExactCollectionImport
+                        ? _pendingCollectionUrls.Count
+                        : existingCollection is null
+                            ? urls.Count
+                            : 0;
                 var task = new DownloadTask
                 {
                     Url = item.Url,
@@ -461,17 +638,19 @@ public partial class BatchDownloadViewModel : ObservableObject
                     BatchDirectory = batch?.Directory ?? "",
                     CollectionTitle = batch?.CollectionTitle ?? "",
                     CollectionItemIndex = batch is null ? 0 : collectionItemIndex,
-                    CollectionItemCount = batch is null
-                        ? 0
-                        : isExactCollectionImport
-                            ? _pendingCollectionUrls.Count
-                            : urls.Count
+                    CollectionItemCount = collectionItemCount
                 };
                 await _downloadManager.EnqueueAsync(task);
                 enqueuedCount++;
             }
 
-            if (batch is not null)
+            if (isReusingExistingCollection)
+            {
+                RequestShowNotification?.Invoke(
+                    $"已将 {urls.Count} 个任务加入合集：{batch!.Name}",
+                    true);
+            }
+            else if (batch is not null)
             {
                 RequestShowNotification?.Invoke(
                     $"已加入 {urls.Count} 个任务，并创建目录：{Path.GetFileName(batch.Directory)}",
@@ -500,7 +679,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     }
 
     private bool CanStartBatchDownload()
-        => LinkCount > 0 && !IsDownloading;
+        => LinkCount > 0 && !IsDownloading && !IsLoadingCollectionFolders;
 
     [RelayCommand(CanExecute = nameof(CanImportPlaylist))]
     private async Task ImportPlaylist()

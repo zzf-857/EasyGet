@@ -198,8 +198,9 @@
                         Style="{StaticResource SurfaceButton}" Command="{Binding ClearSelectionCommand}" Content="取消选择"/>
                 <Grid Grid.Column="3" Height="32" Margin="8,0">
                     <ComboBox Style="{StaticResource DarkComboBox}"
-                              ItemsSource="{Binding HistoryFolders}" SelectedItem="{Binding BulkTargetFolder}"
-                              DisplayMemberPath="Name" IsEnabled="{Binding HasHistoryFolders}"
+                              ItemsSource="{Binding BulkTargetFolders}" SelectedItem="{Binding BulkTargetFolder}"
+                              DisplayMemberPath="DisplayName" IsEnabled="{Binding HasBulkTargetFolders}"
+                              ToolTip="{Binding BulkTargetFolder.Directory}"
                               AutomationProperties.Name="选择目标文件夹"/>
                     <TextBlock Text="{Binding BulkTargetFolderPlaceholderText}"
                                Margin="12,0,32,0" VerticalAlignment="Center"

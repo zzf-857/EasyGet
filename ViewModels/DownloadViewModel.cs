@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
@@ -26,10 +27,15 @@ public partial class DownloadViewModel : ObservableObject
     private readonly DownloadPreflightService _preflightService;
     private readonly HistoryService? _historyService;
     private readonly DownloadDuplicateDetector? _duplicateDetector;
+    private readonly ExistingCollectionFolderStore _collectionFolderStore;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
+    private readonly Func<string, string?> _selectDirectory;
     private CancellationTokenSource? _parseCts;
     private int _parseRequestId;
+    private string _configuredDownloadDirectory = "";
+    private string _downloadRootDirectory = "";
+    private string? _selectedCollectionDirectoryBeforeRefresh;
 
     // 输入
     [ObservableProperty] private string _url = "";
@@ -38,6 +44,12 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string _selectedSubtitle = "none";
     [ObservableProperty] private SourceFormatChoice? _selectedSourceFormat;
     [ObservableProperty] private string _downloadDirectory = "";
+    [ObservableProperty]
+    private ExistingCollectionFolder? _selectedCollectionFolder;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanEditDownloadDestination))]
+    [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
+    private bool _isPreparingDownload;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(StartDownloadButtonText))]
     private bool _isScheduledDownloadEnabled;
@@ -83,11 +95,16 @@ public partial class DownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsCompleted))]
     [NotifyPropertyChangedFor(nameof(IsTaskFailed))]
     private DownloadTask? _currentTask;
-    [ObservableProperty] private bool _isDownloading;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanEditDownloadDestination))]
+    [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
+    private bool _isDownloading;
 
     // 日志
     public ObservableCollection<string> LogLines { get; } = [];
     public ObservableCollection<SourceFormatChoice> SourceFormatOptions { get; } = [];
+    public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
+        => _collectionFolderStore.Folders;
     public string LogText => string.Join(Environment.NewLine, LogLines);
 
     // 选项列表
@@ -120,6 +137,14 @@ public partial class DownloadViewModel : ObservableObject
     public bool HasResolvedSourceFormats => SourceFormatOptions.Count > 1;
     public bool UsesAutomaticSourceFormat => string.IsNullOrWhiteSpace(SelectedSourceFormat?.Selector);
     public string StartDownloadButtonText => IsScheduledDownloadEnabled ? "加入计划" : "开始下载";
+    public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
+    public bool CanEditDownloadDestination
+        => !IsDownloading && !IsPreparingDownload && !IsLoadingCollectionFolders;
+    public bool CanSelectExistingCollectionFolder
+        => _collectionFolderStore.HasFolders && CanEditDownloadDestination;
+    public string ExistingCollectionFolderPlaceholder => _collectionFolderStore.Placeholder;
+
+    public event Action<string, bool>? RequestShowNotification;
 
     public DownloadViewModel(
         DownloadManager downloadManager,
@@ -127,7 +152,8 @@ public partial class DownloadViewModel : ObservableObject
         IVideoInfoProvider videoInfoProvider,
         DownloadPreflightService? preflightService = null,
         HistoryService? historyService = null,
-        DownloadDuplicateDetector? duplicateDetector = null)
+        DownloadDuplicateDetector? duplicateDetector = null,
+        ExistingCollectionFolderStore? collectionFolderStore = null)
         : this(
             downloadManager,
             configService,
@@ -136,7 +162,8 @@ public partial class DownloadViewModel : ObservableObject
             null,
             preflightService,
             historyService,
-            duplicateDetector)
+            duplicateDetector,
+            collectionFolderStore)
     {
     }
 
@@ -148,7 +175,9 @@ public partial class DownloadViewModel : ObservableObject
         Func<string?>? readClipboardText = null,
         DownloadPreflightService? preflightService = null,
         HistoryService? historyService = null,
-        DownloadDuplicateDetector? duplicateDetector = null)
+        DownloadDuplicateDetector? duplicateDetector = null,
+        ExistingCollectionFolderStore? collectionFolderStore = null,
+        Func<string, string?>? selectDirectory = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
@@ -156,8 +185,17 @@ public partial class DownloadViewModel : ObservableObject
         _preflightService = preflightService ?? new DownloadPreflightService();
         _historyService = historyService;
         _duplicateDetector = duplicateDetector;
+        _collectionFolderStore = collectionFolderStore
+            ?? new ExistingCollectionFolderStore(historyService);
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
+        _selectDirectory = selectDirectory ?? SelectDirectory;
+        _configuredDownloadDirectory = _configService.Config.DefaultDownloadPath;
+        _downloadRootDirectory = _configuredDownloadDirectory;
+        DownloadDirectory = _downloadRootDirectory;
+        _collectionFolderStore.PropertyChanged += OnCollectionFolderStorePropertyChanged;
+        _collectionFolderStore.FoldersRefreshing += OnCollectionFoldersRefreshing;
+        _collectionFolderStore.FoldersRefreshed += OnCollectionFoldersRefreshed;
         LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
         RebuildSourceFormatOptions();
 
@@ -219,13 +257,18 @@ public partial class DownloadViewModel : ObservableObject
     partial void OnSelectedSourceFormatChanged(SourceFormatChoice? value)
         => OnPropertyChanged(nameof(UsesAutomaticSourceFormat));
 
+    partial void OnIsDownloadingChanged(bool value)
+        => NotifyDestinationCommandsCanExecuteChanged();
+
+    partial void OnIsPreparingDownloadChanged(bool value)
+        => NotifyDestinationCommandsCanExecuteChanged();
+
     /// <summary>
     /// 初始化默认值
     /// </summary>
     public void Initialize()
     {
         var config = _configService.Config;
-        DownloadDirectory = config.DefaultDownloadPath;
         SelectedFormat = config.DefaultFormat;
         SelectedQuality = config.DefaultQuality switch
         {
@@ -249,10 +292,21 @@ public partial class DownloadViewModel : ObservableObject
     public void RefreshRuntimeConfigDisplay()
     {
         var config = _configService.Config;
-        DownloadDirectory = config.DefaultDownloadPath;
+        var updatedDefault = config.DefaultDownloadPath;
+        var followsConfiguredDefault = ExistingCollectionFolderStore.PathsEqual(
+            _downloadRootDirectory,
+            _configuredDownloadDirectory);
+        _configuredDownloadDirectory = updatedDefault;
+        if (followsConfiguredDefault)
+            _downloadRootDirectory = updatedDefault;
+        if (followsConfiguredDefault && SelectedCollectionFolder is null)
+            DownloadDirectory = _downloadRootDirectory;
         ProxyStatusText = DescribeProxyStatus(config);
         ConcurrentFragmentsText = DescribeConcurrentFragments(config);
     }
+
+    public Task InitializeExistingCollectionFoldersAsync()
+        => LoadExistingCollectionFoldersAsync(forceRefresh: false);
 
     /// <summary>
     /// 从剪贴板粘贴 URL
@@ -281,19 +335,99 @@ public partial class DownloadViewModel : ObservableObject
     /// <summary>
     /// 浏览选择下载目录
     /// </summary>
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanEditDestination))]
     private void BrowseDirectory()
+    {
+        var selectedDirectory = _selectDirectory(DownloadDirectory);
+        if (string.IsNullOrWhiteSpace(selectedDirectory))
+            return;
+
+        _downloadRootDirectory = Path.GetFullPath(selectedDirectory.Trim());
+        SelectedCollectionFolder = null;
+        DownloadDirectory = _downloadRootDirectory;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanClearSelectedCollectionFolder))]
+    private void ClearSelectedCollectionFolder()
+        => SelectedCollectionFolder = null;
+
+    private bool CanClearSelectedCollectionFolder()
+        => SelectedCollectionFolder is not null && CanEditDestination();
+
+    private bool CanEditDestination()
+        => CanEditDownloadDestination;
+
+    [RelayCommand(CanExecute = nameof(CanEditDestination))]
+    private Task RefreshExistingCollectionFolders()
+        => LoadExistingCollectionFoldersAsync(forceRefresh: true);
+
+    private async Task LoadExistingCollectionFoldersAsync(bool forceRefresh)
+    {
+        try
+        {
+            if (forceRefresh)
+                await _collectionFolderStore.RefreshAsync();
+            else
+                await _collectionFolderStore.EnsureLoadedAsync();
+        }
+        catch (Exception ex)
+        {
+            RequestShowNotification?.Invoke($"读取已有合集失败：{ex.Message}", false);
+        }
+    }
+
+    private void OnCollectionFolderStorePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(ExistingCollectionFolderStore.IsLoading):
+                OnPropertyChanged(nameof(IsLoadingCollectionFolders));
+                OnPropertyChanged(nameof(CanEditDownloadDestination));
+                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
+                NotifyDestinationCommandsCanExecuteChanged();
+                break;
+            case nameof(ExistingCollectionFolderStore.HasFolders):
+                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
+                break;
+            case nameof(ExistingCollectionFolderStore.Placeholder):
+                OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
+                break;
+        }
+    }
+
+    private void OnCollectionFoldersRefreshing(object? sender, EventArgs e)
+        => _selectedCollectionDirectoryBeforeRefresh = SelectedCollectionFolder?.Directory;
+
+    private void OnCollectionFoldersRefreshed(object? sender, EventArgs e)
+    {
+        var selectedPath = _selectedCollectionDirectoryBeforeRefresh
+            ?? SelectedCollectionFolder?.Directory;
+        _selectedCollectionDirectoryBeforeRefresh = null;
+        if (!string.IsNullOrWhiteSpace(selectedPath))
+            SelectedCollectionFolder = _collectionFolderStore.FindByDirectory(selectedPath);
+    }
+
+    partial void OnSelectedCollectionFolderChanged(ExistingCollectionFolder? value)
+    {
+        DownloadDirectory = value?.Directory ?? _downloadRootDirectory;
+        ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyDestinationCommandsCanExecuteChanged()
+    {
+        BrowseDirectoryCommand.NotifyCanExecuteChanged();
+        RefreshExistingCollectionFoldersCommand.NotifyCanExecuteChanged();
+        ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
+    }
+
+    private static string? SelectDirectory(string currentDirectory)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
             Title = "选择下载目录",
-            InitialDirectory = DownloadDirectory
+            InitialDirectory = currentDirectory
         };
-
-        if (dialog.ShowDialog() == true)
-        {
-            DownloadDirectory = dialog.FolderName;
-        }
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
     }
 
     [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanParse))]
@@ -359,9 +493,15 @@ public partial class DownloadViewModel : ObservableObject
     [RelayCommand]
     private async Task StartDownload()
     {
-        if (IsDownloading) 
+        if (IsLoadingCollectionFolders)
         {
-            UrlError = "当前任务正在进行中。如需同时建立多个下载任务，请使用左侧“批量下载”功能。";
+            UrlError = "正在读取已有合集，请稍后再开始下载。";
+            return;
+        }
+
+        if (IsDownloading || IsPreparingDownload)
+        {
+            UrlError = "当前任务正在准备或进行中。如需同时建立多个下载任务，请使用左侧“批量下载”功能。";
             return;
         }
 
@@ -394,6 +534,24 @@ public partial class DownloadViewModel : ObservableObject
             scheduledStartUtc = scheduledStart.ToUniversalTime();
         }
 
+        IsPreparingDownload = true;
+        try
+        {
+            await PrepareAndEnqueueDownloadAsync(cleanUrl, scheduledStartUtc);
+        }
+        finally
+        {
+            IsPreparingDownload = false;
+        }
+    }
+
+    private async Task PrepareAndEnqueueDownloadAsync(
+        string cleanUrl,
+        DateTimeOffset? scheduledStartUtc)
+    {
+        var existingCollection = SelectedCollectionFolder;
+        var requestedDownloadDirectory = DownloadDirectory;
+        DownloadBatchContext? batch = null;
         if (_historyService is not null && _duplicateDetector is not null)
         {
             var duplicate = await _duplicateDetector.DetectAsync(cleanUrl, _historyService);
@@ -407,8 +565,38 @@ public partial class DownloadViewModel : ObservableObject
             }
         }
 
+        if (existingCollection is not null)
+        {
+            if (!Directory.Exists(existingCollection.Directory))
+            {
+                RequestShowNotification?.Invoke(
+                    "所选合集文件夹已不存在，请刷新列表或重新选择。",
+                    false);
+                await LoadExistingCollectionFoldersAsync(forceRefresh: true);
+                return;
+            }
+
+            try
+            {
+                batch = BatchDownloadOrganizer.ReuseExisting(
+                    existingCollection.Directory,
+                    existingCollection.BatchId,
+                    existingCollection.Name,
+                    existingCollection.Name);
+            }
+            catch (Exception ex) when (ex is ArgumentException
+                                       or NotSupportedException
+                                       or PathTooLongException
+                                       or DirectoryNotFoundException)
+            {
+                RequestShowNotification?.Invoke($"无法使用所选合集：{ex.Message}", false);
+                await LoadExistingCollectionFoldersAsync(forceRefresh: true);
+                return;
+            }
+        }
+
         var preflight = _preflightService.Check(
-            DownloadDirectory,
+            batch?.Directory ?? requestedDownloadDirectory,
             SelectedSourceFormat?.ExpectedBytes > 0
                 ? SelectedSourceFormat.ExpectedBytes
                 : PreviewInfo?.FileSize ?? 0);
@@ -434,6 +622,12 @@ public partial class DownloadViewModel : ObservableObject
             SourceFormatSelector = SelectedSourceFormat?.Selector ?? "",
             Subtitle = ParseSubtitle(SelectedSubtitle),
             OutputDirectory = DownloadDirectory,
+            BatchId = batch?.Id ?? "",
+            BatchName = batch?.Name ?? "",
+            BatchDirectory = batch?.Directory ?? "",
+            CollectionTitle = batch?.CollectionTitle ?? "",
+            CollectionItemIndex = 0,
+            CollectionItemCount = 0,
             ScheduledStartTimeUtc = scheduledStartUtc
         };
 
@@ -895,7 +1089,7 @@ public partial class DownloadViewModel : ObservableObject
         if (extracted == null)
             return false;
 
-        if (!Uri.TryCreate(extracted, UriKind.Absolute, out var uri) || 
+        if (!Uri.TryCreate(extracted, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             return false;

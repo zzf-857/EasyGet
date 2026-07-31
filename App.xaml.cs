@@ -54,6 +54,9 @@ public partial class App : System.Windows.Application
             services.AddSingleton<ConfigService>();
             services.AddSingleton<EnvironmentService>();
             services.AddSingleton<HistoryService>();
+            services.AddSingleton<ExistingCollectionFolderStore>();
+            services.AddSingleton<HistoryDirectoryDiscoveryService>();
+            services.AddSingleton<HistoryThumbnailService>();
             services.AddSingleton<DownloadPreflightService>();
             services.AddSingleton<FirstRunReadinessService>();
             services.AddSingleton<LongRunningSessionService>();

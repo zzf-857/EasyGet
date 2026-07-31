@@ -205,6 +205,138 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public async Task GetExistingCollectionFoldersAsync_AggregatesStableBatchPathsAndOrdersByLatestUse()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/alpha/old-name",
+                BatchId = "batch-alpha",
+                BatchName = "Alpha Old",
+                BatchDirectory = @"D:\Videos\Alpha",
+                DownloadTime = new DateTime(2026, 7, 30, 9, 0, 0)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/alpha/latest-name-first",
+                BatchId = "batch-alpha",
+                BatchName = "Alpha Name First",
+                BatchDirectory = @"D:\Videos\Alpha",
+                DownloadTime = new DateTime(2026, 7, 30, 10, 0, 0)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/alpha/latest-name-second",
+                BatchId = "batch-alpha",
+                BatchName = "Alpha Latest Name",
+                BatchDirectory = @"D:\Videos\Alpha",
+                DownloadTime = new DateTime(2026, 7, 30, 10, 0, 0)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/alpha/no-name",
+                BatchId = "batch-alpha",
+                BatchName = "   ",
+                BatchDirectory = @"D:\Videos\Alpha",
+                DownloadTime = new DateTime(2026, 7, 30, 11, 0, 0)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/alpha/archive",
+                BatchId = "batch-alpha",
+                BatchName = "Alpha Archive",
+                BatchDirectory = @"E:\Archive\Alpha",
+                DownloadTime = new DateTime(2026, 7, 30, 8, 0, 0)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/beta",
+                BatchId = "batch-beta",
+                BatchName = "Beta",
+                BatchDirectory = @"D:\Videos\Beta",
+                DownloadTime = new DateTime(2026, 7, 30, 12, 0, 0)
+            });
+
+            var folders = await service.GetExistingCollectionFoldersAsync();
+
+            Assert.Equal(3, folders.Count);
+            Assert.Equal(
+                new[] { @"D:\Videos\Beta", @"D:\Videos\Alpha", @"E:\Archive\Alpha" },
+                folders.Select(folder => folder.Directory));
+
+            var alpha = folders[1];
+            Assert.Equal("batch-alpha", alpha.BatchId);
+            Assert.Equal("Alpha Latest Name", alpha.Name);
+            Assert.Equal(4, alpha.ExistingItemCount);
+            Assert.Equal(new DateTime(2026, 7, 30, 11, 0, 0), alpha.LastDownloadTime);
+
+            var archivedAlpha = folders[2];
+            Assert.Equal("batch-alpha", archivedAlpha.BatchId);
+            Assert.Equal("Alpha Archive", archivedAlpha.Name);
+            Assert.Equal(1, archivedAlpha.ExistingItemCount);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
+    public async Task GetExistingCollectionFoldersAsync_IgnoresRowsWithoutBatchIdOrDirectory()
+    {
+        var dbPath = CreateTempDatabasePath();
+
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/single",
+                BatchDirectory = @"D:\Videos\Single"
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/blank-id",
+                BatchId = "   ",
+                BatchDirectory = @"D:\Videos\BlankId"
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/missing-directory",
+                BatchId = "batch-missing-directory"
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/blank-directory",
+                BatchId = "batch-blank-directory",
+                BatchDirectory = "   "
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/valid",
+                BatchId = "batch-valid",
+                BatchName = "Valid Collection",
+                BatchDirectory = @"D:\Videos\Valid",
+                DownloadTime = new DateTime(2026, 7, 30, 13, 0, 0)
+            });
+
+            var folder = Assert.Single(await service.GetExistingCollectionFoldersAsync());
+            Assert.Equal("batch-valid", folder.BatchId);
+            Assert.Equal("Valid Collection", folder.Name);
+            Assert.Equal(@"D:\Videos\Valid", folder.Directory);
+            Assert.Equal(1, folder.ExistingItemCount);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task GetAllAsync_RoundTripsDownloadTimeAcrossCultureChanges()
     {
         var originalCulture = CultureInfo.CurrentCulture;

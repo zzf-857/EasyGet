@@ -217,15 +217,18 @@ public class HistoryViewModelTests
             Assert.Equal(folder.Id, workspaceFolder.Id);
             Assert.True(workspaceFolder.CanAcceptDrop);
             Assert.Empty(viewModel.BatchFolderCards);
-            var originalTarget = Assert.Single(viewModel.HistoryFolders);
+            var originalTarget = Assert.Single(viewModel.BulkTargetFolders.Where(target => target.IsOrganizer));
+            Assert.Equal(folder.Id, originalTarget.FolderId);
             viewModel.BulkTargetFolder = originalTarget;
 
             await viewModel.LoadHistory();
 
-            var refreshedTarget = Assert.Single(viewModel.HistoryFolders);
-            Assert.NotSame(originalTarget, refreshedTarget);
-            Assert.Same(refreshedTarget, viewModel.BulkTargetFolder);
-            Assert.Equal(folder.Id, viewModel.BulkTargetFolder?.Id);
+            var refreshedFolder = Assert.Single(viewModel.HistoryFolders);
+            var reboundTarget = Assert.Single(viewModel.BulkTargetFolders.Where(target => target.IsOrganizer));
+            Assert.NotSame(originalTarget, reboundTarget);
+            Assert.Same(reboundTarget, viewModel.BulkTargetFolder);
+            Assert.Equal(refreshedFolder.Id, reboundTarget.FolderId);
+            Assert.Equal(folder.Id, reboundTarget.FolderId);
         }
         finally
         {

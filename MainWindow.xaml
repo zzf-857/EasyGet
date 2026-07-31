@@ -124,11 +124,9 @@
                 MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
             <Grid>
                 <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                    <Border Width="24" Height="24" CornerRadius="4" Background="{DynamicResource AccentBrush}">
-                        <Image Source="/Assets/app.png" Width="20" Height="20" Stretch="Uniform"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               RenderOptions.BitmapScalingMode="HighQuality"/>
-                    </Border>
+                    <Image Source="/Assets/app.png" Width="28" Height="28" Stretch="Uniform"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
                     <TextBlock Text="EasyGet" Margin="8,0,0,0" Style="{StaticResource TextBodyStrong}"
                                VerticalAlignment="Center"/>
                     <Border Margin="8,0,0,0" BorderBrush="{StaticResource BorderPrimaryBrush}"

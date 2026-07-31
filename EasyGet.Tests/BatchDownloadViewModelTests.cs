@@ -316,6 +316,225 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
+    public async Task InitializeAsync_LoadsExistingCollectionsAndSelectionFillsDirectory()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var defaultDirectory = root.Path("downloads");
+        var collectionDirectory = root.Path("downloads", "RAG 课程");
+        Directory.CreateDirectory(defaultDirectory);
+        Directory.CreateDirectory(collectionDirectory);
+        await history.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/rag/1",
+            BatchId = "batch-rag",
+            BatchName = "RAG 课程",
+            BatchDirectory = collectionDirectory,
+            DownloadTime = new DateTime(2026, 7, 30, 10, 0, 0)
+        });
+        await history.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/rag/2",
+            BatchId = "batch-rag",
+            BatchName = "RAG 课程",
+            BatchDirectory = collectionDirectory,
+            DownloadTime = new DateTime(2026, 7, 30, 11, 0, 0)
+        });
+        await history.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/missing",
+            BatchId = "batch-missing",
+            BatchName = "已删除合集",
+            BatchDirectory = root.Path("missing")
+        });
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = defaultDirectory;
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            historyService: history);
+
+        await viewModel.InitializeAsync();
+
+        var option = Assert.Single(viewModel.ExistingCollectionFolders);
+        Assert.Equal("batch-rag", option.BatchId);
+        Assert.Equal(2, option.ExistingItemCount);
+        viewModel.SelectedCollectionFolder = option;
+        Assert.Equal(collectionDirectory, viewModel.DownloadDirectory);
+
+        viewModel.ClearSelectedCollectionFolderCommand.Execute(null);
+        Assert.Null(viewModel.SelectedCollectionFolder);
+        Assert.Equal(defaultDirectory, viewModel.DownloadDirectory);
+    }
+
+    [Fact]
+    public void BrowseDirectory_ClearsExistingCollectionSelection()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("default");
+        var selectedDirectory = root.Path("selected-collection");
+        var browsedDirectory = root.Path("custom-root");
+        Directory.CreateDirectory(selectedDirectory);
+        Directory.CreateDirectory(browsedDirectory);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            selectDirectory: _ => browsedDirectory)
+        {
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-existing",
+                Name = "已有合集",
+                Directory = selectedDirectory
+            }
+        };
+
+        viewModel.BrowseDirectoryCommand.Execute(null);
+
+        Assert.Null(viewModel.SelectedCollectionFolder);
+        Assert.Equal(browsedDirectory, viewModel.DownloadDirectory);
+    }
+
+    [Fact]
+    public void DestinationControls_AreLockedWhileBatchIsBeingCreated()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var collectionDirectory = root.Path("collection");
+        Directory.CreateDirectory(collectionDirectory);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-existing",
+                Name = "已有合集",
+                Directory = collectionDirectory
+            },
+            IsDownloading = true
+        };
+
+        Assert.False(viewModel.CanEditBatchDestination);
+        Assert.False(viewModel.CanSelectExistingCollectionFolder);
+        Assert.False(viewModel.BrowseDirectoryCommand.CanExecute(null));
+        Assert.False(viewModel.RefreshExistingCollectionFoldersCommand.CanExecute(null));
+        Assert.False(viewModel.ClearSelectedCollectionFolderCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task StartBatchDownload_UsesPageDownloadDirectoryAsNewBatchRoot()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var defaultDirectory = root.Path("default");
+        var selectedDirectory = root.Path("selected");
+        config.Config.DefaultDownloadPath = defaultDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            DownloadDirectory = selectedDirectory,
+            UrlsText = "https://example.com/one\nhttps://example.com/two"
+        };
+
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        var batchDirectory = Assert.Single(manager.Tasks.Select(task => task.BatchDirectory).Distinct());
+        Assert.StartsWith(
+            Path.GetFullPath(selectedDirectory),
+            Path.GetFullPath(batchDirectory),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(manager.Tasks, task => task.BatchDirectory.StartsWith(
+            Path.GetFullPath(defaultDirectory),
+            StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task StartBatchDownload_ReusesExistingCollectionWithoutNestedDirectory()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var collectionDirectory = root.Path("downloads", "RAG 课程");
+        Directory.CreateDirectory(collectionDirectory);
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            UrlsText = "https://example.com/new-part",
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-rag",
+                Name = "RAG 课程",
+                Directory = collectionDirectory,
+                ExistingItemCount = 5
+            }
+        };
+
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        var task = Assert.Single(manager.Tasks);
+        Assert.Equal("batch-rag", task.BatchId);
+        Assert.Equal("RAG 课程", task.BatchName);
+        Assert.Equal(Path.GetFullPath(collectionDirectory), task.BatchDirectory);
+        Assert.Equal(Path.GetFullPath(collectionDirectory), task.OutputDirectory);
+        Assert.Equal(0, task.CollectionItemIndex);
+        Assert.Equal(0, task.CollectionItemCount);
+        Assert.Equal(5, viewModel.SelectedCollectionFolder!.ExistingItemCount);
+    }
+
+    [Fact]
+    public async Task StartBatchDownload_WhenSelectedCollectionWasDeleted_DoesNotRecreateIt()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var collectionDirectory = root.Path("deleted-collection");
+        Directory.CreateDirectory(collectionDirectory);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            UrlsText = "https://example.com/new-part",
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-deleted",
+                Name = "已删除合集",
+                Directory = collectionDirectory
+            }
+        };
+        string? notification = null;
+        viewModel.RequestShowNotification += (message, _) => notification = message;
+        Directory.Delete(collectionDirectory);
+
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+
+        Assert.Empty(manager.Tasks);
+        Assert.False(Directory.Exists(collectionDirectory));
+        Assert.Contains("已不存在", notification, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CancelTask_DuringMerge_CancelsInsteadOfRemovingQueueEntry()
     {
         using var root = new TestDirectory();

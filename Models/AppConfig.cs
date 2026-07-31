@@ -143,7 +143,7 @@ public class AppConfig
     /// <summary>抖音直播流空闲超时（秒）</summary>
     public int DouyinLiveIdleTimeoutSeconds { get; set; } = DefaultDouyinLiveIdleTimeoutSeconds;
 
-    /// <summary>是否按平台自动归类下载文件到子文件夹</summary>
+    /// <summary>仅用于兼容旧配置和备份；已识别平台现在始终使用规范目录。</summary>
     public bool AutoCategorizeByPlatform { get; set; } = true;
 
     /// <summary>窗口激活时是否检测剪贴板中的媒体链接</summary>

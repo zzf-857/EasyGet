@@ -393,6 +393,21 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void BatchDownloadViewExposesTargetDirectoryAndExistingCollectionPicker()
+    {
+        var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
+
+        Assert.Contains("{Binding DownloadDirectory}", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding BrowseDirectoryCommand}", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding ExistingCollectionFolders}", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding SelectedCollectionFolder}", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding RefreshExistingCollectionFoldersCommand}", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding ClearSelectedCollectionFolderCommand}", source, StringComparison.Ordinal);
+        Assert.Contains("DisplayMemberPath=\"DisplayName\"", source, StringComparison.Ordinal);
+        Assert.Contains("{Binding CanSelectExistingCollectionFolder}", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void BatchDownloadQueueUsesRecyclingAndDedicatedThumbnailColumn()
     {
         var document = XDocument.Load(GetViewPath("BatchDownloadView.xaml"));
@@ -702,8 +717,10 @@ public class XamlBindingTests
 
         Assert.Contains("HistoryFolders", source, StringComparison.Ordinal);
         Assert.Contains("BatchFolderCards", source, StringComparison.Ordinal);
+        Assert.Contains("ItemsSource=\"{Binding BulkTargetFolders}\"", source, StringComparison.Ordinal);
+        Assert.Contains("DisplayMemberPath=\"DisplayName\"", source, StringComparison.Ordinal);
         Assert.Contains("BulkTargetFolderPlaceholderText", source, StringComparison.Ordinal);
-        Assert.Contains("IsEnabled=\"{Binding HasHistoryFolders}\"", source, StringComparison.Ordinal);
+        Assert.Contains("IsEnabled=\"{Binding HasBulkTargetFolders}\"", source, StringComparison.Ordinal);
         Assert.Contains("CurrentLocationPathText", source, StringComparison.Ordinal);
         Assert.Contains("CurrentLocationFileCountText", source, StringComparison.Ordinal);
         Assert.Contains("CurrentLocationSizeText", source, StringComparison.Ordinal);
@@ -839,9 +856,46 @@ public class XamlBindingTests
         Assert.Contains("ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
         Assert.Contains("UseAria2c", source, StringComparison.Ordinal);
         Assert.Contains("aria2c 外部下载器", source, StringComparison.Ordinal);
-        Assert.Contains("GlobalDownloadRateLimitKilobytesPerSecond", source, StringComparison.Ordinal);
+        Assert.Contains("GlobalDownloadRateLimitDisplayText", source, StringComparison.Ordinal);
+        Assert.Contains("GlobalDownloadRateLimitSliderStep", source, StringComparison.Ordinal);
+        Assert.Contains("GlobalDownloadRateLimitSliderMaximum", source, StringComparison.Ordinal);
         Assert.Contains("全局下载限速", source, StringComparison.Ordinal);
-        Assert.Contains("KB/s", source, StringComparison.Ordinal);
+        Assert.Contains("AccentSlider", source, StringComparison.Ordinal);
+        Assert.Contains("AppConfig.MinConcurrentFragments", source, StringComparison.Ordinal);
+        Assert.Contains("AppConfig.MaxConcurrentFragments", source, StringComparison.Ordinal);
+        Assert.Contains("AppConfig.MinConcurrentDownloadLimit", source, StringComparison.Ordinal);
+        Assert.Contains("AppConfig.MaxConcurrentDownloadLimit", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SettingsSliderBoundsUseBindingConversionForIntegerConfigConstants()
+    {
+        var source = File.ReadAllText(GetViewPath("SettingsView.xaml"));
+
+        Assert.Contains(
+            "Minimum=\"{Binding Source={x:Static models:AppConfig.MinConcurrentFragments}, Mode=OneTime}\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Maximum=\"{Binding Source={x:Static models:AppConfig.MaxConcurrentFragments}, Mode=OneTime}\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Minimum=\"{Binding Source={x:Static models:AppConfig.MinConcurrentDownloadLimit}, Mode=OneTime}\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Maximum=\"{Binding Source={x:Static models:AppConfig.MaxConcurrentDownloadLimit}, Mode=OneTime}\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Minimum=\"{x:Static models:AppConfig.",
+            source,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Maximum=\"{x:Static models:AppConfig.",
+            source,
+            StringComparison.Ordinal);
     }
 
     [Fact]

@@ -123,6 +123,8 @@ public partial class MainViewModel : ObservableObject
 
         BatchDownloadVM.RequestShowNotification += (msg, isSuccess) =>
             ShowToast(msg, isSuccess, isSuccess ? null : "查看队列", isSuccess ? null : () => Navigate("batch"));
+        DownloadVM.RequestShowNotification += (msg, isSuccess) =>
+            ShowToast(msg, isSuccess);
         HistoryVM.RequestShowNotification += (msg, isSuccess) =>
             ShowToast(msg, isSuccess, isSuccess ? null : "查看历史", isSuccess ? null : () => Navigate("history"));
         DownloadVM.ClipboardLinkDetected += OnClipboardLinkDetected;
@@ -209,6 +211,12 @@ public partial class MainViewModel : ObservableObject
 
     private void OnSettingsViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(SettingsViewModel.FfmpegFound)
+            && SettingsVM.FfmpegFound)
+        {
+            HistoryVM.RetryLocalThumbnails();
+        }
+
         if (e.PropertyName is nameof(SettingsViewModel.YtDlpFound)
             or nameof(SettingsViewModel.FfmpegFound)
             or nameof(SettingsViewModel.YtDlpVersion)
@@ -245,6 +253,7 @@ public partial class MainViewModel : ObservableObject
     private void OnSettingsSaved()
     {
         DownloadVM.RefreshRuntimeConfigDisplay();
+        BatchDownloadVM.RefreshRuntimeConfigDisplay();
         HistoryVM.RefreshStorageStatus();
         UpdateLongRunningSession();
     }
@@ -363,6 +372,13 @@ public partial class MainViewModel : ObservableObject
         DownloadVM.Initialize();
         HistoryVM.RefreshStorageStatus();
         await HistoryVM.EnsureHistoryLoadedAsync();
+        await DownloadVM.InitializeExistingCollectionFoldersAsync();
+        if (!ReferenceEquals(
+                DownloadVM.ExistingCollectionFolders,
+                BatchDownloadVM.ExistingCollectionFolders))
+        {
+            await BatchDownloadVM.InitializeAsync();
+        }
 
         StatusMessage = "正在检查运行环境...";
         var report = _readinessService is null || _configService is null

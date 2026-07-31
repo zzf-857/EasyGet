@@ -874,6 +874,108 @@
         </Setter>
     </Style>
 
+    <!-- ========== Slider 样式 ========== -->
+    <Style x:Key="AccentSliderTrackButton" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Height="4"
+                            VerticalAlignment="Center"
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="2"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="AccentSliderThumb" TargetType="Thumb">
+        <Setter Property="Width" Value="18"/>
+        <Setter Property="Height" Value="18"/>
+        <Setter Property="Background" Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+        <Setter Property="BorderThickness" Value="2"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBody"
+                            Width="{TemplateBinding Width}"
+                            Height="{TemplateBinding Height}"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="9"
+                            SnapsToDevicePixels="True"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBody" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                            <Setter TargetName="ThumbBody" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBody" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                            <Setter TargetName="ThumbBody" Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="AccentSlider" TargetType="Slider">
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="MinWidth" Value="180"/>
+        <Setter Property="Orientation" Value="Horizontal"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="IsSnapToTickEnabled" Value="True"/>
+        <Setter Property="AutoToolTipPlacement" Value="TopLeft"/>
+        <Setter Property="AutoToolTipPrecision" Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Border x:Name="FocusRing"
+                            Background="Transparent"
+                            BorderBrush="Transparent"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            Padding="5,0">
+                        <Track x:Name="PART_Track"
+                               Height="20"
+                               VerticalAlignment="Center"
+                               Focusable="False"
+                               IsDirectionReversed="{TemplateBinding IsDirectionReversed}"
+                               Maximum="{TemplateBinding Maximum}"
+                               Minimum="{TemplateBinding Minimum}"
+                               Orientation="{TemplateBinding Orientation}"
+                               Value="{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Background="{DynamicResource AccentBrush}"
+                                              Command="{x:Static Slider.DecreaseLarge}"
+                                              Style="{StaticResource AccentSliderTrackButton}"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Background="{StaticResource BorderStrongBrush}"
+                                              Command="{x:Static Slider.IncreaseLarge}"
+                                              Style="{StaticResource AccentSliderTrackButton}"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource AccentSliderThumb}"/>
+                            </Track.Thumb>
+                        </Track>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="FocusRing" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.45"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ========== ProgressBar 样式 ========== -->
     <Style x:Key="AccentProgressBar" TargetType="ProgressBar">
         <Setter Property="Height" Value="8"/>

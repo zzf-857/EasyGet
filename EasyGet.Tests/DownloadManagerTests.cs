@@ -935,7 +935,6 @@ public class DownloadManagerTests
     {
         var configService = new TestConfigService();
         configService.Config.DefaultDownloadPath = outputDir;
-        configService.Config.AutoCategorizeByPlatform = true;
         configService.Config.EnableDouyinSpecialEngine = enableDouyinSpecialEngine;
         configService.Config.MaxConcurrentDownloads = 1;
         return configService;

@@ -11,7 +11,7 @@ namespace EasyGet.ViewModels;
 /// <summary>
 /// 历史记录页 ViewModel
 /// </summary>
-public partial class HistoryViewModel : ObservableObject
+public partial class HistoryViewModel : ObservableObject, IDisposable
 {
     private static readonly TimeSpan SearchDebounceDelay = TimeSpan.FromMilliseconds(300);
     private const int DefaultHistoryCardColumnCount = 4;
@@ -21,12 +21,16 @@ public partial class HistoryViewModel : ObservableObject
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Action<Func<Task>> _scheduleHistoryUpdate;
     private readonly DownloadFileDeletionService _fileDeletionService;
+    private readonly HistoryDirectoryDiscoveryService _directoryDiscoveryService;
+    private readonly HistoryThumbnailService _thumbnailService;
     private readonly SemaphoreSlim _historyLoadSemaphore = new(1, 1);
     private readonly object _initialHistoryLoadGate = new();
     private readonly object _historyAddedGate = new();
+    private readonly object _thumbnailHydrationGate = new();
     private readonly Dictionary<long, DownloadHistory> _pendingHistoryAdded = [];
     private readonly HashSet<long> _recentlyCompletedHistoryIds = [];
     private CancellationTokenSource? _searchCts;
+    private ThumbnailHydrationSession? _thumbnailHydrationSession;
     private Task? _initialHistoryLoadTask;
     private bool _hasLoadedHistory;
     private bool _historyAddedDrainScheduled;
@@ -34,6 +38,7 @@ public partial class HistoryViewModel : ObservableObject
     private bool _suppressSelectionRefresh;
     private bool _suppressLocationRefresh;
     private int _historyCardColumnCount = DefaultHistoryCardColumnCount;
+    private bool _isDisposed;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSearchOrFilterActive))]
@@ -63,7 +68,7 @@ public partial class HistoryViewModel : ObservableObject
     [ObservableProperty] private int _unfiledHistoryCount;
     [ObservableProperty] private int _selectedCount;
     [ObservableProperty] private string _newFolderName = "";
-    [ObservableProperty] private HistoryFolder? _bulkTargetFolder;
+    [ObservableProperty] private HistoryMoveTarget? _bulkTargetFolder;
 
     public bool IsSearchOrFilterActive
         => !string.IsNullOrEmpty(SearchKeyword)
@@ -78,6 +83,7 @@ public partial class HistoryViewModel : ObservableObject
     public bool HasSelection => SelectedCount > 0;
     public bool HasVisibleHistory => VisibleHistoryCount > 0;
     public bool HasHistoryFolders => HistoryFolders.Count > 0;
+    public bool HasBulkTargetFolders => BulkTargetFolders.Count > 0;
     public bool HasBatchFolders => BatchFolderCards.Count > 0;
     public bool HasWorkspaceFolders => HistoryFolders.Count > 0 || BatchFolderCards.Count > 0;
     public bool HasDisplayedHistoryCards => HistoryCardRows.Count > 0;
@@ -101,7 +107,7 @@ public partial class HistoryViewModel : ObservableObject
             ? "取消选择当前目录中的全部历史记录"
             : "选择当前目录中的全部历史记录";
     public string BulkTargetFolderPlaceholderText
-        => HasHistoryFolders ? "选择目标文件夹" : "请先新建整理文件夹";
+        => HasBulkTargetFolders ? "选择目标文件夹" : "暂无可用目标文件夹";
     public string SelectedFolderTitle
         => !string.IsNullOrWhiteSpace(SelectedBatchKey)
             ? BatchFolderCards.FirstOrDefault(group => group.Key == SelectedBatchKey)?.Name ?? "批量文件夹"
@@ -125,7 +131,7 @@ public partial class HistoryViewModel : ObservableObject
     partial void OnNewFolderNameChanged(string value)
         => CreateFolderCommand.NotifyCanExecuteChanged();
 
-    partial void OnBulkTargetFolderChanged(HistoryFolder? value)
+    partial void OnBulkTargetFolderChanged(HistoryMoveTarget? value)
         => MoveSelectedToFolderCommand.NotifyCanExecuteChanged();
 
     partial void OnSelectedFolderIdChanged(long? value)
@@ -187,6 +193,7 @@ public partial class HistoryViewModel : ObservableObject
     public ObservableCollection<HistoryCardRow> HistoryCardRows { get; } = [];
     public ObservableCollection<DownloadHistoryGroup> BatchFolderCards { get; } = [];
     public ObservableCollection<HistoryFolder> HistoryFolders { get; } = [];
+    public ObservableCollection<HistoryMoveTarget> BulkTargetFolders { get; } = [];
 
     public event Action<string, bool>? RequestShowNotification;
 
@@ -198,8 +205,17 @@ public partial class HistoryViewModel : ObservableObject
     public HistoryViewModel(
         HistoryService historyService,
         ConfigService configService,
-        DownloadFileDeletionService? fileDeletionService = null)
-        : this(historyService, configService, StartProcess, null, fileDeletionService)
+        DownloadFileDeletionService? fileDeletionService = null,
+        HistoryThumbnailService? thumbnailService = null,
+        HistoryDirectoryDiscoveryService? directoryDiscoveryService = null)
+        : this(
+            historyService,
+            configService,
+            StartProcess,
+            null,
+            fileDeletionService,
+            thumbnailService,
+            directoryDiscoveryService)
     {
     }
 
@@ -213,14 +229,122 @@ public partial class HistoryViewModel : ObservableObject
         ConfigService configService,
         Action<ProcessStartInfo> startProcess,
         Action<Func<Task>>? scheduleHistoryUpdate = null,
-        DownloadFileDeletionService? fileDeletionService = null)
+        DownloadFileDeletionService? fileDeletionService = null,
+        HistoryThumbnailService? thumbnailService = null,
+        HistoryDirectoryDiscoveryService? directoryDiscoveryService = null)
     {
         _historyService = historyService;
         _configService = configService;
         _startProcess = startProcess;
         _scheduleHistoryUpdate = scheduleHistoryUpdate ?? ScheduleHistoryUpdate;
         _fileDeletionService = fileDeletionService ?? new DownloadFileDeletionService();
+        _directoryDiscoveryService = directoryDiscoveryService
+            ?? new HistoryDirectoryDiscoveryService();
+        _thumbnailService = thumbnailService
+            ?? new HistoryThumbnailService(configService, new EnvironmentService());
         _historyService.HistoryAdded += OnHistoryAdded;
+    }
+
+    private void RestartThumbnailHydration(IEnumerable<DownloadHistory> items)
+    {
+        var snapshot = items.ToList();
+        if (snapshot.Count == 0)
+        {
+            CancelThumbnailHydration();
+            return;
+        }
+
+        ThumbnailHydrationSession? previousSession;
+        lock (_thumbnailHydrationGate)
+        {
+            if (_isDisposed)
+                return;
+
+            previousSession = _thumbnailHydrationSession;
+            var nextSession = new ThumbnailHydrationSession();
+            _thumbnailHydrationSession = nextSession;
+            nextSession.Track(HydrateThumbnailsSafelyAsync(snapshot, nextSession.Token));
+        }
+
+        previousSession?.Retire();
+    }
+
+    public void RetryLocalThumbnails()
+    {
+        if (!Volatile.Read(ref _hasLoadedHistory))
+            return;
+
+        RestartThumbnailHydration(HistoryItems);
+    }
+
+    private void ContinueThumbnailHydration(IEnumerable<DownloadHistory> items)
+    {
+        var snapshot = items.ToList();
+        if (snapshot.Count == 0)
+            return;
+
+        lock (_thumbnailHydrationGate)
+        {
+            if (_isDisposed)
+                return;
+
+            var session = _thumbnailHydrationSession ??= new ThumbnailHydrationSession();
+            session.Track(HydrateThumbnailsSafelyAsync(
+                snapshot,
+                session.Token));
+        }
+    }
+
+    private async Task HydrateThumbnailsSafelyAsync(
+        IReadOnlyCollection<DownloadHistory> items,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var orderedItems = items
+                .Select(item => (
+                    Item: item,
+                    Paths: EnumerateLocalFilePaths(item).ToArray()))
+                .Where(candidate => candidate.Paths.Length > 0)
+                .OrderBy(candidate => string.IsNullOrWhiteSpace(candidate.Item.ThumbnailUrl) ? 0 : 1)
+                .ToList();
+            await Parallel.ForEachAsync(
+                orderedItems,
+                new ParallelOptions
+                {
+                    MaxDegreeOfParallelism = 2,
+                    CancellationToken = cancellationToken
+                },
+                async (candidate, ct) =>
+                {
+                    var localThumbnail = await _thumbnailService.ResolveLocalThumbnailAsync(
+                        candidate.Paths,
+                        ct);
+                    if (string.IsNullOrWhiteSpace(localThumbnail))
+                        return;
+
+                    var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                    if (dispatcher is null || dispatcher.CheckAccess())
+                    {
+                        candidate.Item.ThumbnailUrl = localThumbnail;
+                    }
+                    else
+                    {
+                        await dispatcher.InvokeAsync(
+                            () => candidate.Item.ThumbnailUrl = localThumbnail,
+                            System.Windows.Threading.DispatcherPriority.Background,
+                            ct);
+                    }
+                });
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // A newer history query or application shutdown retired this hydration pass.
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[HistoryViewModel] Thumbnail hydration failed: {ex.Message}");
+        }
     }
 
     private static void ScheduleHistoryUpdate(Func<Task> update)
@@ -249,11 +373,14 @@ public partial class HistoryViewModel : ObservableObject
 
     private void OnHistoryAdded(DownloadHistory history)
     {
-        if (history.Id <= 0)
+        if (history.Id <= 0 || Volatile.Read(ref _isDisposed))
             return;
 
         lock (_historyAddedGate)
         {
+            if (_isDisposed)
+                return;
+
             _pendingHistoryAdded[history.Id] = history;
             _recentlyCompletedHistoryIds.Add(history.Id);
         }
@@ -266,7 +393,8 @@ public partial class HistoryViewModel : ObservableObject
         var shouldSchedule = false;
         lock (_historyAddedGate)
         {
-            if (Volatile.Read(ref _hasLoadedHistory)
+            if (!_isDisposed
+                && Volatile.Read(ref _hasLoadedHistory)
                 && _pendingHistoryAdded.Count > 0
                 && !_historyAddedDrainScheduled)
             {
@@ -304,7 +432,9 @@ public partial class HistoryViewModel : ObservableObject
             lock (_historyAddedGate)
             {
                 _historyAddedDrainScheduled = false;
-                if (Volatile.Read(ref _hasLoadedHistory) && _pendingHistoryAdded.Count > 0)
+                if (!_isDisposed
+                    && Volatile.Read(ref _hasLoadedHistory)
+                    && _pendingHistoryAdded.Count > 0)
                 {
                     _historyAddedDrainScheduled = true;
                     shouldReschedule = true;
@@ -321,6 +451,9 @@ public partial class HistoryViewModel : ObservableObject
         await _historyLoadSemaphore.WaitAsync();
         try
         {
+            if (Volatile.Read(ref _isDisposed))
+                return false;
+
             List<DownloadHistory> pendingItems;
             lock (_historyAddedGate)
             {
@@ -334,6 +467,10 @@ public partial class HistoryViewModel : ObservableObject
             TotalHistoryCount = await _historyService.GetCountAsync();
             UnfiledHistoryCount = await _historyService.GetUnfiledCountAsync();
             var folders = await _historyService.GetFoldersAsync();
+            if (Volatile.Read(ref _isDisposed))
+                return false;
+            var bulkTargetSnapshotTask = LoadBulkTargetFolderSnapshotAsync();
+
             var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
 
             foreach (var folder in HistoryFolders)
@@ -349,11 +486,17 @@ public partial class HistoryViewModel : ObservableObject
                 .GroupBy(item => item.Id)
                 .Select(group => group.Last())
                 .ToList();
-            var enrichedItems = await Task.Run(() => candidates
+            var enrichmentTask = Task.Run(() => candidates
                 .Select(EnrichHistoryItem)
                 .ToList());
+            await Task.WhenAll(bulkTargetSnapshotTask, enrichmentTask);
+            var bulkTargetSnapshot = await bulkTargetSnapshotTask;
+            var enrichedItems = await enrichmentTask;
+            if (Volatile.Read(ref _isDisposed))
+                return false;
 
             var shouldRebuild = false;
+            var addedItems = new List<DownloadHistory>();
             foreach (var pendingItem in pendingItems)
             {
                 var existingItem = HistoryItems.FirstOrDefault(item => item.Id == pendingItem.Id);
@@ -376,6 +519,7 @@ public partial class HistoryViewModel : ObservableObject
                 result.Item.IsRecentlyCompleted = true;
                 result.Item.PropertyChanged += OnHistoryItemPropertyChanged;
                 HistoryItems.Add(result.Item);
+                addedItems.Add(result.Item);
                 shouldRebuild = true;
             }
 
@@ -397,6 +541,11 @@ public partial class HistoryViewModel : ObservableObject
             {
                 NotifyLocationState();
             }
+
+            RebuildBulkTargetFolders(
+                bulkTargetSnapshot.Directories,
+                bulkTargetSnapshot.ExistingCollectionFolders);
+            ContinueThumbnailHydration(addedItems);
 
             return true;
         }
@@ -486,7 +635,7 @@ public partial class HistoryViewModel : ObservableObject
         lock (_initialHistoryLoadGate)
         {
             if (_hasLoadedHistory)
-                return Task.CompletedTask;
+                return RefreshBulkTargetFoldersAsync();
 
             if (_initialHistoryLoadTask is null || _initialHistoryLoadTask.IsCompleted)
                 _initialHistoryLoadTask = LoadHistory();
@@ -524,6 +673,9 @@ public partial class HistoryViewModel : ObservableObject
             var unfiledCount = await _historyService.GetUnfiledCountAsync();
             var folders = await _historyService.GetFoldersAsync();
             var items = await _historyService.GetAllAsync(searchKeyword);
+            var allItemsForBulkTargets = string.IsNullOrWhiteSpace(searchKeyword)
+                ? items
+                : await _historyService.GetAllAsync();
             var filteredItems = items
                 .Where(item => MatchesMediaFilter(item, mediaFilter))
                 .GroupBy(item => item.Id)
@@ -533,9 +685,13 @@ public partial class HistoryViewModel : ObservableObject
                 .ToList();
             var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
 
-            var fileExistsResults = await Task.Run(() => filteredItems
+            var bulkTargetSnapshotTask = LoadBulkTargetFolderSnapshotAsync(allItemsForBulkTargets);
+            var enrichmentTask = Task.Run(() => filteredItems
                 .Select(EnrichHistoryItem)
                 .ToList());
+            await Task.WhenAll(bulkTargetSnapshotTask, enrichmentTask);
+            var bulkTargetSnapshot = await bulkTargetSnapshotTask;
+            var fileExistsResults = await enrichmentTask;
 
             if (requestVersion != Volatile.Read(ref _historyLoadRequestVersion))
                 return;
@@ -560,12 +716,6 @@ public partial class HistoryViewModel : ObservableObject
                 HistoryFolders.Add(folder);
             }
 
-            if (BulkTargetFolder is not null)
-            {
-                BulkTargetFolder = HistoryFolders.FirstOrDefault(
-                    folder => folder.Id == BulkTargetFolder.Id);
-            }
-
             if (SelectedFolderId > 0 && HistoryFolders.All(folder => folder.Id != SelectedFolderId))
                 SelectedFolderId = null;
 
@@ -573,9 +723,12 @@ public partial class HistoryViewModel : ObservableObject
             OnPropertyChanged(nameof(HasWorkspaceFolders));
             OnPropertyChanged(nameof(WorkspaceSummaryText));
             OnPropertyChanged(nameof(SelectedFolderTitle));
-            OnPropertyChanged(nameof(BulkTargetFolderPlaceholderText));
             ClearSelection();
             RebuildHistoryGroups();
+            RebuildBulkTargetFolders(
+                bulkTargetSnapshot.Directories,
+                bulkTargetSnapshot.ExistingCollectionFolders);
+            RestartThumbnailHydration(HistoryItems);
             lock (_initialHistoryLoadGate)
                 Volatile.Write(ref _hasLoadedHistory, true);
             loadedSuccessfully = true;
@@ -698,6 +851,117 @@ public partial class HistoryViewModel : ObservableObject
         OnPropertyChanged(nameof(ShouldShowFolderOnlyHint));
         NotifyVisibleSelectionState();
         NotifyLocationState();
+    }
+
+    private async Task RefreshBulkTargetFoldersAsync()
+    {
+        await _historyLoadSemaphore.WaitAsync();
+        try
+        {
+            if (Volatile.Read(ref _isDisposed))
+                return;
+
+            var snapshot = await LoadBulkTargetFolderSnapshotAsync();
+            if (Volatile.Read(ref _isDisposed))
+                return;
+
+            RebuildBulkTargetFolders(
+                snapshot.Directories,
+                snapshot.ExistingCollectionFolders);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[HistoryViewModel] Target-folder refresh failed: {ex.Message}");
+        }
+        finally
+        {
+            _historyLoadSemaphore.Release();
+        }
+    }
+
+    private async Task<BulkTargetFolderSnapshot> LoadBulkTargetFolderSnapshotAsync(
+        IReadOnlyList<DownloadHistory>? allHistoryItems = null)
+    {
+        var historyItems = allHistoryItems ?? await _historyService.GetAllAsync();
+        var existingCollectionFolders = await _historyService.GetExistingCollectionFoldersAsync();
+        var knownDirectories = existingCollectionFolders
+            .Select(folder => folder.Directory)
+            .Concat(historyItems.Select(item => item.BatchDirectory))
+            .Concat(historyItems
+                .Where(item => string.IsNullOrWhiteSpace(item.BatchDirectory))
+                .Select(item => BatchDownloadOrganizer.ResolveOutputDirectory(item.FilePath)))
+            .Where(directory => !string.IsNullOrWhiteSpace(directory))
+            .Distinct(OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal)
+            .ToArray();
+        var discoveredDirectories = await _directoryDiscoveryService.DiscoverAsync(
+            _configService.Config.DefaultDownloadPath,
+            knownDirectories);
+        return new BulkTargetFolderSnapshot(
+            discoveredDirectories,
+            existingCollectionFolders);
+    }
+
+    private void RebuildBulkTargetFolders(
+        IReadOnlyList<string> discoveredDirectories,
+        IReadOnlyList<ExistingCollectionFolder> existingCollectionFolders)
+    {
+        var previousTarget = BulkTargetFolder;
+        var targets = new List<HistoryMoveTarget>();
+        targets.AddRange(HistoryFolders.Select(folder => new HistoryMoveTarget
+        {
+            Kind = HistoryMoveTargetKind.Organizer,
+            FolderId = folder.Id,
+            Name = folder.Name
+        }));
+
+        foreach (var directory in discoveredDirectories)
+        {
+            var visibleBatch = BatchFolderCards.FirstOrDefault(group =>
+                ExistingCollectionFolderStore.PathsEqual(group.Directory, directory));
+            var persistedBatch = existingCollectionFolders.FirstOrDefault(folder =>
+                ExistingCollectionFolderStore.PathsEqual(folder.Directory, directory));
+            var displayName = HistoryDirectoryDiscoveryService.DescribeDirectory(
+                directory,
+                _configService.Config.DefaultDownloadPath);
+            var batchName = !string.IsNullOrWhiteSpace(visibleBatch?.Name)
+                ? visibleBatch.Name
+                : !string.IsNullOrWhiteSpace(persistedBatch?.Name)
+                    ? persistedBatch.Name
+                    : displayName;
+            var batchId = !string.IsNullOrWhiteSpace(visibleBatch?.BatchId)
+                ? visibleBatch.BatchId
+                : !string.IsNullOrWhiteSpace(persistedBatch?.BatchId)
+                    ? persistedBatch.BatchId
+                    : BatchDownloadOrganizer.CreateDirectoryGroupId(directory);
+            targets.Add(new HistoryMoveTarget
+            {
+                Kind = HistoryMoveTargetKind.LocalDirectory,
+                BatchId = batchId,
+                BatchName = batchName,
+                Name = displayName,
+                Directory = directory
+            });
+        }
+
+        BulkTargetFolders.Clear();
+        foreach (var target in targets)
+            BulkTargetFolders.Add(target);
+
+        BulkTargetFolder = previousTarget?.Kind switch
+        {
+            HistoryMoveTargetKind.Organizer => BulkTargetFolders.FirstOrDefault(target =>
+                target.IsOrganizer && target.FolderId == previousTarget.FolderId),
+            HistoryMoveTargetKind.LocalDirectory => BulkTargetFolders.FirstOrDefault(target =>
+                !target.IsOrganizer
+                && ExistingCollectionFolderStore.PathsEqual(
+                    target.Directory,
+                    previousTarget.Directory)),
+            _ => null
+        };
+        OnPropertyChanged(nameof(HasBulkTargetFolders));
+        OnPropertyChanged(nameof(BulkTargetFolderPlaceholderText));
     }
 
     private bool MatchesSelectedFolder(DownloadHistory item)
@@ -865,31 +1129,8 @@ public partial class HistoryViewModel : ObservableObject
     }
 
     private static string ResolveCommonOutputDirectory(IReadOnlyList<DownloadHistory> items)
-    {
-        var directories = items
-            .Select(item => TryGetParentDirectory(item.FilePath))
-            .Where(directory => !string.IsNullOrWhiteSpace(directory))
-            .Distinct(OperatingSystem.IsWindows()
-                ? StringComparer.OrdinalIgnoreCase
-                : StringComparer.Ordinal)
-            .ToList();
-        return directories.Count == 1 ? directories[0] : "";
-    }
-
-    private static string TryGetParentDirectory(string? filePath)
-    {
-        if (string.IsNullOrWhiteSpace(filePath))
-            return "";
-
-        try
-        {
-            return Path.GetDirectoryName(filePath) ?? "";
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return "";
-        }
-    }
+        => BatchDownloadOrganizer.ResolveCommonOutputDirectory(
+            items.Select(item => item.FilePath));
 
     private static string ResolveBatchName(
         DownloadHistory history,
@@ -1100,14 +1341,33 @@ public partial class HistoryViewModel : ObservableObject
         if (BulkTargetFolder is null)
             return;
 
-        await MoveItemsToFolderAsync(
-            GetSelectedItems().Select(item => item.Id).ToList(),
-            BulkTargetFolder.Id);
+        var historyIds = GetSelectedItems().Select(item => item.Id).ToList();
+        if (BulkTargetFolder.IsOrganizer)
+        {
+            await MoveItemsToFolderAsync(historyIds, BulkTargetFolder.FolderId);
+            return;
+        }
+
+        await MoveItemsToDirectoryGroupAsync(historyIds, BulkTargetFolder);
     }
 
     private bool CanMoveSelectedToFolder()
-        => BulkTargetFolder is not null
-           && HistoryItems.Any(item => item.IsSelected && item.FolderId != BulkTargetFolder.Id);
+    {
+        if (BulkTargetFolder is null)
+            return false;
+
+        return HistoryItems.Any(item => item.IsSelected
+            && (BulkTargetFolder.IsOrganizer
+                ? item.FolderId != BulkTargetFolder.FolderId
+                : item.FolderId > 0
+                  || !string.Equals(
+                      item.BatchId,
+                      BulkTargetFolder.BatchId,
+                      StringComparison.Ordinal)
+                  || !ExistingCollectionFolderStore.PathsEqual(
+                      item.BatchDirectory,
+                      BulkTargetFolder.Directory)));
+    }
 
     [RelayCommand(CanExecute = nameof(CanRemoveSelectedFromFolder))]
     private async Task RemoveSelectedFromFolder()
@@ -1170,7 +1430,7 @@ public partial class HistoryViewModel : ObservableObject
         var allItems = await _historyService.GetAllAsync();
         var missing = allItems.Where(item =>
             {
-                var candidates = EnumerateExistingCandidates(item).ToArray();
+                var candidates = EnumerateLocalFilePaths(item).ToArray();
                 return candidates.Length > 0
                        && candidates.All(path => !File.Exists(path) && !Directory.Exists(path));
             })
@@ -1193,7 +1453,7 @@ public partial class HistoryViewModel : ObservableObject
         RequestShowNotification?.Invoke($"已清理 {missing.Count} 条失效历史记录。", true);
     }
 
-    private static IEnumerable<string> EnumerateExistingCandidates(DownloadHistory item)
+    private static IEnumerable<string> EnumerateLocalFilePaths(DownloadHistory item)
     {
         if (!string.IsNullOrWhiteSpace(item.FilePath))
             yield return item.FilePath;
@@ -1243,6 +1503,30 @@ public partial class HistoryViewModel : ObservableObject
             true);
     }
 
+    private async Task MoveItemsToDirectoryGroupAsync(
+        IReadOnlyCollection<long> historyIds,
+        HistoryMoveTarget target)
+    {
+        if (historyIds.Count == 0
+            || target.IsOrganizer
+            || string.IsNullOrWhiteSpace(target.Directory))
+        {
+            return;
+        }
+
+        await _historyService.MoveToDirectoryGroupAsync(
+            historyIds,
+            target.BatchId,
+            target.BatchName,
+            target.Directory);
+        await LoadHistory();
+        SelectedFolderId = null;
+        SelectedBatchKey = $"batch:{target.BatchId}";
+        RequestShowNotification?.Invoke(
+            $"已将 {historyIds.Count} 项归类到“{target.Name}”（本地文件未移动）",
+            true);
+    }
+
     public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
 
     /// <summary>
@@ -1259,6 +1543,7 @@ public partial class HistoryViewModel : ObservableObject
         await _historyLoadSemaphore.WaitAsync();
         try
         {
+            CancelThumbnailHydration();
             await _historyService.ClearAllAsync();
             lock (_historyAddedGate)
             {
@@ -1291,6 +1576,41 @@ public partial class HistoryViewModel : ObservableObject
         {
             _historyLoadSemaphore.Release();
         }
+    }
+
+    private void CancelThumbnailHydration()
+    {
+        ThumbnailHydrationSession? session;
+        lock (_thumbnailHydrationGate)
+        {
+            session = _thumbnailHydrationSession;
+            _thumbnailHydrationSession = null;
+        }
+
+        session?.Retire();
+    }
+
+    public void Dispose()
+    {
+        lock (_thumbnailHydrationGate)
+        {
+            if (_isDisposed)
+                return;
+
+            Volatile.Write(ref _isDisposed, true);
+        }
+
+        _historyService.HistoryAdded -= OnHistoryAdded;
+        lock (_historyAddedGate)
+        {
+            Volatile.Write(ref _hasLoadedHistory, false);
+            _pendingHistoryAdded.Clear();
+            _recentlyCompletedHistoryIds.Clear();
+            _historyAddedDrainScheduled = false;
+        }
+        CancelPendingSearch();
+        CancelThumbnailHydration();
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>
@@ -1728,10 +2048,49 @@ public partial class HistoryViewModel : ObservableObject
         => !string.IsNullOrWhiteSpace(path)
            && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path));
 
+    private sealed class ThumbnailHydrationSession
+    {
+        private readonly CancellationTokenSource _source = new();
+        private Task _completion = Task.CompletedTask;
+
+        public CancellationToken Token => _source.Token;
+
+        public void Track(Task task)
+            => _completion = _completion.IsCompletedSuccessfully
+                ? task
+                : Task.WhenAll(_completion, task);
+
+        public void Retire()
+        {
+            _source.Cancel();
+            _ = DisposeWhenCompleteAsync();
+        }
+
+        private async Task DisposeWhenCompleteAsync()
+        {
+            try
+            {
+                await _completion;
+            }
+            catch
+            {
+                // Cancellation and extraction errors are already handled by the hydration task.
+            }
+            finally
+            {
+                _source.Dispose();
+            }
+        }
+    }
+
     private sealed record HistoryItemEnrichment(
         DownloadHistory Item,
         string AvailableFilePath,
         DouyinManifestSummaryResult DouyinManifestSummary);
+
+    private sealed record BulkTargetFolderSnapshot(
+        IReadOnlyList<string> Directories,
+        IReadOnlyList<ExistingCollectionFolder> ExistingCollectionFolders);
 
     private sealed record DouyinManifestSummaryResult(
         string SummaryText,

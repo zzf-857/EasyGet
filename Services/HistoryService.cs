@@ -1,8 +1,8 @@
-using System.IO;
 using System.Globalization;
+using System.IO;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using EasyGet.Models;
+using Microsoft.Data.Sqlite;
 
 namespace EasyGet.Services;
 
@@ -12,10 +12,16 @@ namespace EasyGet.Services;
 public class HistoryService : IDisposable
 {
     private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id";
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase
+        : StringComparer.Ordinal;
 
     private readonly SqliteConnection _connection;
+    private readonly SemaphoreSlim _connectionGate = new(1, 1);
+    private int _disposed;
 
     public event Action<DownloadHistory>? HistoryAdded;
+    public event Action? HistoryInvalidated;
 
     public HistoryService()
         : this(GetDefaultDatabasePath())
@@ -165,9 +171,9 @@ public class HistoryService : IDisposable
     {
         ArgumentNullException.ThrowIfNull(history);
 
-        long insertedId;
-        using (var cmd = _connection.CreateCommand())
+        var insertedId = await WithConnectionAsync(async () =>
         {
+            using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO download_history (url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id)
                 VALUES ($url, $title, $platform, $format, $quality, $fileSize, $filePath, $attachmentFilePaths, $downloadTime, $thumbnailUrl, $batchId, $batchName, $batchDirectory, $folderId)
@@ -191,10 +197,10 @@ public class HistoryService : IDisposable
             cmd.Parameters.AddWithValue("$folderId", Math.Max(0, history.FolderId));
 
             var result = await cmd.ExecuteScalarAsync();
-            insertedId = result is long id && id > 0
+            return result is long id && id > 0
                 ? id
                 : throw new InvalidOperationException("SQLite did not return a valid history row id.");
-        }
+        });
 
         history.Id = insertedId;
         NotifyHistoryAdded(history);
@@ -219,58 +225,234 @@ public class HistoryService : IDisposable
         }
     }
 
+    private void NotifyHistoryInvalidated()
+    {
+        var handlers = HistoryInvalidated;
+        if (handlers is null)
+            return;
+
+        foreach (Action handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler();
+            }
+            catch
+            {
+                // History mutations must not fail because one observer failed.
+            }
+        }
+    }
+
     /// <summary>
     /// 获取所有下载记录（按时间倒序）
     /// </summary>
-    public async Task<List<DownloadHistory>> GetAllAsync(string? searchKeyword = null)
+    public Task<List<DownloadHistory>> GetAllAsync(string? searchKeyword = null)
+        => WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+
+            if (!string.IsNullOrWhiteSpace(searchKeyword))
+            {
+                cmd.CommandText = $"""
+                    SELECT {HistoryColumns} FROM download_history
+                    WHERE title LIKE $keyword
+                       OR url LIKE $keyword
+                       OR platform LIKE $keyword
+                       OR batch_name LIKE $keyword
+                    ORDER BY download_time DESC, id DESC
+                    """;
+                cmd.Parameters.AddWithValue("$keyword", $"%{searchKeyword}%");
+            }
+            else
+            {
+                cmd.CommandText = $"SELECT {HistoryColumns} FROM download_history ORDER BY download_time DESC, id DESC";
+            }
+
+            var results = new List<DownloadHistory>();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var thumbnailUrl = "";
+                try { thumbnailUrl = reader.GetString(reader.GetOrdinal("thumbnail_url")); } catch { }
+
+                results.Add(new DownloadHistory
+                {
+                    Id = ReadNonNegativeInt64(reader, "id"),
+                    Url = ReadString(reader, "url"),
+                    Title = ReadString(reader, "title"),
+                    Platform = ReadString(reader, "platform"),
+                    Format = ReadString(reader, "format"),
+                    Quality = ReadString(reader, "quality"),
+                    FileSize = ReadNonNegativeInt64(reader, "file_size"),
+                    FilePath = ReadString(reader, "file_path"),
+                    AttachmentFilePaths = DeserializeAttachmentFilePaths(ReadString(reader, "attachment_file_paths")),
+                    DownloadTime = ParseDownloadTime(ReadString(reader, "download_time")),
+                    ThumbnailUrl = thumbnailUrl,
+                    BatchId = ReadString(reader, "batch_id"),
+                    BatchName = ReadString(reader, "batch_name"),
+                    BatchDirectory = ReadString(reader, "batch_directory"),
+                    FolderId = ReadNonNegativeInt64(reader, "folder_id")
+                });
+            }
+
+            return results;
+        });
+
+    /// <summary>
+    /// Gets previously used collection directories, ordered by their latest download.
+    /// </summary>
+    public Task<List<ExistingCollectionFolder>> GetExistingCollectionFoldersAsync()
+        => WithConnectionAsync(async () =>
+        {
+            var folders = await ReadPersistedCollectionFoldersAsync();
+            folders.AddRange(await ReadLegacyCollectionFoldersAsync());
+            return folders
+                .OrderByDescending(folder => folder.LastDownloadTime)
+                .ThenBy(folder => folder.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(folder => folder.Directory, PathComparer)
+                .ToList();
+        });
+
+    private async Task<List<ExistingCollectionFolder>> ReadPersistedCollectionFoldersAsync()
     {
         using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            WITH ranked_history AS (
+                SELECT
+                    id,
+                    batch_id,
+                    batch_directory,
+                    download_time,
+                    COUNT(*) OVER (
+                        PARTITION BY batch_id, batch_directory
+                    ) AS existing_item_count,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY batch_id, batch_directory
+                        ORDER BY download_time DESC, id DESC
+                    ) AS latest_row_rank,
+                    FIRST_VALUE(
+                        CASE
+                            WHEN TRIM(COALESCE(batch_name, '')) <> '' THEN batch_name
+                            ELSE ''
+                        END
+                    ) OVER (
+                        PARTITION BY batch_id, batch_directory
+                        ORDER BY
+                            CASE WHEN TRIM(COALESCE(batch_name, '')) <> '' THEN 0 ELSE 1 END,
+                            download_time DESC,
+                            id DESC
+                    ) AS latest_non_empty_name
+                FROM download_history
+                WHERE TRIM(COALESCE(batch_id, '')) <> ''
+                  AND TRIM(COALESCE(batch_directory, '')) <> ''
+            )
+            SELECT
+                batch_id,
+                latest_non_empty_name AS batch_name,
+                batch_directory,
+                existing_item_count,
+                download_time AS last_download_time
+            FROM ranked_history
+            WHERE latest_row_rank = 1
+            """;
 
-        if (!string.IsNullOrWhiteSpace(searchKeyword))
-        {
-            cmd.CommandText = $"""
-                SELECT {HistoryColumns} FROM download_history
-                WHERE title LIKE $keyword
-                   OR url LIKE $keyword
-                   OR platform LIKE $keyword
-                   OR batch_name LIKE $keyword
-                ORDER BY download_time DESC, id DESC
-                """;
-            cmd.Parameters.AddWithValue("$keyword", $"%{searchKeyword}%");
-        }
-        else
-        {
-            cmd.CommandText = $"SELECT {HistoryColumns} FROM download_history ORDER BY download_time DESC, id DESC";
-        }
-
-        var results = new List<DownloadHistory>();
+        var folders = new List<ExistingCollectionFolder>();
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
-            var thumbnailUrl = "";
-            try { thumbnailUrl = reader.GetString(reader.GetOrdinal("thumbnail_url")); } catch { }
-
-            results.Add(new DownloadHistory
+            folders.Add(new ExistingCollectionFolder
             {
-                Id = ReadNonNegativeInt64(reader, "id"),
-                Url = ReadString(reader, "url"),
-                Title = ReadString(reader, "title"),
-                Platform = ReadString(reader, "platform"),
-                Format = ReadString(reader, "format"),
-                Quality = ReadString(reader, "quality"),
-                FileSize = ReadNonNegativeInt64(reader, "file_size"),
-                FilePath = ReadString(reader, "file_path"),
-                AttachmentFilePaths = DeserializeAttachmentFilePaths(ReadString(reader, "attachment_file_paths")),
-                DownloadTime = ParseDownloadTime(ReadString(reader, "download_time")),
-                ThumbnailUrl = thumbnailUrl,
                 BatchId = ReadString(reader, "batch_id"),
-                BatchName = ReadString(reader, "batch_name"),
-                BatchDirectory = ReadString(reader, "batch_directory"),
-                FolderId = ReadNonNegativeInt64(reader, "folder_id")
+                Name = ReadString(reader, "batch_name"),
+                Directory = ReadString(reader, "batch_directory"),
+                ExistingItemCount = (int)Math.Min(
+                    int.MaxValue,
+                    ReadNonNegativeInt64(reader, "existing_item_count")),
+                LastDownloadTime = ParseDownloadTime(ReadString(reader, "last_download_time"))
             });
         }
 
-        return results;
+        return folders;
+    }
+
+    private async Task<List<ExistingCollectionFolder>> ReadLegacyCollectionFoldersAsync()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT url, title, file_path, download_time
+            FROM download_history
+            WHERE TRIM(COALESCE(batch_id, '')) = ''
+              AND TRIM(COALESCE(batch_directory, '')) = ''
+            ORDER BY download_time DESC, id DESC
+            """;
+
+        var candidates = new List<LegacyCollectionHistory>();
+        using (var reader = await cmd.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var url = ReadString(reader, "url");
+                if (!BatchDownloadOrganizer.TryDescribeCollectionUrl(
+                        url,
+                        out var collectionKey,
+                        out var displayName))
+                {
+                    continue;
+                }
+
+                var directory = BatchDownloadOrganizer.ResolveOutputDirectory(
+                    ReadString(reader, "file_path"));
+                if (string.IsNullOrWhiteSpace(directory))
+                    continue;
+
+                candidates.Add(new LegacyCollectionHistory(
+                    collectionKey,
+                    displayName,
+                    url,
+                    ReadString(reader, "title"),
+                    directory,
+                    ParseDownloadTime(ReadString(reader, "download_time"))));
+            }
+        }
+
+        var folders = new List<ExistingCollectionFolder>();
+        foreach (var collectionGroup in candidates.GroupBy(
+                     candidate => candidate.CollectionKey,
+                     StringComparer.Ordinal))
+        {
+            if (collectionGroup.Count() < 2)
+                continue;
+
+            foreach (var directoryGroup in collectionGroup.GroupBy(
+                         candidate => candidate.Directory,
+                         PathComparer))
+            {
+                var latest = directoryGroup
+                    .OrderByDescending(candidate => candidate.DownloadTime)
+                    .First();
+                var inferredName = directoryGroup
+                    .Select(candidate => CollectionNamingService.TryExtractCollectionTitle(
+                        candidate.Title,
+                        out var title)
+                        ? title
+                        : "")
+                    .FirstOrDefault(title => !string.IsNullOrWhiteSpace(title));
+                var name = string.IsNullOrWhiteSpace(inferredName)
+                    ? latest.DisplayName
+                    : inferredName;
+                folders.Add(new ExistingCollectionFolder
+                {
+                    BatchId = BatchDownloadOrganizer.CreateBatchId(latest.Url, name),
+                    Name = name,
+                    Directory = latest.Directory,
+                    ExistingItemCount = directoryGroup.Count(),
+                    LastDownloadTime = latest.DownloadTime
+                });
+            }
+        }
+
+        return folders;
     }
 
     private static DateTime ParseDownloadTime(string value)
@@ -369,9 +551,14 @@ public class HistoryService : IDisposable
     /// </summary>
     public async Task ClearAllAsync()
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM download_history";
-        await cmd.ExecuteNonQueryAsync();
+        var changed = await WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM download_history";
+            return await cmd.ExecuteNonQueryAsync() > 0;
+        });
+        if (changed)
+            NotifyHistoryInvalidated();
     }
 
     /// <summary>
@@ -379,71 +566,88 @@ public class HistoryService : IDisposable
     /// </summary>
     public async Task DeleteAsync(long id)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
-        cmd.Parameters.AddWithValue("$id", id);
-        await cmd.ExecuteNonQueryAsync();
-    }
-
-    public async Task<int> GetCountAsync()
-    {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM download_history";
-        var result = await cmd.ExecuteScalarAsync();
-        return result is long count ? (int)Math.Min(int.MaxValue, Math.Max(0, count)) : 0;
-    }
-
-    public async Task<int> GetUnfiledCountAsync()
-    {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM download_history WHERE folder_id = 0";
-        var result = await cmd.ExecuteScalarAsync();
-        return result is long count ? (int)Math.Min(int.MaxValue, Math.Max(0, count)) : 0;
-    }
-
-    public async Task<List<HistoryFolder>> GetFoldersAsync()
-    {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT f.id, f.name, f.created_at, COUNT(h.id) AS item_count
-            FROM history_folders f
-            LEFT JOIN download_history h ON h.folder_id = f.id
-            GROUP BY f.id, f.name, f.created_at
-            ORDER BY f.created_at ASC, f.id ASC
-            """;
-
-        var folders = new List<HistoryFolder>();
-        using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
+        var changed = await WithConnectionAsync(async () =>
         {
-            folders.Add(new HistoryFolder
-            {
-                Id = ReadNonNegativeInt64(reader, "id"),
-                Name = ReadString(reader, "name"),
-                CreatedAt = ParseDownloadTime(ReadString(reader, "created_at")),
-                ItemCount = (int)Math.Min(int.MaxValue, ReadNonNegativeInt64(reader, "item_count"))
-            });
-        }
-
-        return folders;
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
+            cmd.Parameters.AddWithValue("$id", id);
+            return await cmd.ExecuteNonQueryAsync() > 0;
+        });
+        if (changed)
+            NotifyHistoryInvalidated();
     }
+
+    public Task<int> GetCountAsync()
+        => WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM download_history";
+            var result = await cmd.ExecuteScalarAsync();
+            return result is long count
+                ? (int)Math.Min(int.MaxValue, Math.Max(0, count))
+                : 0;
+        });
+
+    public Task<int> GetUnfiledCountAsync()
+        => WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*) FROM download_history WHERE folder_id = 0";
+            var result = await cmd.ExecuteScalarAsync();
+            return result is long count
+                ? (int)Math.Min(int.MaxValue, Math.Max(0, count))
+                : 0;
+        });
+
+    public Task<List<HistoryFolder>> GetFoldersAsync()
+        => WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT f.id, f.name, f.created_at, COUNT(h.id) AS item_count
+                FROM history_folders f
+                LEFT JOIN download_history h ON h.folder_id = f.id
+                GROUP BY f.id, f.name, f.created_at
+                ORDER BY f.created_at ASC, f.id ASC
+                """;
+
+            var folders = new List<HistoryFolder>();
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                folders.Add(new HistoryFolder
+                {
+                    Id = ReadNonNegativeInt64(reader, "id"),
+                    Name = ReadString(reader, "name"),
+                    CreatedAt = ParseDownloadTime(ReadString(reader, "created_at")),
+                    ItemCount = (int)Math.Min(int.MaxValue, ReadNonNegativeInt64(reader, "item_count"))
+                });
+            }
+
+            return folders;
+        });
 
     public async Task<HistoryFolder> CreateFolderAsync(string name)
     {
         var normalizedName = NormalizeFolderName(name);
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO history_folders (name, created_at)
-            VALUES ($name, $createdAt);
-            SELECT last_insert_rowid();
-            """;
         var createdAt = DateTime.Now;
-        cmd.Parameters.AddWithValue("$name", normalizedName);
-        cmd.Parameters.AddWithValue(
-            "$createdAt",
-            createdAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
-        var result = await cmd.ExecuteScalarAsync();
-        var id = result is long value ? value : Convert.ToInt64(result, CultureInfo.InvariantCulture);
+        var id = await WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO history_folders (name, created_at)
+                VALUES ($name, $createdAt);
+                SELECT last_insert_rowid();
+                """;
+            cmd.Parameters.AddWithValue("$name", normalizedName);
+            cmd.Parameters.AddWithValue(
+                "$createdAt",
+                createdAt.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture));
+            var result = await cmd.ExecuteScalarAsync();
+            return result is long value
+                ? value
+                : Convert.ToInt64(result, CultureInfo.InvariantCulture);
+        });
         return new HistoryFolder { Id = id, Name = normalizedName, CreatedAt = createdAt };
     }
 
@@ -452,11 +656,15 @@ public class HistoryService : IDisposable
         if (folderId <= 0)
             return;
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "UPDATE history_folders SET name = $name WHERE id = $id";
-        cmd.Parameters.AddWithValue("$name", NormalizeFolderName(name));
-        cmd.Parameters.AddWithValue("$id", folderId);
-        await cmd.ExecuteNonQueryAsync();
+        var normalizedName = NormalizeFolderName(name);
+        await WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "UPDATE history_folders SET name = $name WHERE id = $id";
+            cmd.Parameters.AddWithValue("$name", normalizedName);
+            cmd.Parameters.AddWithValue("$id", folderId);
+            await cmd.ExecuteNonQueryAsync();
+        });
     }
 
     public async Task DeleteFolderAsync(long folderId)
@@ -464,24 +672,27 @@ public class HistoryService : IDisposable
         if (folderId <= 0)
             return;
 
-        using var transaction = _connection.BeginTransaction();
-        using (var unfile = _connection.CreateCommand())
+        await WithConnectionAsync(async () =>
         {
-            unfile.Transaction = transaction;
-            unfile.CommandText = "UPDATE download_history SET folder_id = 0 WHERE folder_id = $id";
-            unfile.Parameters.AddWithValue("$id", folderId);
-            await unfile.ExecuteNonQueryAsync();
-        }
+            using var transaction = _connection.BeginTransaction();
+            using (var unfile = _connection.CreateCommand())
+            {
+                unfile.Transaction = transaction;
+                unfile.CommandText = "UPDATE download_history SET folder_id = 0 WHERE folder_id = $id";
+                unfile.Parameters.AddWithValue("$id", folderId);
+                await unfile.ExecuteNonQueryAsync();
+            }
 
-        using (var delete = _connection.CreateCommand())
-        {
-            delete.Transaction = transaction;
-            delete.CommandText = "DELETE FROM history_folders WHERE id = $id";
-            delete.Parameters.AddWithValue("$id", folderId);
-            await delete.ExecuteNonQueryAsync();
-        }
+            using (var delete = _connection.CreateCommand())
+            {
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM history_folders WHERE id = $id";
+                delete.Parameters.AddWithValue("$id", folderId);
+                await delete.ExecuteNonQueryAsync();
+            }
 
-        transaction.Commit();
+            transaction.Commit();
+        });
     }
 
     public async Task MoveToFolderAsync(IEnumerable<long> historyIds, long folderId)
@@ -490,22 +701,81 @@ public class HistoryService : IDisposable
         if (ids.Count == 0 || folderId < 0)
             return;
 
-        if (folderId > 0 && !await FolderExistsAsync(folderId))
-            throw new InvalidOperationException("目标整理文件夹不存在。");
-
-        using var transaction = _connection.BeginTransaction();
-        using var cmd = _connection.CreateCommand();
-        cmd.Transaction = transaction;
-        cmd.CommandText = "UPDATE download_history SET folder_id = $folderId WHERE id = $id";
-        var folderParameter = cmd.Parameters.Add("$folderId", SqliteType.Integer);
-        var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
-        folderParameter.Value = folderId;
-        foreach (var id in ids)
+        await WithConnectionAsync(async () =>
         {
-            idParameter.Value = id;
-            await cmd.ExecuteNonQueryAsync();
-        }
-        transaction.Commit();
+            if (folderId > 0 && !await FolderExistsCoreAsync(folderId))
+                throw new InvalidOperationException("目标整理文件夹不存在。");
+
+            using var transaction = _connection.BeginTransaction();
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = transaction;
+            cmd.CommandText = "UPDATE download_history SET folder_id = $folderId WHERE id = $id";
+            var folderParameter = cmd.Parameters.Add("$folderId", SqliteType.Integer);
+            var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
+            folderParameter.Value = folderId;
+            foreach (var id in ids)
+            {
+                idParameter.Value = id;
+                await cmd.ExecuteNonQueryAsync();
+            }
+            transaction.Commit();
+        });
+    }
+
+    public async Task MoveToDirectoryGroupAsync(
+        IEnumerable<long> historyIds,
+        string batchId,
+        string batchName,
+        string directory)
+    {
+        var ids = NormalizeHistoryIds(historyIds);
+        if (ids.Count == 0)
+            return;
+        if (string.IsNullOrWhiteSpace(batchId))
+            throw new ArgumentException("目标文件夹标识不能为空。", nameof(batchId));
+        if (string.IsNullOrWhiteSpace(directory))
+            throw new ArgumentException("目标文件夹路径不能为空。", nameof(directory));
+
+        var fullDirectory = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(directory.Trim()));
+        if (!Directory.Exists(fullDirectory))
+            throw new DirectoryNotFoundException($"目标文件夹不存在：{fullDirectory}");
+
+        var normalizedName = string.IsNullOrWhiteSpace(batchName)
+            ? Path.GetFileName(fullDirectory)
+            : batchName.Trim();
+        if (string.IsNullOrWhiteSpace(normalizedName))
+            normalizedName = "本地文件夹";
+
+        var changed = await WithConnectionAsync(async () =>
+        {
+            var updatedCount = 0;
+            using var transaction = _connection.BeginTransaction();
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = transaction;
+            cmd.CommandText = """
+                UPDATE download_history
+                SET folder_id = 0,
+                    batch_id = $batchId,
+                    batch_name = $batchName,
+                    batch_directory = $batchDirectory
+                WHERE id = $id
+                """;
+            cmd.Parameters.AddWithValue("$batchId", batchId.Trim());
+            cmd.Parameters.AddWithValue("$batchName", normalizedName);
+            cmd.Parameters.AddWithValue("$batchDirectory", fullDirectory);
+            var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
+            foreach (var id in ids)
+            {
+                idParameter.Value = id;
+                updatedCount += await cmd.ExecuteNonQueryAsync();
+            }
+            transaction.Commit();
+            return updatedCount > 0;
+        });
+
+        if (changed)
+            NotifyHistoryInvalidated();
     }
 
     public async Task DeleteManyAsync(IEnumerable<long> historyIds)
@@ -514,20 +784,28 @@ public class HistoryService : IDisposable
         if (ids.Count == 0)
             return;
 
-        using var transaction = _connection.BeginTransaction();
-        using var cmd = _connection.CreateCommand();
-        cmd.Transaction = transaction;
-        cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
-        var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
-        foreach (var id in ids)
+        var changed = await WithConnectionAsync(async () =>
         {
-            idParameter.Value = id;
-            await cmd.ExecuteNonQueryAsync();
-        }
-        transaction.Commit();
+            var deletedCount = 0;
+            using var transaction = _connection.BeginTransaction();
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = transaction;
+            cmd.CommandText = "DELETE FROM download_history WHERE id = $id";
+            var idParameter = cmd.Parameters.Add("$id", SqliteType.Integer);
+            foreach (var id in ids)
+            {
+                idParameter.Value = id;
+                deletedCount += await cmd.ExecuteNonQueryAsync();
+            }
+            transaction.Commit();
+            return deletedCount > 0;
+        });
+
+        if (changed)
+            NotifyHistoryInvalidated();
     }
 
-    private async Task<bool> FolderExistsAsync(long folderId)
+    private async Task<bool> FolderExistsCoreAsync(long folderId)
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT 1 FROM history_folders WHERE id = $id LIMIT 1";
@@ -557,15 +835,87 @@ public class HistoryService : IDisposable
         if (string.IsNullOrWhiteSpace(batchId))
             return;
 
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM download_history WHERE batch_id = $batchId";
-        cmd.Parameters.AddWithValue("$batchId", batchId.Trim());
-        await cmd.ExecuteNonQueryAsync();
+        var changed = await WithConnectionAsync(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "DELETE FROM download_history WHERE batch_id = $batchId";
+            cmd.Parameters.AddWithValue("$batchId", batchId.Trim());
+            return await cmd.ExecuteNonQueryAsync() > 0;
+        });
+
+        if (changed)
+            NotifyHistoryInvalidated();
     }
+
+    private async Task WithConnectionAsync(Func<Task> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+        await _connectionGate.WaitAsync();
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            await operation();
+        }
+        finally
+        {
+            _connectionGate.Release();
+        }
+    }
+
+    private async Task<T> WithConnectionAsync<T>(Func<Task<T>> operation)
+    {
+        ArgumentNullException.ThrowIfNull(operation);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+
+        await _connectionGate.WaitAsync();
+        try
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+            return await operation();
+        }
+        finally
+        {
+            _connectionGate.Release();
+        }
+    }
+
+    private sealed record LegacyCollectionHistory(
+        string CollectionKey,
+        string DisplayName,
+        string Url,
+        string Title,
+        string Directory,
+        DateTime DownloadTime);
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
         HistoryAdded = null;
-        _connection.Dispose();
+        HistoryInvalidated = null;
+        // Do not block the UI thread while an asynchronous SQLite operation owns the gate.
+        _ = DisposeConnectionWhenIdleAsync();
+        GC.SuppressFinalize(this);
+    }
+
+    private async Task DisposeConnectionWhenIdleAsync()
+    {
+        await _connectionGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            _connection.Dispose();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[HistoryService] Failed to dispose the database connection: {ex.Message}");
+        }
+        finally
+        {
+            _connectionGate.Release();
+        }
     }
 }

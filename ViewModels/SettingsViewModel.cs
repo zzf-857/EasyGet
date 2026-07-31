@@ -31,6 +31,22 @@ public partial class SettingsViewModel : ObservableObject
     };
 
     private const int AutoSaveDebounceMilliseconds = 150;
+    private static readonly int[] GlobalDownloadRateLimitPresets =
+    [
+        0,
+        512,
+        1024,
+        2048,
+        4096,
+        8192,
+        16384,
+        32768,
+        65536,
+        131072,
+        262144,
+        524288,
+        AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond
+    ];
     private static readonly TimeSpan BrowserLoginDetectionTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan BrowserLoginDetectionInterval = TimeSpan.FromSeconds(2);
 
@@ -75,6 +91,8 @@ public partial class SettingsViewModel : ObservableObject
     private readonly PlatformCookieVault _cookieVault;
     private readonly SupportBundleService _supportBundleService;
     private readonly UserDataBackupService _userDataBackupService;
+    private readonly DownloadPerformanceRecommendation _downloadPerformanceRecommendation =
+        DownloadPerformanceAdvisor.GetCurrentRecommendation();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _browserLoginCancellations =
         new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
@@ -129,9 +147,25 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private string _defaultDownloadPath = "";
     [ObservableProperty] private string _defaultFormat = "mp4";
     [ObservableProperty] private string _defaultQuality = "最高画质";
-    [ObservableProperty] private int _maxConcurrentDownloads = AppConfig.GetDefaultConcurrentDownloadLimit();
-    [ObservableProperty] private int _concurrentFragments = AppConfig.GetDefaultConcurrentFragments();
-    [ObservableProperty] private int _globalDownloadRateLimitKilobytesPerSecond;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConcurrentDownloadsRiskLevel))]
+    [NotifyPropertyChangedFor(nameof(ConcurrentFragmentsDescriptionText))]
+    [NotifyPropertyChangedFor(nameof(PerformanceEvaluationRows))]
+    [NotifyPropertyChangedFor(nameof(PerformanceStatusText))]
+    [NotifyPropertyChangedFor(nameof(PerformanceRiskLevel))]
+    private int _maxConcurrentDownloads = AppConfig.GetDefaultConcurrentDownloadLimit();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConcurrentFragmentsRiskLevel))]
+    [NotifyPropertyChangedFor(nameof(ConcurrentFragmentsDescriptionText))]
+    [NotifyPropertyChangedFor(nameof(PerformanceEvaluationRows))]
+    [NotifyPropertyChangedFor(nameof(PerformanceStatusText))]
+    [NotifyPropertyChangedFor(nameof(PerformanceRiskLevel))]
+    private int _concurrentFragments = AppConfig.GetDefaultConcurrentFragments();
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(GlobalDownloadRateLimitDisplayText))]
+    [NotifyPropertyChangedFor(nameof(GlobalDownloadRateLimitSliderStep))]
+    private int _globalDownloadRateLimitKilobytesPerSecond;
     [ObservableProperty] private string _settingsSaveStatusMessage = "";
 
     [ObservableProperty] private bool _useProxy;
@@ -186,7 +220,6 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _douyinLiveChunkSize = AppConfig.DefaultDouyinLiveChunkSize;
     [ObservableProperty] private int _douyinLiveIdleTimeoutSeconds = AppConfig.DefaultDouyinLiveIdleTimeoutSeconds;
 
-    [ObservableProperty] private bool _autoCategorizeByPlatform = true;
     [ObservableProperty] private bool _clipboardMonitoringEnabled = true;
     [ObservableProperty] private bool _preventSleepDuringDownloads = true;
     [ObservableProperty] private bool _minimizeToTray = true;
@@ -252,6 +285,156 @@ public partial class SettingsViewModel : ObservableObject
     public string DouyinFilenameTemplatePreviewText => BuildDouyinTemplatePreview(DouyinFilenameTemplate);
     public string DouyinFolderTemplatePreviewText => BuildDouyinTemplatePreview(DouyinFolderTemplate);
     public string DouyinCookieHealthText => DouyinCookieHealthReporter.Describe(CookieContent);
+    public string PerformanceRecommendationText
+    {
+        get
+        {
+            var memoryText = GetPerformanceMemoryText();
+            return $"本机 {_downloadPerformanceRecommendation.LogicalProcessorCount} 个逻辑处理器 · {memoryText}；"
+                   + $"建议 {_downloadPerformanceRecommendation.RecommendedFragments} 分片 / "
+                   + $"{_downloadPerformanceRecommendation.RecommendedConcurrentDownloads} 个同时任务";
+        }
+    }
+
+    public string ConcurrentFragmentsRiskLevel
+        => _downloadPerformanceRecommendation
+            .EvaluateConfiguredFragments(ConcurrentFragments)
+            .ToString();
+
+    public string ConcurrentDownloadsRiskLevel
+        => _downloadPerformanceRecommendation
+            .EvaluateConcurrentDownloads(MaxConcurrentDownloads)
+            .ToString();
+
+    public string ConcurrentFragmentsDescriptionText
+    {
+        get
+        {
+            var assessment = GetDownloadPerformanceAssessment();
+            return assessment.IsSmartLimited
+                ? $"设置范围 1–32；当前会按 {assessment.EffectiveFragments} 分片运行（智能限流）"
+                : "单个任务的并行下载分片数（1–32）";
+        }
+    }
+
+    public string PerformanceRiskLevel
+        => GetDownloadPerformanceAssessment().Risk.ToString();
+
+    public string PerformanceStatusText
+    {
+        get
+        {
+            var assessment = GetDownloadPerformanceAssessment();
+            var statusText = assessment.Risk switch
+            {
+                DownloadPerformanceRisk.Normal => "当前配置合理",
+                DownloadPerformanceRisk.Warning => "当前配置偏高",
+                _ => "当前配置过高"
+            };
+            var smartLimitText = assessment.IsSmartLimited ? "（已智能限流）" : "";
+            var impactText = assessment.Risk switch
+            {
+                DownloadPerformanceRisk.Normal => "",
+                DownloadPerformanceRisk.Warning => "，可能增加磁盘与网络波动",
+                _ => "，可能导致卡顿、下载失败或平台限流"
+            };
+
+            return $"{statusText} · {assessment.ConcurrentDownloads} 个任务 × "
+                   + $"实际 {assessment.EffectiveFragments} 分片{smartLimitText}{impactText}";
+        }
+    }
+
+    public IReadOnlyList<PerformanceEvaluationRow> PerformanceEvaluationRows
+    {
+        get
+        {
+            var recommendation = _downloadPerformanceRecommendation;
+            var assessment = GetDownloadPerformanceAssessment();
+            var configuredFragmentsText = assessment.IsSmartLimited
+                ? $"{assessment.ConfiguredFragments} 个（实际 {assessment.EffectiveFragments}）"
+                : $"{assessment.ConfiguredFragments} 个";
+            var fragmentRationale = assessment.IsSmartLimited
+                ? "同时任务数达到 8 后，程序会把实际单任务分片限制为 4"
+                : "影响每个下载任务建立的连接数量";
+            var memoryReference = recommendation.MemoryBudgetBytes > 0
+                ? $"内存预算：{recommendation.MemoryFragmentBudget} 分片 / "
+                  + $"{recommendation.MemoryConcurrentDownloadsBudget} 个任务"
+                : "未获取，当前仅按处理器预算估算";
+
+            return
+            [
+                new PerformanceEvaluationRow(
+                    "处理器",
+                    $"{recommendation.LogicalProcessorCount} 个逻辑处理器",
+                    $"CPU 预算：{recommendation.ProcessorFragmentBudget} 分片 / "
+                    + $"{recommendation.ProcessorConcurrentDownloadsBudget} 个任务",
+                    "解析、合并和后处理会共享处理器资源"),
+                new PerformanceEvaluationRow(
+                    "运行时内存预算",
+                    GetPerformanceMemoryText(),
+                    memoryReference,
+                    "并发任务会同时占用下载器和媒体合并进程内存"),
+                new PerformanceEvaluationRow(
+                    "综合建议",
+                    $"{recommendation.RecommendedFragments} 分片 / "
+                    + $"{recommendation.RecommendedConcurrentDownloads} 个任务",
+                    $"建议峰值连接约 {recommendation.RecommendedPeakConnections}",
+                    "取 CPU、内存和共享连接策略中更保守的结果"),
+                new PerformanceEvaluationRow(
+                    "同时任务数",
+                    $"{assessment.ConcurrentDownloads} 个",
+                    DescribePerformanceRiskRange(recommendation.RecommendedConcurrentDownloads),
+                    "直接决定同时运行的下载进程数量",
+                    ConcurrentDownloadsRiskLevel),
+                new PerformanceEvaluationRow(
+                    "单任务分片",
+                    configuredFragmentsText,
+                    DescribePerformanceRiskRange(recommendation.RecommendedFragments),
+                    fragmentRationale,
+                    ConcurrentFragmentsRiskLevel),
+                new PerformanceEvaluationRow(
+                    "总连接预算",
+                    $"{assessment.ConcurrentDownloads} × {assessment.EffectiveFragments} = {assessment.CurrentPeakConnections}",
+                    DescribePerformanceRiskRange(recommendation.RecommendedPeakConnections),
+                    "用于估算网络、磁盘和平台请求压力",
+                    assessment.ConnectionRisk.ToString()),
+                new PerformanceEvaluationRow(
+                    "未自动测速",
+                    "磁盘 / 网络 / 前台负载",
+                    "结合任务管理器与实际下载稳定性判断",
+                    "若磁盘满载、速度剧烈波动或失败率升高，优先降低同时任务数")
+            ];
+        }
+    }
+
+    private string GetPerformanceMemoryText()
+        => _downloadPerformanceRecommendation.MemoryBudgetBytes > 0
+            ? $"运行时可用内存预算约 {_downloadPerformanceRecommendation.MemoryBudgetBytes / (1024d * 1024d * 1024d):0.#} GB"
+            : "内存信息未获取";
+
+    private static string DescribePerformanceRiskRange(int recommendedValue)
+    {
+        var warningUpperBound = DownloadPerformanceAdvisor.GetWarningUpperBound(recommendedValue);
+        return $"正常 ≤ {recommendedValue}；黄色 ≤ {warningUpperBound}；红色 > {warningUpperBound}";
+    }
+
+    public string GlobalDownloadRateLimitDisplayText
+        => GlobalDownloadRateLimitKilobytesPerSecond <= 0
+            ? "不限速"
+            : GlobalDownloadRateLimitKilobytesPerSecond % 1024 == 0
+                ? $"{GlobalDownloadRateLimitKilobytesPerSecond / 1024:N0} MB/s"
+                : $"{GlobalDownloadRateLimitKilobytesPerSecond:N0} KB/s";
+    public int GlobalDownloadRateLimitSliderMaximum => GlobalDownloadRateLimitPresets.Length - 1;
+    public int GlobalDownloadRateLimitSliderStep
+    {
+        get => ResolveGlobalDownloadRateLimitSliderStep(
+            GlobalDownloadRateLimitKilobytesPerSecond);
+        set => GlobalDownloadRateLimitKilobytesPerSecond =
+            GlobalDownloadRateLimitPresets[Math.Clamp(
+                value,
+                0,
+                GlobalDownloadRateLimitSliderMaximum)];
+    }
     public string DouyinTemplateVariablesText { get; } = string.Join(
         "  ",
         ConfigService.SupportedDouyinTemplateVariableNames.Select(variable => $"{{{variable}}}"));
@@ -272,6 +455,33 @@ public partial class SettingsViewModel : ObservableObject
 
     public event Action? SettingsSaved;
     public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
+
+    private static int ResolveGlobalDownloadRateLimitSliderStep(int rateLimit)
+    {
+        var normalizedRateLimit = Math.Clamp(
+            rateLimit,
+            AppConfig.MinGlobalDownloadRateLimitKilobytesPerSecond,
+            AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond);
+        var closestIndex = 0;
+        var closestDistance = long.MaxValue;
+        for (var index = 0; index < GlobalDownloadRateLimitPresets.Length; index++)
+        {
+            var distance = Math.Abs(
+                (long)GlobalDownloadRateLimitPresets[index] - normalizedRateLimit);
+            if (distance >= closestDistance)
+                continue;
+
+            closestIndex = index;
+            closestDistance = distance;
+        }
+
+        return closestIndex;
+    }
+
+    private DownloadPerformanceAssessment GetDownloadPerformanceAssessment()
+        => _downloadPerformanceRecommendation.Assess(
+            ConcurrentFragments,
+            MaxConcurrentDownloads);
 
     public SettingsViewModel(
         ConfigService configService,
@@ -318,6 +528,17 @@ public partial class SettingsViewModel : ObservableObject
         if (!string.IsNullOrWhiteSpace(category))
             SelectedCategory = category;
     }
+
+    [RelayCommand(CanExecute = nameof(CanApplyRecommendedPerformanceSettings))]
+    private void ApplyRecommendedPerformanceSettings()
+    {
+        ConcurrentFragments = _downloadPerformanceRecommendation.RecommendedFragments;
+        MaxConcurrentDownloads = _downloadPerformanceRecommendation.RecommendedConcurrentDownloads;
+    }
+
+    private bool CanApplyRecommendedPerformanceSettings()
+        => ConcurrentFragments != _downloadPerformanceRecommendation.RecommendedFragments
+           || MaxConcurrentDownloads != _downloadPerformanceRecommendation.RecommendedConcurrentDownloads;
 
     public void Initialize()
     {
@@ -374,7 +595,6 @@ public partial class SettingsViewModel : ObservableObject
             DouyinLiveMaxDurationSeconds = c.DouyinLiveMaxDurationSeconds;
             DouyinLiveChunkSize = c.DouyinLiveChunkSize;
             DouyinLiveIdleTimeoutSeconds = c.DouyinLiveIdleTimeoutSeconds;
-            AutoCategorizeByPlatform = c.AutoCategorizeByPlatform;
             ClipboardMonitoringEnabled = c.ClipboardMonitoringEnabled;
             PreventSleepDuringDownloads = c.PreventSleepDuringDownloads;
             MinimizeToTray = c.MinimizeToTray;
@@ -1037,7 +1257,6 @@ public partial class SettingsViewModel : ObservableObject
             c.DouyinLiveMaxDurationSeconds = DouyinLiveMaxDurationSeconds;
             c.DouyinLiveChunkSize = DouyinLiveChunkSize;
             c.DouyinLiveIdleTimeoutSeconds = DouyinLiveIdleTimeoutSeconds;
-            c.AutoCategorizeByPlatform = AutoCategorizeByPlatform;
             c.ClipboardMonitoringEnabled = ClipboardMonitoringEnabled;
             c.PreventSleepDuringDownloads = PreventSleepDuringDownloads;
             c.MinimizeToTray = MinimizeToTray;
@@ -1127,8 +1346,17 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDefaultDownloadPathChanged(string value) => AutoSave();
     partial void OnDefaultFormatChanged(string value) => AutoSave();
     partial void OnDefaultQualityChanged(string value) => AutoSave();
-    partial void OnMaxConcurrentDownloadsChanged(int value) => AutoSave();
-    partial void OnConcurrentFragmentsChanged(int value) => AutoSave();
+    partial void OnMaxConcurrentDownloadsChanged(int value)
+    {
+        ApplyRecommendedPerformanceSettingsCommand.NotifyCanExecuteChanged();
+        AutoSave();
+    }
+
+    partial void OnConcurrentFragmentsChanged(int value)
+    {
+        ApplyRecommendedPerformanceSettingsCommand.NotifyCanExecuteChanged();
+        AutoSave();
+    }
     partial void OnGlobalDownloadRateLimitKilobytesPerSecondChanged(int value) => AutoSave();
     partial void OnUseProxyChanged(bool value) => AutoSave();
     partial void OnProxyAddressChanged(string value) => AutoSave();
@@ -1168,7 +1396,6 @@ public partial class SettingsViewModel : ObservableObject
     partial void OnDouyinLiveMaxDurationSecondsChanged(int value) => AutoSave();
     partial void OnDouyinLiveChunkSizeChanged(int value) => AutoSave();
     partial void OnDouyinLiveIdleTimeoutSecondsChanged(int value) => AutoSave();
-    partial void OnAutoCategorizeByPlatformChanged(bool value) => AutoSave();
     partial void OnClipboardMonitoringEnabledChanged(bool value) => AutoSave();
     partial void OnPreventSleepDuringDownloadsChanged(bool value) => AutoSave();
     partial void OnMinimizeToTrayChanged(bool value) => AutoSave();

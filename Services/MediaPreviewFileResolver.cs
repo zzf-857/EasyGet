@@ -4,13 +4,6 @@ namespace EasyGet.Services;
 
 internal static class MediaPreviewFileResolver
 {
-    private static readonly HashSet<string> MediaExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".mp4", ".mkv", ".webm", ".avi", ".mov", ".flv", ".wmv",
-        ".mp3", ".m4a", ".wav", ".flac", ".aac", ".opus", ".ogg",
-        ".jpg", ".jpeg", ".png", ".gif", ".webp"
-    };
-
     public static string Resolve(string path)
     {
         if (string.IsNullOrEmpty(path))
@@ -33,7 +26,7 @@ internal static class MediaPreviewFileResolver
                 bestAny = PreferEarlierFileName(filePath, bestAny);
 
                 var extension = Path.GetExtension(filePath);
-                if (MediaExtensions.Contains(extension))
+                if (MediaFileClassifier.IsPreviewExtension(extension))
                 {
                     bestMedia = PreferEarlierFileName(filePath, bestMedia);
                 }

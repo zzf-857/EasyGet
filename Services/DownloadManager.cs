@@ -1492,44 +1492,6 @@ public class DownloadManager : IDisposable
             : DownloadStatus.Cancelled;
     }
 
-    /// <summary>
-    /// 将 yt-dlp 返回的平台标识符映射为中文友好且文件系统安全的文件夹名
-    /// </summary>
-    private static string MapPlatformToFolderName(string platform)
-    {
-        // 不区分大小写匹配常见平台
-        return platform.ToLowerInvariant() switch
-        {
-            "youtube" => "YouTube",
-            "bilibili" or "bilibilibangu" => "哔哩哔哩",
-            "douyin" => "抖音",
-            "tiktok" => "TikTok",
-            "instagram" => "Instagram",
-            "twitter" or "x" => "Twitter(X)",
-            "weibo" => "微博",
-            "xiaohongshu" => "小红书",
-            "kuaishou" => "快手",
-            "iqiyi" => "爱奇艺",
-            "youku" => "优酷",
-            "tencent" or "tencentvideo" or "qq" => "腾讯视频",
-            "facebook" => "Facebook",
-            "twitch" or "twitchvod" or "twitchstream" => "Twitch",
-            "niconico" or "niconicouser" => "NicoNico",
-            "vimeo" => "Vimeo",
-            _ => SanitizeFolderName(platform) // 未知平台使用原始名并清理无效字符
-        };
-    }
-
-    /// <summary>
-    /// 清理文件夹名中的非法字符
-    /// </summary>
-    private static string SanitizeFolderName(string name)
-    {
-        var invalid = System.IO.Path.GetInvalidFileNameChars();
-        var sanitized = new string(name.Where(c => !invalid.Contains(c)).ToArray());
-        return string.IsNullOrWhiteSpace(sanitized) ? "其他" : sanitized;
-    }
-
     private static void ApplyProgress(DownloadTask task, DownloadProgress progress)
     {
         void Apply()
@@ -1701,16 +1663,27 @@ public class DownloadManager : IDisposable
 
     private void ApplyAutoCategorization(DownloadTask task, string platform)
     {
-        if (!_configService.Config.AutoCategorizeByPlatform
-            || string.IsNullOrEmpty(platform)
-            || !string.IsNullOrWhiteSpace(task.CollectionTitle))
+        if (!string.IsNullOrWhiteSpace(task.CollectionTitle)
+            || !PlatformDirectoryPolicy.TryResolveCanonicalFolder(
+                platform,
+                task.Url,
+                out var folderName))
         {
             return;
         }
 
-        var folderName = MapPlatformToFolderName(platform);
-        task.OutputDirectory = System.IO.Path.Combine(task.OutputDirectory, folderName);
-        System.IO.Directory.CreateDirectory(task.OutputDirectory);
+        var baseDirectory = string.IsNullOrWhiteSpace(task.OutputDirectory)
+            ? _configService.Config.DefaultDownloadPath
+            : task.OutputDirectory;
+        var categorizedDirectory = PlatformDirectoryPolicy.ResolveCategorizedDirectory(
+            baseDirectory,
+            folderName);
+        var directoryChanged = !AreEquivalentPaths(task.OutputDirectory, categorizedDirectory);
+        task.OutputDirectory = categorizedDirectory;
+        System.IO.Directory.CreateDirectory(categorizedDirectory);
+        if (!directoryChanged)
+            return;
+
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 自动归类到: {folderName}/");
     }
 
