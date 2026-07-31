@@ -1,0 +1,56 @@
+name: Build and Package
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Build & Package Windows App
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install PyInstaller
+        run: python -m pip install --disable-pip-version-check pyinstaller==6.19.0
+        
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Restore
+        run: |
+          dotnet restore EasyGet.csproj
+          dotnet restore EasyGet.Tests/EasyGet.Tests.csproj
+
+      - name: Test
+        run: dotnet test EasyGet.Tests/EasyGet.Tests.csproj -c Release --no-restore
+
+      - name: Build installer and portable zip
+        shell: pwsh
+        run: |
+          # Use a placeholder version for continuous builds
+          ./scripts/build-installer.ps1 -Configuration Release -Runtime win-x64 -Version "0.0.0-ci" -SkipTests
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: EasyGet-Windows-Artifacts
+          path: |
+            artifacts/publish/Release/EasyGet-Setup-*.exe
+            artifacts/publish/Release/EasyGet-win-x64-Release.zip
