@@ -365,7 +365,7 @@ public class BatchDownloadViewModelTests
             "Text=\"{Binding StatusText, Mode=OneWay}\"",
             xaml,
             StringComparison.Ordinal);
-        Assert.Contains("Text=\"{Binding DisplayTitle}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding Title, UpdateSourceTrigger=PropertyChanged}\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
