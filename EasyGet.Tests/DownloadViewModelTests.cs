@@ -434,20 +434,140 @@ public class DownloadViewModelTests
     }
 
     [Fact]
-    public void UrlChangedDuringDownload_KeepsPageStateDownloadingAndPreservesTask()
+    public void UrlChangedDuringDownload_DetachesTaskWithoutCancellingIt()
     {
         using var context = CreateDownloadContext();
         var viewModel = context.ViewModel;
 
-        var task = new DownloadTask();
+        using var taskCts = new CancellationTokenSource();
+        var task = new DownloadTask { Cts = taskCts };
         viewModel.CurrentTask = task;
         viewModel.IsDownloading = true;
         viewModel.PageState = DownloadPageState.Downloading;
 
         viewModel.Url = "https://example.com/changed-during-download";
 
-        Assert.Equal(DownloadPageState.Downloading, viewModel.PageState);
-        Assert.Same(task, viewModel.CurrentTask);
+        Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
+        Assert.Null(viewModel.CurrentTask);
+        Assert.False(viewModel.IsDownloading);
+        Assert.False(taskCts.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task ParseDuringDownload_DetachesOldTaskAndEnablesNewDownload()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+        context.VideoInfoProvider.Enqueue(new VideoInfo
+        {
+            Title = "新任务",
+            Url = "https://example.com/current"
+        });
+        viewModel.Url = "https://example.com/current";
+        using var taskCts = new CancellationTokenSource();
+        viewModel.CurrentTask = new DownloadTask { Cts = taskCts };
+        viewModel.IsDownloading = true;
+        viewModel.PageState = DownloadPageState.Downloading;
+
+        await viewModel.ParseCommand.ExecuteAsync(null);
+
+        Assert.Equal(DownloadPageState.Ready, viewModel.PageState);
+        Assert.Equal("新任务", viewModel.PreviewInfo?.Title);
+        Assert.Null(viewModel.CurrentTask);
+        Assert.False(viewModel.IsDownloading);
+        Assert.True(viewModel.CanEditDownloadDestination);
+        Assert.False(taskCts.IsCancellationRequested);
+    }
+
+    [Fact]
+    public async Task ActiveDownload_DoesNotBlockParsingAndEnqueuingSecondTask()
+    {
+        var downloadService = new BlockingDownloadService();
+        using var context = CreateDownloadContext(downloadService: downloadService);
+        var viewModel = context.ViewModel;
+        context.VideoInfoProvider.Enqueue(new VideoInfo
+        {
+            Title = "第一个任务",
+            Url = "https://example.com/first"
+        });
+        context.VideoInfoProvider.Enqueue(new VideoInfo
+        {
+            Title = "第二个任务",
+            Url = "https://example.com/second"
+        });
+
+        try
+        {
+            viewModel.Url = "https://example.com/first";
+            await viewModel.ParseCommand.ExecuteAsync(null);
+            await viewModel.StartDownloadCommand.ExecuteAsync(null);
+            await downloadService.FirstDownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+            var firstTask = Assert.Single(context.Manager.Tasks);
+            var firstToken = Assert.IsType<CancellationTokenSource>(firstTask.Cts);
+
+            viewModel.Url = "https://example.com/second";
+            await viewModel.ParseCommand.ExecuteAsync(null);
+
+            Assert.Equal(DownloadPageState.Ready, viewModel.PageState);
+            Assert.False(viewModel.IsDownloading);
+            Assert.False(firstToken.IsCancellationRequested);
+
+            await viewModel.StartDownloadCommand.ExecuteAsync(null);
+            await downloadService.TwoDownloadsStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+            Assert.Equal(2, context.Manager.Tasks.Count);
+            Assert.Equal("第二个任务", viewModel.CurrentTask?.Title);
+            Assert.False(firstToken.IsCancellationRequested);
+        }
+        finally
+        {
+            downloadService.Release();
+            await context.Manager.WaitForIdleAsync(CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(3));
+        }
+    }
+
+    [Fact]
+    public async Task SharedRootChangeDuringPreparation_DoesNotRestoreStalePageDirectory()
+    {
+        using var root = new TestDirectory();
+        var initialRoot = root.Path("initial-root");
+        var updatedRoot = root.Path("updated-root");
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = initialRoot;
+        using var history = new HistoryService(root.Path("history.db"));
+        const string url = "https://example.com/video";
+        await history.AddAsync(new DownloadHistory
+        {
+            Url = url,
+            Title = "已存在的任务"
+        });
+        var service = new CompletingDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var provider = new FakeVideoInfoProvider();
+        provider.Enqueue(new VideoInfo { Url = url, Title = "新任务" });
+        var viewModel = new DownloadViewModel(
+            manager,
+            config,
+            provider,
+            preflightService: new DownloadPreflightService(),
+            historyService: history,
+            duplicateDetector: new DownloadDuplicateDetector());
+        viewModel.ConfirmFunc = (_, _) =>
+        {
+            config.UpdateDefaultDownloadPath(updatedRoot);
+            return true;
+        };
+        viewModel.Url = url;
+        await viewModel.ParseCommand.ExecuteAsync(null);
+
+        await viewModel.StartDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(updatedRoot, config.Config.DefaultDownloadPath);
+        Assert.Equal(updatedRoot, viewModel.DownloadDirectory);
+        Assert.Equal(Path.GetFullPath(initialRoot), Assert.Single(manager.Tasks).OutputDirectory);
     }
 
     [Fact]
@@ -615,6 +735,41 @@ public class DownloadViewModelTests
             task.Status = DownloadStatus.Completed;
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class BlockingDownloadService : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _release = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _downloadCount;
+
+        public TaskCompletionSource FirstDownloadStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource TwoDownloadsStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<VideoInfo?>(null);
+
+        public async Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            task.Status = DownloadStatus.Downloading;
+            var count = Interlocked.Increment(ref _downloadCount);
+            FirstDownloadStarted.TrySetResult();
+            if (count >= 2)
+                TwoDownloadsStarted.TrySetResult();
+
+            await _release.Task.WaitAsync(cancellationToken);
+            task.Status = DownloadStatus.Completed;
+        }
+
+        public void Release() => _release.TrySetResult();
     }
 
     private sealed record VideoInfoCall(string Url, CancellationToken CancellationToken);

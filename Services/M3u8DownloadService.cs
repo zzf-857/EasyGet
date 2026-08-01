@@ -69,7 +69,10 @@ public class M3u8DownloadService
         {
             finalName += ".mp4";
         }
-        var finalMp4Path = Path.Combine(task.OutputDirectory, finalName);
+        using var finalOutputReservation = DownloadOutputPathReservation.Reserve(
+            task.OutputDirectory,
+            finalName);
+        var finalMp4Path = finalOutputReservation.Path;
 
         // 初始化 HttpClientHandler，支持代理
         var handler = new HttpClientHandler();
@@ -295,7 +298,7 @@ public class M3u8DownloadService
                 logCallback?.Invoke("[m3u8] ffmpeg 封装失败或不可用，直接重命名 TS 文件为 MP4...");
                 try
                 {
-                    File.Move(outputTsPath, finalMp4Path, overwrite: true);
+                    File.Move(outputTsPath, finalMp4Path, overwrite: false);
                     logCallback?.Invoke($"[m3u8] 重命名成功！已生成: {finalMp4Path} (注意：此文件实质为 TS 流格式)");
                 }
                 catch (Exception renameErr)
@@ -500,7 +503,7 @@ public class M3u8DownloadService
         if (!IsSuccessfulFfmpegMerge(processResult, muxedOutputPath))
             return false;
 
-        File.Move(muxedOutputPath, finalOutputPath, overwrite: true);
+        File.Move(muxedOutputPath, finalOutputPath, overwrite: false);
         return true;
     }
 

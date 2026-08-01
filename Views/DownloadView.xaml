@@ -101,7 +101,6 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <Grid Grid.Row="0">
@@ -154,43 +153,27 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="64"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="保存到" Style="{StaticResource TextCaption}"
-                               VerticalAlignment="Center"/>
-                    <TextBlock Grid.Column="1" Text="{Binding DownloadDirectory}" Style="{StaticResource TextMono}"
-                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                               ToolTip="{Binding DownloadDirectory}"/>
-                    <Button Grid.Column="2" Height="32" MinWidth="56" Margin="12,0,0,0" Padding="12,4"
-                            Style="{StaticResource SurfaceButton}" Foreground="{DynamicResource AccentBrush}"
-                            Background="Transparent" BorderThickness="0"
-                            Command="{Binding BrowseDirectoryCommand}" Content="更改"
-                            IsEnabled="{Binding CanEditDownloadDestination}"
-                            ToolTip="更改下载保存位置" AutomationProperties.Name="更改下载保存位置"/>
-                </Grid>
-
-                <Grid Grid.Row="2" Margin="0,8,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="64"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="32"/>
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="32"/>
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="32"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="已有合集" Style="{StaticResource TextCaption}"
+                    <TextBlock Grid.Column="0" Text="保存位置" Style="{StaticResource TextCaption}"
                                VerticalAlignment="Center"/>
                     <Grid Grid.Column="1">
                         <ComboBox Height="32" Style="{StaticResource DarkComboBox}"
                                   ItemsSource="{Binding ExistingCollectionFolders}"
                                   SelectedItem="{Binding SelectedCollectionFolder}"
                                   DisplayMemberPath="DisplayName"
-                                  IsEnabled="{Binding CanSelectExistingCollectionFolder}"
-                                  ToolTip="{Binding SelectedCollectionFolder.Directory}"
-                                  AutomationProperties.Name="选择已有合集文件夹"/>
+                                  IsEnabled="{Binding CanEditDownloadDestination}"
+                                  ToolTip="{Binding DownloadDirectory}"
+                                  AutomationProperties.Name="选择保存位置"/>
                         <TextBlock Margin="12,0,32,0" VerticalAlignment="Center"
                                    Text="{Binding ExistingCollectionFolderPlaceholder}"
-                                   IsHitTestVisible="False" TextTrimming="CharacterEllipsis">
+                                   IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding DownloadDirectory}">
                             <TextBlock.Style>
                                 <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -205,21 +188,27 @@
                     </Grid>
                     <Button Grid.Column="3" Width="32" Height="32" Padding="0"
                             Style="{StaticResource ToolbarIconButton}"
+                            Command="{Binding ClearSelectedCollectionFolderCommand}"
+                            ToolTip="切换为临时下载" AutomationProperties.Name="切换为临时下载">
+                        <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                    </Button>
+                    <Button Grid.Column="5" Width="32" Height="32" Padding="0"
+                            Style="{StaticResource ToolbarIconButton}"
                             Command="{Binding RefreshExistingCollectionFoldersCommand}"
                             IsEnabled="{Binding CanEditDownloadDestination}"
                             ToolTip="刷新已有合集" AutomationProperties.Name="刷新已有合集">
                         <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                     </Button>
-                    <Button Grid.Column="5" Width="32" Height="32" Padding="0"
+                    <Button Grid.Column="7" Width="32" Height="32" Padding="0"
                             Style="{StaticResource ToolbarIconButton}"
-                            Command="{Binding ClearSelectedCollectionFolderCommand}"
+                            Command="{Binding BrowseDirectoryCommand}"
                             IsEnabled="{Binding CanEditDownloadDestination}"
-                            ToolTip="取消选择已有合集" AutomationProperties.Name="取消选择已有合集">
-                        <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                            ToolTip="选择新文件夹作为合集" AutomationProperties.Name="添加合集目录">
+                        <TextBlock Text="&#xE8B7;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                     </Button>
                 </Grid>
 
-                <Grid Grid.Row="3" Margin="0,8,0,0">
+                <Grid Grid.Row="2" Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
@@ -241,7 +230,7 @@
                     </ComboBox>
                 </Grid>
 
-                <Grid Grid.Row="4" Margin="0,8,0,0">
+                <Grid Grid.Row="3" Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="Auto"/>

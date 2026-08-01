@@ -134,7 +134,7 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
-    public async Task StartBatchDownload_AddsAllBilibiliPartsBeforeMetadataResolutionCompletes()
+    public async Task ResolveBatchNames_UsesBoundedConcurrencyAndWaitsForConfirmationBeforeEnqueue()
     {
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
@@ -143,7 +143,11 @@ public class BatchDownloadViewModelTests
         var blocker = new BlockingYtDlpDownloadService();
         var manager = new DownloadManager(blocker, history, config);
         var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
-        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp)
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            concreteYtDlp,
+            videoInfoProvider: blocker)
         {
             UrlsText = string.Join(
                 '\n',
@@ -151,33 +155,38 @@ public class BatchDownloadViewModelTests
                     $"https://www.bilibili.com/video/BV1ddN76xEQY/?p={i}"))
         };
 
-        var command = viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        var command = viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
         await blocker.FirstMetadataRequest.WaitAsync(TimeSpan.FromSeconds(2));
-        var admittedTaskCount = manager.Tasks.Count;
+        Assert.Empty(manager.Tasks);
+        Assert.Equal(85, viewModel.PendingItems.Count);
         blocker.Release();
         await command.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Empty(manager.Tasks);
+        Assert.True(viewModel.IsNameConfirmationStep);
+        Assert.False(viewModel.IsResolvingNames);
+        Assert.Equal(85, blocker.MetadataRequestCount);
+
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal(85, admittedTaskCount);
         Assert.Equal(85, manager.Tasks.Select(task => task.Url).Distinct().Count());
-        Assert.InRange(blocker.MaxConcurrentMetadataRequests, 1, 4);
-        var batchId = Assert.Single(manager.Tasks.Select(task => task.BatchId).Distinct());
-        var batchDirectory = Assert.Single(manager.Tasks.Select(task => task.BatchDirectory).Distinct());
-        Assert.False(string.IsNullOrWhiteSpace(batchId));
-        Assert.Contains("Bilibili合集_BV1ddN76xEQY", batchDirectory, StringComparison.Ordinal);
-        Assert.True(Directory.Exists(batchDirectory));
-        Assert.All(manager.Tasks, task => Assert.StartsWith(
-            batchDirectory,
-            task.OutputDirectory,
-            StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(4, blocker.MaxConcurrentMetadataRequests);
+        Assert.Equal(85, blocker.MetadataRequestCount);
+        Assert.All(manager.Tasks, task =>
+        {
+            Assert.Equal("", task.BatchId);
+            Assert.Equal("", task.BatchDirectory);
+            Assert.Equal("", task.CollectionTitle);
+            Assert.Equal(Path.GetFullPath(config.Config.DefaultDownloadPath), task.OutputDirectory);
+        });
 
         var savedHistory = await history.GetAllAsync();
         Assert.Equal(85, savedHistory.Count);
         Assert.All(savedHistory, item =>
         {
-            Assert.Equal(batchId, item.BatchId);
-            Assert.Equal(batchDirectory, item.BatchDirectory);
+            Assert.Equal("", item.BatchId);
+            Assert.Equal("", item.BatchDirectory);
         });
     }
 
@@ -193,7 +202,11 @@ public class BatchDownloadViewModelTests
         var manager = new DownloadManager(service, history, config);
         manager.Tasks.Add(new DownloadTask { Url = "https://example.com/already" });
         var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
-        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp)
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            concreteYtDlp,
+            videoInfoProvider: service)
         {
             UrlsText = string.Join('\n',
             [
@@ -206,6 +219,8 @@ public class BatchDownloadViewModelTests
 
         Assert.Equal(3, viewModel.LinkCount);
 
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        Assert.Single(manager.Tasks);
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(3));
@@ -222,6 +237,323 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
+    public async Task ResolveBatchNames_RecognizesTitleFirstAndLegacyFormatsWithoutMetadataRequests()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        var service = new BlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            UrlsText = string.Join('\n',
+            [
+                "片头---https://example.com/video---one",
+                "https://example.com/two | 旧格式标题"
+            ])
+        };
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+
+        Assert.Empty(manager.Tasks);
+        Assert.Equal(0, service.MetadataRequestCount);
+        Assert.Equal(
+            ["https://example.com/video---one", "https://example.com/two"],
+            viewModel.PendingItems.Select(item => item.Url).ToArray());
+        Assert.Equal(
+            ["片头", "旧格式标题"],
+            viewModel.PendingItems.Select(item => item.Title).ToArray());
+
+        viewModel.PendingItems[0].Title = "修改后的片头";
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(
+            ["修改后的片头", "旧格式标题"],
+            manager.Tasks.Select(task => task.Title).ToArray());
+        Assert.Equal(0, service.MetadataRequestCount);
+    }
+
+    [Fact]
+    public async Task ResolveBatchNames_PureUrlReusesMetadataAndKeepsEditedTitle()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        var service = new BlockingYtDlpDownloadService
+        {
+            MetadataTitleFactory = _ => "解析得到的标题"
+        };
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            UrlsText = "https://example.com/video"
+        };
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+
+        Assert.Empty(manager.Tasks);
+        Assert.Equal(1, service.MetadataRequestCount);
+        var draft = Assert.Single(viewModel.PendingItems);
+        Assert.Equal("解析得到的标题", draft.Title);
+        draft.Title = "用户确认的标题";
+
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal("用户确认的标题", Assert.Single(manager.Tasks).Title);
+        Assert.Equal(1, service.MetadataRequestCount);
+    }
+
+    [Fact]
+    public async Task ResolveBatchNames_FailedItemCanContinueAfterUserSuppliesTitle()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        var service = new BlockingYtDlpDownloadService
+        {
+            MetadataResultFactory = url => url.EndsWith("/missing", StringComparison.Ordinal)
+                ? null
+                : new VideoInfo { Url = url, Title = "可用标题", Platform = "generic" }
+        };
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            UrlsText = "https://example.com/missing\nhttps://example.com/available"
+        };
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+
+        var missing = Assert.Single(
+            viewModel.PendingItems,
+            item => item.Url.EndsWith("/missing", StringComparison.Ordinal));
+        Assert.Equal("", missing.Title);
+        Assert.True(missing.HasResolutionMessage);
+        Assert.False(viewModel.StartBatchDownloadCommand.CanExecute(null));
+
+        missing.Title = "手动补充标题";
+        Assert.True(viewModel.StartBatchDownloadCommand.CanExecute(null));
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(2, manager.Tasks.Count);
+        Assert.Equal("手动补充标题", manager.Tasks.Single(task => task.Url == missing.Url).Title);
+        Assert.Equal(2, service.MetadataRequestCount);
+    }
+
+    [Fact]
+    public async Task UrlsTextChange_CancelsAndInvalidatesPendingNameResolution()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new BlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            UrlsText = "https://example.com/old"
+        };
+
+        var resolution = viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await service.FirstMetadataRequest.WaitAsync(TimeSpan.FromSeconds(2));
+
+        viewModel.UrlsText = "https://example.com/new";
+        service.Release();
+        await resolution.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(viewModel.IsBatchInputStep);
+        Assert.Empty(viewModel.PendingItems);
+        Assert.Empty(manager.Tasks);
+        Assert.Equal("https://example.com/new", viewModel.UrlsText);
+    }
+
+    [Fact]
+    public async Task PlaylistImport_DuringNameResolution_CannotReplacePendingDrafts()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new BlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            UrlsText = "https://example.com/original",
+            PlaylistUrl = "https://example.com/replacement-playlist"
+        };
+        var replacement = new PlaylistInfo
+        {
+            Title = "不应覆盖的合集",
+            SourceUrl = viewModel.PlaylistUrl,
+            Urls = ["https://example.com/replacement"]
+        };
+
+        var resolution = viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await service.FirstMetadataRequest.WaitAsync(TimeSpan.FromSeconds(2));
+
+        var originalDraft = Assert.Single(viewModel.PendingItems);
+        Assert.False(viewModel.ImportPlaylistCommand.CanExecute(null));
+        Assert.False(viewModel.ApplyPlaylistImport(replacement));
+        Assert.Equal("https://example.com/original", viewModel.UrlsText);
+        Assert.Same(originalDraft, Assert.Single(viewModel.PendingItems));
+
+        service.Release();
+        await resolution.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(viewModel.IsNameConfirmationStep);
+        Assert.False(viewModel.ImportPlaylistCommand.CanExecute(null));
+        Assert.Same(originalDraft, Assert.Single(viewModel.PendingItems));
+    }
+
+    [Fact]
+    public async Task PlaylistImport_InProgress_DisablesNameResolutionUntilImportFinishes()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new BlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var importStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var importResult = new TaskCompletionSource<PlaylistInfo>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            videoInfoProvider: service,
+            getPlaylistInfoAsync: async (_, cancellationToken) =>
+            {
+                importStarted.TrySetResult();
+                return await importResult.Task.WaitAsync(cancellationToken);
+            })
+        {
+            UrlsText = "https://example.com/original",
+            PlaylistUrl = "https://example.com/playlist"
+        };
+
+        var import = viewModel.ImportPlaylistCommand.ExecuteAsync(null);
+        await importStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(viewModel.IsImportingPlaylist);
+        Assert.False(viewModel.ResolveBatchNamesCommand.CanExecute(null));
+
+        importResult.SetResult(new PlaylistInfo
+        {
+            Title = "新合集",
+            SourceUrl = "https://example.com/playlist",
+            Urls = ["https://example.com/playlist-item"]
+        });
+        await import.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.False(viewModel.IsImportingPlaylist);
+        Assert.Equal("https://example.com/playlist-item", viewModel.UrlsText);
+        Assert.True(viewModel.ResolveBatchNamesCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task StartBatchDownload_UsesImmutableTitlesAndRejectsPlaylistImportWhileAwaitingHistory()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var historyReadStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHistoryRead = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            historyService: history,
+            duplicateDetector: new DownloadDuplicateDetector(_ => false),
+            videoInfoProvider: service,
+            loadDownloadHistoryAsync: async () =>
+            {
+                historyReadStarted.TrySetResult();
+                await releaseHistoryRead.Task;
+                return [];
+            })
+        {
+            UrlsText = string.Join('\n',
+            [
+                "确认标题一---https://example.com/one",
+                "确认标题二---https://example.com/two"
+            ]),
+            PlaylistUrl = "https://example.com/replacement-playlist"
+        };
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        var firstDraft = viewModel.PendingItems[0];
+        var secondDraft = viewModel.PendingItems[1];
+
+        var start = viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await historyReadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.True(viewModel.IsDownloading);
+        Assert.False(viewModel.CanEditPendingItems);
+        Assert.False(viewModel.RemovePendingItemCommand.CanExecute(firstDraft));
+        Assert.False(viewModel.ImportPlaylistCommand.CanExecute(null));
+        Assert.False(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Title = "不应覆盖的合集",
+            Urls = ["https://example.com/replacement"]
+        }));
+
+        firstDraft.Title = "等待期间修改一";
+        secondDraft.Title = "等待期间修改二";
+        releaseHistoryRead.SetResult();
+        await start.WaitAsync(TimeSpan.FromSeconds(3));
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(
+            ["确认标题一", "确认标题二"],
+            manager.Tasks.Select(task => task.Title).ToArray());
+    }
+
+    [Fact]
     public async Task ImportedPlaylist_UsesActualTitleForFolderAndCollectionTasks()
     {
         using var root = new TestDirectory();
@@ -229,6 +561,8 @@ public class BatchDownloadViewModelTests
         var config = new ConfigService(root.Path("config"));
         config.Config.DefaultDownloadPath = root.Path("downloads");
         const string collectionTitle = "【大模型RAG】2026年系统教程！全程干货！";
+        var collectionDirectory = root.Path("chosen-rag-collection");
+        Directory.CreateDirectory(collectionDirectory);
         var service = new BlockingYtDlpDownloadService();
         service.MetadataPlatform = "Bilibili";
         service.MetadataTitleFactory = url => url.Contains("p=1", StringComparison.Ordinal)
@@ -237,7 +571,19 @@ public class BatchDownloadViewModelTests
         service.Release();
         var manager = new DownloadManager(service, history, config);
         var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
-        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            concreteYtDlp,
+            videoInfoProvider: service)
+        {
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-rag",
+                Name = collectionTitle,
+                Directory = collectionDirectory
+            }
+        };
         var playlist = new PlaylistInfo
         {
             Title = collectionTitle,
@@ -250,6 +596,8 @@ public class BatchDownloadViewModelTests
         };
 
         Assert.True(viewModel.ApplyPlaylistImport(playlist));
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        Assert.Empty(manager.Tasks);
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(5));
@@ -259,8 +607,8 @@ public class BatchDownloadViewModelTests
         {
             Assert.Equal(collectionTitle, task.CollectionTitle);
             Assert.Equal(collectionTitle, task.BatchName);
-            Assert.Equal(collectionTitle, Path.GetFileName(task.BatchDirectory));
-            Assert.Equal(task.BatchDirectory, task.OutputDirectory);
+            Assert.Equal(Path.GetFullPath(collectionDirectory), task.BatchDirectory);
+            Assert.Equal(Path.GetFullPath(collectionDirectory), task.OutputDirectory);
             Assert.Equal(2, task.CollectionItemCount);
         });
         Assert.Equal([1, 2], manager.Tasks.Select(task => task.CollectionItemIndex).ToArray());
@@ -277,6 +625,8 @@ public class BatchDownloadViewModelTests
         using var history = new HistoryService(root.Path("history.db"));
         var config = new ConfigService(root.Path("config"));
         config.Config.DefaultDownloadPath = root.Path("downloads");
+        var collectionDirectory = root.Path("rag-series");
+        Directory.CreateDirectory(collectionDirectory);
         var service = new BlockingYtDlpDownloadService
         {
             MetadataPlatform = "Bilibili"
@@ -284,7 +634,19 @@ public class BatchDownloadViewModelTests
         service.Release();
         var manager = new DownloadManager(service, history, config);
         var concreteYtDlp = new YtDlpService(config, new EnvironmentService());
-        var viewModel = new BatchDownloadViewModel(manager, config, concreteYtDlp);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            concreteYtDlp,
+            videoInfoProvider: service)
+        {
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-rag-series",
+                Name = "RAG 系列课程",
+                Directory = collectionDirectory
+            }
+        };
         const string firstUrl = "https://www.bilibili.com/video/BV1ddN76xEQY/?p=1";
         manager.Tasks.Add(new DownloadTask { Url = firstUrl, Status = DownloadStatus.Completed });
         var playlist = new PlaylistInfo
@@ -300,6 +662,8 @@ public class BatchDownloadViewModelTests
         };
 
         Assert.True(viewModel.ApplyPlaylistImport(playlist));
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        Assert.Single(manager.Tasks);
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(5));
@@ -371,7 +735,81 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
-    public void BrowseDirectory_ClearsExistingCollectionSelection()
+    public async Task InitializeAsync_RestoresConfiguredCollectionWithoutDownloadHistory()
+    {
+        using var root = new TestDirectory();
+        var collectionDirectory = root.Path("saved-collection");
+        Directory.CreateDirectory(collectionDirectory);
+        var initialConfig = new ConfigService(root.Path("config"));
+        initialConfig.Config.DefaultDownloadPath = root.Path("temporary");
+        Assert.True(await initialConfig.UpdateSelectedCollectionDirectoryAsync(
+            collectionDirectory));
+
+        var reloadedConfig = new ConfigService(root.Path("config"));
+        await reloadedConfig.LoadAsync();
+        using var history = new HistoryService(root.Path("history.db"));
+        var ytDlp = new YtDlpService(reloadedConfig, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, reloadedConfig);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            reloadedConfig,
+            ytDlp,
+            historyService: history);
+
+        await viewModel.InitializeAsync();
+
+        var selected = Assert.IsType<ExistingCollectionFolder>(
+            viewModel.SelectedCollectionFolder);
+        Assert.Equal(Path.GetFullPath(collectionDirectory), selected.Directory);
+        Assert.Equal(Path.GetFullPath(collectionDirectory), viewModel.DownloadDirectory);
+        Assert.Contains(
+            viewModel.ExistingCollectionFolders,
+            folder => ExistingCollectionFolderStore.PathsEqual(
+                folder.Directory,
+                collectionDirectory));
+    }
+
+    [Fact]
+    public async Task RefreshCollections_DoesNotPersistTransientComboBoxNullSelection()
+    {
+        using var root = new TestDirectory();
+        var collectionDirectory = root.Path("kept-collection");
+        Directory.CreateDirectory(collectionDirectory);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("temporary");
+        Assert.True(await config.UpdateSelectedCollectionDirectoryAsync(
+            collectionDirectory));
+        using var history = new HistoryService(root.Path("history.db"));
+        using var store = new ExistingCollectionFolderStore(history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            historyService: history,
+            collectionFolderStore: store);
+        await viewModel.InitializeAsync();
+        Assert.NotNull(viewModel.SelectedCollectionFolder);
+        store.FoldersRefreshing += (_, _) =>
+        {
+            // WPF clears a TwoWay SelectedItem while its ItemsSource is rebuilt.
+            viewModel.SelectedCollectionFolder = null;
+        };
+
+        await store.RefreshAsync();
+
+        Assert.NotNull(viewModel.SelectedCollectionFolder);
+        Assert.Equal(
+            Path.GetFullPath(collectionDirectory),
+            viewModel.SelectedCollectionFolder!.Directory);
+        Assert.Equal(
+            Path.GetFullPath(collectionDirectory),
+            config.Config.SelectedCollectionDirectory);
+    }
+
+    [Fact]
+    public async Task BrowseDirectory_RegistersAndSelectsNewCollection()
     {
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
@@ -398,10 +836,106 @@ public class BatchDownloadViewModelTests
             }
         };
 
-        viewModel.BrowseDirectoryCommand.Execute(null);
+        await viewModel.BrowseDirectoryCommand.ExecuteAsync(null);
+
+        Assert.NotNull(viewModel.SelectedCollectionFolder);
+        Assert.Equal(Path.GetFullPath(browsedDirectory), viewModel.SelectedCollectionFolder!.Directory);
+        Assert.Equal(browsedDirectory, viewModel.DownloadDirectory);
+        Assert.Equal(Path.GetFullPath(browsedDirectory), config.Config.SelectedCollectionDirectory);
+        Assert.Equal(root.Path("default"), config.Config.DefaultDownloadPath);
+    }
+
+    [Fact]
+    public async Task BrowseDirectory_SynchronizesBothPagesAndPersistsLastSelection()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("initial");
+        var singleSelection = root.Path("single-selection");
+        var batchSelection = root.Path("batch-selection");
+        Directory.CreateDirectory(singleSelection);
+        Directory.CreateDirectory(batchSelection);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var single = new DownloadViewModel(
+            manager,
+            config,
+            new YtDlpVideoInfoProvider(ytDlp),
+            _ => { },
+            selectDirectory: _ => singleSelection);
+        var batch = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            selectDirectory: _ => batchSelection);
+
+        await single.BrowseDirectoryCommand.ExecuteAsync(null);
+
+        Assert.Equal(singleSelection, single.DownloadDirectory);
+        Assert.Equal(singleSelection, batch.DownloadDirectory);
+        Assert.Equal(root.Path("initial"), config.Config.DefaultDownloadPath);
+        Assert.Equal(Path.GetFullPath(singleSelection), config.Config.SelectedCollectionDirectory);
+
+        await batch.BrowseDirectoryCommand.ExecuteAsync(null);
+
+        Assert.Equal(batchSelection, single.DownloadDirectory);
+        Assert.Equal(batchSelection, batch.DownloadDirectory);
+        Assert.Equal(root.Path("initial"), config.Config.DefaultDownloadPath);
+        Assert.Equal(Path.GetFullPath(batchSelection), config.Config.SelectedCollectionDirectory);
+        var reloaded = new ConfigService(config.ConfigDirectory);
+        await reloaded.LoadAsync();
+        Assert.Equal(root.Path("initial"), reloaded.Config.DefaultDownloadPath);
+        Assert.Equal(Path.GetFullPath(batchSelection), reloaded.Config.SelectedCollectionDirectory);
+        Assert.Contains(
+            reloaded.Config.CollectionDirectories,
+            path => ExistingCollectionFolderStore.PathsEqual(path, batchSelection));
+
+        batch.ClearSelectedCollectionFolderCommand.Execute(null);
+        Assert.Null(single.SelectedCollectionFolder);
+        Assert.Null(batch.SelectedCollectionFolder);
+        Assert.Equal(root.Path("initial"), single.DownloadDirectory);
+        Assert.Equal(root.Path("initial"), batch.DownloadDirectory);
+        Assert.Equal("", config.Config.SelectedCollectionDirectory);
+        Assert.True(await config.SaveAsync());
+        var temporaryReload = new ConfigService(config.ConfigDirectory);
+        await temporaryReload.LoadAsync();
+        Assert.Equal("", temporaryReload.Config.SelectedCollectionDirectory);
+    }
+
+    [Fact]
+    public void SharedRootChange_PreservesCollectionOverrideUntilItIsCleared()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var initialRoot = root.Path("initial-root");
+        var updatedRoot = root.Path("updated-root");
+        var collectionDirectory = root.Path("initial-root", "existing-collection");
+        Directory.CreateDirectory(collectionDirectory);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = initialRoot;
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-existing",
+                Name = "已有合集",
+                Directory = collectionDirectory
+            }
+        };
+
+        config.UpdateDefaultDownloadPath(updatedRoot);
+
+        Assert.Equal(collectionDirectory, viewModel.DownloadDirectory);
+        Assert.Equal(updatedRoot, config.Config.DefaultDownloadPath);
+
+        viewModel.ClearSelectedCollectionFolderCommand.Execute(null);
 
         Assert.Null(viewModel.SelectedCollectionFolder);
-        Assert.Equal(browsedDirectory, viewModel.DownloadDirectory);
+        Assert.Equal(updatedRoot, viewModel.DownloadDirectory);
     }
 
     [Fact]
@@ -433,36 +967,41 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
-    public async Task StartBatchDownload_UsesPageDownloadDirectoryAsNewBatchRoot()
+    public async Task StartBatchDownload_TemporaryModeUsesDefaultDirectoryWithoutSubfolders()
     {
         using var root = new TestDirectory();
         using var history = new HistoryService(root.Path("history.db"));
         var config = new ConfigService(root.Path("config"));
         var defaultDirectory = root.Path("default");
-        var selectedDirectory = root.Path("selected");
         config.Config.DefaultDownloadPath = defaultDirectory;
         var service = new BlockingYtDlpDownloadService();
         service.Release();
         var manager = new DownloadManager(service, history, config);
         var ytDlp = new YtDlpService(config, new EnvironmentService());
-        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
         {
-            DownloadDirectory = selectedDirectory,
             UrlsText = "https://example.com/one\nhttps://example.com/two"
         };
 
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        Assert.Empty(manager.Tasks);
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(3));
 
-        var batchDirectory = Assert.Single(manager.Tasks.Select(task => task.BatchDirectory).Distinct());
-        Assert.StartsWith(
-            Path.GetFullPath(selectedDirectory),
-            Path.GetFullPath(batchDirectory),
-            StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(manager.Tasks, task => task.BatchDirectory.StartsWith(
-            Path.GetFullPath(defaultDirectory),
-            StringComparison.OrdinalIgnoreCase));
+        Assert.All(manager.Tasks, task =>
+        {
+            Assert.Equal(Path.GetFullPath(defaultDirectory), task.OutputDirectory);
+            Assert.Equal("", task.BatchId);
+            Assert.Equal("", task.BatchDirectory);
+            Assert.Equal("", task.CollectionTitle);
+        });
+        Assert.Equal(defaultDirectory, config.Config.DefaultDownloadPath);
+        Assert.Equal(defaultDirectory, viewModel.DownloadDirectory);
     }
 
     [Fact]
@@ -477,7 +1016,11 @@ public class BatchDownloadViewModelTests
         service.Release();
         var manager = new DownloadManager(service, history, config);
         var ytDlp = new YtDlpService(config, new EnvironmentService());
-        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
         {
             UrlsText = "https://example.com/new-part",
             SelectedCollectionFolder = new ExistingCollectionFolder
@@ -489,6 +1032,8 @@ public class BatchDownloadViewModelTests
             }
         };
 
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        Assert.Empty(manager.Tasks);
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
         await manager.WaitForIdleAsync(CancellationToken.None)
             .WaitAsync(TimeSpan.FromSeconds(3));
@@ -511,9 +1056,15 @@ public class BatchDownloadViewModelTests
         var config = new ConfigService(root.Path("config"));
         var collectionDirectory = root.Path("deleted-collection");
         Directory.CreateDirectory(collectionDirectory);
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
         var ytDlp = new YtDlpService(config, new EnvironmentService());
-        var manager = new DownloadManager(ytDlp, history, config);
-        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
         {
             UrlsText = "https://example.com/new-part",
             SelectedCollectionFolder = new ExistingCollectionFolder
@@ -527,6 +1078,7 @@ public class BatchDownloadViewModelTests
         viewModel.RequestShowNotification += (message, _) => notification = message;
         Directory.Delete(collectionDirectory);
 
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
         await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
 
         Assert.Empty(manager.Tasks);
@@ -585,6 +1137,10 @@ public class BatchDownloadViewModelTests
             xaml,
             StringComparison.Ordinal);
         Assert.Contains("Text=\"{Binding Title, UpdateSourceTrigger=PropertyChanged}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("视频标题---视频链接", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding ResolveBatchNamesCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("Command=\"{Binding StartBatchDownloadCommand}\"", xaml, StringComparison.Ordinal);
+        Assert.Contains("DataContext.CanEditPendingItems", xaml, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -695,6 +1251,49 @@ public class BatchDownloadViewModelTests
         {
             TryDeleteDatabase(dbPath);
         }
+    }
+
+    [Fact]
+    public void ImportText_PreservesTitleFirstEntryAndDeduplicatesByUrl()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp);
+
+        viewModel.ImportText(string.Join('\n',
+        [
+            "演示视频---https://example.com/demo",
+            "https://example.com/demo"
+        ]));
+
+        Assert.Equal("演示视频---https://example.com/demo", viewModel.UrlsText);
+        Assert.Equal(1, viewModel.LinkCount);
+    }
+
+    [Theory]
+    [InlineData("", "https://example.com/demo\n演示视频---https://example.com/demo")]
+    [InlineData("https://example.com/demo", "演示视频---https://example.com/demo")]
+    public void ImportText_WhenBareUrlPrecedesExplicitTitle_PrefersExplicitTitle(
+        string existingText,
+        string importedText)
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config, ytDlp)
+        {
+            UrlsText = existingText
+        };
+
+        viewModel.ImportText(importedText);
+
+        Assert.Equal("演示视频---https://example.com/demo", viewModel.UrlsText);
+        Assert.Equal(1, viewModel.LinkCount);
     }
 
     [Fact]
@@ -886,7 +1485,7 @@ public class BatchDownloadViewModelTests
         }
     }
 
-    private sealed class BlockingYtDlpDownloadService : IYtDlpDownloadService
+    private sealed class BlockingYtDlpDownloadService : IYtDlpDownloadService, IVideoInfoProvider
     {
         private readonly TaskCompletionSource _first = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -894,27 +1493,35 @@ public class BatchDownloadViewModelTests
             TaskCreationOptions.RunContinuationsAsynchronously);
         private int _activeMetadataRequests;
         private int _maxConcurrentMetadataRequests;
+        private int _metadataRequestCount;
 
         public Task FirstMetadataRequest => _first.Task;
         public int MaxConcurrentMetadataRequests => Volatile.Read(
             ref _maxConcurrentMetadataRequests);
+        public int MetadataRequestCount => Volatile.Read(ref _metadataRequestCount);
         public Func<string, string> MetadataTitleFactory { get; set; } = url => url;
+        public Func<string, VideoInfo?>? MetadataResultFactory { get; set; }
         public string MetadataPlatform { get; set; } = "Twitter";
 
         public async Task<VideoInfo?> GetVideoInfoAsync(
             string url,
             CancellationToken cancellationToken = default)
         {
+            Interlocked.Increment(ref _metadataRequestCount);
             var active = Interlocked.Increment(ref _activeMetadataRequests);
             UpdateMaximum(ref _maxConcurrentMetadataRequests, active);
             _first.TrySetResult();
             try
             {
                 await _release.Task.WaitAsync(cancellationToken);
+                if (MetadataResultFactory is not null)
+                    return MetadataResultFactory(url);
+
                 return new VideoInfo
                 {
                     Title = MetadataTitleFactory(url),
-                    Platform = MetadataPlatform
+                    Platform = MetadataPlatform,
+                    Url = url
                 };
             }
             finally

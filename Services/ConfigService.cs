@@ -101,8 +101,103 @@ public class ConfigService
     /// <summary>当前配置</summary>
     public AppConfig Config => _config;
 
+    /// <summary>默认下载目录在任意页面被修改时触发。</summary>
+    public event Action<string>? DefaultDownloadPathChanged;
+
+    /// <summary>当前合集目的地在任意页面被修改时触发；空值表示临时下载。</summary>
+    public event Action<string>? SelectedCollectionDirectoryChanged;
+
+    /// <summary>用户保存的合集目录列表发生变化时触发。</summary>
+    public event Action? CollectionDirectoriesChanged;
+
     /// <summary>当前配置及关联应用数据的根目录。</summary>
     public string ConfigDirectory => _configDir;
+
+    public string UpdateDefaultDownloadPath(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var normalizedPath = Path.GetFullPath(path.Trim());
+        var changed = !string.Equals(
+            _config.DefaultDownloadPath,
+            normalizedPath,
+            StringComparison.Ordinal);
+        _config.DefaultDownloadPath = normalizedPath;
+        if (!changed)
+            return normalizedPath;
+
+        var handlers = DefaultDownloadPathChanged;
+        if (handlers is null)
+            return normalizedPath;
+
+        foreach (Action<string> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(normalizedPath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ConfigService] Download path subscriber failed: {ex.Message}");
+            }
+        }
+
+        return normalizedPath;
+    }
+
+    public Task<bool> UpdateDefaultDownloadPathAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        UpdateDefaultDownloadPath(path);
+        return SaveAsync(cancellationToken);
+    }
+
+    public string UpdateSelectedCollectionDirectory(string? path)
+    {
+        var normalizedPath = NormalizeOptionalDirectory(path);
+        if (normalizedPath.Length > 0
+            && !_config.CollectionDirectories.Any(existing =>
+                PathsEqual(existing, normalizedPath)))
+        {
+            _config.CollectionDirectories.Add(normalizedPath);
+            InvokeSafely(CollectionDirectoriesChanged, "collection directories");
+        }
+
+        if (PathsEqual(_config.SelectedCollectionDirectory, normalizedPath))
+            return normalizedPath;
+
+        _config.SelectedCollectionDirectory = normalizedPath;
+        InvokeSafely(
+            SelectedCollectionDirectoryChanged,
+            normalizedPath,
+            "download destination");
+        return normalizedPath;
+    }
+
+    public Task<bool> UpdateSelectedCollectionDirectoryAsync(
+        string? path,
+        CancellationToken cancellationToken = default)
+    {
+        UpdateSelectedCollectionDirectory(path);
+        return SaveAsync(cancellationToken);
+    }
+
+    public async Task<bool> RegisterCollectionDirectoryAsync(
+        string path,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var normalizedPath = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(path.Trim()));
+        if (!_config.CollectionDirectories.Any(existing => PathsEqual(existing, normalizedPath)))
+        {
+            _config.CollectionDirectories.Add(normalizedPath);
+            InvokeSafely(CollectionDirectoriesChanged, "collection directories");
+        }
+
+        return await SaveAsync(cancellationToken);
+    }
 
     /// <summary>
     /// 加载配置（如果配置文件不存在则使用默认值）
@@ -673,6 +768,23 @@ public class ConfigService
             ? defaults.DefaultDownloadPath
             : config.DefaultDownloadPath.Trim();
 
+        config.CollectionDirectories = (config.CollectionDirectories ?? [])
+            .Select(NormalizeOptionalDirectory)
+            .Where(path => path.Length > 0)
+            .Distinct(OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal)
+            .Take(100)
+            .ToList();
+        config.SelectedCollectionDirectory = NormalizeOptionalDirectory(
+            config.SelectedCollectionDirectory);
+        if (config.SelectedCollectionDirectory.Length > 0
+            && !config.CollectionDirectories.Any(path =>
+                PathsEqual(path, config.SelectedCollectionDirectory)))
+        {
+            config.CollectionDirectories.Add(config.SelectedCollectionDirectory);
+        }
+
         config.DefaultFormat = NormalizeOption(config.DefaultFormat, SupportedFormats, defaults.DefaultFormat);
         config.DefaultQuality = NormalizeOption(config.DefaultQuality, SupportedQualities, defaults.DefaultQuality);
         config.DefaultSubtitle = NormalizeOption(config.DefaultSubtitle, SupportedSubtitles, defaults.DefaultSubtitle);
@@ -734,6 +846,76 @@ public class ConfigService
         }
 
         return defaultValue;
+    }
+
+    private static string NormalizeOptionalDirectory(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return "";
+
+        try
+        {
+            return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path.Trim()));
+        }
+        catch (Exception ex) when (ex is ArgumentException
+                                   or NotSupportedException
+                                   or PathTooLongException)
+        {
+            return "";
+        }
+    }
+
+    private static bool PathsEqual(string? left, string? right)
+    {
+        var normalizedLeft = NormalizeOptionalDirectory(left);
+        var normalizedRight = NormalizeOptionalDirectory(right);
+        return string.Equals(
+            normalizedLeft,
+            normalizedRight,
+            OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal);
+    }
+
+    private static void InvokeSafely(Action? handlers, string eventName)
+    {
+        if (handlers is null)
+            return;
+
+        foreach (Action handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ConfigService] {eventName} subscriber failed: {ex.Message}");
+            }
+        }
+    }
+
+    private static void InvokeSafely(
+        Action<string>? handlers,
+        string value,
+        string eventName)
+    {
+        if (handlers is null)
+            return;
+
+        foreach (Action<string> handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                handler(value);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine(
+                    $"[ConfigService] {eventName} subscriber failed: {ex.Message}");
+            }
+        }
     }
 
     private static string NormalizeLegacyCookiePlatform(string? value)

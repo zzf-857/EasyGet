@@ -1,7 +1,10 @@
 using EasyGet.Models;
 using EasyGet.Services;
 using EasyGet.Services.Cookies;
+using System.Net;
+using System.Net.Sockets;
 using System.Reflection;
+using System.Text;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -15,6 +18,153 @@ public class DownloadManagerTests
 
         Assert.Equal(DownloadStatus.Resolving, task.Status);
         Assert.Contains("认证", task.StatusText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("https://media.example.test/index.m3u8", "M3U8", false)]
+    [InlineData("https://t.me/example_channel/123", "Telegram", false)]
+    [InlineData("https://media.example.test/playlist.m3u8", "M3U8", true)]
+    public async Task EnqueueAsync_DedicatedEngineSkipsYtDlpMetadataPipeline(
+        string url,
+        string expectedPlatform,
+        bool scheduled)
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        config.Config.MaxConcurrentDownloads = 1;
+        var ytDlp = new FakeYtDlpDownloadService();
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var downloadGate = GetDownloadGate(manager);
+        await downloadGate.WaitAsync();
+
+        try
+        {
+            var task = new DownloadTask
+            {
+                Url = url,
+                OutputDirectory = config.Config.DefaultDownloadPath,
+                ScheduledStartTimeUtc = scheduled
+                    ? DateTimeOffset.UtcNow.AddMilliseconds(25)
+                    : null
+            };
+
+            await manager.EnqueueAsync(task);
+            Assert.True(await WaitUntilAsync(
+                () => task.Status == DownloadStatus.Waiting,
+                TimeSpan.FromSeconds(2)));
+
+            Assert.Equal(0, ytDlp.GetVideoInfoCallCount);
+            Assert.Equal(expectedPlatform, task.Platform);
+            Assert.False(string.IsNullOrWhiteSpace(task.Title));
+            Assert.Equal(
+                Path.GetFullPath(config.Config.DefaultDownloadPath),
+                task.OutputDirectory);
+
+            manager.Cancel(task.Id);
+            await manager.WaitForIdleAsync(CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(2));
+        }
+        finally
+        {
+            downloadGate.Release();
+        }
+    }
+
+    [Fact]
+    public async Task EnqueueAsync_DedicatedOutputFailureDoesNotAbortLaterTasks()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        config.Config.MaxConcurrentDownloads = 2;
+        var blockedRoot = root.Path("blocked-root");
+        File.WriteAllText(blockedRoot, "this path is a file");
+        var ytDlp = new FakeYtDlpDownloadService();
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var failedTask = new DownloadTask
+        {
+            Url = "https://media.example.test/index.m3u8",
+            OutputDirectory = blockedRoot
+        };
+
+        var exception = await Record.ExceptionAsync(() => manager.EnqueueAsync(failedTask));
+
+        Assert.Null(exception);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.Equal(DownloadStatus.Failed, failedTask.Status);
+        Assert.Contains("输出目录", failedTask.ErrorMessage, StringComparison.Ordinal);
+
+        var laterTask = new DownloadTask
+        {
+            Url = "https://example.test/later-video",
+            OutputDirectory = config.Config.DefaultDownloadPath
+        };
+        await manager.EnqueueAsync(laterTask);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(DownloadStatus.Completed, laterTask.Status);
+        Assert.Equal(2, manager.Tasks.Count);
+    }
+
+    [Fact]
+    public async Task M3u8Fallback_ConcurrentSameTitlesUseDistinctReservedFileNames()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        using var server = new MasterPlaylistServer();
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        config.Config.MaxConcurrentDownloads = 2;
+        var ytDlpFallback = new RecordingFallbackYtDlpDownloadService(expectedDownloads: 2);
+        var m3u8 = new M3u8DownloadService(config, new EnvironmentService());
+        using var manager = new DownloadManager(
+            ytDlpFallback,
+            history,
+            config,
+            m3u8DownloadService: m3u8);
+        var first = new DownloadTask
+        {
+            Url = server.Url,
+            Title = "共享标题",
+            OutputDirectory = config.Config.DefaultDownloadPath
+        };
+        var second = new DownloadTask
+        {
+            Url = server.Url,
+            Title = "共享标题",
+            OutputDirectory = config.Config.DefaultDownloadPath
+        };
+
+        try
+        {
+            await manager.EnqueueAsync(first);
+            await manager.EnqueueAsync(second);
+            await ytDlpFallback.AllDownloadsStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+            Assert.Equal(
+                ["共享标题", "共享标题 (2)"],
+                ytDlpFallback.ReservedFileNames
+                    .Order(StringComparer.Ordinal)
+                    .ToArray());
+            Assert.Equal("共享标题", first.Title);
+            Assert.Equal("共享标题", second.Title);
+        }
+        finally
+        {
+            ytDlpFallback.Release();
+        }
+
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(DownloadStatus.Completed, first.Status);
+        Assert.Equal(DownloadStatus.Completed, second.Status);
+        Assert.Null(first.OutputFileNameOverride);
+        Assert.Null(second.OutputFileNameOverride);
     }
 
     [Fact]
@@ -335,7 +485,7 @@ public class DownloadManagerTests
             Assert.Equal(1, ytDlp.DownloadCallCount);
             Assert.Equal("legacy douyin note", task.Title);
             Assert.Equal("Douyin", task.Platform);
-            Assert.Equal(Path.Combine(outputDir, "抖音"), ytDlp.OutputDirectoryAtDownload);
+            Assert.Equal(outputDir, ytDlp.OutputDirectoryAtDownload);
             Assert.Equal(DownloadStatus.Completed, task.Status);
         }
         finally
@@ -1040,6 +1190,141 @@ public class DownloadManagerTests
 
     private static void AssertCancellationTokenSourceDisposed(CancellationTokenSource source)
         => Assert.True(IsCancellationTokenSourceDisposed(source));
+
+    private sealed class RecordingFallbackYtDlpDownloadService(int expectedDownloads)
+        : IYtDlpDownloadService
+    {
+        private readonly TaskCompletionSource _release = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly object _fileNamesLock = new();
+        private readonly List<string> _reservedFileNames = [];
+
+        public TaskCompletionSource AllDownloadsStarted { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public IReadOnlyList<string> ReservedFileNames
+        {
+            get
+            {
+                lock (_fileNamesLock)
+                    return _reservedFileNames.ToArray();
+            }
+        }
+
+        public Task<VideoInfo?> GetVideoInfoAsync(
+            string url,
+            CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException(
+                "M3U8 fallback must not enter the yt-dlp metadata pipeline.");
+
+        public async Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            task.Status = DownloadStatus.Downloading;
+            lock (_fileNamesLock)
+            {
+                _reservedFileNames.Add(task.OutputFileNameOverride ?? task.Title);
+                if (_reservedFileNames.Count == expectedDownloads)
+                    AllDownloadsStarted.TrySetResult();
+            }
+
+            await _release.Task.WaitAsync(cancellationToken);
+            task.Status = DownloadStatus.Completed;
+        }
+
+        public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class MasterPlaylistServer : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _serverTask;
+
+        public MasterPlaylistServer()
+        {
+            _listener.Start();
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            Url = $"http://127.0.0.1:{port}/master.m3u8";
+            _serverTask = Task.Run(ServeAsync);
+        }
+
+        public string Url { get; }
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                while (!_cts.IsCancellationRequested)
+                {
+                    var client = await _listener.AcceptTcpClientAsync(_cts.Token);
+                    _ = ServeClientAsync(client);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        private async Task ServeClientAsync(TcpClient client)
+        {
+            using (client)
+            {
+                try
+                {
+                    var stream = client.GetStream();
+                    var buffer = new byte[1024];
+                    var request = new StringBuilder();
+                    while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+                    {
+                        var read = await stream.ReadAsync(buffer, _cts.Token);
+                        if (read == 0)
+                            break;
+                        request.Append(Encoding.ASCII.GetString(buffer, 0, read));
+                    }
+
+                    const string playlist = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=800000\nvariant.m3u8\n";
+                    var body = Encoding.ASCII.GetBytes(playlist);
+                    var headers = Encoding.ASCII.GetBytes(
+                        "HTTP/1.1 200 OK\r\n"
+                        + "Content-Type: application/vnd.apple.mpegurl\r\n"
+                        + $"Content-Length: {body.Length}\r\n"
+                        + "Connection: close\r\n\r\n");
+                    await stream.WriteAsync(headers, _cts.Token);
+                    await stream.WriteAsync(body, _cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _listener.Stop();
+            try
+            {
+                _serverTask.Wait(TimeSpan.FromSeconds(1));
+            }
+            catch (AggregateException)
+            {
+            }
+            _cts.Dispose();
+        }
+    }
 
     private sealed class FakeYtDlpDownloadService : IYtDlpDownloadService
     {

@@ -102,6 +102,10 @@ public sealed class UserDataBackupService
     ];
 
     private static readonly HashSet<string> AllowedSettings = BuildAllowedSettings();
+    private static readonly HashSet<string> AllowedStringArraySettings =
+    [
+        JsonNamingPolicy.CamelCase.ConvertName(nameof(AppConfig.CollectionDirectories))
+    ];
 
     private readonly UserDataBackupPaths _paths;
     private readonly Func<DateTimeOffset> _utcNow;
@@ -470,13 +474,45 @@ public sealed class UserDataBackupService
                 errors.Add($"The safe settings entry contains unsupported property '{property.Key}'.");
             if (ContainsSensitiveKey(property.Key))
                 errors.Add($"The safe settings entry contains sensitive property '{property.Key}'.");
-            if (property.Value is JsonObject or JsonArray)
+            if (property.Value is JsonObject)
                 errors.Add($"The safe setting '{property.Key}' must be a scalar value.");
+            else if (property.Value is JsonArray array)
+                ValidateSafeStringArray(property.Key, array, errors);
             names.Add(property.Key);
         }
 
         names.Sort(StringComparer.Ordinal);
         return names;
+    }
+
+    private static void ValidateSafeStringArray(
+        string propertyName,
+        JsonArray values,
+        ICollection<string> errors)
+    {
+        if (!AllowedStringArraySettings.Contains(propertyName))
+        {
+            errors.Add($"The safe setting '{propertyName}' must be a scalar value.");
+            return;
+        }
+
+        if (values.Count > 100)
+        {
+            errors.Add($"The safe setting '{propertyName}' contains too many values.");
+            return;
+        }
+
+        foreach (var value in values)
+        {
+            if (value is not JsonValue jsonValue
+                || !jsonValue.TryGetValue<string>(out var text)
+                || text.Length > 32_768)
+            {
+                errors.Add(
+                    $"The safe setting '{propertyName}' must contain only valid strings.");
+                return;
+            }
+        }
     }
 
     private async Task<byte[]> ExtractRestorePayloadAsync(
@@ -834,6 +870,8 @@ public sealed class UserDataBackupService
         {
             nameof(AppConfig.ConfigVersion),
             nameof(AppConfig.DefaultDownloadPath),
+            nameof(AppConfig.CollectionDirectories),
+            nameof(AppConfig.SelectedCollectionDirectory),
             nameof(AppConfig.DefaultFormat),
             nameof(AppConfig.DefaultQuality),
             nameof(AppConfig.DefaultSubtitle),

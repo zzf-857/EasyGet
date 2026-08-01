@@ -26,19 +26,109 @@
 
                 <StackPanel Grid.Row="0" Margin="0,0,0,12">
                     <TextBlock Text="批量下载" Style="{StaticResource TextPageTitle}"/>
-                    <TextBlock Text="每行一个链接，支持自定义名称，格式：链接 | 自定义名称" Margin="0,4,0,0"
-                               Style="{StaticResource TextCaption}"/>
+                    <TextBlock Text="每行一个链接；示例：视频标题---视频链接" Margin="0,4,0,0"
+                               Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
                 </StackPanel>
 
-                <TextBox Grid.Row="1" Style="{StaticResource DarkTextBox}"
-                         Background="{StaticResource BgInputBrush}"
-                         Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}"
-                          AcceptsReturn="True" TextWrapping="Wrap" Padding="12,8"
-                         VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FontFamilyMono}"
-                         FontSize="{StaticResource FontSizeBody}" AutomationProperties.Name="批量视频链接"/>
+                <Grid Grid.Row="1">
+                    <TextBox Style="{StaticResource DarkTextBox}"
+                             Background="{StaticResource BgInputBrush}"
+                             Text="{Binding UrlsText, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True" TextWrapping="Wrap" Padding="12,8"
+                             VerticalScrollBarVisibility="Auto" FontFamily="{StaticResource FontFamilyMono}"
+                             FontSize="{StaticResource FontSizeBody}" AutomationProperties.Name="批量视频链接"
+                             Visibility="{Binding IsBatchInputStep, Converter={StaticResource BoolToVisibility}}"/>
+
+                    <Grid Visibility="{Binding IsNameConfirmationStep, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="{Binding BatchConfirmationSummary}"
+                                   Style="{StaticResource TextBodyStrong}" TextTrimming="CharacterEllipsis"/>
+                        <ProgressBar Grid.Row="1" Height="3" Margin="0,8,0,8" IsIndeterminate="True"
+                                     Visibility="{Binding IsResolvingNames, Converter={StaticResource BoolToVisibility}}"/>
+                        <ListBox Grid.Row="2" Margin="0,8,0,0" ItemsSource="{Binding PendingItems}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True"
+                                 VirtualizingPanel.VirtualizationMode="Recycling">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Focusable" Value="False"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="0,8" BorderBrush="{StaticResource BorderSubtleBrush}"
+                                            BorderThickness="0,0,0,1">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="8"/>
+                                                <ColumnDefinition Width="32"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <TextBox Grid.Row="0" Grid.Column="0" Height="32"
+                                                     Style="{StaticResource DarkTextBox}"
+                                                     Background="{StaticResource BgInputBrush}" Padding="10,4"
+                                                     VerticalContentAlignment="Center"
+                                                     Text="{Binding Title, UpdateSourceTrigger=PropertyChanged}"
+                                                     IsEnabled="{Binding DataContext.CanEditPendingItems, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                     AutomationProperties.Name="确认下载名称"/>
+                                            <Button Grid.Row="0" Grid.Column="2" Width="32" Height="32" Padding="0"
+                                                    VerticalAlignment="Center" Style="{StaticResource ToolbarIconButton}"
+                                                    Command="{Binding DataContext.RemovePendingItemCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                    CommandParameter="{Binding}"
+                                                    IsEnabled="{Binding DataContext.CanEditPendingItems, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                    ToolTip="移除此项" AutomationProperties.Name="移除此项">
+                                                <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}"
+                                                           FontSize="{StaticResource IconSizeSmall}"/>
+                                            </Button>
+                                            <TextBlock Grid.Row="1" Grid.ColumnSpan="3" Margin="0,5,0,0"
+                                                       Text="{Binding Url}" Style="{StaticResource TextMono}"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="{StaticResource FontSizeCaption}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Url}"/>
+                                            <TextBlock Grid.Row="2" Grid.ColumnSpan="3" Margin="0,4,0,0"
+                                                       Text="{Binding ResolutionMessage}" Style="{StaticResource TextCaption}"
+                                                       Foreground="{StaticResource WarningBrush}"
+                                                       TextWrapping="Wrap"
+                                                       Visibility="{Binding HasResolutionMessage, Converter={StaticResource BoolToVisibility}}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Grid>
 
                 <StackPanel Grid.Row="2" Margin="0,12,0,0">
                     <Grid Margin="0,0,0,8">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsBatchInputStep}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -73,43 +163,27 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="64"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="保存到" Style="{StaticResource TextCaption}"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="{Binding DownloadDirectory}" Style="{StaticResource TextMono}"
-                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding DownloadDirectory}"/>
-                        <Button Grid.Column="2" Height="32" MinWidth="56" Margin="12,0,0,0" Padding="12,4"
-                                Style="{StaticResource SurfaceButton}" Foreground="{DynamicResource AccentBrush}"
-                                Background="Transparent" BorderThickness="0"
-                                Command="{Binding BrowseDirectoryCommand}" Content="更改"
-                                IsEnabled="{Binding CanEditBatchDestination}"
-                                ToolTip="更改本次批量下载位置" AutomationProperties.Name="更改批量下载位置"/>
-                    </Grid>
-
-                    <Grid Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="64"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="32"/>
                             <ColumnDefinition Width="8"/>
                             <ColumnDefinition Width="32"/>
                             <ColumnDefinition Width="8"/>
                             <ColumnDefinition Width="32"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="已有合集" Style="{StaticResource TextCaption}"
+                        <TextBlock Grid.Column="0" Text="保存位置" Style="{StaticResource TextCaption}"
                                    VerticalAlignment="Center"/>
                         <Grid Grid.Column="1">
                             <ComboBox Height="32" Style="{StaticResource DarkComboBox}"
                                       ItemsSource="{Binding ExistingCollectionFolders}"
                                       SelectedItem="{Binding SelectedCollectionFolder}"
                                       DisplayMemberPath="DisplayName"
-                                      IsEnabled="{Binding CanSelectExistingCollectionFolder}"
-                                      ToolTip="{Binding SelectedCollectionFolder.Directory}"
-                                      AutomationProperties.Name="选择已有合集文件夹"/>
+                                      IsEnabled="{Binding CanEditBatchDestination}"
+                                      ToolTip="{Binding DownloadDirectory}"
+                                      AutomationProperties.Name="选择保存位置"/>
                             <TextBlock Margin="12,0,32,0" VerticalAlignment="Center"
                                        Text="{Binding ExistingCollectionFolderPlaceholder}"
-                                       IsHitTestVisible="False" TextTrimming="CharacterEllipsis">
+                                       IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding DownloadDirectory}">
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -124,21 +198,40 @@
                         </Grid>
                         <Button Grid.Column="3" Width="32" Height="32" Padding="0"
                                 Style="{StaticResource ToolbarIconButton}"
+                                Command="{Binding ClearSelectedCollectionFolderCommand}"
+                                ToolTip="切换为临时下载" AutomationProperties.Name="切换为临时下载">
+                            <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                        </Button>
+                        <Button Grid.Column="5" Width="32" Height="32" Padding="0"
+                                Style="{StaticResource ToolbarIconButton}"
                                 Command="{Binding RefreshExistingCollectionFoldersCommand}"
                                 IsEnabled="{Binding CanEditBatchDestination}"
                                 ToolTip="刷新已有合集" AutomationProperties.Name="刷新已有合集">
                             <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                         </Button>
-                        <Button Grid.Column="5" Width="32" Height="32" Padding="0"
+                        <Button Grid.Column="7" Width="32" Height="32" Padding="0"
                                 Style="{StaticResource ToolbarIconButton}"
-                                Command="{Binding ClearSelectedCollectionFolderCommand}"
+                                Command="{Binding BrowseDirectoryCommand}"
                                 IsEnabled="{Binding CanEditBatchDestination}"
-                                ToolTip="取消选择已有合集" AutomationProperties.Name="取消选择已有合集">
-                            <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                                ToolTip="选择新文件夹作为合集" AutomationProperties.Name="添加合集目录">
+                            <TextBlock Text="&#xE8B7;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                         </Button>
                     </Grid>
                     <Button Height="36" Margin="0,12,0,0" Style="{StaticResource AccentButton}"
-                            Command="{Binding StartBatchDownloadCommand}" Content="解析并加入队列"/>
+                            Command="{Binding ResolveBatchNamesCommand}" Content="解析并确认名称"
+                            Visibility="{Binding IsBatchInputStep, Converter={StaticResource BoolToVisibility}}"/>
+                    <Grid Margin="0,12,0,0"
+                          Visibility="{Binding IsNameConfirmationStep, Converter={StaticResource BoolToVisibility}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Height="36" Style="{StaticResource SurfaceButton}"
+                                Command="{Binding EditBatchInputCommand}" Content="返回修改"/>
+                        <Button Grid.Column="2" Height="36" Style="{StaticResource AccentButton}"
+                                Command="{Binding StartBatchDownloadCommand}" Content="确认并下载"/>
+                    </Grid>
 
                     <Border Height="1" Background="{StaticResource BorderSubtleBrush}" Margin="0,16,0,12"/>
                     <TextBlock Text="播放列表 / 合集" Style="{StaticResource TextBodyStrong}" Margin="0,0,0,8"/>

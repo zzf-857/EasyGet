@@ -34,6 +34,52 @@ public class ConfigServiceTests
     }
 
     [Fact]
+    public async Task UpdateDefaultDownloadPathAsync_NotifiesAndPersistsSelection()
+    {
+        var service = new ConfigService(_tempDir);
+        var expectedPath = Path.Combine(_tempDir, "shared-downloads");
+        var observedPaths = new List<string>();
+        service.DefaultDownloadPathChanged += observedPaths.Add;
+
+        Assert.True(await service.UpdateDefaultDownloadPathAsync(expectedPath));
+
+        Assert.Equal(Path.GetFullPath(expectedPath), service.Config.DefaultDownloadPath);
+        Assert.Equal([Path.GetFullPath(expectedPath)], observedPaths);
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+        Assert.Equal(Path.GetFullPath(expectedPath), reloaded.Config.DefaultDownloadPath);
+    }
+
+    [Fact]
+    public async Task SelectedCollectionDirectory_IsRegisteredSharedAndPersisted()
+    {
+        var service = new ConfigService(_tempDir);
+        var collectionDirectory = Path.Combine(_tempDir, "RAG collection");
+        Directory.CreateDirectory(collectionDirectory);
+        var observedSelections = new List<string>();
+        var collectionListChangeCount = 0;
+        service.SelectedCollectionDirectoryChanged += observedSelections.Add;
+        service.CollectionDirectoriesChanged += () => collectionListChangeCount++;
+
+        Assert.True(await service.UpdateSelectedCollectionDirectoryAsync(collectionDirectory));
+
+        var expected = Path.GetFullPath(collectionDirectory);
+        Assert.Equal(expected, service.Config.SelectedCollectionDirectory);
+        Assert.Contains(
+            service.Config.CollectionDirectories,
+            path => ExistingCollectionFolderStore.PathsEqual(path, expected));
+        Assert.Equal([expected], observedSelections);
+        Assert.Equal(1, collectionListChangeCount);
+
+        var reloaded = new ConfigService(_tempDir);
+        await reloaded.LoadAsync();
+        Assert.Equal(expected, reloaded.Config.SelectedCollectionDirectory);
+        Assert.Contains(
+            reloaded.Config.CollectionDirectories,
+            path => ExistingCollectionFolderStore.PathsEqual(path, expected));
+    }
+
+    [Fact]
     public async Task SaveAndReload_PreservesClipboardMonitoringPreference()
     {
         var service = new ConfigService(_tempDir);

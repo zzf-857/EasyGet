@@ -127,6 +127,37 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void SharedDownloadPathChange_UpdatesSettingsDisplayImmediately()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.Initialize();
+        var expectedPath = Path.Combine(config.ConfigDirectory, "shared-downloads");
+
+        config.UpdateDefaultDownloadPath(expectedPath);
+
+        Assert.Equal(Path.GetFullPath(expectedPath), viewModel.DefaultDownloadPath);
+    }
+
+    [Fact]
+    public async Task SavingOtherSettings_DoesNotRollBackSharedDownloadPath()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.Initialize();
+        var expectedPath = Path.Combine(config.ConfigDirectory, "shared-downloads");
+        config.UpdateDefaultDownloadPath(expectedPath);
+
+        viewModel.UseProxy = !viewModel.UseProxy;
+        Assert.True(await viewModel.FlushPendingSaveAsync());
+
+        var reloaded = new ConfigService(config.ConfigDirectory);
+        await reloaded.LoadAsync();
+        Assert.Equal(Path.GetFullPath(expectedPath), reloaded.Config.DefaultDownloadPath);
+        Assert.Equal(Path.GetFullPath(expectedPath), viewModel.DefaultDownloadPath);
+    }
+
+    [Fact]
     public void Initialize_LoadsDouyinSpecialSettingsFromConfig()
     {
         var config = CreateTempConfigService();

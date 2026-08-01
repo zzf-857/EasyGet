@@ -564,6 +564,24 @@ public class ThemeStyleTests
     }
 
     [Fact]
+    public void ComboBoxSelectionPresenterHonorsDisplayMemberPath()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = document.Descendants().Single(element =>
+            element.Name.LocalName == "Style"
+            && element.Attribute(x + "Key")?.Value == "DarkComboBox");
+
+        var selectionPresenter = style.Descendants().Single(element =>
+            element.Name.LocalName == "ContentPresenter"
+            && element.Attribute(x + "Name")?.Value == "ContentSite");
+
+        Assert.Equal(
+            "{TemplateBinding ItemTemplateSelector}",
+            selectionPresenter.Attribute("ContentTemplateSelector")?.Value);
+    }
+
+    [Fact]
     public void ToggleSwitchStyleDefinesDisabledVisualState()
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));

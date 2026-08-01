@@ -121,65 +121,8 @@ public partial class YtDlpService
         if (YangshipinUrlParser.IsYangshipinVideoUrl(url))
             return await _yangshipinDownloadService.GetVideoInfoAsync(url, ct);
 
-        if (M3u8DownloadService.IsM3u8Url(url))
-        {
-            var title = "M3U8_Video";
-            try
-            {
-                var uri = new Uri(url);
-                var filename = Path.GetFileNameWithoutExtension(uri.AbsolutePath);
-                if (!string.IsNullOrWhiteSpace(filename) && filename != "index" && filename != "playlist")
-                {
-                    title = filename;
-                }
-                else
-                {
-                    title = $"M3U8_{DateTime.Now:yyyyMMdd_HHmmss}";
-                }
-            }
-            catch
-            {
-                title = $"M3U8_{DateTime.Now:yyyyMMdd_HHmmss}";
-            }
-
-            return new VideoInfo
-            {
-                Title = title,
-                Platform = "M3U8",
-                Duration = 0,
-                Thumbnail = "",
-                FileSize = 0,
-                Url = url
-            };
-        }
-
-        if (TelegramDownloadService.IsTelegramUrl(url))
-        {
-            var title = "Telegram_Message";
-            try
-            {
-                var parsed = TelegramDownloadService.ParseTelegramLink(url);
-                if (parsed != null)
-                {
-                    var (chatTarget, startId, endId) = parsed.Value;
-                    title = endId != null ? $"TG_{chatTarget}_{startId}-{endId}" : $"TG_{chatTarget}_{startId}";
-                }
-            }
-            catch
-            {
-                title = $"TG_Message_{DateTime.Now:yyyyMMdd_HHmmss}";
-            }
-
-            return new VideoInfo
-            {
-                Title = title,
-                Platform = "Telegram",
-                Duration = 0,
-                Thumbnail = "",
-                FileSize = 0,
-                Url = url
-            };
-        }
+        if (DownloadRouteResolver.TryCreateLocalVideoInfo(url, out var localInfo))
+            return localInfo;
 
         try
         {
@@ -792,7 +735,9 @@ public partial class YtDlpService
         }
 
         args.Add("-o");
-        args.Add(DownloadFileNameBuilder.BuildOutputTemplate(task.OutputDirectory, task.Title));
+        args.Add(DownloadFileNameBuilder.BuildOutputTemplate(
+            task.OutputDirectory,
+            task.OutputFileNameOverride ?? task.Title));
 
         args.Add("--windows-filenames");
         args.Add("--no-mtime");

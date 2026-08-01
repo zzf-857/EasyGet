@@ -27,6 +27,12 @@ public class AppConfig
     public string DefaultDownloadPath { get; set; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "EasyGet");
 
+    /// <summary>用户显式添加的合集目录。</summary>
+    public List<string> CollectionDirectories { get; set; } = [];
+
+    /// <summary>当前跨页面共享的合集目录；空值表示临时下载。</summary>
+    public string SelectedCollectionDirectory { get; set; } = "";
+
     /// <summary>默认格式 (mp4, mkv, webm, mp3, m4a)</summary>
     public string DefaultFormat { get; set; } = "mp4";
 
@@ -143,7 +149,7 @@ public class AppConfig
     /// <summary>抖音直播流空闲超时（秒）</summary>
     public int DouyinLiveIdleTimeoutSeconds { get; set; } = DefaultDouyinLiveIdleTimeoutSeconds;
 
-    /// <summary>仅用于兼容旧配置和备份；已识别平台现在始终使用规范目录。</summary>
+    /// <summary>仅用于兼容旧配置和备份；当前下载不再自动创建平台子目录。</summary>
     public bool AutoCategorizeByPlatform { get; set; } = true;
 
     /// <summary>窗口激活时是否检测剪贴板中的媒体链接</summary>

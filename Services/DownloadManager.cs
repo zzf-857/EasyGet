@@ -473,13 +473,14 @@ public class DownloadManager : IDisposable
                 _scheduledDownloads.Remove(registration.Task);
                 attempt = CreateAttemptLocked(registration.Task);
                 registration.Task.ScheduledStartTimeUtc = null;
-                registration.Task.Status = DownloadStatus.Resolving;
                 RegisterActiveTask();
                 attempt.MarkRegistered();
             }
 
-            WriteScheduleLogSafely(
-                $"[{DateTime.Now:HH:mm:ss}] 计划任务到点，正在解析: {registration.Task.Url}");
+            var metadataResolved = PrepareAttemptForPipeline(registration.Task);
+            WriteScheduleLogSafely(metadataResolved
+                ? $"[{DateTime.Now:HH:mm:ss}] 计划任务到点，等待下载: {registration.Task.Url}"
+                : $"[{DateTime.Now:HH:mm:ss}] 计划任务到点，正在解析: {registration.Task.Url}");
 
             if (_taskQueuePersistence is not null)
             {
@@ -505,7 +506,10 @@ public class DownloadManager : IDisposable
                 return;
             }
 
-            await QueueMetadataAsync(attempt).ConfigureAwait(false);
+            if (metadataResolved)
+                _ = ProcessDownloadAsync(attempt);
+            else
+                await QueueMetadataAsync(attempt).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -598,15 +602,29 @@ public class DownloadManager : IDisposable
             RegisterActiveTask();
             attempt.MarkRegistered();
 
-            if (resolvedInfo is not null)
+            bool metadataResolved;
+            try
             {
-                ApplyVideoInfoMetadata(task, resolvedInfo);
-                task.Status = DownloadStatus.Waiting;
+                metadataResolved = PrepareAttemptForPipeline(task, resolvedInfo);
+            }
+            catch (Exception ex)
+            {
+                FinishAttempt(attempt, currentTask =>
+                {
+                    currentTask.Status = DownloadStatus.Failed;
+                    currentTask.ErrorMessage = "准备下载任务失败，请检查输出目录后重试";
+                });
+                System.Diagnostics.Debug.WriteLine(
+                    $"[DownloadManager] Download preparation failed: {ex.Message}");
+                return true;
+            }
+
+            if (metadataResolved)
+            {
                 _ = ProcessDownloadAsync(attempt);
                 return true;
             }
 
-            task.Status = DownloadStatus.Resolving;
             LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 正在解析: {task.Url}");
 
             _ = QueueMetadataAsync(attempt);
@@ -621,6 +639,27 @@ public class DownloadManager : IDisposable
             });
             throw;
         }
+    }
+
+    private bool PrepareAttemptForPipeline(
+        DownloadTask task,
+        VideoInfo? resolvedInfo = null)
+    {
+        if (resolvedInfo is null
+            && DownloadRouteResolver.TryCreateLocalVideoInfo(task.Url, out var localInfo))
+        {
+            resolvedInfo = localInfo;
+        }
+
+        if (resolvedInfo is null)
+        {
+            task.Status = DownloadStatus.Resolving;
+            return false;
+        }
+
+        ApplyVideoInfoMetadata(task, resolvedInfo);
+        task.Status = DownloadStatus.Waiting;
+        return true;
     }
 
     public Task WaitForIdleAsync(CancellationToken cancellationToken)
@@ -1518,8 +1557,9 @@ public class DownloadManager : IDisposable
         CancellationToken token)
     {
         Action<string> log = line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}");
+        var engine = DownloadRouteResolver.Resolve(task.Url);
 
-        if (M3u8DownloadService.IsM3u8Url(task.Url))
+        if (engine == DownloadEngine.M3u8)
         {
             try
             {
@@ -1532,10 +1572,29 @@ public class DownloadManager : IDisposable
                 log("[m3u8] 尝试自动回退到默认下载器 (yt-dlp)...");
                 task.Status = DownloadStatus.Downloading;
                 task.ErrorMessage = string.Empty; // 必须清空错误信息，否则 UI 会一直显示红字导致用户误解
+
+                var expectedExtension = ResolveExpectedYtDlpExtension(task.Format);
+                var requestedFileName =
+                    $"{DownloadFileNameBuilder.SanitizeResolvedTitle(task.Title)}{expectedExtension}";
+                using var fallbackOutputReservation = DownloadOutputPathReservation.Reserve(
+                    task.OutputDirectory,
+                    requestedFileName);
+                var previousOutputFileNameOverride = task.OutputFileNameOverride;
+                task.OutputFileNameOverride = System.IO.Path.GetFileNameWithoutExtension(
+                    fallbackOutputReservation.Path);
+                try
+                {
+                    await _ytDlpService.DownloadAsync(task, progress, log, token);
+                }
+                finally
+                {
+                    task.OutputFileNameOverride = previousOutputFileNameOverride;
+                }
+                return;
             }
         }
 
-        if (TelegramDownloadService.IsTelegramUrl(task.Url))
+        if (engine == DownloadEngine.Telegram)
         {
             await _telegramDownloadService.DownloadAsync(task, progress, log, token);
             return;
@@ -1543,6 +1602,16 @@ public class DownloadManager : IDisposable
 
         await _ytDlpService.DownloadAsync(task, progress, log, token);
     }
+
+    private static string ResolveExpectedYtDlpExtension(string? format)
+        => format?.Trim().ToLowerInvariant() switch
+        {
+            "mp3" => ".mp3",
+            "m4a" => ".m4a",
+            "mkv" => ".mkv",
+            "webm" => ".webm",
+            _ => ".mp4"
+        };
 
     private async Task SaveHistoryIfCompletedAsync(DownloadTask task)
     {
@@ -1658,33 +1727,6 @@ public class DownloadManager : IDisposable
         task.FileSize = info.FileSize;
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {task.Title}");
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 平台: {info.Platform} | 时长: {task.DurationText}");
-        ApplyAutoCategorization(task, info.Platform);
-    }
-
-    private void ApplyAutoCategorization(DownloadTask task, string platform)
-    {
-        if (!string.IsNullOrWhiteSpace(task.CollectionTitle)
-            || !PlatformDirectoryPolicy.TryResolveCanonicalFolder(
-                platform,
-                task.Url,
-                out var folderName))
-        {
-            return;
-        }
-
-        var baseDirectory = string.IsNullOrWhiteSpace(task.OutputDirectory)
-            ? _configService.Config.DefaultDownloadPath
-            : task.OutputDirectory;
-        var categorizedDirectory = PlatformDirectoryPolicy.ResolveCategorizedDirectory(
-            baseDirectory,
-            folderName);
-        var directoryChanged = !AreEquivalentPaths(task.OutputDirectory, categorizedDirectory);
-        task.OutputDirectory = categorizedDirectory;
-        System.IO.Directory.CreateDirectory(categorizedDirectory);
-        if (!directoryChanged)
-            return;
-
-        LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 自动归类到: {folderName}/");
     }
 
     private static void ClearDouyinTaskAttemptState(DownloadTask task)

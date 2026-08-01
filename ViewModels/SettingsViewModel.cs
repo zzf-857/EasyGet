@@ -518,6 +518,7 @@ public partial class SettingsViewModel : ObservableObject
             [Path.Combine(AppContext.BaseDirectory, "logs")]);
         _userDataBackupService = userDataBackupService ?? new UserDataBackupService(
             UserDataBackupPaths.FromConfigDirectory(configService.ConfigDirectory));
+        _configService.DefaultDownloadPathChanged += OnSharedDefaultDownloadPathChanged;
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
     }
@@ -1178,7 +1179,10 @@ public partial class SettingsViewModel : ObservableObject
         try
         {
             var c = _configService.Config;
-            c.DefaultDownloadPath = DefaultDownloadPath;
+            _configService.UpdateDefaultDownloadPath(
+                string.IsNullOrWhiteSpace(DefaultDownloadPath)
+                    ? c.DefaultDownloadPath
+                    : DefaultDownloadPath);
             c.DefaultFormat = DefaultFormat;
             c.DefaultQuality = DefaultQuality switch
             {
@@ -1344,6 +1348,30 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     partial void OnDefaultDownloadPathChanged(string value) => AutoSave();
+
+    private void OnSharedDefaultDownloadPathChanged(string path)
+    {
+        void Apply()
+        {
+            var wasInitializing = _isInitializing;
+            _isInitializing = true;
+            try
+            {
+                DefaultDownloadPath = path;
+            }
+            finally
+            {
+                _isInitializing = wasInitializing;
+            }
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+            Apply();
+        else
+            dispatcher.Invoke(Apply);
+    }
+
     partial void OnDefaultFormatChanged(string value) => AutoSave();
     partial void OnDefaultQualityChanged(string value) => AutoSave();
     partial void OnMaxConcurrentDownloadsChanged(int value)

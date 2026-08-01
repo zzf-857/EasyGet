@@ -19,6 +19,8 @@ public sealed class UserDataBackupServiceTests
             {
               "configVersion": 3,
               "defaultFormat": "mkv",
+              "collectionDirectories": ["D:\\Collections\\RAG"],
+              "selectedCollectionDirectory": "D:\\Collections\\RAG",
               "globalDownloadRateLimitKilobytesPerSecond": 2048,
               "themeColor": "Rose",
               "cookieContent": "COOKIE-SECRET-123",
@@ -50,6 +52,8 @@ public sealed class UserDataBackupServiceTests
 
         Assert.Equal(1, preview.HistoryRecordCount);
         Assert.Contains("defaultFormat", preview.IncludedSettingNames);
+        Assert.Contains("collectionDirectories", preview.IncludedSettingNames);
+        Assert.Contains("selectedCollectionDirectory", preview.IncludedSettingNames);
         Assert.Contains("globalDownloadRateLimitKilobytesPerSecond", preview.IncludedSettingNames);
         Assert.Contains("themeColor", preview.IncludedSettingNames);
         Assert.DoesNotContain("cookieContent", preview.IncludedSettingNames);
@@ -68,6 +72,8 @@ public sealed class UserDataBackupServiceTests
         var settingsText = await ReadEntryTextAsync(
             archive.GetEntry(UserDataBackupService.SettingsEntryName)!);
         Assert.Contains("\"defaultFormat\": \"mkv\"", settingsText, StringComparison.Ordinal);
+        Assert.Contains("\"collectionDirectories\"", settingsText, StringComparison.Ordinal);
+        Assert.Contains("\"selectedCollectionDirectory\"", settingsText, StringComparison.Ordinal);
         Assert.Contains("\"globalDownloadRateLimitKilobytesPerSecond\": 2048", settingsText, StringComparison.Ordinal);
         Assert.DoesNotContain("COOKIE-SECRET-123", settingsText, StringComparison.Ordinal);
         Assert.DoesNotContain("cookieContent", settingsText, StringComparison.OrdinalIgnoreCase);

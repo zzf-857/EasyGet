@@ -74,7 +74,7 @@ public partial class DownloadTask : ObservableObject
     /// <summary>批量/合集任务在历史页显示的名称</summary>
     public string BatchName { get; set; } = "";
 
-    /// <summary>批量/合集任务的根目录（平台自动归类目录的上一级）</summary>
+    /// <summary>批量/合集任务的最终目录</summary>
     public string BatchDirectory { get; set; } = "";
 
     /// <summary>平台返回的真实合集标题；普通批量任务为空</summary>
@@ -88,6 +88,9 @@ public partial class DownloadTask : ObservableObject
 
     /// <summary>输出文件路径</summary>
     [ObservableProperty] private string _outputFilePath = "";
+
+    /// <summary>下载管线为避免并发同名覆盖而临时指定的文件名，不写入持久化队列。</summary>
+    internal string? OutputFileNameOverride { get; set; }
 
     /// <summary>所有安全输出文件路径（Douyin sidecar 可返回多个产物）</summary>
     public List<string> OutputFilePaths { get; set; } = [];

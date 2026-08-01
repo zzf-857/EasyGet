@@ -140,6 +140,38 @@ public class YtDlpArgsTests
     }
 
     [Fact]
+    public void BuildDownloadArgs_UsesReservedFileNameWithoutChangingDisplayTitle()
+    {
+        using var root = new TestDirectory();
+        var service = new YtDlpService(
+            new ConfigService(root.Path("config")),
+            new EnvironmentService());
+        var method = typeof(YtDlpService).GetMethod(
+            "BuildDownloadArgs",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        Assert.NotNull(method);
+        var task = new DownloadTask
+        {
+            Url = "https://example.test/master.m3u8",
+            Title = "共享标题",
+            OutputDirectory = root.DirectoryPath,
+            Format = "mp4",
+            Quality = "best",
+            OutputFileNameOverride = "共享标题 (2)"
+        };
+
+        var args = (List<string>)method!.Invoke(
+            service,
+            [task, Array.Empty<string>(), null])!;
+
+        AssertOptionValue(
+            args,
+            "-o",
+            Path.Combine(root.DirectoryPath, "共享标题 (2).%(ext)s"));
+        Assert.Equal("共享标题", task.Title);
+    }
+
+    [Fact]
     public void BuildFormatString_PrefersMp4AndM4aStreamsForMp4Downloads()
     {
         var format = BuildFormatString("mp4", "1080");

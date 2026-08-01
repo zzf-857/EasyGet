@@ -20,22 +20,31 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly YtDlpService _ytDlpService;
+    private readonly IVideoInfoProvider _videoInfoProvider;
     private readonly DownloadPreflightService _preflightService;
-    private readonly HistoryService? _historyService;
     private readonly DownloadDuplicateDetector? _duplicateDetector;
     private readonly ExistingCollectionFolderStore _collectionFolderStore;
+    private readonly Func<string, CancellationToken, Task<PlaylistInfo>> _getPlaylistInfoAsync;
+    private readonly Func<Task<List<DownloadHistory>>>? _loadDownloadHistoryAsync;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
     private readonly Func<string, string?> _selectDirectory;
     private readonly HashSet<DownloadTask> _trackedQueueTasks = [];
+    private readonly HashSet<BatchDownloadDraft> _trackedPendingItems = [];
     private readonly object _queueStateLock = new();
     private volatile bool _suppressQueueRefresh;
-    private string _configuredDownloadDirectory = "";
     private string _downloadRootDirectory = "";
     private string? _selectedCollectionDirectoryBeforeRefresh;
-    private string _pendingCollectionSourceUrl = "";
     private string _pendingCollectionTitle = "";
     private List<string> _pendingCollectionUrls = [];
+    private CancellationTokenSource? _nameResolutionCts;
+    private int _inputRevision;
+    private bool _suppressDraftInvalidation;
+    private bool _draftsAreExactCollectionImport;
+    private string _draftCollectionTitle = "";
+    private bool _applyingSharedDestination;
+    private bool _isRefreshingDestinationOptions;
+    private Task<bool> _destinationPersistenceTask = Task.FromResult(true);
 
     [ObservableProperty] private string _urlsText = "";
     [ObservableProperty] private string _selectedFormat = "mp4";
@@ -44,16 +53,29 @@ public partial class BatchDownloadViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditBatchDestination))]
     [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
+    [NotifyPropertyChangedFor(nameof(CanEditPendingItems))]
     private bool _isDownloading;
     [ObservableProperty] private bool _isImportingPlaylist;
     [ObservableProperty] private string _playlistUrl = "";
     [ObservableProperty] private string _selectedQueueFilter = "全部";
     [ObservableProperty] private string _downloadDirectory = "";
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBatchInputStep))]
+    [NotifyPropertyChangedFor(nameof(BatchConfirmationSummary))]
+    [NotifyPropertyChangedFor(nameof(CanEditPendingItems))]
+    private bool _isNameConfirmationStep;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(BatchConfirmationSummary))]
+    [NotifyPropertyChangedFor(nameof(CanEditBatchDestination))]
+    [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
+    [NotifyPropertyChangedFor(nameof(CanEditPendingItems))]
+    private bool _isResolvingNames;
+    [ObservableProperty]
     private ExistingCollectionFolder? _selectedCollectionFolder;
 
     public ObservableCollection<DownloadTask> QueueTasks => _downloadManager.Tasks;
     public ObservableCollection<DownloadTask> VisibleQueueTasks { get; } = [];
+    public ObservableCollection<BatchDownloadDraft> PendingItems { get; } = [];
     public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
         => _collectionFolderStore.Folders;
     public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
@@ -75,10 +97,18 @@ public partial class BatchDownloadViewModel : ObservableObject
     public bool CanClearFinished => QueueTasks.Any(task => task.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled);
     public bool CanRetryFailed => FailedTaskCount > 0;
     public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
-    public bool CanEditBatchDestination => !IsDownloading && !IsLoadingCollectionFolders;
+    public bool IsBatchInputStep => !IsNameConfirmationStep;
+    public string BatchConfirmationSummary => IsResolvingNames
+        ? $"正在解析 {PendingItems.Count} 个视频的名称..."
+        : $"已解析 {PendingItems.Count} 个视频，请确认或修改名称";
+    public bool CanEditBatchDestination
+        => !IsDownloading && !IsResolvingNames && !IsLoadingCollectionFolders;
     public bool CanSelectExistingCollectionFolder
         => _collectionFolderStore.HasFolders && CanEditBatchDestination;
-    public string ExistingCollectionFolderPlaceholder => _collectionFolderStore.Placeholder;
+    public bool CanEditPendingItems
+        => IsNameConfirmationStep && !IsResolvingNames && !IsDownloading;
+    public string ExistingCollectionFolderPlaceholder
+        => $"临时下载 · {_downloadRootDirectory}";
     public double OverallProgress => TotalTaskCount == 0
         ? 0
         : QueueTasks.Sum(task => task.Status == DownloadStatus.Completed ? 100 : Math.Clamp(task.Progress, 0, 100)) / TotalTaskCount;
@@ -113,46 +143,143 @@ public partial class BatchDownloadViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(text)) return;
 
         var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var existingUrls = UrlsText
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(DownloadViewModel.ExtractUrl)
-            .Where(url => url is not null)
-            .Cast<string>()
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var validUrls = new List<string>();
+        var existingLines = string.IsNullOrEmpty(UrlsText)
+            ? []
+            : UrlsText.Split('\n', StringSplitOptions.None).ToList();
+        var existingEntries = new Dictionary<string, (int LineIndex, bool HasProvidedTitle)>(
+            StringComparer.OrdinalIgnoreCase);
+        for (var index = 0; index < existingLines.Count; index++)
+        {
+            var existingItem = ParseBatchInputLine(existingLines[index]);
+            if (existingItem is null)
+                continue;
+
+            if (!existingEntries.TryGetValue(existingItem.Url, out var current)
+                || (!current.HasProvidedTitle && existingItem.HasProvidedTitle))
+            {
+                existingEntries[existingItem.Url] = (index, existingItem.HasProvidedTitle);
+            }
+        }
+
+        var validEntries = new List<string>();
+        var importedEntries = new Dictionary<string, (int EntryIndex, bool HasProvidedTitle)>(
+            StringComparer.OrdinalIgnoreCase);
         int ignoredCount = 0;
         int duplicateCount = 0;
+        int updatedTitleCount = 0;
 
         foreach (var line in lines)
         {
-            var url = DownloadViewModel.ExtractUrl(line);
-            if (url != null && existingUrls.Add(url))
-            {
-                validUrls.Add(url);
-            }
-            else if (url != null)
-            {
-                duplicateCount++;
-            }
-            else
+            var item = ParseBatchInputLine(line);
+            if (item is null)
             {
                 ignoredCount++;
+                continue;
             }
+
+            var formattedEntry = FormatBatchInput(item);
+            if (existingEntries.TryGetValue(item.Url, out var existingEntry))
+            {
+                duplicateCount++;
+                if (item.HasProvidedTitle && !existingEntry.HasProvidedTitle)
+                {
+                    existingLines[existingEntry.LineIndex] = formattedEntry;
+                    existingEntries[item.Url] = (existingEntry.LineIndex, true);
+                    updatedTitleCount++;
+                }
+                continue;
+            }
+
+            if (importedEntries.TryGetValue(item.Url, out var importedEntry))
+            {
+                duplicateCount++;
+                if (item.HasProvidedTitle && !importedEntry.HasProvidedTitle)
+                {
+                    validEntries[importedEntry.EntryIndex] = formattedEntry;
+                    importedEntries[item.Url] = (importedEntry.EntryIndex, true);
+                    updatedTitleCount++;
+                }
+                continue;
+            }
+
+            importedEntries.Add(item.Url, (validEntries.Count, item.HasProvidedTitle));
+            validEntries.Add(formattedEntry);
         }
 
-        if (validUrls.Count > 0)
+        if (validEntries.Count > 0 || updatedTitleCount > 0)
         {
-            var newText = string.Join("\n", validUrls);
-            UrlsText = string.IsNullOrEmpty(UrlsText) ? newText : UrlsText + "\n" + newText;
+            existingLines.AddRange(validEntries);
+            UrlsText = string.Join("\n", existingLines);
             ClearPendingCollectionImport();
         }
 
-        var details = new List<string> { $"新增 {validUrls.Count} 个链接" };
+        var details = new List<string> { $"新增 {validEntries.Count} 个链接" };
+        if (updatedTitleCount > 0)
+            details.Add($"补充 {updatedTitleCount} 个标题");
         if (duplicateCount > 0)
             details.Add($"跳过 {duplicateCount} 个重复链接");
         if (ignoredCount > 0)
             details.Add($"忽略 {ignoredCount} 行无效文本");
-        RequestShowNotification?.Invoke(string.Join("，", details), validUrls.Count > 0);
+        RequestShowNotification?.Invoke(
+            string.Join("，", details),
+            validEntries.Count > 0 || updatedTitleCount > 0);
+    }
+
+    private sealed record ParsedBatchInput(string Url, string Title, bool HasProvidedTitle);
+
+    private sealed record ConfirmedBatchItem(
+        string Url,
+        string Title,
+        VideoInfo? ResolvedInfo,
+        int CollectionItemIndex,
+        int CollectionItemCount);
+
+    private static string FormatBatchInput(ParsedBatchInput item)
+        => item.HasProvidedTitle ? $"{item.Title}---{item.Url}" : item.Url;
+
+    private static List<ParsedBatchInput> ParseBatchInput(string text)
+        => text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(ParseBatchInputLine)
+            .Where(item => item is not null)
+            .Cast<ParsedBatchInput>()
+            .GroupBy(item => item.Url, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.FirstOrDefault(item => item.HasProvidedTitle) ?? group.First())
+            .ToList();
+
+    private static ParsedBatchInput? ParseBatchInputLine(string line)
+    {
+        var trimmed = line.Trim();
+        if (trimmed.Length == 0)
+            return null;
+
+        var extractedUrl = DownloadViewModel.ExtractUrl(trimmed);
+        if (extractedUrl is null)
+            return null;
+
+        var urlIndex = trimmed.IndexOf(extractedUrl, StringComparison.OrdinalIgnoreCase);
+        if (urlIndex > 0)
+        {
+            var prefix = trimmed[..urlIndex].TrimEnd();
+            if (prefix.EndsWith("---", StringComparison.Ordinal))
+            {
+                var title = prefix[..^3].Trim();
+                if (title.Length > 0)
+                    return new ParsedBatchInput(extractedUrl, title, true);
+            }
+        }
+
+        var pipeIndex = trimmed.IndexOfAny(['|', '｜']);
+        if (pipeIndex >= 0)
+        {
+            var url = DownloadViewModel.ExtractUrl(trimmed[..pipeIndex]);
+            if (url is not null)
+            {
+                var title = trimmed[(pipeIndex + 1)..].Trim();
+                return new ParsedBatchInput(url, title, title.Length > 0);
+            }
+        }
+
+        return new ParsedBatchInput(extractedUrl, "", false);
     }
 
     public BatchDownloadViewModel(
@@ -162,7 +289,8 @@ public partial class BatchDownloadViewModel : ObservableObject
         DownloadPreflightService? preflightService = null,
         HistoryService? historyService = null,
         DownloadDuplicateDetector? duplicateDetector = null,
-        ExistingCollectionFolderStore? collectionFolderStore = null)
+        ExistingCollectionFolderStore? collectionFolderStore = null,
+        IVideoInfoProvider? videoInfoProvider = null)
         : this(
             downloadManager,
             configService,
@@ -173,7 +301,8 @@ public partial class BatchDownloadViewModel : ObservableObject
             historyService,
             duplicateDetector,
             null,
-            collectionFolderStore)
+            collectionFolderStore,
+            videoInfoProvider)
     {
     }
 
@@ -187,26 +316,34 @@ public partial class BatchDownloadViewModel : ObservableObject
         HistoryService? historyService = null,
         DownloadDuplicateDetector? duplicateDetector = null,
         Func<string, string?>? selectDirectory = null,
-        ExistingCollectionFolderStore? collectionFolderStore = null)
+        ExistingCollectionFolderStore? collectionFolderStore = null,
+        IVideoInfoProvider? videoInfoProvider = null,
+        Func<string, CancellationToken, Task<PlaylistInfo>>? getPlaylistInfoAsync = null,
+        Func<Task<List<DownloadHistory>>>? loadDownloadHistoryAsync = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _ytDlpService = ytDlpService;
+        _videoInfoProvider = videoInfoProvider ?? new YtDlpVideoInfoProvider(ytDlpService);
         _preflightService = preflightService ?? new DownloadPreflightService();
-        _historyService = historyService;
         _duplicateDetector = duplicateDetector;
         _collectionFolderStore = collectionFolderStore
-            ?? new ExistingCollectionFolderStore(historyService);
+            ?? new ExistingCollectionFolderStore(historyService, configService);
+        _getPlaylistInfoAsync = getPlaylistInfoAsync ?? _ytDlpService.GetPlaylistInfoAsync;
+        _loadDownloadHistoryAsync = loadDownloadHistoryAsync
+            ?? (historyService is null ? null : () => historyService.GetAllAsync());
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
         _selectDirectory = selectDirectory ?? SelectDirectory;
-        _configuredDownloadDirectory = _configService.Config.DefaultDownloadPath;
-        _downloadRootDirectory = _configuredDownloadDirectory;
+        _downloadRootDirectory = _configService.Config.DefaultDownloadPath;
         DownloadDirectory = _downloadRootDirectory;
+        _configService.DefaultDownloadPathChanged += OnSharedDefaultDownloadPathChanged;
+        _configService.SelectedCollectionDirectoryChanged += OnSharedSelectedCollectionDirectoryChanged;
         _collectionFolderStore.PropertyChanged += OnCollectionFolderStorePropertyChanged;
         _collectionFolderStore.FoldersRefreshing += OnCollectionFoldersRefreshing;
         _collectionFolderStore.FoldersRefreshed += OnCollectionFoldersRefreshed;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
+        PendingItems.CollectionChanged += OnPendingItemsChanged;
         SynchronizeQueueSubscriptions();
         RefreshQueueState();
     }
@@ -216,27 +353,37 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     public void RefreshRuntimeConfigDisplay()
     {
-        var updatedDefault = _configService.Config.DefaultDownloadPath;
-        var followsConfiguredDefault = ExistingCollectionFolderStore.PathsEqual(
-            _downloadRootDirectory,
-            _configuredDownloadDirectory);
-        _configuredDownloadDirectory = updatedDefault;
-        if (followsConfiguredDefault)
-            _downloadRootDirectory = updatedDefault;
-        if (followsConfiguredDefault && SelectedCollectionFolder is null)
-            DownloadDirectory = _downloadRootDirectory;
+        OnSharedDefaultDownloadPathChanged(_configService.Config.DefaultDownloadPath);
+        OnSharedSelectedCollectionDirectoryChanged(
+            _configService.Config.SelectedCollectionDirectory);
     }
 
     [RelayCommand(CanExecute = nameof(CanEditDestination))]
-    private void BrowseDirectory()
+    private async Task BrowseDirectory()
     {
         var selectedDirectory = _selectDirectory(DownloadDirectory);
         if (string.IsNullOrWhiteSpace(selectedDirectory))
             return;
 
-        _downloadRootDirectory = Path.GetFullPath(selectedDirectory.Trim());
-        SelectedCollectionFolder = null;
-        DownloadDirectory = _downloadRootDirectory;
+        try
+        {
+            SelectedCollectionFolder = await _collectionFolderStore.RegisterCollectionAsync(
+                selectedDirectory);
+            if (!await _destinationPersistenceTask)
+            {
+                RequestShowNotification?.Invoke(
+                    "合集已选择，但保存失败；应用退出时将再次尝试保存。",
+                    false);
+            }
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or ArgumentException
+                                   or NotSupportedException
+                                   or InvalidOperationException)
+        {
+            RequestShowNotification?.Invoke($"无法添加合集目录：{ex.Message}", false);
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanClearSelectedCollectionFolder))]
@@ -261,6 +408,9 @@ public partial class BatchDownloadViewModel : ObservableObject
                 await _collectionFolderStore.RefreshAsync();
             else
                 await _collectionFolderStore.EnsureLoadedAsync();
+
+            OnSharedSelectedCollectionDirectoryChanged(
+                _configService.Config.SelectedCollectionDirectory);
         }
         catch (Exception ex)
         {
@@ -276,6 +426,7 @@ public partial class BatchDownloadViewModel : ObservableObject
                 OnPropertyChanged(nameof(IsLoadingCollectionFolders));
                 OnPropertyChanged(nameof(CanEditBatchDestination));
                 OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
+                ResolveBatchNamesCommand.NotifyCanExecuteChanged();
                 StartBatchDownloadCommand.NotifyCanExecuteChanged();
                 NotifyDestinationCommandsCanExecuteChanged();
                 break;
@@ -289,28 +440,98 @@ public partial class BatchDownloadViewModel : ObservableObject
     }
 
     private void OnCollectionFoldersRefreshing(object? sender, EventArgs e)
-        => _selectedCollectionDirectoryBeforeRefresh = SelectedCollectionFolder?.Directory;
+    {
+        _selectedCollectionDirectoryBeforeRefresh = SelectedCollectionFolder?.Directory
+            ?? _configService.Config.SelectedCollectionDirectory;
+        _isRefreshingDestinationOptions = true;
+    }
 
     private void OnCollectionFoldersRefreshed(object? sender, EventArgs e)
     {
         var selectedPath = _selectedCollectionDirectoryBeforeRefresh
-            ?? SelectedCollectionFolder?.Directory;
+            ?? SelectedCollectionFolder?.Directory
+            ?? _configService.Config.SelectedCollectionDirectory;
         _selectedCollectionDirectoryBeforeRefresh = null;
-        if (!string.IsNullOrWhiteSpace(selectedPath))
-            SelectedCollectionFolder = _collectionFolderStore.FindByDirectory(selectedPath);
+        try
+        {
+            OnSharedSelectedCollectionDirectoryChanged(selectedPath ?? "");
+        }
+        finally
+        {
+            _isRefreshingDestinationOptions = false;
+        }
     }
 
     partial void OnSelectedCollectionFolderChanged(ExistingCollectionFolder? value)
     {
         DownloadDirectory = value?.Directory ?? _downloadRootDirectory;
         ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
+        if (_applyingSharedDestination || _isRefreshingDestinationOptions)
+            return;
+
+        _configService.UpdateSelectedCollectionDirectory(value?.Directory);
+        _destinationPersistenceTask = _configService.SaveAsync();
+    }
+
+    private void OnSharedDefaultDownloadPathChanged(string path)
+    {
+        void Apply()
+        {
+            _downloadRootDirectory = path;
+            if (SelectedCollectionFolder is null)
+                DownloadDirectory = path;
+            OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+            Apply();
+        else
+            dispatcher.Invoke(Apply);
+    }
+
+    private void OnSharedSelectedCollectionDirectoryChanged(string directory)
+    {
+        void Apply()
+        {
+            var selected = string.IsNullOrWhiteSpace(directory)
+                ? null
+                : ExistingCollectionFolderStore.PathsEqual(
+                    SelectedCollectionFolder?.Directory,
+                    directory)
+                    && Directory.Exists(directory)
+                    ? SelectedCollectionFolder
+                    : _collectionFolderStore.FindByDirectory(directory);
+            _applyingSharedDestination = true;
+            try
+            {
+                SelectedCollectionFolder = selected;
+            }
+            finally
+            {
+                _applyingSharedDestination = false;
+            }
+
+            DownloadDirectory = selected?.Directory ?? _downloadRootDirectory;
+            if (!string.IsNullOrWhiteSpace(directory) && selected is null)
+            {
+                _configService.UpdateSelectedCollectionDirectory(null);
+                _destinationPersistenceTask = _configService.SaveAsync();
+            }
+        }
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+            Apply();
+        else
+            dispatcher.Invoke(Apply);
     }
 
     private static string? SelectDirectory(string currentDirectory)
     {
         var dialog = new Microsoft.Win32.OpenFolderDialog
         {
-            Title = "选择批量下载目录",
+            Title = "选择文件夹作为合集",
             InitialDirectory = currentDirectory
         };
         return dialog.ShowDialog() == true ? dialog.FolderName : null;
@@ -330,6 +551,31 @@ public partial class BatchDownloadViewModel : ObservableObject
         {
             // 队列汇总属于 UI 辅助状态，绝不能中断实际下载工作线程。
         }
+    }
+
+    private void OnPendingItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        SynchronizePendingItemSubscriptions();
+        OnPropertyChanged(nameof(BatchConfirmationSummary));
+        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+    }
+
+    private void OnPendingItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(BatchDownloadDraft.Title))
+            StartBatchDownloadCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SynchronizePendingItemSubscriptions()
+    {
+        foreach (var tracked in _trackedPendingItems.Where(item => !PendingItems.Contains(item)).ToList())
+        {
+            tracked.PropertyChanged -= OnPendingItemPropertyChanged;
+            _trackedPendingItems.Remove(tracked);
+        }
+
+        foreach (var item in PendingItems.Where(item => _trackedPendingItems.Add(item)))
+            item.PropertyChanged += OnPendingItemPropertyChanged;
     }
 
     private void OnQueueTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -439,20 +685,43 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     partial void OnUrlsTextChanged(string value)
     {
+        _inputRevision++;
+        if (!_suppressDraftInvalidation && IsNameConfirmationStep)
+            ResetNameConfirmation();
+
         LinkCount = string.IsNullOrWhiteSpace(value)
             ? 0
-            : value.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                   .Select(DownloadViewModel.ExtractUrl)
-                   .Where(url => url is not null)
-                   .Distinct(StringComparer.OrdinalIgnoreCase)
-                   .Count();
-        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+            : ParseBatchInput(value).Count;
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
     }
 
     partial void OnIsDownloadingChanged(bool value)
     {
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
         StartBatchDownloadCommand.NotifyCanExecuteChanged();
+        EditBatchInputCommand.NotifyCanExecuteChanged();
+        RemovePendingItemCommand.NotifyCanExecuteChanged();
+        ImportPlaylistCommand.NotifyCanExecuteChanged();
         NotifyDestinationCommandsCanExecuteChanged();
+    }
+
+    partial void OnIsResolvingNamesChanged(bool value)
+    {
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+        EditBatchInputCommand.NotifyCanExecuteChanged();
+        RemovePendingItemCommand.NotifyCanExecuteChanged();
+        ImportPlaylistCommand.NotifyCanExecuteChanged();
+        NotifyDestinationCommandsCanExecuteChanged();
+    }
+
+    partial void OnIsNameConfirmationStepChanged(bool value)
+    {
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+        EditBatchInputCommand.NotifyCanExecuteChanged();
+        RemovePendingItemCommand.NotifyCanExecuteChanged();
+        ImportPlaylistCommand.NotifyCanExecuteChanged();
     }
 
     private void NotifyDestinationCommandsCanExecuteChanged()
@@ -466,7 +735,11 @@ public partial class BatchDownloadViewModel : ObservableObject
         => ImportPlaylistCommand.NotifyCanExecuteChanged();
 
     partial void OnIsImportingPlaylistChanged(bool value)
-        => ImportPlaylistCommand.NotifyCanExecuteChanged();
+    {
+        ImportPlaylistCommand.NotifyCanExecuteChanged();
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand]
     private void PasteUrls()
@@ -489,52 +762,196 @@ public partial class BatchDownloadViewModel : ObservableObject
     private static string? ReadClipboardText()
         => Clipboard.ContainsText() ? Clipboard.GetText() : null;
 
+    [RelayCommand(CanExecute = nameof(CanResolveBatchNames))]
+    private async Task ResolveBatchNames()
+    {
+        if (!CanResolveBatchNames())
+            return;
+
+        var inputRevision = _inputRevision;
+        var parsedItems = ParseBatchInput(UrlsText);
+        var parsedUrls = parsedItems.Select(item => item.Url).ToList();
+        var isExactCollectionImport = _pendingCollectionUrls.Count > 0
+                                      && parsedUrls.Count == _pendingCollectionUrls.Count
+                                      && parsedUrls.ToHashSet(StringComparer.OrdinalIgnoreCase)
+                                          .SetEquals(_pendingCollectionUrls);
+        var knownUrls = new HashSet<string>(
+            _downloadManager.Tasks.Select(task => task.Url),
+            StringComparer.OrdinalIgnoreCase);
+        var validItems = parsedItems.Where(item => knownUrls.Add(item.Url)).ToList();
+        if (validItems.Count == 0)
+        {
+            RequestShowNotification?.Invoke("没有新增任务：这些链接已经在下载队列中", false);
+            return;
+        }
+
+        ResetNameConfirmation();
+        _draftsAreExactCollectionImport = isExactCollectionImport;
+        _draftCollectionTitle = isExactCollectionImport ? _pendingCollectionTitle : "";
+
+        foreach (var item in validItems)
+        {
+            var collectionItemIndex = isExactCollectionImport
+                ? _pendingCollectionUrls.FindIndex(url => string.Equals(
+                    url,
+                    item.Url,
+                    StringComparison.OrdinalIgnoreCase)) + 1
+                : 0;
+            PendingItems.Add(new BatchDownloadDraft(
+                item.Url,
+                item.Title,
+                item.HasProvidedTitle,
+                collectionItemIndex,
+                isExactCollectionImport ? _pendingCollectionUrls.Count : 0));
+        }
+
+        IsNameConfirmationStep = true;
+        IsResolvingNames = true;
+        var cts = new CancellationTokenSource();
+        _nameResolutionCts = cts;
+        try
+        {
+            await ResolvePendingNamesAsync(PendingItems.ToArray(), cts.Token);
+            if (inputRevision != _inputRevision || !IsNameConfirmationStep)
+                return;
+
+            var unresolvedCount = PendingItems.Count(item => string.IsNullOrWhiteSpace(item.Title));
+            if (unresolvedCount > 0)
+            {
+                RequestShowNotification?.Invoke(
+                    $"有 {unresolvedCount} 个名称未能解析，请手动填写后继续",
+                    false);
+            }
+            else if (validItems.Count < parsedItems.Count)
+            {
+                RequestShowNotification?.Invoke(
+                    $"已解析 {validItems.Count} 个名称，并跳过 {parsedItems.Count - validItems.Count} 个队列内重复链接",
+                    true);
+            }
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            RequestShowNotification?.Invoke($"批量名称解析失败：{ex.Message}", false);
+        }
+        finally
+        {
+            if (ReferenceEquals(_nameResolutionCts, cts))
+            {
+                _nameResolutionCts = null;
+                IsResolvingNames = false;
+            }
+            cts.Dispose();
+        }
+    }
+
+    private async Task ResolvePendingNamesAsync(
+        IReadOnlyCollection<BatchDownloadDraft> drafts,
+        CancellationToken cancellationToken)
+    {
+        using var gate = new SemaphoreSlim(4, 4);
+        var resolutions = drafts.Select(async draft =>
+        {
+            if (draft.HasProvidedTitle)
+            {
+                draft.ResolvedInfo = DownloadRouteResolver.TryCreateLocalVideoInfo(
+                    draft.Url,
+                    out var localInfo)
+                        ? localInfo
+                        : new VideoInfo { Url = draft.Url, Title = draft.Title.Trim() };
+                return;
+            }
+
+            await gate.WaitAsync(cancellationToken);
+            draft.IsResolving = true;
+            try
+            {
+                var info = await _videoInfoProvider.GetVideoInfoAsync(draft.Url, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                draft.ResolvedInfo = info;
+                if (info is null)
+                {
+                    draft.ResolutionMessage = draft.HasProvidedTitle
+                        ? "未读取到元数据，下载时将重试解析"
+                        : "未能解析名称，请手动输入后继续";
+                    return;
+                }
+
+                if (!draft.HasProvidedTitle)
+                {
+                    var resolvedTitle = info.Title?.Trim() ?? "";
+                    draft.Title = _draftsAreExactCollectionImport
+                        && !string.IsNullOrWhiteSpace(_draftCollectionTitle)
+                            ? CollectionNamingService.BuildItemTitle(
+                                resolvedTitle,
+                                _draftCollectionTitle,
+                                draft.CollectionItemIndex,
+                                draft.CollectionItemCount)
+                            : resolvedTitle;
+                }
+
+                if (string.IsNullOrWhiteSpace(draft.Title))
+                    draft.ResolutionMessage = "未能解析名称，请手动输入后继续";
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                draft.ResolutionMessage = draft.HasProvidedTitle
+                    ? "元数据解析失败，下载时将重试解析"
+                    : "名称解析失败，请手动输入后继续";
+            }
+            finally
+            {
+                draft.IsResolving = false;
+                gate.Release();
+            }
+        });
+
+        await Task.WhenAll(resolutions);
+    }
+
     [RelayCommand(CanExecute = nameof(CanStartBatchDownload))]
     private async Task StartBatchDownload()
     {
-        if (LinkCount == 0)
+        if (!CanStartBatchDownload())
             return;
 
+        var knownUrls = new HashSet<string>(
+            _downloadManager.Tasks.Select(task => task.Url),
+            StringComparer.OrdinalIgnoreCase);
+        var confirmedItems = PendingItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.Title) && knownUrls.Add(item.Url))
+            .Select(item => new ConfirmedBatchItem(
+                item.Url,
+                item.Title.Trim(),
+                item.ResolvedInfo,
+                item.CollectionItemIndex,
+                item.CollectionItemCount))
+            .ToList();
+        var urls = confirmedItems.Select(item => item.Url).ToList();
+        if (urls.Count == 0)
+        {
+            RequestShowNotification?.Invoke("没有新增任务：这些链接已经在下载队列中", false);
+            return;
+        }
+
+        var draftsAreExactCollectionImport = _draftsAreExactCollectionImport;
+        var draftCollectionTitle = _draftCollectionTitle;
         IsDownloading = true;
         var enqueuedCount = 0;
         var existingCollection = SelectedCollectionFolder;
         var requestedDownloadDirectory = DownloadDirectory;
         try
         {
-            var parsedItems = UrlsText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                               .Select(line =>
-                               {
-                                   var parts = line.Split(new[] { '|', '｜' }, 2, StringSplitOptions.TrimEntries);
-                                   var urlStr = DownloadViewModel.ExtractUrl(parts[0]);
-                                   return urlStr is not null ? new { Url = urlStr, Title = parts.Length == 2 ? parts[1] : "" } : null;
-                               })
-                               .Where(x => x is not null)
-                               .GroupBy(x => x!.Url, StringComparer.OrdinalIgnoreCase)
-                               .Select(g => g.First()!)
-                               .ToList();
 
-            var parsedUrls = parsedItems.Select(x => x.Url).ToList();
-
-            var isExactCollectionImport = _pendingCollectionUrls.Count > 0
-                                          && parsedUrls.Count == _pendingCollectionUrls.Count
-                                          && parsedUrls.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                                              .SetEquals(_pendingCollectionUrls);
-            var knownUrls = new HashSet<string>(
-                _downloadManager.Tasks.Select(task => task.Url),
-                StringComparer.OrdinalIgnoreCase);
-
-            var validItems = parsedItems.Where(x => knownUrls.Add(x.Url)).ToList();
-            var urls = validItems.Select(x => x.Url).ToList();
-
-            if (urls.Count == 0)
+            if (_loadDownloadHistoryAsync is not null && _duplicateDetector is not null)
             {
-                RequestShowNotification?.Invoke("没有新增任务：这些链接已经在下载队列中", false);
-                return;
-            }
-
-            if (_historyService is not null && _duplicateDetector is not null)
-            {
-                var history = await _historyService.GetAllAsync();
+                var history = await _loadDownloadHistoryAsync();
                 var duplicateUrls = urls
                     .Where(url => _duplicateDetector.Detect(url, history).IsDuplicate)
                     .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -543,8 +960,8 @@ public partial class BatchDownloadViewModel : ObservableObject
                         $"发现 {duplicateUrls.Count} 个链接已在历史或本地文件中。\n是否仍然全部重新下载？选择“否”将跳过重复项。",
                         "批量重复下载确认") != true)
                 {
-                    validItems = validItems.Where(x => !duplicateUrls.Contains(x.Url)).ToList();
-                    urls = validItems.Select(x => x.Url).ToList();
+                    confirmedItems = confirmedItems.Where(x => !duplicateUrls.Contains(x.Url)).ToList();
+                    urls = confirmedItems.Select(x => x.Url).ToList();
                     if (urls.Count == 0)
                     {
                         RequestShowNotification?.Invoke("已跳过全部重复链接，没有新增任务。", true);
@@ -561,16 +978,12 @@ public partial class BatchDownloadViewModel : ObservableObject
             }
 
             var isReusingExistingCollection = existingCollection is not null;
-            var collectionTitle = isExactCollectionImport
-                && !string.IsNullOrWhiteSpace(_pendingCollectionTitle)
-                    ? _pendingCollectionTitle
+            var collectionTitle = draftsAreExactCollectionImport
+                && !string.IsNullOrWhiteSpace(draftCollectionTitle)
+                    ? draftCollectionTitle
                     : existingCollection?.Name ?? "";
             var batch = existingCollection is null
-                ? BatchDownloadOrganizer.Create(
-                    requestedDownloadDirectory,
-                    urls,
-                    isExactCollectionImport ? _pendingCollectionSourceUrl : "",
-                    collectionTitle: isExactCollectionImport ? _pendingCollectionTitle : "")
+                ? null
                 : BatchDownloadOrganizer.ReuseExisting(
                     existingCollection.Directory,
                     existingCollection.BatchId,
@@ -606,30 +1019,27 @@ public partial class BatchDownloadViewModel : ObservableObject
                 _ => "best"
             };
 
-            for (var index = 0; index < validItems.Count; index++)
+            for (var index = 0; index < confirmedItems.Count; index++)
             {
-                var item = validItems[index];
+                var item = confirmedItems[index];
                 // History does not persist collection indexes, so manual appends stay unnumbered
                 // instead of guessing a next index from the number of completed history rows.
-                var collectionItemIndex = isExactCollectionImport
-                    ? _pendingCollectionUrls.FindIndex(url => string.Equals(
-                        url,
-                        item.Url,
-                        StringComparison.OrdinalIgnoreCase)) + 1
+                var collectionItemIndex = draftsAreExactCollectionImport
+                    ? item.CollectionItemIndex
                     : existingCollection is null
                         ? index + 1
                         : 0;
                 var collectionItemCount = batch is null
                     ? 0
-                    : isExactCollectionImport
-                        ? _pendingCollectionUrls.Count
+                    : draftsAreExactCollectionImport
+                        ? item.CollectionItemCount
                         : existingCollection is null
                             ? urls.Count
                             : 0;
                 var task = new DownloadTask
                 {
                     Url = item.Url,
-                    Title = item.Title,
+                    Title = item.Title.Trim(),
                     Format = format,
                     Quality = quality,
                     OutputDirectory = outputDirectory,
@@ -640,7 +1050,12 @@ public partial class BatchDownloadViewModel : ObservableObject
                     CollectionItemIndex = batch is null ? 0 : collectionItemIndex,
                     CollectionItemCount = collectionItemCount
                 };
-                await _downloadManager.EnqueueAsync(task);
+                var resolvedInfo = item.ResolvedInfo ?? new VideoInfo
+                {
+                    Url = item.Url,
+                    Title = item.Title.Trim()
+                };
+                await _downloadManager.EnqueueAsync(task, resolvedInfo);
                 enqueuedCount++;
             }
 
@@ -650,18 +1065,21 @@ public partial class BatchDownloadViewModel : ObservableObject
                     $"已将 {urls.Count} 个任务加入合集：{batch!.Name}",
                     true);
             }
-            else if (batch is not null)
-            {
-                RequestShowNotification?.Invoke(
-                    $"已加入 {urls.Count} 个任务，并创建目录：{Path.GetFileName(batch.Directory)}",
-                    true);
-            }
             else
             {
                 RequestShowNotification?.Invoke($"已加入 {urls.Count} 个下载任务", true);
             }
 
-            UrlsText = "";
+            _suppressDraftInvalidation = true;
+            try
+            {
+                UrlsText = "";
+            }
+            finally
+            {
+                _suppressDraftInvalidation = false;
+            }
+            ResetNameConfirmation();
             ClearPendingCollectionImport();
             SelectedQueueFilter = "进行中";
         }
@@ -678,21 +1096,70 @@ public partial class BatchDownloadViewModel : ObservableObject
         }
     }
 
+    private bool CanResolveBatchNames()
+        => LinkCount > 0
+           && IsBatchInputStep
+           && !IsDownloading
+           && !IsResolvingNames
+           && !IsImportingPlaylist
+           && !IsLoadingCollectionFolders;
+
     private bool CanStartBatchDownload()
-        => LinkCount > 0 && !IsDownloading && !IsLoadingCollectionFolders;
+        => IsNameConfirmationStep
+           && !IsResolvingNames
+           && !IsDownloading
+           && !IsImportingPlaylist
+           && PendingItems.Count > 0
+           && PendingItems.All(item => !string.IsNullOrWhiteSpace(item.Title));
+
+    [RelayCommand(CanExecute = nameof(CanEditBatchInput))]
+    private void EditBatchInput()
+        => ResetNameConfirmation();
+
+    private bool CanEditBatchInput()
+        => IsNameConfirmationStep && !IsDownloading;
+
+    [RelayCommand(CanExecute = nameof(CanRemovePendingItem))]
+    private void RemovePendingItem(BatchDownloadDraft? item)
+    {
+        if (item is null || !CanEditPendingItems)
+            return;
+
+        PendingItems.Remove(item);
+        if (PendingItems.Count == 0)
+            ResetNameConfirmation();
+    }
+
+    private bool CanRemovePendingItem(BatchDownloadDraft? item)
+        => item is not null && CanEditPendingItems;
+
+    private void ResetNameConfirmation()
+    {
+        _nameResolutionCts?.Cancel();
+        _nameResolutionCts = null;
+        foreach (var item in _trackedPendingItems)
+            item.PropertyChanged -= OnPendingItemPropertyChanged;
+        _trackedPendingItems.Clear();
+        PendingItems.Clear();
+        _draftsAreExactCollectionImport = false;
+        _draftCollectionTitle = "";
+        IsResolvingNames = false;
+        IsNameConfirmationStep = false;
+        StartBatchDownloadCommand.NotifyCanExecuteChanged();
+    }
 
     [RelayCommand(CanExecute = nameof(CanImportPlaylist))]
     private async Task ImportPlaylist()
     {
-        if (string.IsNullOrWhiteSpace(PlaylistUrl))
+        if (!CanImportPlaylist())
             return;
 
         IsImportingPlaylist = true;
         try
         {
             var sourceUrl = PlaylistUrl.Trim();
-            var playlist = await _ytDlpService.GetPlaylistInfoAsync(sourceUrl);
-            if (ApplyPlaylistImport(playlist, sourceUrl))
+            var playlist = await _getPlaylistInfoAsync(sourceUrl, CancellationToken.None);
+            if (ApplyPlaylistImport(playlist))
                 PlaylistUrl = "";
             else
                 RequestShowNotification?.Invoke("未能从该链接读取播放列表，请检查链接或登录状态", false);
@@ -708,9 +1175,13 @@ public partial class BatchDownloadViewModel : ObservableObject
     }
 
     private bool CanImportPlaylist()
-        => !string.IsNullOrWhiteSpace(PlaylistUrl) && !IsImportingPlaylist;
+        => !string.IsNullOrWhiteSpace(PlaylistUrl)
+           && !IsImportingPlaylist
+           && IsBatchInputStep
+           && !IsResolvingNames
+           && !IsDownloading;
 
-    internal bool ApplyPlaylistImport(PlaylistInfo playlist, string? fallbackSourceUrl = null)
+    internal bool ApplyPlaylistImport(PlaylistInfo playlist)
     {
         ArgumentNullException.ThrowIfNull(playlist);
         if (playlist.Urls.Count == 0)
@@ -722,10 +1193,10 @@ public partial class BatchDownloadViewModel : ObservableObject
             .ToList();
         if (urls.Count == 0)
             return false;
+        if (!IsBatchInputStep || IsResolvingNames || IsDownloading)
+            return false;
+
         UrlsText = string.Join("\n", urls);
-        _pendingCollectionSourceUrl = string.IsNullOrWhiteSpace(playlist.SourceUrl)
-            ? fallbackSourceUrl?.Trim() ?? ""
-            : playlist.SourceUrl.Trim();
         _pendingCollectionTitle = playlist.Title.Trim();
         _pendingCollectionUrls = urls;
         RequestShowNotification?.Invoke(
@@ -738,7 +1209,6 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     private void ClearPendingCollectionImport()
     {
-        _pendingCollectionSourceUrl = "";
         _pendingCollectionTitle = "";
         _pendingCollectionUrls = [];
     }

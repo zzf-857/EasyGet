@@ -151,6 +151,66 @@ public class M3u8DownloadServiceTests
     }
 
     [Fact]
+    public async Task OutputPathReservation_ConcurrentSameNamesUseNumberedSuffixes()
+    {
+        using var root = new TestDirectory();
+        var reservations = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ =>
+            Task.Run(() => DownloadOutputPathReservation.Reserve(
+                root.DirectoryPath,
+                "Friendly title.mp4"))));
+
+        try
+        {
+            var paths = reservations
+                .Select(reservation => reservation.Path)
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+
+            Assert.Equal(8, paths.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Contains(root.Path("Friendly title.mp4"), paths);
+            foreach (var suffix in Enumerable.Range(2, 7))
+                Assert.Contains(root.Path($"Friendly title ({suffix}).mp4"), paths);
+        }
+        finally
+        {
+            foreach (var reservation in reservations)
+                reservation.Dispose();
+        }
+    }
+
+    [Fact]
+    public void OutputPathReservation_SkipsExistingFileWithoutOverwritingIt()
+    {
+        using var root = new TestDirectory();
+        var existingPath = root.Path("video.mp4");
+        File.WriteAllText(existingPath, "existing output");
+
+        using var reservation = DownloadOutputPathReservation.Reserve(
+            root.DirectoryPath,
+            "video.mp4");
+
+        Assert.Equal(root.Path("video (2).mp4"), reservation.Path);
+        Assert.Equal("existing output", File.ReadAllText(existingPath));
+    }
+
+    [Fact]
+    public void OutputPathReservation_DisposeReleasesUnwrittenPath()
+    {
+        using var root = new TestDirectory();
+        var first = DownloadOutputPathReservation.Reserve(
+            root.DirectoryPath,
+            "video.mp4");
+        var reservedPath = first.Path;
+
+        first.Dispose();
+        using var replacement = DownloadOutputPathReservation.Reserve(
+            root.DirectoryPath,
+            "video.mp4");
+
+        Assert.Equal(reservedPath, replacement.Path);
+    }
+
+    [Fact]
     public void EnsureSegmentsReadyForMerge_RejectsPermanentlyFailedSegments()
     {
         using var root = new TestDirectory();
@@ -253,6 +313,25 @@ public class M3u8DownloadServiceTests
     }
 
     [Fact]
+    public void PromoteFfmpegOutputIfSuccessful_NeverOverwritesExistingOutput()
+    {
+        using var root = new TestDirectory();
+        var muxedOutputPath = root.Path("muxed.mp4");
+        var finalOutputPath = root.Path("video.mp4");
+        File.WriteAllText(muxedOutputPath, "new output");
+        File.WriteAllText(finalOutputPath, "existing output");
+
+        Assert.Throws<IOException>(() =>
+            M3u8DownloadService.PromoteFfmpegOutputIfSuccessful(
+                new ProcessOutput("", "", 0),
+                muxedOutputPath,
+                finalOutputPath));
+
+        Assert.Equal("new output", File.ReadAllText(muxedOutputPath));
+        Assert.Equal("existing output", File.ReadAllText(finalOutputPath));
+    }
+
+    [Fact]
     public async Task DownloadAsync_PropagatesCancellationWhileLoadingPlaylist()
     {
         using var root = new TestDirectory();
@@ -261,6 +340,7 @@ public class M3u8DownloadServiceTests
         var task = new DownloadTask
         {
             Url = "https://example.test/video.m3u8",
+            Title = "cancelled video",
             OutputDirectory = root.Path("output")
         };
         using var cancellation = new CancellationTokenSource();
@@ -270,6 +350,32 @@ public class M3u8DownloadServiceTests
             service.DownloadAsync(task, ct: cancellation.Token));
 
         Assert.Equal(DownloadStatus.Cancelled, task.Status);
+        using var replacement = DownloadOutputPathReservation.Reserve(
+            task.OutputDirectory,
+            "cancelled video.mp4");
+        Assert.Equal(root.Path("output", "cancelled video.mp4"), replacement.Path);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_ReleasesOutputPathReservationAfterRequestSetupFailure()
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        var service = new M3u8DownloadService(config, new EnvironmentService());
+        var task = new DownloadTask
+        {
+            Url = "relative-video.m3u8",
+            Title = "failed video",
+            OutputDirectory = root.Path("output")
+        };
+
+        await Assert.ThrowsAsync<Exception>(() => service.DownloadAsync(task));
+
+        Assert.Equal(DownloadStatus.Failed, task.Status);
+        using var replacement = DownloadOutputPathReservation.Reserve(
+            task.OutputDirectory,
+            "failed video.mp4");
+        Assert.Equal(root.Path("output", "failed video.mp4"), replacement.Path);
     }
 
     [Fact]

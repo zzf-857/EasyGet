@@ -393,7 +393,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void BatchDownloadViewExposesTargetDirectoryAndExistingCollectionPicker()
+    public void BatchDownloadViewUsesOneTemporaryOrCollectionDestinationPicker()
     {
         var source = File.ReadAllText(GetViewPath("BatchDownloadView.xaml"));
 
@@ -404,7 +404,11 @@ public class XamlBindingTests
         Assert.Contains("{Binding RefreshExistingCollectionFoldersCommand}", source, StringComparison.Ordinal);
         Assert.Contains("{Binding ClearSelectedCollectionFolderCommand}", source, StringComparison.Ordinal);
         Assert.Contains("DisplayMemberPath=\"DisplayName\"", source, StringComparison.Ordinal);
-        Assert.Contains("{Binding CanSelectExistingCollectionFolder}", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"保存位置\"", source, StringComparison.Ordinal);
+        Assert.Contains("切换为临时下载", source, StringComparison.Ordinal);
+        Assert.Contains("选择新文件夹作为合集", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"保存到\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text=\"已有合集\"", source, StringComparison.Ordinal);
     }
 
     [Fact]

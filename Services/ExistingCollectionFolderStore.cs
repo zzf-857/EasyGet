@@ -13,6 +13,7 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
     private const int RefreshDebounceMilliseconds = 150;
 
     private readonly HistoryService? _historyService;
+    private readonly ConfigService? _configService;
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private readonly object _lifecycleGate = new();
     private readonly ObservableCollection<ExistingCollectionFolder> _folders = [];
@@ -26,15 +27,21 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
     [NotifyPropertyChangedFor(nameof(Placeholder))]
     private bool _isLoading;
 
-    public ExistingCollectionFolderStore(HistoryService? historyService = null)
+    public ExistingCollectionFolderStore(
+        HistoryService? historyService = null,
+        ConfigService? configService = null)
     {
         _historyService = historyService;
+        _configService = configService;
         Folders = new ReadOnlyObservableCollection<ExistingCollectionFolder>(_folders);
         if (_historyService is not null)
         {
             _historyService.HistoryAdded += OnHistoryAdded;
             _historyService.HistoryInvalidated += OnHistoryInvalidated;
         }
+
+        if (_configService is not null)
+            _configService.CollectionDirectoriesChanged += OnCollectionDirectoriesChanged;
     }
 
     public ReadOnlyObservableCollection<ExistingCollectionFolder> Folders { get; }
@@ -57,10 +64,63 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
         return LoadAsync(forceRefresh: true);
     }
 
+    public async Task<ExistingCollectionFolder> RegisterCollectionAsync(
+        string directory,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        var fullPath = Path.TrimEndingDirectorySeparator(
+            Path.GetFullPath(directory.Trim()));
+        if (!Directory.Exists(fullPath))
+            throw new DirectoryNotFoundException($"Collection directory was not found: {fullPath}");
+
+        if (_configService is not null)
+        {
+            await _configService.RegisterCollectionDirectoryAsync(
+                fullPath,
+                cancellationToken);
+        }
+
+        await LoadAsync(forceRefresh: true);
+        return FindByDirectory(fullPath)
+               ?? throw new InvalidOperationException(
+                   "The selected collection directory could not be loaded.");
+    }
+
     public ExistingCollectionFolder? FindByDirectory(string? directory)
-        => string.IsNullOrWhiteSpace(directory)
-            ? null
-            : _folders.FirstOrDefault(folder => PathsEqual(folder.Directory, directory));
+    {
+        if (string.IsNullOrWhiteSpace(directory))
+            return null;
+
+        var existing = _folders.FirstOrDefault(folder =>
+            PathsEqual(folder.Directory, directory));
+        if (existing is not null)
+            return existing;
+
+        try
+        {
+            var fullPath = Path.TrimEndingDirectorySeparator(
+                Path.GetFullPath(directory.Trim()));
+            if (!Directory.Exists(fullPath))
+                return null;
+
+            var name = Path.GetFileName(fullPath);
+            return new ExistingCollectionFolder
+            {
+                BatchId = BatchDownloadOrganizer.CreateDirectoryGroupId(fullPath),
+                Name = string.IsNullOrWhiteSpace(name) ? "合集" : name,
+                Directory = fullPath
+            };
+        }
+        catch (Exception ex) when (ex is ArgumentException
+                                   or NotSupportedException
+                                   or PathTooLongException
+                                   or IOException
+                                   or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     internal static bool PathsEqual(string? left, string? right)
     {
@@ -101,7 +161,9 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
             List<ExistingCollectionFolder> historyFolders = _historyService is null
                 ? []
                 : await _historyService.GetExistingCollectionFoldersAsync();
-            var availableFolders = await Task.Run(() => Normalize(historyFolders));
+            var configuredFolders = CreateConfiguredFolders();
+            var availableFolders = await Task.Run(() =>
+                Normalize(historyFolders.Concat(configuredFolders)));
             lock (_lifecycleGate)
             {
                 if (Volatile.Read(ref _disposed) != 0)
@@ -195,6 +257,9 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
         var version = Interlocked.Increment(ref _refreshRequestVersion);
         _ = RefreshAfterInvalidationAsync(version);
     }
+
+    private void OnCollectionDirectoriesChanged()
+        => OnHistoryInvalidated();
 
     private bool CanProcessHistoryChange()
     {
@@ -321,6 +386,29 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
             .ToList();
     }
 
+    private IReadOnlyList<ExistingCollectionFolder> CreateConfiguredFolders()
+    {
+        if (_configService is null)
+            return [];
+
+        return _configService.Config.CollectionDirectories
+            .Select(directory =>
+            {
+                var name = Path.GetFileName(directory.TrimEnd(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar));
+                return new ExistingCollectionFolder
+                {
+                    BatchId = BatchDownloadOrganizer.CreateDirectoryGroupId(directory),
+                    Name = string.IsNullOrWhiteSpace(name) ? "合集" : name,
+                    Directory = directory,
+                    ExistingItemCount = 0,
+                    LastDownloadTime = DateTime.MinValue
+                };
+            })
+            .ToList();
+    }
+
     public void Dispose()
     {
         lock (_lifecycleGate)
@@ -340,6 +428,8 @@ public sealed partial class ExistingCollectionFolderStore : ObservableObject, ID
             _historyService.HistoryAdded -= OnHistoryAdded;
             _historyService.HistoryInvalidated -= OnHistoryInvalidated;
         }
+        if (_configService is not null)
+            _configService.CollectionDirectoriesChanged -= OnCollectionDirectoriesChanged;
 
         // In-flight refreshes still release the managed gate after observing _disposed.
         GC.SuppressFinalize(this);
