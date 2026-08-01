@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.4.3 - 2026-08-01
+
+### Download Organization
+- Standardize platform download folders, reuse existing collection directories, and improve batch organization across download and history workflows.
+- Add local history thumbnails, media-aware directory discovery, and clearer grouping for existing downloads.
+
+### Performance Guidance
+- Add runtime performance recommendations for concurrency, fragments, connection counts, and related download settings.
+- Present the recommendations in a dedicated settings dialog with the current value, suggested value, and expected impact.
+
+### Desktop Shell
+- Refine the tray context menu with a compact dark appearance, Fluent glyphs, and restrained interaction states.
+- Make the title-bar close button, taskbar Close command, and Alt+F4 hide EasyGet while keeping it available from the tray; only the tray Exit command now shuts down the application.
+
+### Diagnostics and Release Reliability
+- Repair the Douyin sidecar import self-test arguments and avoid misclassifying command-line usage errors as expired Cookies.
+- Add a guarded release entry point with immutable-release verification, tag ancestry checks, and end-to-end update-manifest validation.
+
+### Tests
+- Add regression coverage for platform directories, existing collection reuse, local thumbnails, performance recommendations, tray styling, close-to-tray behavior, sidecar health checks, and release automation.
+- Verified 1184 automated tests pass; 1 live network test remains explicitly skipped.
+
 ## 1.4.1 - 2026-07-29
 
 ### Startup Reliability
