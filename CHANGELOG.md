@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.5 - 2026-08-14
+
+### Release Recovery
+- Recover from the unpublished `v1.4.4` tag after the release workflow failed on a timing-sensitive scheduled-download restore test.
+- Discover the tag-triggered `release.yml` run without crashing when `gh run list` still returns an empty JSON array under PowerShell StrictMode.
+
+### Tests
+- Keep a restored future schedule in `Scheduled` across process restart, then activate it once, instead of racing a 700ms due time on CI.
+
 ## 1.4.4 - 2026-08-14
 
 ### Reliability

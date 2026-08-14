@@ -435,8 +435,7 @@ function Wait-ForReleaseWorkflow {
     $maxDiscoveryAttempts = 60
     $run = $null
     for ($attempt = 1; $attempt -le $maxDiscoveryAttempts; $attempt++) {
-        $runJsonLines = @(Invoke-NativeCommandCapture `
-            -Command "gh" `
+        $runJson = Invoke-GhUtf8Json `
             -Arguments @(
                 "run", "list",
                 "--repo", $Repository,
@@ -446,16 +445,24 @@ function Wait-ForReleaseWorkflow {
                 "--limit", "20",
                 "--json", "databaseId,headBranch,headSha,status,conclusion,url,workflowName,event"
             ) `
-            -Description "Discovering the release.yml workflow run")
-        $runJson = $runJsonLines -join [Environment]::NewLine
-        $runs = @($runJson | ConvertFrom-Json)
-        $run = $runs |
-            Where-Object {
-                $_.headSha -eq $Commit -and
-                $_.headBranch -eq $Tag -and
-                $_.event -eq "push"
-            } |
-            Sort-Object databaseId -Descending |
+            -Description "Discovering the release.yml workflow run"
+        $parsedRuns = @()
+        if (-not [string]::IsNullOrWhiteSpace($runJson)) {
+            $parsedRuns = @($runJson | ConvertFrom-Json)
+        }
+        $run = @(
+            $parsedRuns |
+                Where-Object {
+                    $null -ne $_ -and
+                    $null -ne $_.PSObject.Properties['headSha'] -and
+                    $null -ne $_.PSObject.Properties['headBranch'] -and
+                    $null -ne $_.PSObject.Properties['event'] -and
+                    $_.headSha -eq $Commit -and
+                    $_.headBranch -eq $Tag -and
+                    $_.event -eq "push"
+                }
+        ) |
+            Sort-Object { $_.databaseId } -Descending |
             Select-Object -First 1
 
         if ($null -ne $run) {

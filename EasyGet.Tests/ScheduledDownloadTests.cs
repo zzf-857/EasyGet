@@ -139,7 +139,7 @@ public sealed class ScheduledDownloadTests
     {
         using var root = new TestDirectory();
         var statePath = root.Path("queue-state.json");
-        var dueAt = DateTimeOffset.UtcNow.AddMilliseconds(700);
+        var dueAt = DateTimeOffset.UtcNow.AddHours(1);
 
         using (var firstPersistence = new TaskQueuePersistenceService(statePath, TimeSpan.Zero))
         using (var firstHistory = new HistoryService(root.Path("first-history.db")))
@@ -169,6 +169,7 @@ public sealed class ScheduledDownloadTests
         Assert.Equal(DownloadStatus.Scheduled, restored.Status);
         Assert.Equal(0, downloads.MetadataCalls);
 
+        await manager.ScheduleAsync(restored, DateTimeOffset.UtcNow.AddSeconds(-1));
         await downloads.DownloadCompleted.Task.WaitAsync(TimeSpan.FromSeconds(3));
         await manager.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(3));
 

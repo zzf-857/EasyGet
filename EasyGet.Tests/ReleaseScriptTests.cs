@@ -932,6 +932,8 @@ public class ReleaseScriptTests
         Assert.Contains("@(\"push\", \"--atomic\", \"origin\"", script, StringComparison.Ordinal);
         Assert.Contains("-Command \"gh\"", script, StringComparison.Ordinal);
         Assert.Contains("@(\"run\", \"watch\"", script, StringComparison.Ordinal);
+        Assert.Contains("PSObject.Properties['headSha']", script, StringComparison.Ordinal);
+        Assert.Contains("Discovering the release.yml workflow run", script, StringComparison.Ordinal);
         Assert.Contains("releases/latest/download/easyget-update.json?cache-buster=", script, StringComparison.Ordinal);
         Assert.Contains("$clientManifestUri = \"https://github.com/$Repository/releases/latest/download/easyget-update.json\"", script, StringComparison.Ordinal);
         Assert.Contains("$clientManifest.version -ne $ReleaseVersion", script, StringComparison.Ordinal);
