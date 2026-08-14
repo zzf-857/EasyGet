@@ -168,6 +168,67 @@ public class DownloadManagerTests
     }
 
     [Fact]
+    public async Task YtDlp_ConcurrentSameTitlesUseDistinctReservedFileNames()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        config.Config.MaxConcurrentDownloads = 2;
+        var ytDlp = new RecordingFallbackYtDlpDownloadService(
+            expectedDownloads: 2,
+            allowMetadata: true);
+        using var manager = new DownloadManager(ytDlp, history, config);
+        var first = new DownloadTask
+        {
+            Url = "https://example.test/video-a",
+            Title = "共享标题",
+            OutputDirectory = config.Config.DefaultDownloadPath
+        };
+        var second = new DownloadTask
+        {
+            Url = "https://example.test/video-b",
+            Title = "共享标题",
+            OutputDirectory = config.Config.DefaultDownloadPath
+        };
+
+        try
+        {
+            await manager.EnqueueAsync(first);
+            await manager.EnqueueAsync(second);
+            await ytDlp.AllDownloadsStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+            Assert.Equal(
+                ["共享标题", "共享标题 (2)"],
+                ytDlp.ReservedFileNames
+                    .Order(StringComparer.Ordinal)
+                    .ToArray());
+            Assert.Equal(
+                2,
+                ytDlp.OutputTemplates.Distinct(StringComparer.Ordinal).Count());
+            Assert.Contains(
+                ytDlp.OutputTemplates,
+                template => template.Contains("共享标题.%(ext)s", StringComparison.Ordinal));
+            Assert.Contains(
+                ytDlp.OutputTemplates,
+                template => template.Contains("共享标题 (2).%(ext)s", StringComparison.Ordinal));
+            Assert.Equal("共享标题", first.Title);
+            Assert.Equal("共享标题", second.Title);
+        }
+        finally
+        {
+            ytDlp.Release();
+        }
+
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.Equal(DownloadStatus.Completed, first.Status);
+        Assert.Equal(DownloadStatus.Completed, second.Status);
+        Assert.Null(first.OutputFileNameOverride);
+        Assert.Null(second.OutputFileNameOverride);
+    }
+
+    [Fact]
     public void DownloadTask_DisplayTitleShowsUsefulPlaceholderBeforeMetadataArrives()
     {
         var task = new DownloadTask
@@ -311,6 +372,41 @@ public class DownloadManagerTests
         await idleTask.WaitAsync(TimeSpan.FromSeconds(3));
 
         Assert.False(completedBeforeRelease);
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+    }
+
+    [Fact]
+    public async Task ResumeAsync_EmptyTitleRequestsMetadata()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new FakeYtDlpDownloadService
+        {
+            InfoToReturn = new VideoInfo
+            {
+                Title = "resolved after resume",
+                Platform = "YouTube"
+            }
+        };
+        using var manager = new DownloadManager(service, history, config);
+        var task = new DownloadTask
+        {
+            Url = "https://example.com/restored-resolving",
+            Title = "",
+            Status = DownloadStatus.Paused,
+            WasRestoredFromPreviousSession = true
+        };
+        manager.Tasks.Add(task);
+
+        await manager.ResumeAsync(task.Id);
+        await manager.WaitForIdleAsync(CancellationToken.None)
+            .WaitAsync(TimeSpan.FromSeconds(3));
+
+        Assert.Equal(1, service.GetVideoInfoCallCount);
+        Assert.Equal(1, service.DownloadCallCount);
+        Assert.Equal("resolved after resume", task.Title);
+        Assert.Equal("YouTube", task.Platform);
         Assert.Equal(DownloadStatus.Completed, task.Status);
     }
 
@@ -1191,13 +1287,16 @@ public class DownloadManagerTests
     private static void AssertCancellationTokenSourceDisposed(CancellationTokenSource source)
         => Assert.True(IsCancellationTokenSourceDisposed(source));
 
-    private sealed class RecordingFallbackYtDlpDownloadService(int expectedDownloads)
+    private sealed class RecordingFallbackYtDlpDownloadService(
+        int expectedDownloads,
+        bool allowMetadata = false)
         : IYtDlpDownloadService
     {
         private readonly TaskCompletionSource _release = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly object _fileNamesLock = new();
         private readonly List<string> _reservedFileNames = [];
+        private readonly List<string> _outputTemplates = [];
 
         public TaskCompletionSource AllDownloadsStarted { get; } = new(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1211,11 +1310,31 @@ public class DownloadManagerTests
             }
         }
 
+        public IReadOnlyList<string> OutputTemplates
+        {
+            get
+            {
+                lock (_fileNamesLock)
+                    return _outputTemplates.ToArray();
+            }
+        }
+
         public Task<VideoInfo?> GetVideoInfoAsync(
             string url,
             CancellationToken cancellationToken = default)
-            => throw new InvalidOperationException(
-                "M3U8 fallback must not enter the yt-dlp metadata pipeline.");
+        {
+            if (!allowMetadata)
+            {
+                throw new InvalidOperationException(
+                    "M3U8 fallback must not enter the yt-dlp metadata pipeline.");
+            }
+
+            return Task.FromResult<VideoInfo?>(new VideoInfo
+            {
+                Title = "ignored-metadata-title",
+                Platform = "Generic"
+            });
+        }
 
         public async Task DownloadAsync(
             DownloadTask task,
@@ -1227,6 +1346,9 @@ public class DownloadManagerTests
             lock (_fileNamesLock)
             {
                 _reservedFileNames.Add(task.OutputFileNameOverride ?? task.Title);
+                _outputTemplates.Add(DownloadFileNameBuilder.BuildOutputTemplate(
+                    task.OutputDirectory,
+                    task.OutputFileNameOverride ?? task.Title));
                 if (_reservedFileNames.Count == expectedDownloads)
                     AllDownloadsStarted.TrySetResult();
             }

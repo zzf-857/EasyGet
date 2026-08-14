@@ -303,11 +303,10 @@ public class ConfigService
                     if (CookieFileSerializer.HasExplicitDomainRows(_config.CookieContent)
                         || !string.IsNullOrWhiteSpace(_config.LegacyCookiePlatform))
                     {
-                        await CompleteLegacyCookieMigrationCoreAsync(
+                        migrationPersistedConfig = await CompleteLegacyCookieMigrationCoreAsync(
                             _config.LegacyCookiePlatform,
                             vault,
                             cancellationToken);
-                        migrationPersistedConfig = true;
                     }
                     else
                     {
@@ -324,7 +323,6 @@ public class ConfigService
                 {
                     System.Diagnostics.Debug.WriteLine(
                         $"[ConfigService] Cookie migration during save failed: {ex.Message}");
-                    return false;
                 }
             }
 
@@ -375,14 +373,14 @@ public class ConfigService
         }
     }
 
-    private async Task CompleteLegacyCookieMigrationCoreAsync(
+    private async Task<bool> CompleteLegacyCookieMigrationCoreAsync(
         string platformId,
         PlatformCookieVault vault,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (string.IsNullOrWhiteSpace(_config.CookieContent))
-            return;
+            return false;
 
         var originalContent = _config.CookieContent;
         var originalPlatform = _config.LegacyCookiePlatform;
@@ -410,10 +408,7 @@ public class ConfigService
             }
 
             if (scopedContents.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    "Cookie 文件未包含任何受支持平台的域名，无法安全迁移。");
-            }
+                return false;
         }
         else
         {
@@ -433,6 +428,9 @@ public class ConfigService
         {
             foreach (var scopedContent in scopedContents)
             {
+                if (await vault.ExistsAsync(scopedContent.StorageKey, cancellationToken))
+                    continue;
+
                 await vault.SaveAsync(
                     scopedContent.StorageKey,
                     scopedContent.Content,
@@ -482,6 +480,8 @@ public class ConfigService
             if (encrypted is not null)
                 CryptographicOperations.ZeroMemory(encrypted);
         }
+
+        return true;
     }
 
     /// <summary>

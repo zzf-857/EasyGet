@@ -82,6 +82,51 @@ public class XiaohongshuImageDownloadServiceTests
             service.TryDownloadAsync(task, ct: cancellation.Token));
     }
 
+    [Fact]
+    public void ResolveImageSubfolderName_AppendsNoteIdWhenPresent()
+    {
+        using var root = new TestDirectory();
+
+        var name = XiaohongshuImageDownloadService.ResolveImageSubfolderName(
+            "春日穿搭",
+            "6a1d4bd30000000008024b72",
+            root.DirectoryPath,
+            "https://www.xiaohongshu.com/explore/6a1d4bd30000000008024b72");
+
+        Assert.Equal("春日穿搭-6a1d4bd30000000008024b72", name);
+    }
+
+    [Fact]
+    public void ResolveImageSubfolderName_KeepsTitleWhenNoteIdMissingAndDirectoryIsFree()
+    {
+        using var root = new TestDirectory();
+
+        var name = XiaohongshuImageDownloadService.ResolveImageSubfolderName(
+            "春日穿搭",
+            "",
+            root.DirectoryPath,
+            "https://www.xiaohongshu.com/explore/other");
+
+        Assert.Equal("春日穿搭", name);
+    }
+
+    [Fact]
+    public void ResolveImageSubfolderName_DisambiguatesExistingTitleDirectoryWithoutNoteId()
+    {
+        using var root = new TestDirectory();
+        Directory.CreateDirectory(root.Path("春日穿搭"));
+
+        var name = XiaohongshuImageDownloadService.ResolveImageSubfolderName(
+            "春日穿搭",
+            "",
+            root.DirectoryPath,
+            "https://www.xiaohongshu.com/explore/other");
+
+        Assert.NotEqual("春日穿搭", name);
+        Assert.StartsWith("春日穿搭-", name, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(root.Path(name)));
+    }
+
     [Theory]
     [InlineData("https://www.xiaohongshu.com/discovery/item/6a1d4bd30000000008024b72?source=webshare", "6a1d4bd30000000008024b72")]
     [InlineData("https://www.xiaohongshu.com/explore/6a1d4bd30000000008024b72", "6a1d4bd30000000008024b72")]
@@ -208,7 +253,7 @@ public class XiaohongshuImageDownloadServiceTests
             Assert.Equal(DownloadStatus.Completed, task.Status);
             Assert.EndsWith($"{Path.DirectorySeparatorChar}1.jpg", task.OutputFilePath);
 
-            var subfolder = Path.Combine(outputDirectory, "并发下载测试");
+            var subfolder = Path.Combine(outputDirectory, "并发下载测试-abc123");
             Assert.Equal(
                 ["1.jpg", "2.jpg", "3.jpg", "4.jpg"],
                 Directory.GetFiles(subfolder)
@@ -254,7 +299,14 @@ public class XiaohongshuImageDownloadServiceTests
             Assert.True(task.Format == "jpg" || task.Format == "png" || task.Format == "webp");
             Assert.True(Directory.Exists(task.OutputDirectory));
 
-            var subfolder = Path.Combine(task.OutputDirectory, DownloadFileNameBuilder.SanitizeResolvedTitle(info.Title));
+            var noteId = XiaohongshuImageDownloadService.ExtractNoteId(url);
+            var subfolder = Path.Combine(
+                task.OutputDirectory,
+                XiaohongshuImageDownloadService.ResolveImageSubfolderName(
+                    DownloadFileNameBuilder.SanitizeResolvedTitle(info.Title),
+                    noteId,
+                    task.OutputDirectory,
+                    url));
             Assert.True(Directory.Exists(subfolder));
             var files = Directory.GetFiles(subfolder);
             Assert.NotEmpty(files);

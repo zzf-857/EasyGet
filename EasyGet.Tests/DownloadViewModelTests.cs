@@ -434,22 +434,30 @@ public class DownloadViewModelTests
     }
 
     [Fact]
-    public void UrlChangedDuringDownload_DetachesTaskWithoutCancellingIt()
+    public void UrlChangedDuringDownload_KeepsActiveTaskAttached()
     {
         using var context = CreateDownloadContext();
         var viewModel = context.ViewModel;
 
         using var taskCts = new CancellationTokenSource();
-        var task = new DownloadTask { Cts = taskCts };
+        var task = new DownloadTask
+        {
+            Cts = taskCts,
+            Status = DownloadStatus.Downloading
+        };
         viewModel.CurrentTask = task;
         viewModel.IsDownloading = true;
         viewModel.PageState = DownloadPageState.Downloading;
+        viewModel.PreviewInfo = new VideoInfo { Title = "旧预览" };
+        viewModel.UrlError = "旧错误";
 
         viewModel.Url = "https://example.com/changed-during-download";
 
-        Assert.Equal(DownloadPageState.Idle, viewModel.PageState);
-        Assert.Null(viewModel.CurrentTask);
-        Assert.False(viewModel.IsDownloading);
+        Assert.Same(task, viewModel.CurrentTask);
+        Assert.True(viewModel.IsDownloading);
+        Assert.Equal(DownloadPageState.Downloading, viewModel.PageState);
+        Assert.Null(viewModel.PreviewInfo);
+        Assert.Null(viewModel.UrlError);
         Assert.False(taskCts.IsCancellationRequested);
     }
 

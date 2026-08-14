@@ -122,6 +122,55 @@ public sealed class CookieMigrationTests
         Assert.Equal("", service.Config.CookieContent);
     }
 
+    [Fact]
+    public async Task CompleteLegacyCookieMigrationAsync_DoesNotOverwriteExistingVaultFiles()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var vault = new PlatformCookieVault(root.DirectoryPath, protector);
+        await vault.SaveAsync("youtube", "SID=existing-youtube", CancellationToken.None);
+        var service = new ConfigService(root.DirectoryPath, protector);
+        service.Config.CookieContent = """
+            # Netscape HTTP Cookie File
+            .youtube.com	TRUE	/	TRUE	0	SID	incoming-youtube
+            .x.com	TRUE	/	TRUE	0	auth_token	incoming-twitter
+            """;
+        service.Config.LegacyCookiePlatform = "";
+
+        await service.CompleteLegacyCookieMigrationAsync(
+            "",
+            vault,
+            CancellationToken.None);
+
+        Assert.Equal("SID=existing-youtube", await vault.LoadAsync("youtube", CancellationToken.None));
+        var twitter = await vault.LoadAsync("twitter", CancellationToken.None);
+        Assert.Contains("incoming-twitter", twitter, StringComparison.Ordinal);
+        Assert.DoesNotContain("incoming-youtube", twitter, StringComparison.Ordinal);
+        Assert.Equal("", service.Config.CookieContent);
+    }
+
+    [Fact]
+    public async Task CompleteLegacyCookieMigrationAsync_UnknownDomainsDoNotThrowOrWriteVault()
+    {
+        using var root = new TestDirectory();
+        var protector = new XorTestProtector();
+        var service = new ConfigService(root.DirectoryPath, protector);
+        var cookieContent = """
+            # Netscape HTTP Cookie File
+            .unknown.example	TRUE	/	TRUE	0	session	unknown-secret
+            """;
+        service.Config.CookieContent = cookieContent;
+        var vault = new PlatformCookieVault(root.DirectoryPath, protector);
+
+        await service.CompleteLegacyCookieMigrationAsync(
+            "",
+            vault,
+            CancellationToken.None);
+
+        Assert.Equal(cookieContent, service.Config.CookieContent);
+        Assert.False(Directory.Exists(root.Path("manual-cookies")));
+    }
+
     private sealed class XorTestProtector : ISecretProtector
     {
         public byte[] Protect(byte[] plaintext) => Transform(plaintext);

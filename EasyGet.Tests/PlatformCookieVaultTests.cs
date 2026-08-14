@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using EasyGet.Services.Cookies;
 using Xunit;
@@ -66,6 +67,22 @@ public sealed class PlatformCookieVaultTests
     }
 
     [Fact]
+    public async Task LoadAsync_WhenUnprotectFails_QuarantinesCorruptFileAndReturnsNull()
+    {
+        using var root = new TestDirectory();
+        var vault = new PlatformCookieVault(root.DirectoryPath, new ThrowingUnprotectProtector());
+        var path = root.Path("manual-cookies", "youtube.bin");
+        Directory.CreateDirectory(root.Path("manual-cookies"));
+        await File.WriteAllBytesAsync(path, [1, 2, 3, 4]);
+
+        var result = await vault.LoadAsync("youtube", CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.False(File.Exists(path));
+        Assert.NotEmpty(Directory.GetFiles(root.Path("manual-cookies"), "youtube.corrupt-*.bin"));
+    }
+
+    [Fact]
     public void DpapiSecretProtector_RoundTripsForCurrentWindowsUser()
     {
         if (!OperatingSystem.IsWindows())
@@ -87,5 +104,13 @@ public sealed class PlatformCookieVaultTests
 
         private static byte[] Transform(byte[] input)
             => input.Select(value => (byte)(value ^ 0xA5)).ToArray();
+    }
+
+    private sealed class ThrowingUnprotectProtector : ISecretProtector
+    {
+        public byte[] Protect(byte[] plaintext) => plaintext.ToArray();
+
+        public byte[] Unprotect(byte[] ciphertext)
+            => throw new CryptographicException("test decrypt failed");
     }
 }

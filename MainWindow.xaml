@@ -136,6 +136,12 @@
                     </Border>
                 </StackPanel>
 
+                <TextBlock Text="{Binding CurrentPageTitle}"
+                           Style="{StaticResource TextBodyStrong}"
+                           Foreground="{StaticResource TextSecondaryBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           IsHitTestVisible="False"/>
+
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Stretch">
                     <Button Style="{StaticResource WindowControlButton}" ToolTip="最小化"
                             AutomationProperties.Name="最小化" Click="MinimizeButton_Click">
@@ -252,7 +258,7 @@
                                   MouseEnter="ToastCard_MouseEnter" MouseLeave="ToastCard_MouseLeave">
                                 <Border x:Name="ToastCard" Background="{StaticResource BgSurfaceHighestBrush}"
                                         BorderBrush="{StaticResource BorderStrongBrush}"
-                                        BorderThickness="1" CornerRadius="6" Padding="12,8">
+                                        BorderThickness="1" CornerRadius="8" Padding="12,8">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto"/>
@@ -260,21 +266,22 @@
                                             <ColumnDefinition Width="Auto"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <Ellipse Grid.Column="0" Width="8" Height="8" Margin="0,4,8,0" VerticalAlignment="Top">
-                                            <Ellipse.Style>
-                                                <Style TargetType="Ellipse">
-                                                    <Setter Property="Fill" Value="{StaticResource SuccessBrush}"/>
+                                        <Border Grid.Column="0" Width="3" MinHeight="28" Margin="0,0,10,0"
+                                                CornerRadius="2" VerticalAlignment="Stretch">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Fill" Value="{StaticResource ErrorBrush}"/>
+                                                            <Setter Property="Background" Value="{StaticResource ErrorBrush}"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsInfo}" Value="True">
-                                                            <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
-                                            </Ellipse.Style>
-                                        </Ellipse>
+                                            </Border.Style>
+                                        </Border>
                                         <StackPanel Grid.Column="1">
                                             <TextBlock>
                                                 <TextBlock.Style>

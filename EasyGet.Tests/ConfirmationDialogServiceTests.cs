@@ -13,6 +13,10 @@ public class ConfirmationDialogServiceTests
     public void ResolveConfirmText_UsesActionSpecificChineseLabel(string title, string expected)
         => Assert.Equal(expected, ConfirmationDialogService.ResolveConfirmText(title));
 
+    [Fact]
+    public void ShouldConfirmWhenOwnerUnavailable_ReturnsFalse()
+        => Assert.False(ConfirmationDialogService.ShouldConfirmWhenOwnerUnavailable());
+
     [Theory]
     [InlineData("确认删除批次记录", true)]
     [InlineData("确认清空记录", true)]

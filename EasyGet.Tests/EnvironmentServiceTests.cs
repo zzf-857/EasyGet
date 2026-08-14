@@ -238,6 +238,119 @@ public class EnvironmentServiceTests : IDisposable
     }
 
     [Fact]
+    public void ToolApply_DownloadsOfficialReleaseAndReplacesWithoutSelfUpdateFlag()
+    {
+        var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
+            Path.Combine("Services", "EnvironmentService.cs")));
+
+        Assert.Contains("ReplaceExecutable(", source, StringComparison.Ordinal);
+        Assert.Contains("EasyGet-ToolUpdater", source, StringComparison.Ordinal);
+        Assert.Contains("YtDlpLatestReleaseApiUrl", source, StringComparison.Ordinal);
+        Assert.Contains("FfmpegReleaseVersionUrl", source, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "RunCommandAsync(Status.YtDlpPath, \"-U\"",
+            source,
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("2026.03.17", "2026.08.11", true)]
+    [InlineData("2026.08.11", "2026.08.11", false)]
+    [InlineData("8.0-essentials_build", "8.0", false)]
+    [InlineData("7.1.1", "8.0", true)]
+    [InlineData("", "2026.08.11", true)]
+    [InlineData("2026.08.11", "", false)]
+    public void IsToolUpdateAvailable_ComparesNormalizedVersions(
+        string current,
+        string latest,
+        bool expected)
+    {
+        Assert.Equal(expected, EnvironmentService.IsToolUpdateAvailable(current, latest));
+    }
+
+    [Fact]
+    public void ParseLatestVersions_ReadsGithubTagAndGyanPlainText()
+    {
+        Assert.Equal(
+            "2026.08.11",
+            EnvironmentService.ParseYtDlpLatestVersion("""{"tag_name":"2026.08.11","name":"yt-dlp 2026.08.11"}"""));
+        Assert.Equal("8.0", EnvironmentService.ParseFfmpegLatestVersion("8.0\n"));
+        Assert.Equal("7.1.1", EnvironmentService.NormalizeToolVersion("n7.1.1-essentials_build"));
+    }
+
+    [Fact]
+    public void ReplaceExecutable_ReplacesTargetAndRemovesBackup()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var source = Path.Combine(_tempDir, "new.exe");
+        var target = Path.Combine(_tempDir, "yt-dlp.exe");
+        File.WriteAllText(source, "new-bytes");
+        File.WriteAllText(target, "old-bytes");
+
+        EnvironmentService.ReplaceExecutable(source, target);
+
+        Assert.Equal("new-bytes", File.ReadAllText(target));
+        Assert.False(File.Exists(target + ".old"));
+    }
+
+    [Fact]
+    public void ReplaceExecutable_ThrowsFriendlyErrorWhenTargetIsLocked()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var source = Path.Combine(_tempDir, "new.exe");
+        var target = Path.Combine(_tempDir, "ffmpeg.exe");
+        File.WriteAllText(source, "new-bytes");
+        File.WriteAllText(target, "old-bytes");
+
+        using (var locked = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var error = Assert.Throws<IOException>(() => EnvironmentService.ReplaceExecutable(source, target));
+            Assert.Contains("正在使用", error.Message, StringComparison.Ordinal);
+        }
+
+        Assert.Equal("old-bytes", File.ReadAllText(target));
+    }
+
+    [Fact]
+    public async Task CheckToolUpdatesAsync_ReadsLatestVersionsFromOfficialEndpoints()
+    {
+        var handler = new SequenceHandler(request =>
+        {
+            var url = request.RequestUri?.ToString() ?? "";
+            if (url.Contains("api.github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"tag_name":"2026.08.11"}""")
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("8.0")
+            };
+        });
+        using var httpClient = new HttpClient(handler);
+        var service = new EnvironmentService(
+            configService: null,
+            checkToolAsync: (tool, _) => Task.FromResult(
+                tool == "yt-dlp"
+                    ? (true, "2026.03.17", @"C:\Tools\yt-dlp.exe")
+                    : (true, "7.1", @"C:\Tools\ffmpeg.exe")),
+            httpClientFactory: () => httpClient);
+
+        await service.CheckEnvironmentAsync();
+        var results = await service.CheckToolUpdatesAsync();
+
+        var ytDlp = Assert.Single(results, result => result.ToolName == "yt-dlp");
+        var ffmpeg = Assert.Single(results, result => result.ToolName == "ffmpeg");
+        Assert.True(ytDlp.IsUpdateAvailable);
+        Assert.Equal("2026.08.11", ytDlp.LatestVersion);
+        Assert.True(ffmpeg.IsUpdateAvailable);
+        Assert.Equal("8.0", ffmpeg.LatestVersion);
+    }
+
+    [Fact]
     public void ToolDownload_UsesAsyncBufferedFileStreamAndRentedBuffer()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
@@ -247,6 +360,8 @@ public class EnvironmentServiceTests : IDisposable
         Assert.Contains("new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, ToolDownloadBufferSize, useAsync: true)", source, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<byte>.Shared.Rent(ToolDownloadBufferSize)", source, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.Contains("HttpIdleRead.ReadAsync(", source, StringComparison.Ordinal);
+        Assert.Contains("catch (TimeoutException ex)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new byte[ToolDownloadBufferSize]", source, StringComparison.Ordinal);
         Assert.DoesNotContain("File.Create(targetPath)", source, StringComparison.Ordinal);
     }

@@ -104,6 +104,11 @@ public sealed class PlatformCookieVault
             plaintext = _protector.Unprotect(ciphertext);
             return Encoding.UTF8.GetString(plaintext);
         }
+        catch (CryptographicException)
+        {
+            QuarantineCorruptCookieFile(path, platformId);
+            return null;
+        }
         finally
         {
             if (ciphertext is not null)
@@ -139,6 +144,30 @@ public sealed class PlatformCookieVault
     {
         CookieStorageKey.ValidatePlatformId(platformId);
         return Path.Combine(_vaultDirectory, $"{platformId}.bin");
+    }
+
+    private static void QuarantineCorruptCookieFile(string path, string platformId)
+    {
+        var directory = Path.GetDirectoryName(path);
+        if (string.IsNullOrEmpty(directory))
+        {
+            TryDelete(path);
+            return;
+        }
+
+        var corruptPath = Path.Combine(
+            directory,
+            $"{platformId}.corrupt-{DateTime.Now:yyyyMMddHHmmss}.bin");
+        try
+        {
+            File.Move(path, corruptPath);
+        }
+        catch (Exception ex) when (ex is IOException
+                                   or UnauthorizedAccessException
+                                   or System.Security.SecurityException)
+        {
+            TryDelete(path);
+        }
     }
 
     private static void TryDelete(string path)

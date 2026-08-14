@@ -13,6 +13,10 @@ namespace EasyGet;
 public partial class App : System.Windows.Application
 {
     private ServiceProvider? _serviceProvider;
+    private SingleInstanceService? _singleInstance;
+    private MainWindow? _mainWindow;
+    private string? _pendingActivationUrl;
+    private bool _hasPendingActivation;
     private readonly ExceptionNotificationThrottle _exceptionNotifications =
         new(TimeSpan.FromMinutes(1));
 
@@ -38,6 +42,12 @@ public partial class App : System.Windows.Application
                 isFatal: false);
             args.Handled = true; // 防止立即崩溃，尝试优雅退出
         };
+
+        if (!BecomePrimaryOrNotify(e.Args))
+        {
+            Shutdown();
+            return;
+        }
 
         base.OnStartup(e);
 
@@ -72,7 +82,8 @@ public partial class App : System.Windows.Application
                     configDirectory,
                     [
                         Path.Combine(configDirectory, "logs"),
-                        Path.Combine(AppContext.BaseDirectory, "logs")
+                        Path.Combine(AppContext.BaseDirectory, "logs"),
+                        GetLocalAppDataLogsDirectory()
                     ]);
             });
             services.AddSingleton<UserDataBackupService>(provider =>
@@ -133,13 +144,74 @@ public partial class App : System.Windows.Application
             await downloadManager.RestoreAsync();
 
             var mainWindow = _serviceProvider.GetRequiredService<MainWindow>();
+            _mainWindow = mainWindow;
             mainWindow.Show();
+            ApplyStartupAndPendingActivation(e.Args);
         }
         catch (Exception ex)
         {
             LogCrash(ex, "Startup Error");
             Shutdown();
         }
+    }
+
+    private bool BecomePrimaryOrNotify(string[] args)
+    {
+        var service = new SingleInstanceService();
+        if (!service.TryClaimPrimary())
+        {
+            _ = service.TryNotifyPrimary(args);
+            service.Dispose();
+            return false;
+        }
+
+        _singleInstance = service;
+        _ = service.TryStartListening(OnSecondaryInstanceMessage);
+        return true;
+    }
+
+    private void OnSecondaryInstanceMessage(string? url)
+    {
+        var dispatcher = Dispatcher;
+        if (dispatcher is null || dispatcher.HasShutdownStarted)
+            return;
+
+        dispatcher.BeginInvoke(() =>
+        {
+            if (_mainWindow is null)
+            {
+                _pendingActivationUrl = url;
+                _hasPendingActivation = true;
+                return;
+            }
+
+            ApplySecondaryInstanceActivation(_mainWindow, url);
+        });
+    }
+
+    private void ApplyStartupAndPendingActivation(string[] args)
+    {
+        if (_mainWindow is null)
+            return;
+
+        var startupUrl = SingleInstanceService.ExtractUrlFromArguments(args);
+        if (startupUrl is not null)
+            _mainWindow.AcceptExternalUrl(startupUrl);
+
+        if (!_hasPendingActivation)
+            return;
+
+        ApplySecondaryInstanceActivation(_mainWindow, _pendingActivationUrl);
+        _hasPendingActivation = false;
+        _pendingActivationUrl = null;
+    }
+
+    private static void ApplySecondaryInstanceActivation(MainWindow window, string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+            window.RestoreAndActivate();
+        else
+            window.AcceptExternalUrl(url);
     }
 
     private void LogCrash(
@@ -151,7 +223,7 @@ public partial class App : System.Windows.Application
         string? logFile = null;
         try
         {
-            var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+            var logDir = GetLocalAppDataLogsDirectory();
             Directory.CreateDirectory(logDir);
             logFile = Path.Combine(logDir, $"crash_{DateTime.Now:yyyyMMdd_HHmmss}.txt");
             var details = showDialog
@@ -181,8 +253,15 @@ public partial class App : System.Windows.Application
             System.Windows.MessageBoxImage.Error);
     }
 
+    private static string GetLocalAppDataLogsDirectory()
+        => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EasyGet",
+            "logs");
+
     protected override void OnExit(ExitEventArgs e)
     {
+        _singleInstance?.Dispose();
         _serviceProvider?.Dispose();
         base.OnExit(e);
     }

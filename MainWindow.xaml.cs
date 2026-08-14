@@ -386,16 +386,44 @@ public partial class MainWindow : Window
         }
     }
 
-    private void RestoreFromTray()
+    internal void RestoreAndActivate()
     {
-        Dispatcher.Invoke(() =>
+        if (!Dispatcher.CheckAccess())
         {
-            Show();
-            if (WindowState == System.Windows.WindowState.Minimized)
-                WindowState = System.Windows.WindowState.Normal;
-            Activate();
-        });
+            Dispatcher.Invoke(RestoreAndActivate);
+            return;
+        }
+
+        Show();
+        if (WindowState == System.Windows.WindowState.Minimized)
+            WindowState = System.Windows.WindowState.Normal;
+        Activate();
     }
+
+    internal void AcceptExternalUrl(string url)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => AcceptExternalUrl(url));
+            return;
+        }
+
+        RestoreAndActivate();
+
+        if (_viewModel.NavigateCommand.CanExecute("download"))
+            _viewModel.NavigateCommand.Execute("download");
+
+        var extracted = DownloadViewModel.ExtractUrl(url);
+        if (string.IsNullOrWhiteSpace(extracted))
+            return;
+
+        _viewModel.DownloadVM.Url = extracted;
+        if (_viewModel.DownloadVM.ParseCommand.CanExecute(null))
+            _viewModel.DownloadVM.ParseCommand.Execute(null);
+    }
+
+    private void RestoreFromTray()
+        => RestoreAndActivate();
 
     private void ExitFromTray()
     {

@@ -77,6 +77,30 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public async Task Constructor_QuarantinesCorruptDatabaseAndOpensFreshStore()
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        var garbage = "this is not a sqlite database"u8.ToArray();
+        File.WriteAllBytes(dbPath, garbage);
+
+        using var service = new HistoryService(dbPath);
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/recovered",
+            Title = "recovered after corrupt db"
+        });
+
+        var history = Assert.Single(await service.GetAllAsync());
+        Assert.Equal("https://example.com/recovered", history.Url);
+        Assert.True(history.Id > 0);
+
+        var corruptPath = Assert.Single(Directory.GetFiles(root.DirectoryPath, "history.corrupt-*.db"));
+        Assert.Equal(garbage, File.ReadAllBytes(corruptPath));
+        Assert.True(File.Exists(dbPath));
+    }
+
+    [Fact]
     public void Dispose_ReleasesDatabaseFileImmediately()
     {
         using var root = new TestDirectory();

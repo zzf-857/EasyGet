@@ -6,6 +6,8 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using EasyGet.Models;
 
@@ -51,6 +53,7 @@ internal interface IYangshipinDirectDownloader
         string referer,
         string temporaryPath,
         string outputPath,
+        string videoId,
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken);
 }
@@ -211,6 +214,8 @@ public sealed class YangshipinDownloadService : IYangshipinDownloadService
             var outputPath = ResolveOutputPath(task, urlInfo.VideoId);
             var temporaryPath = $"{outputPath}.part";
             task.OutputFilePath = outputPath;
+            YangshipinPartIdentity.PreparePartFile(temporaryPath, urlInfo.VideoId);
+            YangshipinPartIdentity.WriteMeta(temporaryPath, urlInfo.VideoId);
 
             long downloadedSize = 0;
             for (var attempt = 0; attempt < 2; attempt++)
@@ -226,6 +231,7 @@ public sealed class YangshipinDownloadService : IYangshipinDownloadService
                         capture.PageUrl,
                         temporaryPath,
                         outputPath,
+                        urlInfo.VideoId,
                         progress,
                         cancellationToken);
                     break;
@@ -241,6 +247,7 @@ public sealed class YangshipinDownloadService : IYangshipinDownloadService
             if (!File.Exists(outputPath) || downloadedSize <= 0)
                 throw new IOException("央视频文件下载完成后未生成有效输出。");
 
+            YangshipinPartIdentity.DeleteMeta(temporaryPath);
             task.FileSize = new FileInfo(outputPath).Length;
             task.DownloadedSize = task.FileSize;
             task.Progress = 100;
@@ -720,6 +727,105 @@ internal sealed partial class ChromiumYangshipinPageCapture : IYangshipinPageCap
     private static partial Regex WhitespaceRegex();
 }
 
+internal static class YangshipinPartIdentity
+{
+    internal const string MetaSuffix = ".meta.json";
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    internal static string GetMetaPath(string temporaryPath)
+        => $"{temporaryPath}{MetaSuffix}";
+
+    internal static long PreparePartFile(string temporaryPath, string videoId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(temporaryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(videoId);
+
+        if (!File.Exists(temporaryPath))
+        {
+            TryDelete(GetMetaPath(temporaryPath));
+            return 0;
+        }
+
+        if (!TryReadMeta(temporaryPath, out var meta)
+            || !string.Equals(meta.VideoId, videoId, StringComparison.Ordinal))
+        {
+            File.Delete(temporaryPath);
+            TryDelete(GetMetaPath(temporaryPath));
+            return 0;
+        }
+
+        return new FileInfo(temporaryPath).Length;
+    }
+
+    internal static void WriteMeta(string temporaryPath, string videoId, long? totalLength = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(temporaryPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(videoId);
+
+        var directory = Path.GetDirectoryName(temporaryPath);
+        if (!string.IsNullOrWhiteSpace(directory))
+            Directory.CreateDirectory(directory);
+
+        var state = new YangshipinPartMetaState
+        {
+            VideoId = videoId,
+            TotalLength = totalLength is > 0 ? totalLength : null
+        };
+        File.WriteAllText(GetMetaPath(temporaryPath), JsonSerializer.Serialize(state, JsonOptions));
+    }
+
+    internal static bool TryReadMeta(string temporaryPath, out YangshipinPartMetaState meta)
+    {
+        meta = new YangshipinPartMetaState();
+        var metaPath = GetMetaPath(temporaryPath);
+        if (!File.Exists(metaPath))
+            return false;
+
+        try
+        {
+            var parsed = JsonSerializer.Deserialize<YangshipinPartMetaState>(
+                File.ReadAllText(metaPath),
+                JsonOptions);
+            if (parsed is null || string.IsNullOrWhiteSpace(parsed.VideoId))
+                return false;
+
+            meta = parsed;
+            return true;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    internal static void DeleteMeta(string temporaryPath)
+        => TryDelete(GetMetaPath(temporaryPath));
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+}
+
+internal sealed class YangshipinPartMetaState
+{
+    public string VideoId { get; set; } = "";
+    public long? TotalLength { get; set; }
+}
+
 internal sealed class YangshipinDirectDownloader : IYangshipinDirectDownloader
 {
     private const string BrowserUserAgent =
@@ -792,15 +898,15 @@ internal sealed class YangshipinDirectDownloader : IYangshipinDirectDownloader
         string referer,
         string temporaryPath,
         string outputPath,
+        string videoId,
         IProgress<DownloadProgress>? progress,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(videoId);
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)
                                   ?? throw new IOException("输出目录无效。"));
         var buffer = ArrayPool<byte>.Shared.Rent(DownloadBufferSize);
-        var downloaded = File.Exists(temporaryPath)
-            ? new FileInfo(temporaryPath).Length
-            : 0;
+        var downloaded = YangshipinPartIdentity.PreparePartFile(temporaryPath, videoId);
         long total = 0;
         var sessionStartDownloaded = downloaded;
         var started = DateTime.UtcNow;
@@ -848,6 +954,11 @@ internal sealed class YangshipinDirectDownloader : IYangshipinDirectDownloader
                 {
                     throw new IOException("央视频服务器返回了不匹配的续传范围。");
                 }
+
+                YangshipinPartIdentity.WriteMeta(
+                    temporaryPath,
+                    videoId,
+                    total > 0 ? total : null);
 
                 try
                 {
@@ -930,6 +1041,7 @@ internal sealed class YangshipinDirectDownloader : IYangshipinDirectDownloader
         }
 
         File.Move(temporaryPath, outputPath, overwrite: false);
+        YangshipinPartIdentity.DeleteMeta(temporaryPath);
         return downloaded;
     }
 

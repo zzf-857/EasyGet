@@ -291,6 +291,11 @@
         <Setter Property="FontWeight" Value="Normal"/>
         <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
     </Style>
+    <Style x:Key="TextPageSubtitle" TargetType="{x:Type TextBlock}" BasedOn="{StaticResource TextCaption}">
+        <Setter Property="Margin" Value="0,4,0,0"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+    </Style>
     <Style x:Key="TextMono" TargetType="{x:Type TextBlock}">
         <Setter Property="FontFamily" Value="{StaticResource FontFamilyMono}"/>
         <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
@@ -467,6 +472,7 @@
                         <Trigger Property="IsFocused" Value="True">
                             <Setter TargetName="FocusRing" Property="Opacity" Value="0.5"/>
                             <Setter TargetName="BgBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
                         <!-- Hover 触发 (直接改变画刷即可) -->
                         <Trigger Property="IsMouseOver" Value="True">
@@ -1060,19 +1066,21 @@
 
     <!-- ========== ProgressBar 样式 ========== -->
     <Style x:Key="AccentProgressBar" TargetType="ProgressBar">
-        <Setter Property="Height" Value="8"/>
-        <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
+        <Setter Property="Height" Value="4"/>
+        <Setter Property="MinHeight" Value="3"/>
+        <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
         <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
-                    <Border Background="{TemplateBinding Background}" 
-                            CornerRadius="4" 
-                            ClipToBounds="True">
+                    <Border Background="{TemplateBinding Background}"
+                            CornerRadius="2"
+                            ClipToBounds="True"
+                            SnapsToDevicePixels="True">
                         <Grid x:Name="PART_Track">
                             <Border x:Name="PART_Indicator"
                                     HorizontalAlignment="Left"
-                                    CornerRadius="4"
+                                    CornerRadius="2"
                                     Background="{TemplateBinding Foreground}"/>
                         </Grid>
                     </Border>
@@ -1145,13 +1153,13 @@
                                 Opacity="0"
                                 IsHitTestVisible="False"/>
                         <Border x:Name="ActiveIndicator"
-                                Width="4"
-                                Height="4"
+                                Width="3"
+                                Height="16"
                                 CornerRadius="2"
                                 Background="{DynamicResource AccentBrush}"
-                                HorizontalAlignment="Right"
+                                HorizontalAlignment="Left"
                                 VerticalAlignment="Center"
-                                Margin="0,0,12,0"
+                                Margin="4,0,0,0"
                                 RenderTransformOrigin="0.5,0.5"
                                 Opacity="0">
                             <Border.RenderTransform>
@@ -1266,10 +1274,6 @@
                             <Setter TargetName="ActiveIndicator" Property="Opacity" Value="1"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
-                        <DataTrigger Binding="{Binding DataContext.IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}"
-                                     Value="True">
-                            <Setter TargetName="ActiveIndicator" Property="Visibility" Value="Collapsed"/>
-                        </DataTrigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4"/>
                             <Setter Property="Cursor" Value="Arrow"/>
@@ -1349,7 +1353,7 @@
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="border" Property="Background" Value="{StaticResource BgSurfaceHighestBrush}"/>
+                            <Setter TargetName="border" Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
                             <Setter TargetName="border" Property="BorderBrush" Value="Transparent"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>

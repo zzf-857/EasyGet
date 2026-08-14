@@ -126,6 +126,7 @@ public sealed class YangshipinDownloadServiceTests
         Assert.Equal(10, task.FileSize);
         Assert.True(File.Exists(task.OutputFilePath));
         Assert.EndsWith(".mp4", task.OutputFilePath, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(YangshipinPartIdentity.GetMetaPath($"{task.OutputFilePath}.part")));
     }
 
     [Fact]
@@ -231,6 +232,100 @@ public sealed class YangshipinDownloadServiceTests
     }
 
     [Fact]
+    public async Task DownloadAsync_DiscardsLeftoverPartWhenVideoIdDoesNotMatch()
+    {
+        using var root = new TestDirectory();
+        var leftover = "OLD-VIDEO-BYTES";
+        var fresh = Enumerable.Repeat((byte)'N', 12).ToArray();
+        var outputPath = root.Path("match.mp4");
+        var temporaryPath = $"{outputPath}.part";
+        await File.WriteAllTextAsync(temporaryPath, leftover);
+        YangshipinPartIdentity.WriteMeta(temporaryPath, "otherVid0001");
+        var capture = new FakePageCapture(CreateCapture());
+        var downloader = new FakeDirectDownloader
+        {
+            DownloadedBytes = fresh.Length,
+            AppendLeftoverPartIfPresent = true,
+            FreshBytes = fresh
+        };
+        var service = new YangshipinDownloadService(capture, downloader);
+        var task = new DownloadTask
+        {
+            Url = PageUrl,
+            Title = "match",
+            Format = "mp4",
+            OutputDirectory = root.DirectoryPath,
+            OutputFilePath = outputPath
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Null(downloader.RecordedPartContent);
+        Assert.False(File.Exists(temporaryPath));
+        var output = await File.ReadAllBytesAsync(outputPath);
+        Assert.Equal(fresh, output);
+        Assert.NotEqual(
+            Encoding.ASCII.GetBytes(leftover).Concat(fresh).ToArray(),
+            output);
+        Assert.False(File.Exists(YangshipinPartIdentity.GetMetaPath(temporaryPath)));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_KeepsPartMetaWhenDownloadFails()
+    {
+        using var root = new TestDirectory();
+        var outputPath = root.Path("match.mp4");
+        var temporaryPath = $"{outputPath}.part";
+        var capture = new FakePageCapture(CreateCapture());
+        var downloader = new FakeDirectDownloader
+        {
+            DownloadException = new IOException("disk full")
+        };
+        var service = new YangshipinDownloadService(capture, downloader);
+        var task = new DownloadTask
+        {
+            Url = PageUrl,
+            Title = "match",
+            Format = "mp4",
+            OutputDirectory = root.DirectoryPath,
+            OutputFilePath = outputPath
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Failed, task.Status);
+        Assert.True(File.Exists(YangshipinPartIdentity.GetMetaPath(temporaryPath)));
+        Assert.True(YangshipinPartIdentity.TryReadMeta(temporaryPath, out var meta));
+        Assert.Equal("b000045ctqj", meta.VideoId);
+    }
+
+    [Fact]
+    public void PreparePartFile_DeletesPartWhenMetaMissingOrVideoIdMismatches()
+    {
+        using var root = new TestDirectory();
+        var matchingPart = root.Path("same.mp4.part");
+        var missingMetaPart = root.Path("missing.mp4.part");
+        var mismatchedPart = root.Path("other.mp4.part");
+        File.WriteAllText(matchingPart, "keep-me");
+        File.WriteAllText(missingMetaPart, "drop-me");
+        File.WriteAllText(mismatchedPart, "drop-me-too");
+        YangshipinPartIdentity.WriteMeta(matchingPart, "b000045ctqj", 100);
+        YangshipinPartIdentity.WriteMeta(mismatchedPart, "otherVid");
+
+        Assert.Equal(7, YangshipinPartIdentity.PreparePartFile(matchingPart, "b000045ctqj"));
+        Assert.Equal(0, YangshipinPartIdentity.PreparePartFile(missingMetaPart, "b000045ctqj"));
+        Assert.Equal(0, YangshipinPartIdentity.PreparePartFile(mismatchedPart, "b000045ctqj"));
+
+        Assert.True(File.Exists(matchingPart));
+        Assert.False(File.Exists(missingMetaPart));
+        Assert.False(File.Exists(mismatchedPart));
+        Assert.True(File.Exists(YangshipinPartIdentity.GetMetaPath(matchingPart)));
+        Assert.False(File.Exists(YangshipinPartIdentity.GetMetaPath(missingMetaPart)));
+        Assert.False(File.Exists(YangshipinPartIdentity.GetMetaPath(mismatchedPart)));
+    }
+
+    [Fact]
     public async Task DirectDownloader_ResumesPartFileWithRequiredRequestHeaders()
     {
         using var root = new TestDirectory();
@@ -240,12 +335,14 @@ public sealed class YangshipinDownloadServiceTests
         var temporaryPath = root.Path("match.mp4.part");
         var outputPath = root.Path("match.mp4");
         await File.WriteAllTextAsync(temporaryPath, "abcde");
+        YangshipinPartIdentity.WriteMeta(temporaryPath, "b000045ctqj", 10);
 
         var downloaded = await downloader.DownloadAsync(
             server.Url,
             PageUrl,
             temporaryPath,
             outputPath,
+            "b000045ctqj",
             null,
             CancellationToken.None);
         var request = await server.Request.Task.WaitAsync(TimeSpan.FromSeconds(2));
@@ -253,6 +350,7 @@ public sealed class YangshipinDownloadServiceTests
         Assert.Equal(10, downloaded);
         Assert.Equal("abcdefghij", await File.ReadAllTextAsync(outputPath));
         Assert.False(File.Exists(temporaryPath));
+        Assert.False(File.Exists(YangshipinPartIdentity.GetMetaPath(temporaryPath)));
         Assert.Contains("Range: bytes=5-", request, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"Referer: {PageUrl}", request, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Origin: https://www.yangshipin.cn", request, StringComparison.OrdinalIgnoreCase);
@@ -271,11 +369,42 @@ public sealed class YangshipinDownloadServiceTests
             PageUrl,
             root.Path("redirect.mp4.part"),
             root.Path("redirect.mp4"),
+            "b000045ctqj",
             null,
             CancellationToken.None));
 
         Assert.Equal(1, server.RequestCount);
         Assert.False(File.Exists(root.Path("redirect.mp4")));
+    }
+
+    [Fact]
+    public async Task DirectDownloader_DoesNotAppendLeftoverPartFromDifferentVideo()
+    {
+        using var root = new TestDirectory();
+        using var server = new RangeAwareHttpServer("BBBBBBBBBB");
+        var config = new ConfigService(root.Path("config"));
+        var downloader = new YangshipinDirectDownloader(config);
+        var temporaryPath = root.Path("match.mp4.part");
+        var outputPath = root.Path("match.mp4");
+        await File.WriteAllTextAsync(temporaryPath, "AAAAA");
+        YangshipinPartIdentity.WriteMeta(temporaryPath, "differentVid");
+
+        var downloaded = await downloader.DownloadAsync(
+            server.Url,
+            PageUrl,
+            temporaryPath,
+            outputPath,
+            "b000045ctqj",
+            null,
+            CancellationToken.None);
+        var request = await server.Request.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(10, downloaded);
+        Assert.Equal("BBBBBBBBBB", await File.ReadAllTextAsync(outputPath));
+        Assert.NotEqual("AAAAABBBBB", await File.ReadAllTextAsync(outputPath));
+        Assert.DoesNotContain("Range: bytes=5-", request, StringComparison.OrdinalIgnoreCase);
+        Assert.False(File.Exists(temporaryPath));
+        Assert.False(File.Exists(YangshipinPartIdentity.GetMetaPath(temporaryPath)));
     }
 
     private static YangshipinUrlInfo AssertUrlInfo()
@@ -339,6 +468,10 @@ public sealed class YangshipinDownloadServiceTests
         public long ContentLength { get; set; }
         public long DownloadedBytes { get; set; } = 10;
         public bool FailFirstDownloadWithForbidden { get; set; }
+        public bool AppendLeftoverPartIfPresent { get; set; }
+        public byte[]? FreshBytes { get; set; }
+        public Exception? DownloadException { get; set; }
+        public string? RecordedPartContent { get; private set; }
         public int ContentLengthCallCount { get; private set; }
         public int DownloadCallCount { get; private set; }
         public string LastMediaUrl { get; private set; } = "";
@@ -358,6 +491,7 @@ public sealed class YangshipinDownloadServiceTests
             string referer,
             string temporaryPath,
             string outputPath,
+            string videoId,
             IProgress<DownloadProgress>? progress,
             CancellationToken cancellationToken)
         {
@@ -365,6 +499,8 @@ public sealed class YangshipinDownloadServiceTests
             DownloadCallCount++;
             LastMediaUrl = mediaUrl;
             LastReferer = referer;
+            if (DownloadException is not null)
+                throw DownloadException;
             if (FailFirstDownloadWithForbidden && DownloadCallCount == 1)
             {
                 throw new HttpRequestException(
@@ -374,11 +510,22 @@ public sealed class YangshipinDownloadServiceTests
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
-            await File.WriteAllBytesAsync(
-                outputPath,
-                Enumerable.Repeat((byte)1, checked((int)DownloadedBytes)).ToArray(),
-                cancellationToken);
-            return DownloadedBytes;
+            var fresh = FreshBytes
+                ?? Enumerable.Repeat((byte)1, checked((int)DownloadedBytes)).ToArray();
+            if (File.Exists(temporaryPath))
+            {
+                RecordedPartContent = await File.ReadAllTextAsync(temporaryPath, cancellationToken);
+                if (AppendLeftoverPartIfPresent)
+                {
+                    var leftover = await File.ReadAllBytesAsync(temporaryPath, cancellationToken);
+                    var hybrid = leftover.Concat(fresh).ToArray();
+                    await File.WriteAllBytesAsync(outputPath, hybrid, cancellationToken);
+                    return hybrid.Length;
+                }
+            }
+
+            await File.WriteAllBytesAsync(outputPath, fresh, cancellationToken);
+            return fresh.Length;
         }
     }
 
@@ -535,6 +682,96 @@ public sealed class YangshipinDownloadServiceTests
                             + "abcdefghij");
                     await stream.WriteAsync(response, _cts.Token);
                 }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _listener.Stop();
+            try
+            {
+                _serverTask.Wait(TimeSpan.FromSeconds(1));
+            }
+            catch (AggregateException)
+            {
+            }
+            _cts.Dispose();
+        }
+    }
+
+    private sealed class RangeAwareHttpServer : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _cts = new();
+        private readonly Task _serverTask;
+        private readonly string _body;
+
+        public RangeAwareHttpServer(string body)
+        {
+            _body = body;
+            _listener.Start();
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            Url = $"http://127.0.0.1:{port}/b000045ctqj.mp4";
+            _serverTask = Task.Run(ServeAsync);
+        }
+
+        public string Url { get; }
+        public TaskCompletionSource<string> Request { get; } = new(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                using var client = await _listener.AcceptTcpClientAsync(_cts.Token);
+                var stream = client.GetStream();
+                var request = await ResumeHttpServer.ReadHeadersAsync(stream, _cts.Token);
+                Request.TrySetResult(request);
+
+                var rangeStart = 0;
+                const string rangePrefix = "Range: bytes=";
+                foreach (var line in request.Split("\r\n"))
+                {
+                    if (!line.StartsWith(rangePrefix, StringComparison.OrdinalIgnoreCase))
+                        continue;
+
+                    var value = line[rangePrefix.Length..];
+                    var dash = value.IndexOf('-');
+                    if (dash > 0)
+                        int.TryParse(value[..dash], out rangeStart);
+                    break;
+                }
+
+                string response;
+                if (rangeStart > 0 && rangeStart < _body.Length)
+                {
+                    var slice = _body[rangeStart..];
+                    response =
+                        "HTTP/1.1 206 Partial Content\r\n"
+                        + "Content-Type: video/mp4\r\n"
+                        + $"Content-Length: {slice.Length}\r\n"
+                        + $"Content-Range: bytes {rangeStart}-{_body.Length - 1}/{_body.Length}\r\n"
+                        + "Connection: close\r\n\r\n"
+                        + slice;
+                }
+                else
+                {
+                    response =
+                        "HTTP/1.1 200 OK\r\n"
+                        + "Content-Type: video/mp4\r\n"
+                        + $"Content-Length: {_body.Length}\r\n"
+                        + "Connection: close\r\n\r\n"
+                        + _body;
+                }
+
+                await stream.WriteAsync(Encoding.ASCII.GetBytes(response), _cts.Token);
             }
             catch (OperationCanceledException)
             {

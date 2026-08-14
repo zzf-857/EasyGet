@@ -105,6 +105,9 @@ public partial class SettingsViewModel : ObservableObject
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
     private bool _isInitializing;
+    private DateTimeOffset? _lastToolUpdateCheckUtc;
+    private string? _ytDlpLatestError;
+    private string? _ffmpegLatestError;
 
     [ObservableProperty] private string _tgApiId = "";
     [ObservableProperty] private string _tgApiHash = "";
@@ -134,9 +137,16 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty] private bool _ytDlpFound;
     [ObservableProperty] private string _ytDlpVersion = "";
+    [ObservableProperty] private string _ytDlpLatestVersion = "";
+    [ObservableProperty] private string _ytDlpVersionSummary = "";
+    [ObservableProperty] private bool _ytDlpUpdateAvailable;
     [ObservableProperty] private bool _ffmpegFound;
     [ObservableProperty] private string _ffmpegVersion = "";
+    [ObservableProperty] private string _ffmpegLatestVersion = "";
+    [ObservableProperty] private string _ffmpegVersionSummary = "";
+    [ObservableProperty] private bool _ffmpegUpdateAvailable;
     [ObservableProperty] private bool _isCheckingEnv;
+    [ObservableProperty] private bool _isCheckingToolUpdates;
     [ObservableProperty] private string _douyinSidecarHealthText = "抖音 sidecar 未检测";
     [ObservableProperty] private bool _isDouyinSidecarAvailable;
 
@@ -233,6 +243,7 @@ public partial class SettingsViewModel : ObservableObject
     public bool CanManageUserData => !IsDataManagementOperating;
 
     [ObservableProperty] private bool _isUpdatingYtDlp;
+    [ObservableProperty] private bool _isUpdatingFfmpeg;
     [ObservableProperty] private string _updateStatusMessage = "";
     [ObservableProperty] private bool _isInstallingTools;
     [ObservableProperty] private string _installStatusStage = "";
@@ -439,9 +450,15 @@ public partial class SettingsViewModel : ObservableObject
         "  ",
         ConfigService.SupportedDouyinTemplateVariableNames.Select(variable => $"{{{variable}}}"));
 
-    public bool CanCheckEnvironment => !IsCheckingEnv && !IsInstallingTools && !IsUpdatingYtDlp;
+    public bool CanCheckEnvironment => !IsCheckingEnv
+        && !IsCheckingToolUpdates
+        && !IsInstallingTools
+        && !IsUpdatingYtDlp
+        && !IsUpdatingFfmpeg;
     public bool CanInstallMissingTools => CanCheckEnvironment && (!YtDlpFound || !FfmpegFound);
-    public bool CanUpdateYtDlp => CanCheckEnvironment && YtDlpFound;
+    public bool CanCheckToolUpdates => CanCheckEnvironment;
+    public bool CanUpdateYtDlp => CanCheckEnvironment;
+    public bool CanUpdateFfmpeg => CanCheckEnvironment;
     public bool CanCheckDouyinSidecarHealth => !IsCheckingDouyinSidecar;
     public bool CanCheckAppUpdate => !IsCheckingAppUpdate && !IsDownloadingAppUpdate;
     public bool CanDownloadAppUpdate => CanCheckAppUpdate
@@ -625,6 +642,7 @@ public partial class SettingsViewModel : ObservableObject
         YtDlpVersion = status.YtDlpVersion;
         FfmpegFound = status.FfmpegFound;
         FfmpegVersion = status.FfmpegVersion;
+        RefreshToolVersionSummaries();
     }
 
     [RelayCommand]
@@ -1094,7 +1112,13 @@ public partial class SettingsViewModel : ObservableObject
         {
             IsCheckingEnv = false;
         }
+
+        await CheckToolUpdatesCoreAsync(force: true);
     }
+
+    [RelayCommand]
+    private Task CheckToolUpdates()
+        => CheckToolUpdatesCoreAsync(force: true);
 
     [RelayCommand]
     private async Task CheckDouyinSidecarHealth()
@@ -1127,6 +1151,7 @@ public partial class SettingsViewModel : ObservableObject
         {
             await _envService.InstallMissingToolsAsync(new Progress<string>(s => InstallStatusMessage = s));
             RefreshEnvironmentStatus();
+            RefreshToolUpdateAvailability();
         }
         catch (Exception ex)
         {
@@ -1143,9 +1168,33 @@ public partial class SettingsViewModel : ObservableObject
     {
         IsUpdatingYtDlp = true;
         UpdateStatusMessage = "";
-        await _envService.UpdateYtDlpAsync(new Progress<string>(s => UpdateStatusMessage = s));
-        RefreshEnvironmentStatus();
-        IsUpdatingYtDlp = false;
+        try
+        {
+            await _envService.UpdateYtDlpAsync(new Progress<string>(s => UpdateStatusMessage = s));
+            RefreshEnvironmentStatus();
+            RefreshToolUpdateAvailability();
+        }
+        finally
+        {
+            IsUpdatingYtDlp = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task UpdateFfmpeg()
+    {
+        IsUpdatingFfmpeg = true;
+        UpdateStatusMessage = "";
+        try
+        {
+            await _envService.UpdateFfmpegAsync(new Progress<string>(s => UpdateStatusMessage = s));
+            RefreshEnvironmentStatus();
+            RefreshToolUpdateAvailability();
+        }
+        finally
+        {
+            IsUpdatingFfmpeg = false;
+        }
     }
 
     [RelayCommand]
@@ -1440,15 +1489,23 @@ public partial class SettingsViewModel : ObservableObject
         ThemeManager.ApplyTheme(value);
         AutoSave();
     }
+    partial void OnSelectedCategoryChanged(string value)
+    {
+        if (value == "更新与环境")
+            _ = CheckToolUpdatesCoreAsync(force: false);
+    }
+
     partial void OnYtDlpFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnFfmpegFoundChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnIsCheckingEnvChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnIsCheckingToolUpdatesChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnIsInstallingToolsChanged(bool value)
     {
         RefreshInstallStatusStage();
         NotifyEnvironmentActionStateChanged();
     }
     partial void OnIsUpdatingYtDlpChanged(bool value) => NotifyEnvironmentActionStateChanged();
+    partial void OnIsUpdatingFfmpegChanged(bool value) => NotifyEnvironmentActionStateChanged();
     partial void OnInstallStatusMessageChanged(string value) => RefreshInstallStatusStage();
     partial void OnIsAppUpdateAvailableChanged(bool value) => NotifyAppUpdateActionStateChanged();
     partial void OnIsAppUpdateDownloadedChanged(bool value) => NotifyAppUpdateActionStateChanged();
@@ -1643,7 +1700,9 @@ public partial class SettingsViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanCheckEnvironment));
         OnPropertyChanged(nameof(CanInstallMissingTools));
+        OnPropertyChanged(nameof(CanCheckToolUpdates));
         OnPropertyChanged(nameof(CanUpdateYtDlp));
+        OnPropertyChanged(nameof(CanUpdateFfmpeg));
     }
 
     private void NotifyAppUpdateActionStateChanged()
@@ -1656,6 +1715,104 @@ public partial class SettingsViewModel : ObservableObject
     private void RefreshInstallStatusStage()
     {
         InstallStatusStage = DescribeInstallStatusStage(InstallStatusMessage, IsInstallingTools);
+    }
+
+    private async Task CheckToolUpdatesCoreAsync(bool force)
+    {
+        if (IsCheckingToolUpdates || IsInstallingTools || IsUpdatingYtDlp || IsUpdatingFfmpeg || IsCheckingEnv)
+            return;
+        if (!force
+            && _lastToolUpdateCheckUtc is { } last
+            && DateTimeOffset.UtcNow - last < TimeSpan.FromMinutes(5))
+        {
+            return;
+        }
+
+        IsCheckingToolUpdates = true;
+        try
+        {
+            var results = await _envService.CheckToolUpdatesAsync(
+                new Progress<string>(message => UpdateStatusMessage = message));
+            ApplyToolUpdateCheckResults(results);
+            _lastToolUpdateCheckUtc = DateTimeOffset.UtcNow;
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusMessage = $"检查组件更新失败: {ex.Message}";
+        }
+        finally
+        {
+            IsCheckingToolUpdates = false;
+        }
+    }
+
+    private void ApplyToolUpdateCheckResults(IReadOnlyList<ToolUpdateCheckResult> results)
+    {
+        foreach (var result in results)
+        {
+            if (result.ToolName == "yt-dlp")
+            {
+                YtDlpLatestVersion = result.LatestVersion ?? "";
+                YtDlpUpdateAvailable = result.IsUpdateAvailable;
+                _ytDlpLatestError = result.ErrorMessage;
+            }
+            else if (result.ToolName == "ffmpeg")
+            {
+                FfmpegLatestVersion = result.LatestVersion ?? "";
+                FfmpegUpdateAvailable = result.IsUpdateAvailable;
+                _ffmpegLatestError = result.ErrorMessage;
+            }
+        }
+
+        RefreshToolVersionSummaries();
+    }
+
+    private void RefreshToolUpdateAvailability()
+    {
+        YtDlpUpdateAvailable = EnvironmentService.IsToolUpdateAvailable(
+            YtDlpFound ? YtDlpVersion : "",
+            YtDlpLatestVersion);
+        FfmpegUpdateAvailable = EnvironmentService.IsToolUpdateAvailable(
+            FfmpegFound ? FfmpegVersion : "",
+            FfmpegLatestVersion);
+        RefreshToolVersionSummaries();
+    }
+
+    private void RefreshToolVersionSummaries()
+    {
+        YtDlpVersionSummary = FormatToolVersionSummary(
+            YtDlpFound,
+            YtDlpVersion,
+            YtDlpLatestVersion,
+            _ytDlpLatestError);
+        FfmpegVersionSummary = FormatToolVersionSummary(
+            FfmpegFound,
+            FfmpegVersion,
+            FfmpegLatestVersion,
+            _ffmpegLatestError);
+    }
+
+    internal static string FormatToolVersionSummary(
+        bool found,
+        string? currentVersion,
+        string? latestVersion,
+        string? errorMessage)
+    {
+        var currentText = found && !string.IsNullOrWhiteSpace(currentVersion)
+            ? currentVersion.Trim()
+            : "未安装";
+        if (!string.IsNullOrWhiteSpace(latestVersion))
+        {
+            if (!found)
+                return $"未安装 · 最新 {latestVersion}";
+            return EnvironmentService.IsToolUpdateAvailable(currentVersion, latestVersion)
+                ? $"{currentText} · 有新版本 {latestVersion}"
+                : $"{currentText} · 已是最新";
+        }
+
+        return string.IsNullOrWhiteSpace(errorMessage)
+            ? currentText
+            : $"{currentText} · 未能获取最新版本";
     }
 
     internal static string DescribeInstallStatusStage(string message, bool isInstalling)

@@ -34,12 +34,18 @@ public class M3u8DownloadService
         if (string.IsNullOrWhiteSpace(url))
             return false;
 
-        // 去掉 Query 参数后判断后缀，或者直接模糊匹配
-        var cleanUrl = url.Split('?')[0];
-        return cleanUrl.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
-            || cleanUrl.EndsWith(".m3n8", StringComparison.OrdinalIgnoreCase)
-            || url.Contains(".m3u8", StringComparison.OrdinalIgnoreCase)
-            || url.Contains(".m3n8", StringComparison.OrdinalIgnoreCase);
+        var path = GetUrlPathWithoutQueryOrFragment(url.Trim());
+        return path.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)
+            || path.EndsWith(".m3n8", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string GetUrlPathWithoutQueryOrFragment(string url)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return uri.AbsolutePath;
+
+        var withoutFragment = url.Split('#', 2)[0];
+        return withoutFragment.Split('?', 2)[0];
     }
 
     /// <summary>
@@ -352,10 +358,15 @@ public class M3u8DownloadService
     /// </summary>
     internal static List<string> ParseSegments(string m3u8Content, string m3u8Url)
     {
+        ArgumentNullException.ThrowIfNull(m3u8Content);
+        var playlist = StripPlaylistPreamble(m3u8Content);
+        if (!playlist.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("不是有效的 M3U8 播放列表");
+
         var segments = new List<string>();
         var baseUri = new Uri(m3u8Url);
 
-        foreach (var line in EnumeratePlaylistLines(m3u8Content))
+        foreach (var line in EnumeratePlaylistLines(playlist))
         {
             var trimmedLine = line.Span.Trim();
             if (trimmedLine.IsEmpty)
@@ -382,6 +393,14 @@ public class M3u8DownloadService
         }
 
         return segments;
+    }
+
+    internal static string StripPlaylistPreamble(string content)
+    {
+        var span = content.AsSpan().TrimStart();
+        if (!span.IsEmpty && span[0] == '\uFEFF')
+            span = span[1..].TrimStart();
+        return span.ToString();
     }
 
     internal static async Task RunPeriodicProgressReporterAsync(

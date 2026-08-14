@@ -264,7 +264,8 @@ public sealed class TaskQueuePersistenceService : IDisposable
             return null;
         }
 
-        var recoveredOperationalState = persisted.Status is DownloadStatus.Resolving
+        var recoveredOperationalState = persisted.Status is DownloadStatus.Waiting
+            or DownloadStatus.Resolving
             or DownloadStatus.Downloading
             or DownloadStatus.Merging;
         var restoredStatus = recoveredOperationalState

@@ -371,6 +371,8 @@ public class AppUpdateServiceTests
         Assert.Contains("new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, InstallerDownloadBufferSize, useAsync: true)", source, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<byte>.Shared.Rent(InstallerDownloadBufferSize)", source, StringComparison.Ordinal);
         Assert.Contains("ArrayPool<byte>.Shared.Return(buffer)", source, StringComparison.Ordinal);
+        Assert.Contains("HttpIdleRead.ReadAsync(", source, StringComparison.Ordinal);
+        Assert.Contains("catch (TimeoutException ex)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new byte[InstallerDownloadBufferSize]", source, StringComparison.Ordinal);
         Assert.DoesNotContain("File.Create(tempPath)", source, StringComparison.Ordinal);
     }

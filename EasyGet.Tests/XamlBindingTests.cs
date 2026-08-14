@@ -828,8 +828,10 @@ public class XamlBindingTests
 
     [Theory]
     [InlineData("CheckEnvironmentCommand", "CanCheckEnvironment")]
+    [InlineData("CheckToolUpdatesCommand", "CanCheckToolUpdates")]
     [InlineData("InstallMissingToolsCommand", "CanInstallMissingTools")]
     [InlineData("UpdateYtDlpCommand", "CanUpdateYtDlp")]
+    [InlineData("UpdateFfmpegCommand", "CanUpdateFfmpeg")]
     public void SettingsEnvironmentButtonsBindExpectedEnabledState(string commandName, string enabledProperty)
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
@@ -847,6 +849,9 @@ public class XamlBindingTests
         Assert.Contains("CheckAppUpdateCommand", source, StringComparison.Ordinal);
         Assert.Contains("DownloadAppUpdateCommand", source, StringComparison.Ordinal);
         Assert.Contains("InstallAppUpdateCommand", source, StringComparison.Ordinal);
+        Assert.Contains("CheckToolUpdatesCommand", source, StringComparison.Ordinal);
+        Assert.Contains("UpdateFfmpegCommand", source, StringComparison.Ordinal);
+        Assert.Contains("更新并应用", source, StringComparison.Ordinal);
         Assert.Contains("AppUpdateProgress", source, StringComparison.Ordinal);
         Assert.Contains("AppVersionText", source, StringComparison.Ordinal);
         Assert.Contains("AppRuntimeText", source, StringComparison.Ordinal);

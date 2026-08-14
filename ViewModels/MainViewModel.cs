@@ -555,33 +555,31 @@ public partial class MainViewModel : ObservableObject
 
     private void UpdateTaskbarProgress()
     {
-        var activeTasks = _downloadManager.Tasks
-            .Where(t => t.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging)
-            .ToList();
-
-        var failedTasks = _downloadManager.Tasks
-            .Where(t => t.Status == DownloadStatus.Failed)
-            .ToList();
-
-        if (activeTasks.Count > 0)
-        {
-            if (failedTasks.Count > 0)
-            {
-                TaskbarState = TaskbarItemProgressState.Error;
-            }
-            else
-            {
-                TaskbarState = TaskbarItemProgressState.Normal;
-            }
-
-            double totalProgress = activeTasks.Sum(t => t.Progress);
-            TaskbarValue = totalProgress / (activeTasks.Count * 100.0);
-        }
-        else
+        var queueTasks = _downloadManager.Tasks.ToList();
+        var hasUnfinished = queueTasks.Any(task =>
+            task.Status is not (DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled));
+        if (queueTasks.Count == 0 || !hasUnfinished)
         {
             TaskbarState = TaskbarItemProgressState.None;
             TaskbarValue = 0.0;
+            return;
         }
+
+        var hasFailed = queueTasks.Any(task => task.Status == DownloadStatus.Failed);
+        var hasPaused = queueTasks.Any(task => task.Status == DownloadStatus.Paused);
+        var hasRunning = queueTasks.Any(task =>
+            task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging);
+        TaskbarState = hasFailed
+            ? TaskbarItemProgressState.Error
+            : hasPaused && !hasRunning
+                ? TaskbarItemProgressState.Paused
+                : TaskbarItemProgressState.Normal;
+
+        var totalProgress = queueTasks.Sum(task =>
+            task.Status == DownloadStatus.Completed
+                ? 100
+                : Math.Clamp(task.Progress, 0, 100));
+        TaskbarValue = totalProgress / (queueTasks.Count * 100.0);
     }
 
     private static string GetAssemblyVersion()

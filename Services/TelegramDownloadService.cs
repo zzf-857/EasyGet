@@ -140,6 +140,26 @@ public class TelegramDownloadService : IDisposable
         return long.TryParse(chatTarget, out _);
     }
 
+    /// <summary>
+    /// WTelegram 对话字典以频道原始正数 ID 为键；解析得到的 <c>-100{channelId}</c> 仅作展示标记。
+    /// </summary>
+    internal static long GetPrivateChatLookupId(string chatTarget)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(chatTarget);
+
+        const string markedPrefix = "-100";
+        if (chatTarget.StartsWith(markedPrefix, StringComparison.Ordinal)
+            && TryParsePositiveLong(chatTarget[markedPrefix.Length..], out var channelId))
+        {
+            return channelId;
+        }
+
+        if (TryParsePositiveLong(chatTarget, out channelId))
+            return channelId;
+
+        throw new ArgumentException("不是有效的 Telegram 私有频道标识。", nameof(chatTarget));
+    }
+
     private static bool TryParseMessageRange(string value, out int startId, out int? endId)
     {
         startId = 0;
@@ -514,20 +534,9 @@ public class TelegramDownloadService : IDisposable
             try
             {
                 ct.ThrowIfCancellationRequested();
-                if (_client == null)
+                if (_client?.User is null)
                 {
-                    InitClient();
-                }
-
-                if (_client!.User == null)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    var loginStatus = await _client.Login(_configService.Config.TgPhoneNumber);
-                    ct.ThrowIfCancellationRequested();
-                    if (loginStatus != null)
-                    {
-                        throw new InvalidOperationException("Telegram 账号未在设置中完成授权绑定登录，无法开始下载任务。");
-                    }
+                    throw new InvalidOperationException("请先在设置中完成 Telegram 授权");
                 }
             }
             finally
@@ -541,8 +550,9 @@ public class TelegramDownloadService : IDisposable
             try
             {
                 // 获取会话实体
-                if (long.TryParse(chatTarget, out var chatId))
+                if (long.TryParse(chatTarget, out _))
                 {
+                    var lookupId = GetPrivateChatLookupId(chatTarget);
                     // 私有群组：为了避免 access_hash 缺失，先获取所有对话列表填充本地缓存
                     ct.ThrowIfCancellationRequested();
                     var dialogs = await _client!.Messages_GetDialogs();
@@ -551,13 +561,13 @@ public class TelegramDownloadService : IDisposable
                     if (dialogs is Messages_Dialogs md) chatsDict = md.chats;
                     else if (dialogs is Messages_DialogsSlice mds) chatsDict = mds.chats;
 
-                    if (chatsDict != null && chatsDict.TryGetValue(chatId, out var chat))
+                    if (chatsDict != null && chatsDict.TryGetValue(lookupId, out var chat))
                     {
                         peerInfo = chat;
                     }
                     else
                     {
-                        throw new Exception($"未能在对话列表中查找到频道 ID {chatId}，请确保您已加入该私有群聊并且该群在对话列表中。");
+                        throw new Exception($"未能在对话列表中查找到频道 ID {lookupId}，请确保您已加入该私有群聊并且该群在对话列表中。");
                     }
                 }
                 else

@@ -104,7 +104,11 @@
         <Border Grid.Column="0" Background="{StaticResource BgPrimaryBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
             <StackPanel Margin="8,16">
-                <TextBlock Text="设置" Style="{StaticResource TextPageTitle}" Margin="8,0,0,12"/>
+                <StackPanel Margin="8,0,0,12">
+                    <TextBlock Text="设置" Style="{StaticResource TextPageTitle}"/>
+                    <TextBlock Text="环境、下载、登录与性能"
+                               Style="{StaticResource TextPageSubtitle}"/>
+                </StackPanel>
 
                 <RadioButton Style="{StaticResource SettingsNavItem}" Content="常规"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="常规"
@@ -138,7 +142,7 @@
 
             <StackPanel Margin="0,0,0,12">
                 <TextBlock Text="{Binding SettingsCategoryTitle}" Style="{StaticResource TextSection}"/>
-                <TextBlock Text="{Binding SettingsCategoryDescription}" Margin="0,4,0,0" Style="{StaticResource TextCaption}"/>
+                <TextBlock Text="{Binding SettingsCategoryDescription}" Style="{StaticResource TextPageSubtitle}"/>
             </StackPanel>
 
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
@@ -536,7 +540,10 @@
                             </Grid>
                         </Border>
                         <TextBlock Text="{Binding AppUpdateStatusMessage}" Margin="0,8,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding AppUpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
-                        <ProgressBar Height="4" Margin="0,8,0,0" Maximum="100" Value="{Binding AppUpdateProgress}" Visibility="{Binding IsDownloadingAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
+                        <ProgressBar Height="4" Margin="0,8,0,0" Maximum="100"
+                                     Style="{StaticResource AccentProgressBar}"
+                                     Value="{Binding AppUpdateProgress}"
+                                     Visibility="{Binding IsDownloadingAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
                             <Button Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding DownloadAppUpdateCommand}" Content="下载更新包" Visibility="{Binding CanDownloadAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
                             <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource AccentButton}" Command="{Binding InstallAppUpdateCommand}" Content="安装更新" Visibility="{Binding CanInstallAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
@@ -544,15 +551,36 @@
                         <Border Style="{StaticResource SettingsRow}" Margin="0,8,0,0">
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="yt-dlp" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="{Binding YtDlpVersion, FallbackValue='未检测'}" Margin="0,4,0,0" Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"/></StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding UpdateYtDlpCommand}" IsEnabled="{Binding CanUpdateYtDlp}" Content="更新引擎"/>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="yt-dlp" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="{Binding YtDlpVersionSummary, FallbackValue='未检测'}" Margin="0,4,0,0"
+                                               Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding YtDlpVersionSummary}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4"
+                                        Style="{StaticResource SurfaceButton}" Command="{Binding UpdateYtDlpCommand}"
+                                        IsEnabled="{Binding CanUpdateYtDlp}" Content="更新并应用"/>
                             </Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="ffmpeg" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="{Binding FfmpegVersion, FallbackValue='未检测'}" Margin="0,4,0,0" Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis" ToolTip="{Binding FfmpegVersion}"/></StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding CheckEnvironmentCommand}" IsEnabled="{Binding CanCheckEnvironment}" Content="重新检测"/>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="ffmpeg" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="{Binding FfmpegVersionSummary, FallbackValue='未检测'}" Margin="0,4,0,0"
+                                               Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding FfmpegVersionSummary}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4"
+                                        Style="{StaticResource SurfaceButton}" Command="{Binding CheckEnvironmentCommand}"
+                                        IsEnabled="{Binding CanCheckEnvironment}" Content="重新检测"/>
+                                <Button Grid.Column="2" HorizontalAlignment="Right" Height="32" Padding="12,4" Margin="8,0,0,0"
+                                        Style="{StaticResource SurfaceButton}" Command="{Binding UpdateFfmpegCommand}"
+                                        IsEnabled="{Binding CanUpdateFfmpeg}" Content="更新并应用"/>
                             </Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
@@ -562,9 +590,14 @@
                                 <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding CheckDouyinSidecarHealthCommand}" Content="检测"/>
                             </Grid>
                         </Border>
-                        <Button HorizontalAlignment="Right" Height="32" Padding="16,4" Margin="0,12,0,0"
-                                Style="{StaticResource AccentButton}" Command="{Binding InstallMissingToolsCommand}"
-                                IsEnabled="{Binding CanInstallMissingTools}" Content="安装缺失组件"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                            <Button Height="32" Padding="16,4" Style="{StaticResource SurfaceButton}"
+                                    Command="{Binding CheckToolUpdatesCommand}"
+                                    IsEnabled="{Binding CanCheckToolUpdates}" Content="检查组件更新"/>
+                            <Button Height="32" Padding="16,4" Margin="8,0,0,0"
+                                    Style="{StaticResource AccentButton}" Command="{Binding InstallMissingToolsCommand}"
+                                    IsEnabled="{Binding CanInstallMissingTools}" Content="安装缺失组件"/>
+                        </StackPanel>
                         <TextBlock Text="{Binding InstallStatusStage}" Margin="0,8,0,0" Style="{StaticResource TextCaption}" Visibility="{Binding InstallStatusStage, Converter={StaticResource StringToVisibility}}"/>
                         <TextBlock Text="{Binding InstallStatusMessage}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding InstallStatusMessage, Converter={StaticResource StringToVisibility}}"/>
                         <TextBlock Text="{Binding UpdateStatusMessage}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding UpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>

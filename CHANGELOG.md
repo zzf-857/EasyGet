@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.4.4 - 2026-08-14
+
+### Reliability
+- Keep the parse button usable, preserve the active download when the URL changes, restore waiting queue items as paused, and score taskbar progress against the full queue.
+- Escape `%` in output directories, reserve distinct yt-dlp file names, fail when exit code 0 produces no file, and keep Yangshipin, Telegram, M3U8, and Xiaohongshu downloads from mixing identities or overwriting the wrong files.
+- Isolate corrupt Cookie vaults and history databases, stop unknown-platform Cookie errors from blocking settings saves, and write crash logs under LocalAppData.
+
+### Desktop Shell
+- Enforce a single EasyGet instance that forwards URLs to the running window, rebuild the tray icon after Explorer restarts, and refresh page titles, navigation, toasts, and progress bars without adding list shadows or blur.
+
+### Tool Updates
+- Check official yt-dlp and ffmpeg releases from Settings, show current versus latest versions, and apply updates by downloading and replacing the tools. Downloads honor the app proxy and do not auto-install.
+
+### Tests
+- Add coverage for single-instance handoff, idle HTTP reads, reserved outputs, tool version checks, and the download, Cookie, and engine fixes.
+- Verified 1305 automated tests pass; 1 live network test remains explicitly skipped.
+
 ## 1.4.3 - 2026-08-01
 
 ### Download Organization

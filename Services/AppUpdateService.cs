@@ -149,7 +149,18 @@ public class AppUpdateService : IAppUpdateService
                 {
                     while (true)
                     {
-                        var read = await source.ReadAsync(buffer.AsMemory(0, InstallerDownloadBufferSize), ct);
+                        int read;
+                        try
+                        {
+                            read = await HttpIdleRead.ReadAsync(
+                                source,
+                                buffer.AsMemory(0, InstallerDownloadBufferSize),
+                                ct);
+                        }
+                        catch (TimeoutException ex)
+                        {
+                            throw new IOException(ex.Message, ex);
+                        }
                         if (read == 0)
                             break;
 

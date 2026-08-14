@@ -26,8 +26,8 @@
 
                 <StackPanel Grid.Row="0" Margin="0,0,0,12">
                     <TextBlock Text="批量下载" Style="{StaticResource TextPageTitle}"/>
-                    <TextBlock Text="每行一个链接；示例：视频标题---视频链接" Margin="0,4,0,0"
-                               Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
+                    <TextBlock Text="每行一个链接；示例：视频标题---视频链接"
+                               Style="{StaticResource TextPageSubtitle}"/>
                 </StackPanel>
 
                 <Grid Grid.Row="1">
@@ -339,7 +339,7 @@
                 </Grid.RowDefinitions>
                 <Border Grid.Row="0" HorizontalAlignment="Left" Background="{StaticResource BgSurfaceBrush}"
                         BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                        CornerRadius="6" Padding="4">
+                        CornerRadius="8" Padding="4">
                     <StackPanel Orientation="Horizontal">
                         <RadioButton Style="{StaticResource HistoryFilterRadioButton}"
                                      Command="{Binding SetQueueFilterCommand}" CommandParameter="全部"
@@ -382,7 +382,9 @@
                             Margin="0,8,0,0"
                             Visibility="{Binding HasQueueTasks, Converter={StaticResource BoolToVisibility}}">
                     <TextBlock Text="{Binding OverallProgressText}" Style="{StaticResource TextMono}" FontSize="{StaticResource FontSizeCaption}"/>
-                    <ProgressBar Width="112" Height="4" Margin="8,0,0,0" Maximum="100" Value="{Binding OverallProgress, Mode=OneWay}"/>
+                    <ProgressBar Width="112" Height="4" Margin="8,0,0,0" Maximum="100"
+                                 Style="{StaticResource AccentProgressBar}"
+                                 Value="{Binding OverallProgress, Mode=OneWay}"/>
                     <TextBlock Text="{Binding AggregateSpeedText}" Style="{StaticResource TextMono}"
                                Foreground="{DynamicResource AccentBrush}" FontSize="{StaticResource FontSizeCaption}" Margin="12,0,0,0"/>
                 </StackPanel>
@@ -579,6 +581,7 @@
                                         </TextBlock>
                                         <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Height="4"
                                                      HorizontalAlignment="Stretch"
+                                                     Style="{StaticResource AccentProgressBar}"
                                                      Maximum="100" Value="{Binding Progress}"
                                                      VerticalAlignment="Center"/>
                                     </Grid>

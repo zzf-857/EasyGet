@@ -651,16 +651,22 @@ public partial class YtDlpService
             var outputFile = ResolveOutputFile(capturedOutputPath, task, downloadStartTime);
             if (processOutput.ExitCode == 0)
             {
+                if (string.IsNullOrWhiteSpace(outputFile) || !File.Exists(outputFile))
+                {
+                    const string missingOutput = "ERROR: 未找到输出文件";
+                    stderrLines.Add(missingOutput);
+                    lastStderr = stderrLines;
+                    allStderr.AddRange(stderrLines);
+                    lastExitCode = processOutput.ExitCode;
+                    logCallback?.Invoke($"[yt-dlp] {missingOutput}");
+                    break;
+                }
+
                 await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
                 task.Status = DownloadStatus.Completed;
                 task.Progress = 100;
-
-                if (!string.IsNullOrWhiteSpace(outputFile) && File.Exists(outputFile))
-                {
-                    task.OutputFilePath = outputFile;
-                    task.FileSize = new FileInfo(outputFile).Length;
-                }
-
+                task.OutputFilePath = outputFile;
+                task.FileSize = new FileInfo(outputFile).Length;
                 logCallback?.Invoke($"[yt-dlp] completed: {task.Title}");
                 return;
             }
@@ -1335,12 +1341,6 @@ public partial class YtDlpService
 
     private static string? ResolveOutputFile(string? capturedPath, DownloadTask task, DateTime downloadStartTime)
     {
-        if (!string.IsNullOrWhiteSpace(capturedPath) && File.Exists(capturedPath))
-            return capturedPath;
-
-        if (string.IsNullOrWhiteSpace(task.OutputDirectory) || !Directory.Exists(task.OutputDirectory))
-            return null;
-
         var extensions = task.Format switch
         {
             "mp3" => new[] { ".mp3" },
@@ -1349,6 +1349,36 @@ public partial class YtDlpService
             "mkv" => new[] { ".mkv", ".mp4", ".webm" },
             _ => new[] { ".mp4", ".mkv", ".webm" }
         };
+
+        if (!string.IsNullOrWhiteSpace(task.OutputFileNameOverride))
+        {
+            if (!string.IsNullOrWhiteSpace(task.OutputDirectory) && Directory.Exists(task.OutputDirectory))
+            {
+                foreach (var extension in extensions)
+                {
+                    var reservedPath = Path.Combine(
+                        task.OutputDirectory,
+                        task.OutputFileNameOverride + extension);
+                    if (File.Exists(reservedPath))
+                        return Path.GetFullPath(reservedPath);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(capturedPath)
+                && File.Exists(capturedPath)
+                && FileNameMatchesReservedStem(capturedPath, task.OutputFileNameOverride, extensions))
+            {
+                return capturedPath;
+            }
+
+            return null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(capturedPath) && File.Exists(capturedPath))
+            return capturedPath;
+
+        if (string.IsNullOrWhiteSpace(task.OutputDirectory) || !Directory.Exists(task.OutputDirectory))
+            return null;
 
         var minWriteTime = downloadStartTime.AddMinutes(-1);
         string? newestPath = null;
@@ -1376,6 +1406,21 @@ public partial class YtDlpService
         }
 
         return newestPath is null ? null : Path.GetFullPath(newestPath);
+    }
+
+    private static bool FileNameMatchesReservedStem(
+        string path,
+        string reservedStem,
+        IReadOnlyList<string> extensions)
+    {
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        var fileName = Path.GetFileName(path);
+        var stem = Path.GetFileNameWithoutExtension(fileName);
+        var extension = Path.GetExtension(fileName);
+        return string.Equals(stem, reservedStem, comparison)
+            && extensions.Any(candidate => extension.Equals(candidate, comparison));
     }
 
     private static IEnumerable<string> EnumerateProcessLines(string output)

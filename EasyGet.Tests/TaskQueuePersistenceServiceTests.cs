@@ -101,11 +101,14 @@ public sealed class TaskQueuePersistenceServiceTests
 
         Assert.Equal(7, restored.Count);
         Assert.DoesNotContain(restored, task => task.Status == DownloadStatus.Completed);
-        Assert.Equal(4, restored.Count(task => task.Status == DownloadStatus.Paused));
-        Assert.Single(restored, task => task.Status == DownloadStatus.Waiting);
+        Assert.DoesNotContain(restored, task => task.Status == DownloadStatus.Waiting);
+        Assert.Equal(5, restored.Count(task => task.Status == DownloadStatus.Paused));
         Assert.Single(restored, task => task.Status == DownloadStatus.Failed);
         Assert.Single(restored, task => task.Status == DownloadStatus.Cancelled);
-        Assert.Equal(3, restored.Count(task => task.WasRestoredFromPreviousSession));
+        Assert.Equal(4, restored.Count(task => task.WasRestoredFromPreviousSession));
+        var restoredWaiting = Assert.Single(restored, task => task.Id == "task0000");
+        Assert.Equal(DownloadStatus.Paused, restoredWaiting.Status);
+        Assert.True(restoredWaiting.WasRestoredFromPreviousSession);
     }
 
     [Fact]

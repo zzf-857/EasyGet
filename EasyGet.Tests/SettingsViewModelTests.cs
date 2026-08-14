@@ -22,6 +22,22 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true, "2026.03.17", "2026.08.11", null, "2026.03.17 · 有新版本 2026.08.11")]
+    [InlineData(true, "2026.08.11", "2026.08.11", null, "2026.08.11 · 已是最新")]
+    [InlineData(false, "", "2026.08.11", null, "未安装 · 最新 2026.08.11")]
+    [InlineData(true, "2026.03.17", "", "network", "2026.03.17 · 未能获取最新版本")]
+    [InlineData(false, "", "", null, "未安装")]
+    public void FormatToolVersionSummary_DescribesCurrentAndLatest(
+        bool found,
+        string current,
+        string latest,
+        string? error,
+        string expected)
+    {
+        Assert.Equal(expected, SettingsViewModel.FormatToolVersionSummary(found, current, latest, error));
+    }
+
+    [Theory]
     [InlineData("", true, "检测中")]
     [InlineData("正在安装 yt-dlp...", true, "准备安装")]
     [InlineData("yt-dlp 下载中... 45%", true, "下载中")]

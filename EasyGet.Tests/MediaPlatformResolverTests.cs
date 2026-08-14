@@ -28,7 +28,7 @@ public class MediaPlatformResolverTests
         Assert.Equal(expectedId, definition.Id);
         Assert.Equal(new Uri(expectedLoginUri), definition.LoginUri);
         Assert.Equal(expectedCookieDomains.Split('|'), definition.CookieDomains);
-        Assert.True(definition.AnonymousFirst);
+        Assert.Equal(expectedId != "bilibili", definition.AnonymousFirst);
     }
 
     [Theory]

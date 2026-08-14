@@ -135,4 +135,31 @@ public class TelegramDownloadServiceTests
         Assert.Equal(cancellation.Token, exception.CancellationToken);
         Assert.Equal(DownloadStatus.Cancelled, task.Status);
     }
+
+    [Theory]
+    [InlineData("-100123", 123)]
+    [InlineData("-1001234567890", 1234567890)]
+    [InlineData("1234567890", 1234567890)]
+    public void GetPrivateChatLookupId_UsesRawPositiveChannelId(string chatTarget, long expected)
+    {
+        Assert.Equal(expected, TelegramDownloadService.GetPrivateChatLookupId(chatTarget));
+    }
+
+    [Fact]
+    public async Task DownloadAsync_WhenNotLoggedIn_ThrowsWithoutCallingLogin()
+    {
+        using var service = new TelegramDownloadService(new TestConfigService());
+        var task = new DownloadTask
+        {
+            Url = "https://t.me/c/1234567890/456",
+            OutputDirectory = Path.GetTempPath()
+        };
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.DownloadAsync(task));
+
+        Assert.Contains("请先在设置中完成 Telegram 授权", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(DownloadStatus.Failed, task.Status);
+        Assert.DoesNotContain("Login", exception.ToString(), StringComparison.Ordinal);
+    }
 }

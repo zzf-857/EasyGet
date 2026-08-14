@@ -1291,6 +1291,14 @@ public class DownloadManager : IDisposable
                 return;
             }
 
+            // 恢复的 Resolving 任务标题可能为空，走与首次入队相同的元数据解析路径。
+            if (string.IsNullOrWhiteSpace(task.Title))
+            {
+                if (!StartEnqueuedAttempt(task, attempt) && removedFromQueue)
+                    RestoreTaskIfMissing(task);
+                return;
+            }
+
             // 重新入队，但跳过信息解析（已有元数据）
             Tasks.Add(task);
 
@@ -1573,23 +1581,7 @@ public class DownloadManager : IDisposable
                 task.Status = DownloadStatus.Downloading;
                 task.ErrorMessage = string.Empty; // 必须清空错误信息，否则 UI 会一直显示红字导致用户误解
 
-                var expectedExtension = ResolveExpectedYtDlpExtension(task.Format);
-                var requestedFileName =
-                    $"{DownloadFileNameBuilder.SanitizeResolvedTitle(task.Title)}{expectedExtension}";
-                using var fallbackOutputReservation = DownloadOutputPathReservation.Reserve(
-                    task.OutputDirectory,
-                    requestedFileName);
-                var previousOutputFileNameOverride = task.OutputFileNameOverride;
-                task.OutputFileNameOverride = System.IO.Path.GetFileNameWithoutExtension(
-                    fallbackOutputReservation.Path);
-                try
-                {
-                    await _ytDlpService.DownloadAsync(task, progress, log, token);
-                }
-                finally
-                {
-                    task.OutputFileNameOverride = previousOutputFileNameOverride;
-                }
+                await DownloadWithReservedYtDlpOutputAsync(task, progress, log, token);
                 return;
             }
         }
@@ -1600,7 +1592,30 @@ public class DownloadManager : IDisposable
             return;
         }
 
-        await _ytDlpService.DownloadAsync(task, progress, log, token);
+        await DownloadWithReservedYtDlpOutputAsync(task, progress, log, token);
+    }
+
+    private async Task DownloadWithReservedYtDlpOutputAsync(
+        DownloadTask task,
+        IProgress<DownloadProgress> progress,
+        Action<string> log,
+        CancellationToken token)
+    {
+        var requestedFileName =
+            $"{DownloadFileNameBuilder.SanitizeResolvedTitle(task.OutputFileNameOverride ?? task.Title)}{ResolveExpectedYtDlpExtension(task.Format)}";
+        using var reservation = DownloadOutputPathReservation.Reserve(
+            task.OutputDirectory,
+            requestedFileName);
+        var previous = task.OutputFileNameOverride;
+        task.OutputFileNameOverride = System.IO.Path.GetFileNameWithoutExtension(reservation.Path);
+        try
+        {
+            await _ytDlpService.DownloadAsync(task, progress, log, token);
+        }
+        finally
+        {
+            task.OutputFileNameOverride = previous;
+        }
     }
 
     private static string ResolveExpectedYtDlpExtension(string? format)

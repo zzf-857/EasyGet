@@ -113,10 +113,7 @@ public sealed class CookieAcquisitionCoordinator
         cancellationToken.ThrowIfCancellationRequested();
 
         var platform = MediaPlatformResolver.Resolve(url);
-        var attempts = new List<CookieAttempt>
-        {
-            new(CookieSourceKind.Anonymous, platform)
-        };
+        var attempts = new List<CookieAttempt>();
 
         if (await _vault.ExistsAsync(platform.StorageKey, cancellationToken)
             || HasLegacyCookieForPlatform(platform, url))
@@ -125,7 +122,7 @@ public sealed class CookieAcquisitionCoordinator
         }
 
         if (!_config.Config.SmartCookieEnabled)
-            return attempts;
+            return PlaceAnonymousAttempt(attempts, platform);
 
         var successfulProfiles = _health.Snapshot()
             .Where(record => string.Equals(
@@ -182,6 +179,19 @@ public sealed class CookieAcquisitionCoordinator
                 CookieSourceKind.Browser,
                 platform,
                 profile)));
+        return PlaceAnonymousAttempt(attempts, platform);
+    }
+
+    private static List<CookieAttempt> PlaceAnonymousAttempt(
+        List<CookieAttempt> attempts,
+        MediaPlatformDefinition platform)
+    {
+        var anonymous = new CookieAttempt(CookieSourceKind.Anonymous, platform);
+        if (platform.AnonymousFirst)
+            attempts.Insert(0, anonymous);
+        else
+            attempts.Add(anonymous);
+
         return attempts;
     }
 

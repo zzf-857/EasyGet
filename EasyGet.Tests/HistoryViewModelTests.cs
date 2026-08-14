@@ -1014,6 +1014,75 @@ public class HistoryViewModelTests
     }
 
     [Fact]
+    public async Task DeleteBatch_WhenFilterHidesSomeItems_OnlyDeletesVisibleGroupItems()
+    {
+        var dbPath = CreateTempDatabasePath();
+        try
+        {
+            using var service = new HistoryService(dbPath);
+            const string batchId = "filtered-batch";
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/batch/video-1",
+                Title = "visible video one",
+                Format = "mp4",
+                BatchId = batchId,
+                BatchName = "混合批次",
+                BatchDirectory = @"D:\Videos\mixed",
+                DownloadTime = new DateTime(2026, 8, 14, 12, 0, 1)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/batch/video-2",
+                Title = "visible video two",
+                Format = "mkv",
+                BatchId = batchId,
+                BatchName = "混合批次",
+                BatchDirectory = @"D:\Videos\mixed",
+                DownloadTime = new DateTime(2026, 8, 14, 12, 0, 2)
+            });
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/batch/audio-1",
+                Title = "hidden audio",
+                Format = "mp3",
+                BatchId = batchId,
+                BatchName = "混合批次",
+                BatchDirectory = @"D:\Videos\mixed",
+                DownloadTime = new DateTime(2026, 8, 14, 12, 0, 3)
+            });
+
+            string? confirmMessage = null;
+            var viewModel = new HistoryViewModel(service)
+            {
+                SelectedMediaFilter = "视频",
+                ConfirmFunc = (message, _) =>
+                {
+                    confirmMessage = message;
+                    return true;
+                }
+            };
+            await viewModel.LoadHistory();
+
+            var group = Assert.Single(viewModel.BatchFolderCards);
+            Assert.Equal(2, group.ItemCount);
+            Assert.All(group.Items, item => Assert.False(string.Equals(item.Format, "mp3", StringComparison.OrdinalIgnoreCase)));
+
+            await viewModel.DeleteBatchCommand.ExecuteAsync(group);
+
+            Assert.Contains("2 条", confirmMessage, StringComparison.Ordinal);
+            var remaining = await service.GetAllAsync();
+            var leftover = Assert.Single(remaining);
+            Assert.Equal("hidden audio", leftover.Title);
+            Assert.Equal(batchId, leftover.BatchId);
+        }
+        finally
+        {
+            TryDeleteDatabase(dbPath);
+        }
+    }
+
+    [Fact]
     public async Task OpenLargeBatch_BuildsVirtualizedResponsiveRowsInsteadOfOneHugeWrapPanel()
     {
         var dbPath = CreateTempDatabasePath();

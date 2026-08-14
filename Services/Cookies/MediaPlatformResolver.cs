@@ -52,7 +52,8 @@ public static class MediaPlatformResolver
                 "bilibili",
                 "哔哩哔哩",
                 "https://passport.bilibili.com/login",
-                new[] { "bilibili.com" }),
+                new[] { "bilibili.com" },
+                anonymousFirst: false),
             "bilibili.com",
             "b23.tv"),
         Register(
@@ -156,12 +157,14 @@ public static class MediaPlatformResolver
         string id,
         string displayName,
         string loginUri,
-        string[] cookieDomains)
+        string[] cookieDomains,
+        bool anonymousFirst = true)
         => new(
             id,
             displayName,
             new Uri(loginUri),
-            Array.AsReadOnly(cookieDomains));
+            Array.AsReadOnly(cookieDomains),
+            anonymousFirst);
 
     private static PlatformRegistration Register(
         MediaPlatformDefinition definition,

@@ -52,6 +52,33 @@ public class DownloadFileNameBuilderTests
     }
 
     [Fact]
+    public void BuildOutputTemplate_EscapesPercentSignsInOutputDirectory()
+    {
+        var template = DownloadFileNameBuilder.BuildOutputTemplate(
+            @"D:\资料\100%英语听力",
+            "demo");
+
+        Assert.Equal(@"D:\资料\100%%英语听力\demo.%(ext)s", template);
+        Assert.Equal(
+            @"D:\资料\100%%英语听力\%(title).150s.%(ext)s",
+            DownloadFileNameBuilder.BuildOutputTemplate(@"D:\资料\100%英语听力", ""));
+    }
+
+    [Fact]
+    public void BuildOutputTemplate_TruncatesSanitizedTitleTo150Characters()
+    {
+        var title = new string('测', 200);
+
+        var template = DownloadFileNameBuilder.BuildOutputTemplate(
+            @"D:\Videos\YouTube",
+            title);
+
+        Assert.Equal(
+            $@"D:\Videos\YouTube\{new string('测', 150)}.%(ext)s",
+            template);
+    }
+
+    [Fact]
     public void SanitizeResolvedTitle_UsesCachedDefaultStrictEncoding()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(

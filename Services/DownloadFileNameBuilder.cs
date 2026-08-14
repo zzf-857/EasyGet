@@ -5,6 +5,7 @@ namespace EasyGet.Services;
 
 internal static class DownloadFileNameBuilder
 {
+    private const int MaxResolvedTitleLength = 150;
     private static readonly Encoding DefaultStrictEncoding = CreateStrictEncoding(Encoding.Default);
 
     private static readonly char[] TrailingTrimChars =
@@ -16,9 +17,9 @@ internal static class DownloadFileNameBuilder
     {
         var fileName = string.IsNullOrWhiteSpace(resolvedTitle)
             ? "%(title).150s.%(ext)s"
-            : $"{EscapeYtDlpTemplate(SanitizeResolvedTitle(resolvedTitle))}.%(ext)s";
+            : $"{EscapeYtDlpTemplate(TruncateResolvedTitle(SanitizeResolvedTitle(resolvedTitle)))}.%(ext)s";
 
-        return Path.Combine(outputDirectory, fileName);
+        return Path.Combine(EscapeYtDlpTemplate(outputDirectory), fileName);
     }
 
     internal static string SanitizeResolvedTitle(string? resolvedTitle)
@@ -93,6 +94,9 @@ internal static class DownloadFileNameBuilder
             return false;
         }
     }
+
+    private static string TruncateResolvedTitle(string title)
+        => title.Length <= MaxResolvedTitleLength ? title : title[..MaxResolvedTitleLength];
 
     private static string EscapeYtDlpTemplate(string value)
         => value.Replace("%", "%%", StringComparison.Ordinal);

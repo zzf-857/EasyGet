@@ -42,7 +42,9 @@ public partial class DownloadViewModel : ObservableObject
     private Task<bool> _destinationPersistenceTask = Task.FromResult(true);
 
     // 输入
-    [ObservableProperty] private string _url = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanParse))]
+    private string _url = "";
     [ObservableProperty] private string _selectedFormat = "mp4";
     [ObservableProperty] private string _selectedQuality = "best";
     [ObservableProperty] private string _selectedSubtitle = "none";
@@ -72,6 +74,7 @@ public partial class DownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(IsCompleted))]
     [NotifyPropertyChangedFor(nameof(IsTaskFailed))]
     [NotifyPropertyChangedFor(nameof(IsProgressCardVisible))]
+    [NotifyPropertyChangedFor(nameof(CanParse))]
     private DownloadPageState _pageState = DownloadPageState.Idle;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PreviewTitle))]
@@ -227,9 +230,30 @@ public partial class DownloadViewModel : ObservableObject
         CustomFileName = "";
         ParseErrorMessage = "";
         UrlError = null;
-        DetachCurrentTask();
-        PageState = DownloadPageState.Idle;
+        if (!ShouldRetainCurrentTaskOnUrlChange())
+        {
+            DetachCurrentTask();
+            PageState = DownloadPageState.Idle;
+        }
         ParseCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool ShouldRetainCurrentTaskOnUrlChange()
+    {
+        if (CurrentTask is null)
+            return false;
+
+        if (CurrentTask.Status is DownloadStatus.Scheduled
+            or DownloadStatus.Resolving
+            or DownloadStatus.Downloading
+            or DownloadStatus.Merging)
+        {
+            return true;
+        }
+
+        // 刚入队时 Status 可能仍是 Waiting，但页面已进入下载/计划态。
+        return PageState is DownloadPageState.Scheduled or DownloadPageState.Downloading
+            && CurrentTask.Status == DownloadStatus.Waiting;
     }
 
     partial void OnPageStateChanged(DownloadPageState value)

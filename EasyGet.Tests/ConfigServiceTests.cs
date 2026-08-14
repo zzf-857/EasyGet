@@ -310,10 +310,11 @@ public class ConfigServiceTests
     }
 
     [Fact]
-    public async Task SaveAsync_WhenCookieEncryptionFails_PreservesExistingPersistentCopy()
+    public async Task SaveAsync_WhenCookieEncryptionFails_StillPersistsOtherSettings()
     {
         Directory.CreateDirectory(_tempDir);
         var configPath = Path.Combine(_tempDir, "config.json");
+        var downloadPath = Path.Combine(_tempDir, "kept-downloads");
         await File.WriteAllTextAsync(
             configPath,
             """
@@ -324,14 +325,37 @@ public class ConfigServiceTests
             """);
         var service = new ConfigService(_tempDir, new ThrowingTestProtector());
         await service.LoadAsync();
+        service.Config.DefaultDownloadPath = downloadPath;
 
-        await service.SaveAsync();
+        Assert.True(await service.SaveAsync());
 
-        Assert.Contains(
-            "only-persistent-copy",
-            await File.ReadAllTextAsync(configPath),
-            StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(_tempDir, "config.backup.json")));
+        Assert.Equal("auth_token=only-persistent-copy", service.Config.CookieContent);
+        var persisted = await File.ReadAllTextAsync(configPath);
+        Assert.Contains("kept-downloads", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain("only-persistent-copy", persisted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task SaveAsync_WhenCookieFileHasOnlyUnknownDomains_PersistsOtherSettings()
+    {
+        var protector = new XorTestProtector();
+        var service = new ConfigService(_tempDir, protector);
+        var downloadPath = Path.Combine(_tempDir, "unknown-domain-downloads");
+        service.Config.DefaultDownloadPath = downloadPath;
+        service.Config.CookieContent = """
+            # Netscape HTTP Cookie File
+            .unknown.example	TRUE	/	TRUE	0	session	unknown-secret
+            """;
+        service.Config.LegacyCookiePlatform = "";
+
+        Assert.True(await service.SaveAsync());
+
+        Assert.Contains("unknown-secret", service.Config.CookieContent, StringComparison.Ordinal);
+        var persisted = await File.ReadAllTextAsync(Path.Combine(_tempDir, "config.json"));
+        Assert.Contains("unknown-domain-downloads", persisted, StringComparison.Ordinal);
+        Assert.DoesNotContain("unknown-secret", persisted, StringComparison.Ordinal);
+        var vault = new PlatformCookieVault(_tempDir, protector);
+        Assert.False(await vault.ExistsAsync("youtube", CancellationToken.None));
     }
 
     [Fact]

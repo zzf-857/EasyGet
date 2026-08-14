@@ -14,6 +14,8 @@ public sealed class TrayIconService : IDisposable
     internal const string TrayMenuSeparatorStyleKey = "TrayMenuSeparator";
     internal const string OpenMenuGlyph = "\uE8A7";
     internal const string ExitMenuGlyph = "\uE8BB";
+    internal const string TaskbarCreatedMessageName = "TaskbarCreated";
+    private const int WsExToolWindow = 0x00000080;
 
     private const int WmApp = 0x8000;
     private const int TrayCallbackMessage = WmApp + 1;
@@ -36,6 +38,7 @@ public sealed class TrayIconService : IDisposable
     private bool _ownsIcon;
     private bool _isAdded;
     private bool _disposed;
+    private int _taskbarCreatedMessage;
 
     public event Action? ShowRequested;
     public event Action? ExitRequested;
@@ -70,24 +73,41 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
+    internal static bool ShouldReAddIcon(bool isAdded, bool modifySucceeded)
+        => !isAdded || !modifySucceeded;
+
     private void InitializeCore()
     {
-        var parameters = new HwndSourceParameters("EasyGet.TrayIcon")
+        var reuseExistingWindow = _messageSource is not null;
+        if (!reuseExistingWindow)
         {
-            ParentWindow = new IntPtr(-3),
-            WindowStyle = 0
-        };
-        _messageSource = new HwndSource(parameters);
-        _messageSource.AddHook(WindowProc);
-        (_iconHandle, _ownsIcon) = LoadApplicationIcon();
-        _contextMenu = CreateContextMenu();
+            if (_taskbarCreatedMessage == 0)
+                _taskbarCreatedMessage = unchecked((int)RegisterWindowMessage(TaskbarCreatedMessageName));
+
+            // Top-level (not HWND_MESSAGE) so Explorer's TaskbarCreated broadcast is received.
+            var parameters = new HwndSourceParameters("EasyGet.TrayIcon")
+            {
+                Width = 1,
+                Height = 1,
+                PositionX = -32000,
+                PositionY = -32000,
+                WindowStyle = 0,
+                ExtendedWindowStyle = WsExToolWindow
+            };
+            _messageSource = new HwndSource(parameters);
+            _messageSource.AddHook(WindowProc);
+            (_iconHandle, _ownsIcon) = LoadApplicationIcon();
+            _contextMenu = CreateContextMenu();
+        }
 
         var data = CreateNotifyData(NotifyIconMessage | NotifyIconIcon | NotifyIconTip);
         data.IconHandle = _iconHandle;
         data.Tooltip = TrimBalloonText("EasyGet", 127);
         if (!ShellNotifyIcon(NotifyIconAdd, ref data))
         {
-            CleanupResourcesSafely();
+            _isAdded = false;
+            if (!reuseExistingWindow)
+                CleanupResourcesSafely();
             return;
         }
 
@@ -126,7 +146,9 @@ public sealed class TrayIconService : IDisposable
         data.InfoFlags = isError ? NotifyError : NotifyInfo;
         try
         {
-            _ = ShellNotifyIcon(NotifyIconModify, ref data);
+            var modifySucceeded = ShellNotifyIcon(NotifyIconModify, ref data);
+            if (ShouldReAddIcon(_isAdded, modifySucceeded))
+                _isAdded = false;
         }
         catch (Exception ex)
         {
@@ -187,6 +209,14 @@ public sealed class TrayIconService : IDisposable
         IntPtr lParam,
         ref bool handled)
     {
+        if (_taskbarCreatedMessage != 0 && message == _taskbarCreatedMessage)
+        {
+            _isAdded = false;
+            _ = TryInitialize();
+            handled = true;
+            return IntPtr.Zero;
+        }
+
         if (message != TrayCallbackMessage)
             return IntPtr.Zero;
 
@@ -336,6 +366,9 @@ public sealed class TrayIconService : IDisposable
         IntPtr[]? largeIcons,
         IntPtr[]? smallIcons,
         uint iconCount);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint RegisterWindowMessage(string message);
 
     [DllImport("user32.dll")]
     private static extern IntPtr LoadIcon(IntPtr instance, IntPtr iconName);

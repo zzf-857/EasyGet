@@ -16,7 +16,8 @@ public class HistoryService : IDisposable
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
 
-    private readonly SqliteConnection _connection;
+    private readonly string _dbPath;
+    private SqliteConnection _connection;
     private readonly SemaphoreSlim _connectionGate = new(1, 1);
     private int _disposed;
 
@@ -33,15 +34,27 @@ public class HistoryService : IDisposable
         var dbDir = Path.GetDirectoryName(dbPath)
             ?? throw new ArgumentException("Database path must include a directory.", nameof(dbPath));
         Directory.CreateDirectory(dbDir);
-
-        var connectionString = new SqliteConnectionStringBuilder
+        _dbPath = dbPath;
+        _connection = CreateConnection(_dbPath);
+        try
         {
-            DataSource = dbPath,
-            Pooling = false
-        }.ToString();
-        _connection = new SqliteConnection(connectionString);
-        _connection.Open();
-        InitializeDatabase();
+            OpenAndInitialize();
+        }
+        catch (Exception ex) when (ex is SqliteException or InvalidOperationException)
+        {
+            TryDisposeConnection(_connection);
+            QuarantineCorruptDatabase(_dbPath);
+            _connection = CreateConnection(_dbPath);
+            try
+            {
+                OpenAndInitialize();
+            }
+            catch
+            {
+                TryDisposeConnection(_connection);
+                throw;
+            }
+        }
     }
 
     private static string GetDefaultDatabasePath()
@@ -49,6 +62,54 @@ public class HistoryService : IDisposable
         var dbDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EasyGet");
         return Path.Combine(dbDir, "history.db");
+    }
+
+    private static SqliteConnection CreateConnection(string dbPath)
+    {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = dbPath,
+            Pooling = false
+        }.ToString();
+        return new SqliteConnection(connectionString);
+    }
+
+    private void OpenAndInitialize()
+    {
+        _connection.Open();
+        InitializeDatabase();
+    }
+
+    private static void QuarantineCorruptDatabase(string dbPath)
+    {
+        var directory = Path.GetDirectoryName(dbPath)
+            ?? throw new InvalidOperationException("Database path must include a directory.");
+        var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
+        var corruptPath = Path.Combine(directory, $"history.corrupt-{timestamp}.db");
+        for (var suffix = 1; File.Exists(corruptPath); suffix++)
+            corruptPath = Path.Combine(directory, $"history.corrupt-{timestamp}-{suffix}.db");
+
+        MoveIfExists(dbPath, corruptPath);
+        MoveIfExists(dbPath + "-wal", corruptPath + "-wal");
+        MoveIfExists(dbPath + "-shm", corruptPath + "-shm");
+    }
+
+    private static void MoveIfExists(string source, string destination)
+    {
+        if (File.Exists(source))
+            File.Move(source, destination);
+    }
+
+    private static void TryDisposeConnection(SqliteConnection connection)
+    {
+        try
+        {
+            connection.Dispose();
+        }
+        catch
+        {
+            // Closing a failed connection must not hide the original database error.
+        }
     }
 
     private void InitializeDatabase()

@@ -4,8 +4,17 @@ using System.IO;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http;
+using System.Text.Json;
 
 namespace EasyGet.Services;
+
+public sealed record ToolUpdateCheckResult(
+    string ToolName,
+    bool IsInstalled,
+    string CurrentVersion,
+    string? LatestVersion,
+    bool IsUpdateAvailable,
+    string? ErrorMessage);
 
 public class EnvironmentStatus
 {
@@ -22,21 +31,42 @@ public class EnvironmentStatus
 
 public class EnvironmentService
 {
-    private static readonly HttpClient HttpClient = new();
+    internal const string YtDlpLatestReleaseApiUrl = "https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest";
+    internal const string FfmpegReleaseVersionUrl = "https://www.gyan.dev/ffmpeg/builds/release-version";
+    internal const string ToolUpdaterUserAgent = "EasyGet-ToolUpdater";
+
+    private static readonly HttpClient HttpClient = CreateDefaultToolHttpClient();
     private const int ToolDownloadMaxAttempts = 3;
     private const int ToolDownloadBufferSize = 81920;
+    private readonly ConfigService? _configService;
     private readonly Func<string, string, Task<(bool found, string version, string path)>> _checkToolAsync;
+    private readonly Func<HttpClient>? _httpClientFactory;
 
     public EnvironmentStatus Status { get; private set; } = new();
 
     public EnvironmentService()
-        : this(null)
+        : this(null, null, null)
+    {
+    }
+
+    public EnvironmentService(ConfigService configService)
+        : this(configService, null, null)
     {
     }
 
     internal EnvironmentService(Func<string, string, Task<(bool found, string version, string path)>>? checkToolAsync)
+        : this(null, checkToolAsync, null)
     {
+    }
+
+    internal EnvironmentService(
+        ConfigService? configService,
+        Func<string, string, Task<(bool found, string version, string path)>>? checkToolAsync,
+        Func<HttpClient>? httpClientFactory)
+    {
+        _configService = configService;
         _checkToolAsync = checkToolAsync ?? CheckToolAsync;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<EnvironmentStatus> CheckEnvironmentAsync()
@@ -93,33 +123,38 @@ public class EnvironmentService
         return updated;
     }
 
-    public async Task<bool> UpdateYtDlpAsync(IProgress<string>? log = null)
+    public Task<bool> UpdateYtDlpAsync(IProgress<string>? log = null, CancellationToken ct = default)
+        => UpdateToolAsync("yt-dlp", log, ct);
+
+    public Task<bool> UpdateFfmpegAsync(IProgress<string>? log = null, CancellationToken ct = default)
+        => UpdateToolAsync("ffmpeg", log, ct);
+
+    public async Task<IReadOnlyList<ToolUpdateCheckResult>> CheckToolUpdatesAsync(
+        IProgress<string>? log = null,
+        CancellationToken ct = default)
     {
-        try
-        {
-            if (!Status.YtDlpFound)
-            {
-                log?.Report("yt-dlp 未安装。请先安装运行环境。");
-                return false;
-            }
-
-            log?.Report("Updating yt-dlp...");
-            var output = await RunCommandAsync(Status.YtDlpPath, "-U");
-            if (!string.IsNullOrWhiteSpace(output))
-                log?.Report(output.Trim());
-
+        if (!Status.YtDlpFound && !Status.FfmpegFound)
             await CheckEnvironmentAsync();
-            log?.Report(Status.YtDlpFound
-                ? $"yt-dlp current version: {Status.YtDlpVersion}"
-                : "yt-dlp update failed.");
 
-            return Status.YtDlpFound;
-        }
-        catch (Exception ex)
+        log?.Report("正在获取 yt-dlp 与 ffmpeg 的最新版本...");
+        using var http = RentToolHttpClient();
+        var ytDlpTask = FetchLatestVersionAsync("yt-dlp", http.Client, ct);
+        var ffmpegTask = FetchLatestVersionAsync("ffmpeg", http.Client, ct);
+        await Task.WhenAll(ytDlpTask, ffmpegTask);
+
+        var results = new[]
         {
-            log?.Report($"yt-dlp update failed: {ex.Message}");
-            return false;
-        }
+            CreateToolUpdateCheckResult("yt-dlp", Status.YtDlpFound, Status.YtDlpVersion, await ytDlpTask),
+            CreateToolUpdateCheckResult("ffmpeg", Status.FfmpegFound, Status.FfmpegVersion, await ffmpegTask)
+        };
+
+        var available = results.Count(result => result.IsUpdateAvailable);
+        log?.Report(available > 0
+            ? $"发现 {available} 个组件可更新。"
+            : results.Any(result => !string.IsNullOrWhiteSpace(result.ErrorMessage))
+                ? "已检测本地组件，但未能获取全部最新版本。"
+                : "组件已是最新。");
+        return results;
     }
 
     internal static IReadOnlyList<string> GetMissingToolNames(EnvironmentStatus status)
@@ -191,15 +226,17 @@ public class EnvironmentService
             : FindExecutableOnPath("aria2c");
     }
 
-    private static async Task InstallYtDlpAsync(IProgress<string>? log, CancellationToken ct)
+    private async Task InstallYtDlpAsync(IProgress<string>? log, CancellationToken ct)
     {
         var targetPath = Path.Combine(ConfigService.GetToolsDirectory(), "yt-dlp.exe");
         var tempPath = Path.Combine(Path.GetTempPath(), $"easyget-ytdlp-{Guid.NewGuid():N}.exe");
 
         try
         {
-            await DownloadFileAsync(GetToolDownloadUri("yt-dlp"), tempPath, "yt-dlp", log, ct);
-            File.Copy(tempPath, targetPath, overwrite: true);
+            using var http = RentToolHttpClient();
+            await DownloadFileAsync(GetToolDownloadUri("yt-dlp"), tempPath, "yt-dlp", log, ct, http.Client);
+            await VerifyDownloadedExecutableAsync(tempPath, "yt-dlp", "--version", ct);
+            ReplaceExecutable(tempPath, targetPath);
             log?.Report("yt-dlp 安装完成。");
         }
         finally
@@ -208,7 +245,7 @@ public class EnvironmentService
         }
     }
 
-    private static async Task InstallFfmpegAsync(IProgress<string>? log, CancellationToken ct)
+    private async Task InstallFfmpegAsync(IProgress<string>? log, CancellationToken ct)
     {
         var toolsDir = ConfigService.GetToolsDirectory();
         var zipPath = Path.Combine(Path.GetTempPath(), $"easyget-ffmpeg-{Guid.NewGuid():N}.zip");
@@ -216,7 +253,8 @@ public class EnvironmentService
 
         try
         {
-            await DownloadFileAsync(GetToolDownloadUri("ffmpeg"), zipPath, "ffmpeg", log, ct);
+            using var http = RentToolHttpClient();
+            await DownloadFileAsync(GetToolDownloadUri("ffmpeg"), zipPath, "ffmpeg", log, ct, http.Client);
             log?.Report("正在解压 ffmpeg...");
             ZipFile.ExtractToDirectory(zipPath, extractDir);
 
@@ -224,11 +262,12 @@ public class EnvironmentService
             if (string.IsNullOrWhiteSpace(ffmpegPath))
                 throw new FileNotFoundException("未能在 ffmpeg 压缩包中找到 ffmpeg.exe。");
 
-            File.Copy(ffmpegPath, Path.Combine(toolsDir, "ffmpeg.exe"), overwrite: true);
+            await VerifyDownloadedExecutableAsync(ffmpegPath, "ffmpeg", "-version", ct);
+            ReplaceExecutable(ffmpegPath, Path.Combine(toolsDir, "ffmpeg.exe"));
 
             var ffprobePath = FindExecutableInDirectoryTree(extractDir, "ffprobe.exe");
             if (!string.IsNullOrWhiteSpace(ffprobePath))
-                File.Copy(ffprobePath, Path.Combine(toolsDir, "ffprobe.exe"), overwrite: true);
+                ReplaceExecutable(ffprobePath, Path.Combine(toolsDir, "ffprobe.exe"));
 
             log?.Report("ffmpeg 安装完成。");
         }
@@ -294,7 +333,18 @@ public class EnvironmentService
 
             while (true)
             {
-                var read = await source.ReadAsync(buffer.AsMemory(0, ToolDownloadBufferSize), ct);
+                int read;
+                try
+                {
+                    read = await HttpIdleRead.ReadAsync(
+                        source,
+                        buffer.AsMemory(0, ToolDownloadBufferSize),
+                        ct);
+                }
+                catch (TimeoutException ex)
+                {
+                    throw new IOException(ex.Message, ex);
+                }
                 if (read == 0)
                     break;
 
@@ -481,6 +531,265 @@ public class EnvironmentService
             return stdout;
 
         return $"{stdout.TrimEnd()}{Environment.NewLine}{stderr}";
+    }
+
+    private async Task<bool> UpdateToolAsync(string tool, IProgress<string>? log, CancellationToken ct)
+    {
+        try
+        {
+            Directory.CreateDirectory(ConfigService.GetToolsDirectory());
+            log?.Report($"正在获取并应用 {tool}...");
+            if (tool == "yt-dlp")
+                await InstallYtDlpAsync(log, ct);
+            else if (tool == "ffmpeg")
+                await InstallFfmpegAsync(log, ct);
+            else
+                throw new ArgumentOutOfRangeException(nameof(tool), tool, "Unknown tool");
+
+            await CheckEnvironmentAsync();
+            var found = tool == "yt-dlp" ? Status.YtDlpFound : Status.FfmpegFound;
+            var version = tool == "yt-dlp" ? Status.YtDlpVersion : Status.FfmpegVersion;
+            log?.Report(found ? $"{tool} 已更新到 {version}。" : $"{tool} 更新失败。");
+            return found;
+        }
+        catch (Exception ex)
+        {
+            log?.Report($"{tool} 更新失败: {ex.Message}");
+            return false;
+        }
+    }
+
+    private async Task<(string? version, string? error)> FetchLatestVersionAsync(
+        string tool,
+        HttpClient httpClient,
+        CancellationToken ct)
+    {
+        try
+        {
+            if (tool == "yt-dlp")
+            {
+                var json = await ReadSmallTextAsync(httpClient, new Uri(YtDlpLatestReleaseApiUrl), ct);
+                var version = ParseYtDlpLatestVersion(json);
+                return string.IsNullOrWhiteSpace(version)
+                    ? (null, "未能解析 yt-dlp 最新版本。")
+                    : (version, null);
+            }
+
+            if (tool == "ffmpeg")
+            {
+                var text = await ReadSmallTextAsync(httpClient, new Uri(FfmpegReleaseVersionUrl), ct);
+                var version = ParseFfmpegLatestVersion(text);
+                return string.IsNullOrWhiteSpace(version)
+                    ? (null, "未能解析 ffmpeg 最新版本。")
+                    : (version, null);
+            }
+
+            return (null, "未知组件");
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            return (null, ex.Message);
+        }
+    }
+
+    internal static ToolUpdateCheckResult CreateToolUpdateCheckResult(
+        string toolName,
+        bool isInstalled,
+        string currentVersion,
+        (string? version, string? error) latest)
+    {
+        var normalizedCurrent = NormalizeToolVersion(currentVersion);
+        var normalizedLatest = NormalizeToolVersion(latest.version);
+        return new ToolUpdateCheckResult(
+            toolName,
+            isInstalled,
+            normalizedCurrent,
+            string.IsNullOrWhiteSpace(normalizedLatest) ? null : normalizedLatest,
+            IsToolUpdateAvailable(isInstalled ? normalizedCurrent : "", normalizedLatest),
+            latest.error);
+    }
+
+    internal static string? ParseYtDlpLatestVersion(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.TryGetProperty("tag_name", out var tag)
+            ? NormalizeToolVersion(tag.GetString())
+            : null;
+    }
+
+    internal static string? ParseFfmpegLatestVersion(string text)
+        => NormalizeToolVersion(text);
+
+    internal static string NormalizeToolVersion(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "";
+
+        var token = value
+            .Split(['\r', '\n', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault() ?? "";
+        token = token.Trim().TrimStart('v', 'V', 'n', 'N');
+        var separator = token.IndexOfAny(['-', '+', '_']);
+        if (separator > 0)
+            token = token[..separator];
+        return token;
+    }
+
+    internal static bool IsToolUpdateAvailable(string? currentVersion, string? latestVersion)
+    {
+        if (string.IsNullOrWhiteSpace(latestVersion))
+            return false;
+        if (string.IsNullOrWhiteSpace(currentVersion))
+            return true;
+        return CompareToolVersions(latestVersion, currentVersion) > 0;
+    }
+
+    internal static int CompareToolVersions(string? left, string? right)
+    {
+        var leftParts = ParseVersionParts(left);
+        var rightParts = ParseVersionParts(right);
+        if (leftParts.Count == 0 && rightParts.Count == 0)
+            return 0;
+        if (leftParts.Count == 0)
+            return -1;
+        if (rightParts.Count == 0)
+            return 1;
+
+        var length = Math.Max(leftParts.Count, rightParts.Count);
+        for (var i = 0; i < length; i++)
+        {
+            var leftPart = i < leftParts.Count ? leftParts[i] : 0;
+            var rightPart = i < rightParts.Count ? rightParts[i] : 0;
+            var compared = leftPart.CompareTo(rightPart);
+            if (compared != 0)
+                return compared;
+        }
+
+        return 0;
+    }
+
+    private static List<int> ParseVersionParts(string? value)
+    {
+        var normalized = NormalizeToolVersion(value);
+        if (string.IsNullOrWhiteSpace(normalized))
+            return [];
+
+        var parts = new List<int>();
+        foreach (var part in normalized.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var digits = new string(part.TakeWhile(char.IsDigit).ToArray());
+            if (!int.TryParse(digits, out var number))
+                return [];
+            parts.Add(number);
+        }
+
+        return parts;
+    }
+
+    internal static void ReplaceExecutable(string sourcePath, string targetPath)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sourcePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+        if (!File.Exists(sourcePath))
+            throw new FileNotFoundException("找不到已下载的组件文件。", sourcePath);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(targetPath) ?? ConfigService.GetToolsDirectory());
+        var backupPath = targetPath + ".old";
+        TryDeleteFile(backupPath);
+
+        if (File.Exists(targetPath))
+        {
+            try
+            {
+                File.Move(targetPath, backupPath, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new IOException("无法替换正在使用的文件，请先暂停或完成下载任务后重试。", ex);
+            }
+        }
+
+        try
+        {
+            File.Copy(sourcePath, targetPath, overwrite: true);
+            TryDeleteFile(backupPath);
+        }
+        catch
+        {
+            if (File.Exists(backupPath) && !File.Exists(targetPath))
+                File.Move(backupPath, targetPath);
+            throw;
+        }
+    }
+
+    private async Task VerifyDownloadedExecutableAsync(
+        string path,
+        string toolName,
+        string versionArg,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var version = await GetVersionAsync(path, versionArg);
+        if (string.IsNullOrWhiteSpace(version))
+            throw new InvalidOperationException($"下载的 {toolName} 无法运行，已取消替换。");
+    }
+
+    private static async Task<string> ReadSmallTextAsync(HttpClient httpClient, Uri uri, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        if (uri.Host.Contains("github", StringComparison.OrdinalIgnoreCase))
+            request.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+
+        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadAsStringAsync(ct)).Trim();
+    }
+
+    internal HttpClient CreateToolHttpClient()
+        => RentToolHttpClient().Client;
+
+    private ToolHttpClientLease RentToolHttpClient()
+    {
+        if (_httpClientFactory is not null)
+            return new ToolHttpClientLease(_httpClientFactory(), ownsClient: false);
+
+        var config = _configService?.Config;
+        if (config is { UseProxy: true } && !string.IsNullOrWhiteSpace(config.ProxyAddress))
+        {
+            var handler = new HttpClientHandler
+            {
+                AllowAutoRedirect = true,
+                UseProxy = true,
+                Proxy = new WebProxy(config.ProxyAddress.Trim())
+            };
+            return new ToolHttpClientLease(
+                ConfigureToolHttpClient(new HttpClient(handler, disposeHandler: true)),
+                ownsClient: true);
+        }
+
+        return new ToolHttpClientLease(ConfigureToolHttpClient(new HttpClient()), ownsClient: true);
+    }
+
+    private sealed class ToolHttpClientLease(HttpClient client, bool ownsClient) : IDisposable
+    {
+        public HttpClient Client { get; } = client;
+
+        public void Dispose()
+        {
+            if (ownsClient)
+                Client.Dispose();
+        }
+    }
+
+    private static HttpClient CreateDefaultToolHttpClient()
+        => ConfigureToolHttpClient(new HttpClient());
+
+    private static HttpClient ConfigureToolHttpClient(HttpClient client)
+    {
+        client.Timeout = TimeSpan.FromMinutes(5);
+        if (client.DefaultRequestHeaders.UserAgent.Count == 0)
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(ToolUpdaterUserAgent);
+        return client;
     }
 
     private static void TryDeleteFile(string path)

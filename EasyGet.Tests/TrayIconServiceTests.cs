@@ -30,6 +30,34 @@ public class TrayIconServiceTests
     }
 
     [Fact]
+    public void TaskbarCreatedMessageName_MatchesShellBroadcast()
+        => Assert.Equal("TaskbarCreated", TrayIconService.TaskbarCreatedMessageName);
+
+    [Theory]
+    [InlineData(true, true, false)]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(false, false, true)]
+    public void ShouldReAddIcon_WhenMissingOrModifyFailed(
+        bool isAdded,
+        bool modifySucceeded,
+        bool expected)
+        => Assert.Equal(expected, TrayIconService.ShouldReAddIcon(isAdded, modifySucceeded));
+
+    [Fact]
+    public void RegisterWindowMessage_UsesUnicodeUser32EntryPoint()
+    {
+        var method = typeof(TrayIconService).GetMethod(
+            "RegisterWindowMessage",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        var import = method?.GetCustomAttribute<DllImportAttribute>();
+
+        Assert.NotNull(import);
+        Assert.Equal("user32.dll", import.Value, ignoreCase: true);
+        Assert.Equal(CharSet.Unicode, import.CharSet);
+    }
+
+    [Fact]
     public void ShellNotifyIcon_UsesTheUnicodeWindowsEntryPoint()
     {
         var method = typeof(TrayIconService).GetMethod(

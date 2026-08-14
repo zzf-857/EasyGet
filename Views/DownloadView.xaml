@@ -13,7 +13,11 @@
         </Grid.RowDefinitions>
 
         <Grid Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock Text="单个下载" Style="{StaticResource TextPageTitle}"/>
+            <StackPanel VerticalAlignment="Center" Margin="0,0,160,0">
+                <TextBlock Text="单个下载" Style="{StaticResource TextPageTitle}"/>
+                <TextBlock Text="粘贴链接后解析，再确认格式与保存位置"
+                           Style="{StaticResource TextPageSubtitle}"/>
+            </StackPanel>
             <Border HorizontalAlignment="Right" Height="32" Padding="12,4"
                     Background="{StaticResource BgSurfaceBrush}"
                     BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="12"
@@ -89,12 +93,12 @@
             </Grid>
             <Button Grid.Column="2" Height="40" MinWidth="80" Padding="20,4"
                     Style="{StaticResource AccentButton}" Command="{Binding ParseCommand}"
-                    IsEnabled="{Binding CanParse}" AutomationProperties.Name="解析视频链接" Content="解析"/>
+                    AutomationProperties.Name="解析视频链接" Content="解析"/>
         </Grid>
 
         <Border x:Name="DownloadOptionsPanel" Grid.Row="2" Margin="0,0,0,12"
                 Background="{StaticResource BgSurfaceBrush}" BorderBrush="{StaticResource BorderSubtleBrush}"
-                BorderThickness="1" CornerRadius="6" Padding="16,12">
+                BorderThickness="1" CornerRadius="8" Padding="16,12">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -273,13 +277,13 @@
                         <TextBlock Text="复制链接时会自动弹出提示 · 也可将链接拖到窗口"
                                     Margin="0,4,0,0" Style="{StaticResource TextCaption}"/>
                         <WrapPanel HorizontalAlignment="Center" Margin="0,12,0,0">
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="抖音" Style="{StaticResource TextCaption}"/></Border>
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="YouTube" Style="{StaticResource TextCaption}"/></Border>
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="Bilibili" Style="{StaticResource TextCaption}"/></Border>
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="X / Twitter" Style="{StaticResource TextCaption}"/></Border>
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="TikTok" Style="{StaticResource TextCaption}"/></Border>
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="小红书" Style="{StaticResource TextCaption}"/></Border>
-                            <Border BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="4" Padding="8,4" Margin="4,0"><TextBlock Text="1800+ 站点" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="抖音" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="YouTube" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="Bilibili" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="X / Twitter" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="TikTok" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="小红书" Style="{StaticResource TextCaption}"/></Border>
+                            <Border Background="{StaticResource BgSurfaceHighBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="8,4" Margin="4,0"><TextBlock Text="1800+ 站点" Style="{StaticResource TextCaption}"/></Border>
                         </WrapPanel>
                     </StackPanel>
 
@@ -436,7 +440,9 @@
                         <TextBlock Text="{Binding CurrentTask.Progress, StringFormat={}{0:F1}%}"
                                    HorizontalAlignment="Right"
                                    Style="{StaticResource TextMono}" Foreground="{DynamicResource AccentBrush}"/>
-                        <ProgressBar Grid.Row="1" Height="4" Margin="0,8,0,0" Maximum="100" Value="{Binding CurrentTask.Progress}"/>
+                        <ProgressBar Grid.Row="1" Height="4" Margin="0,8,0,0" Maximum="100"
+                                     Style="{StaticResource AccentProgressBar}"
+                                     Value="{Binding CurrentTask.Progress}"/>
                     </Grid>
                 </Grid>
 

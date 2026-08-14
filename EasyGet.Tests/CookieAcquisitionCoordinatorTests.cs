@@ -110,6 +110,22 @@ public sealed class CookieAcquisitionCoordinatorTests
     }
 
     [Fact]
+    public async Task BuildAttemptsAsync_BilibiliWithVaultCookiePrefersCookieBeforeAnonymous()
+    {
+        await using var fixture = await CoordinatorFixture.CreateAsync(
+            platformId: "bilibili",
+            manualCookie: "SESSDATA=secret");
+
+        var attempts = await fixture.Coordinator.BuildAttemptsAsync(
+            "https://www.bilibili.com/video/BV1",
+            CancellationToken.None);
+
+        Assert.Equal(CookieSourceKind.LegacyScoped, attempts[0].Source);
+        Assert.Contains(attempts, attempt => attempt.Source == CookieSourceKind.Anonymous);
+        Assert.Equal(CookieSourceKind.Anonymous, attempts[^1].Source);
+    }
+
+    [Fact]
     public async Task BuildAttemptsAsync_WhenSmartModeIsDisabledUsesAnonymousOnly()
     {
         await using var fixture = await CoordinatorFixture.CreateAsync(

@@ -13,7 +13,7 @@ public static class ConfirmationDialogService
         var app = Application.Current;
         var owner = app?.MainWindow;
         if (app is null || owner is null || !owner.IsLoaded)
-            return true;
+            return ShouldConfirmWhenOwnerUnavailable();
 
         bool ShowCore()
         {
@@ -30,6 +30,12 @@ public static class ConfirmationDialogService
             ? ShowCore()
             : owner.Dispatcher.Invoke(ShowCore);
     }
+
+    /// <summary>
+    /// 无可用主窗口时不能弹出确认框，默认拒绝以免无人值守时误确认破坏性操作。
+    /// Show 依赖 WPF Application，单测通过此方法覆盖该默认值。
+    /// </summary>
+    internal static bool ShouldConfirmWhenOwnerUnavailable() => false;
 
     internal static string NormalizeTitle(string? title)
         => string.IsNullOrWhiteSpace(title) ? "确认操作" : title.Trim();

@@ -86,7 +86,10 @@ public static class CookieFailureClassifier
                 "Unable to decrypt cookie",
                 "Could not decrypt cookie",
                 "cookie decryption failed",
-                "Key not valid for use in specified state"))
+                "Key not valid for use in specified state",
+                "指定状态下使用的密钥无效",
+                "数据无效",
+                "The data is invalid"))
         {
             return CookieFailureCategory.CookieDecryptFailed;
         }
@@ -165,7 +168,11 @@ public static class CookieFailureClassifier
                 "please log in",
                 "please login",
                 "login to continue",
-                "cookies are required"))
+                "cookies are required",
+                "Private video",
+                "members-only",
+                "HTTP Error 401",
+                "Unauthorized"))
         {
             return CookieFailureCategory.AuthenticationRequired;
         }

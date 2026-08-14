@@ -1677,15 +1677,8 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(group.BatchId))
-        {
-            await _historyService.DeleteBatchAsync(group.BatchId);
-        }
-        else
-        {
-            foreach (var item in group.Items)
-                await _historyService.DeleteAsync(item.Id);
-        }
+        foreach (var item in group.Items)
+            await _historyService.DeleteAsync(item.Id);
         await LoadHistory();
     }
 

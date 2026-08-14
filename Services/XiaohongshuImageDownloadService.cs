@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -237,7 +239,12 @@ public class XiaohongshuImageDownloadService
             logCallback?.Invoke($"[xhs-image] 找到 {imageUrls.Count} 张图片。正在准备下载目录...");
 
             var sanitizedTitle = DownloadFileNameBuilder.SanitizeResolvedTitle(title);
-            var subfolderPath = Path.Combine(task.OutputDirectory, sanitizedTitle);
+            var subfolderName = ResolveImageSubfolderName(
+                sanitizedTitle,
+                noteId,
+                task.OutputDirectory,
+                task.Url);
+            var subfolderPath = Path.Combine(task.OutputDirectory, subfolderName);
             Directory.CreateDirectory(subfolderPath);
 
             logCallback?.Invoke($"[xhs-image] 正在保存至文件夹：{subfolderPath}");
@@ -290,6 +297,44 @@ public class XiaohongshuImageDownloadService
             logCallback?.Invoke($"[xhs-image] 下载过程中发生异常：{ex.Message}");
             return false;
         }
+    }
+
+    internal static string ResolveImageSubfolderName(
+        string sanitizedTitle,
+        string? noteId,
+        string outputDirectory,
+        string? taskUrl = null)
+    {
+        if (string.IsNullOrWhiteSpace(sanitizedTitle))
+            sanitizedTitle = "video";
+
+        if (!string.IsNullOrWhiteSpace(noteId))
+            return $"{sanitizedTitle}-{noteId}";
+
+        if (string.IsNullOrWhiteSpace(outputDirectory)
+            || !Directory.Exists(Path.Combine(outputDirectory, sanitizedTitle)))
+        {
+            return sanitizedTitle;
+        }
+
+        if (!string.IsNullOrWhiteSpace(taskUrl))
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(taskUrl)))
+                [..8]
+                .ToLowerInvariant();
+            var hashedName = $"{sanitizedTitle}-{hash}";
+            if (!Directory.Exists(Path.Combine(outputDirectory, hashedName)))
+                return hashedName;
+        }
+
+        for (var index = 2; index < 10_000; index++)
+        {
+            var numbered = $"{sanitizedTitle} ({index})";
+            if (!Directory.Exists(Path.Combine(outputDirectory, numbered)))
+                return numbered;
+        }
+
+        return $"{sanitizedTitle} ({Guid.NewGuid():N})";
     }
 
     internal static string ExtractNoteId(string url)

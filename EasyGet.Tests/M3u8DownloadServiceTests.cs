@@ -14,7 +14,7 @@ public class M3u8DownloadServiceTests
     [InlineData("http://example.com/video.m3u8")]
     [InlineData("https://example.com/playlist.m3n8")]
     [InlineData("https://example.com/path/video.m3u8?auth=token123")]
-    [InlineData("https://example.com/some.m3u8/stream")]
+    [InlineData("https://example.com/path/video.m3u8#t=12")]
     public void IsM3u8Url_ReturnsTrueForM3u8Urls(string url)
     {
         Assert.True(M3u8DownloadService.IsM3u8Url(url));
@@ -22,15 +22,13 @@ public class M3u8DownloadServiceTests
 
     [Theory]
     [InlineData("http://example.com/video.mp4")]
-    [InlineData("https://example.com/video.mkv?format=m3u8_fallback")] // 应该排除仅含 m3u8_fallback 类似关键字但后缀不对的 mp4 
+    [InlineData("https://example.com/video.mkv?format=m3u8_fallback")]
+    [InlineData("https://example.com/some.m3u8/stream")]
+    [InlineData("https://site/play?src=https://cdn/index.m3u8")]
     [InlineData("")]
     [InlineData("   ")]
     public void IsM3u8Url_ReturnsFalseForOtherUrls(string url)
     {
-        // 只有在路径段中真正包含 .m3u8 或 .m3n8 时才判定为 true。
-        // 原判定包含 .m3u8，如果 url 是 https://example.com/video.mkv?format=m3u8_fallback 依然会被匹配为 true。
-        // 但对于我们而言，只要包含这个后缀就能开始用 M3u8DownloadService 尝试下载。
-        // 对于完全无关的 mp4 应该返回 false。
         Assert.False(M3u8DownloadService.IsM3u8Url(url));
     }
 
@@ -96,12 +94,38 @@ public class M3u8DownloadServiceTests
     }
 
     [Fact]
+    public void ParseSegments_ThrowsNotSupportedExceptionWhenContentIsNotAPlaylist()
+    {
+        const string m3u8Url = "https://example.com/path/index.m3u8";
+        const string html = """
+            <!DOCTYPE html>
+            <html><body>not a playlist</body></html>
+            """;
+
+        var exception = Assert.Throws<NotSupportedException>(() =>
+            M3u8DownloadService.ParseSegments(html, m3u8Url));
+
+        Assert.Contains("不是有效的 M3U8 播放列表", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ParseSegments_AcceptsBomAndLeadingWhitespaceBeforeExtM3u()
+    {
+        const string m3u8Url = "https://example.com/path/index.m3u8";
+        var m3u8Content = "\uFEFF  \r\n#EXTM3U\n#EXTINF:10.0,\nsegment0.ts\n";
+
+        var segments = M3u8DownloadService.ParseSegments(m3u8Content, m3u8Url);
+
+        Assert.Equal(["https://example.com/path/segment0.ts"], segments);
+    }
+
+    [Fact]
     public void ParseSegments_StreamsLinesWithoutSplittingPlaylistSnapshot()
     {
         var source = File.ReadAllText(TestRepositoryPaths.GetRootPath(
             Path.Combine("Services", "M3u8DownloadService.cs")));
 
-        Assert.Contains("EnumeratePlaylistLines(m3u8Content)", source, StringComparison.Ordinal);
+        Assert.Contains("EnumeratePlaylistLines(playlist)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("m3u8Content.Split(new[] { '\\r', '\\n' }, StringSplitOptions.RemoveEmptyEntries)", source, StringComparison.Ordinal);
     }
 
