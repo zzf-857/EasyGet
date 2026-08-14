@@ -923,6 +923,8 @@ public class ReleaseScriptTests
         Assert.Contains("repos/$Repository/releases?per_page=100", script, StringComparison.Ordinal);
         Assert.Contains("--paginate", script, StringComparison.Ordinal);
         Assert.Contains("--slurp", script, StringComparison.Ordinal);
+        Assert.Contains("Invoke-GhUtf8Json", script, StringComparison.Ordinal);
+        Assert.Contains("StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)", script, StringComparison.Ordinal);
         Assert.Contains("zzf-857/EasyGet", script, StringComparison.Ordinal);
         Assert.Contains("Set-ProjectVersionPreservingWhitespace", script, StringComparison.Ordinal);
         Assert.Contains("chore: release $tag", script, StringComparison.Ordinal);

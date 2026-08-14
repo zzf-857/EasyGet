@@ -78,6 +78,50 @@ function Invoke-NativeCommandCapture {
     return @($output | ForEach-Object { $_.ToString() })
 }
 
+function Invoke-GhUtf8Json {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [Parameter(Mandatory = $true)][string]$Description
+    )
+
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = "gh"
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $startInfo.StandardErrorEncoding = [System.Text.UTF8Encoding]::new($false)
+    $startInfo.CreateNoWindow = $true
+    $startInfo.Arguments = ($Arguments | ForEach-Object {
+        if ($_ -match '[\s"]') {
+            '"{0}"' -f ($_ -replace '"', '\"')
+        }
+        else {
+            $_
+        }
+    }) -join " "
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    if ($null -eq $process) {
+        throw "$Description failed because gh could not be started."
+    }
+
+    try {
+        $stdout = $process.StandardOutput.ReadToEnd()
+        $stderr = $process.StandardError.ReadToEnd()
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            $details = if ([string]::IsNullOrWhiteSpace($stderr)) { $stdout } else { $stderr }
+            throw "$Description failed with exit code $($process.ExitCode).$([Environment]::NewLine)$details"
+        }
+
+        return $stdout
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+
 function Get-SingleLineCommandOutput {
     param(
         [Parameter(Mandatory = $true)][string]$Command,
@@ -153,15 +197,14 @@ function Assert-GitHubReleaseDoesNotExist {
         throw "An authenticated GitHub CLI is required to check public and draft releases. Run 'gh auth login' and retry."
     }
 
-    $releasePagesJson = @(Invoke-NativeCommandCapture `
-        -Command "gh" `
+    $releasePagesJson = Invoke-GhUtf8Json `
         -Arguments @(
             "api",
             "--paginate",
             "--slurp",
             "repos/$Repository/releases?per_page=100"
         ) `
-        -Description "Listing all public and draft GitHub Releases") -join [Environment]::NewLine
+        -Description "Listing all public and draft GitHub Releases"
     $releasePages = @($releasePagesJson | ConvertFrom-Json)
     foreach ($page in $releasePages) {
         foreach ($release in @($page)) {
