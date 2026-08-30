@@ -95,6 +95,12 @@ public partial class DownloadTask : ObservableObject
     /// <summary>合集总项目数</summary>
     public int CollectionItemCount { get; set; }
 
+    /// <summary>持续跟踪合集的订阅 ID；非跟踪任务为 0</summary>
+    public long CollectionSubscriptionId { get; set; }
+
+    /// <summary>合集条目的稳定键，用于跨刷新关联同一视频</summary>
+    public string CollectionEntryKey { get; set; } = "";
+
     /// <summary>输出文件路径</summary>
     [ObservableProperty] private string _outputFilePath = "";
 

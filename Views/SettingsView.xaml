@@ -268,6 +268,32 @@
                             </Grid>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="自动检查合集更新" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="仅在 EasyGet 运行或驻留系统托盘期间，定期检查已跟踪合集的新视频" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              Style="{StaticResource ToggleSwitch}"
+                                              IsChecked="{Binding AutomaticCollectionRefreshEnabled}"/>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
+                                    <TextBlock Text="合集检查间隔" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="手动检查始终可用；此间隔只控制运行期间的自动检查" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="180" Height="32" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
+                                          ItemsSource="{Binding CollectionRefreshIntervalOptions}"
+                                          SelectedItem="{Binding CollectionRefreshIntervalHours, Mode=TwoWay}"
+                                          ItemStringFormat="{}{0} 小时"
+                                          IsEnabled="{Binding AutomaticCollectionRefreshEnabled}"/>
+                            </Grid>
+                        </Border>
+                        <Border Style="{StaticResource SettingsRow}">
                             <StackPanel>
                                 <Grid>
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>

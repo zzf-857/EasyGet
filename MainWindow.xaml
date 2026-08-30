@@ -292,7 +292,7 @@
                                                             <Setter Property="Text" Value="需要处理"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding IsInfo}" Value="True">
-                                                            <Setter Property="Text" Value="检测到链接"/>
+                                                            <Setter Property="Text" Value="应用通知"/>
                                                         </DataTrigger>
                                                     </Style.Triggers>
                                                     </Style>

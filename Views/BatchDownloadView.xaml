@@ -21,8 +21,42 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
+
+                <StackPanel Grid.Row="0" Orientation="Horizontal">
+                    <RadioButton GroupName="BatchPageMode" Height="32" Padding="12,0"
+                                 Style="{StaticResource HistoryFilterRadioButton}"
+                                 IsChecked="{Binding IsBatchDownloadMode, Mode=OneWay}"
+                                 Command="{Binding SetBatchPageModeCommand}" CommandParameter="batch"
+                                 Content="批量下载"
+                                 AutomationProperties.Name="批量下载模式"/>
+                    <RadioButton GroupName="BatchPageMode" Height="32" Margin="6,0,0,0" Padding="12,0"
+                                 Style="{StaticResource HistoryFilterRadioButton}"
+                                 IsChecked="{Binding IsCollectionUpdatesMode, Mode=OneWay}"
+                                 Command="{Binding SetBatchPageModeCommand}" CommandParameter="updates"
+                                 AutomationProperties.Name="合集更新模式">
+                        <TextBlock>
+                            <Run Text="合集更新 ("/><Run Text="{Binding CollectionUpdatesVM.PendingCount, Mode=OneWay}"/><Run Text=")"/>
+                        </TextBlock>
+                    </RadioButton>
+                </StackPanel>
+
+                <Grid Grid.Row="1" Margin="0,12,0,0">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Visibility" Value="Visible"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsCollectionUpdatesMode}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Margin="0,0,0,12">
                     <TextBlock Text="批量下载" Style="{StaticResource TextPageTitle}"/>
@@ -279,8 +313,19 @@
                                         Command="{Binding ClearPlaylistSelectionCommand}"
                                         IsEnabled="{Binding CanEditPlaylistPreview}"/>
                             </Grid>
-                            <TextBlock Grid.Row="1" Margin="0,5,0,5" Text="{Binding PlaylistSelectionSummary}"
-                                       Style="{StaticResource TextCaption}"/>
+                            <Grid Grid.Row="1" Margin="0,5,0,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding PlaylistSelectionSummary}"
+                                           Style="{StaticResource TextCaption}"/>
+                                <CheckBox Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"
+                                          Content="跟踪后续更新" IsChecked="{Binding TrackCollectionUpdates}"
+                                          Visibility="{Binding HasTrackablePlaylist, Converter={StaticResource BoolToVisibility}}"
+                                          ToolTip="EasyGet 运行或驻留托盘时自动检查"
+                                          AutomationProperties.Name="跟踪合集后续更新"/>
+                            </Grid>
                             <ItemsControl Grid.Row="2" ItemsSource="{Binding PlaylistSections}">
                                 <ItemsControl.ItemsPanel>
                                     <ItemsPanelTemplate>
@@ -369,6 +414,211 @@
                                    VerticalAlignment="Center" Style="{StaticResource TextCaption}"/>
                     </Border>
                 </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,12,0,0" DataContext="{Binding CollectionUpdatesVM}"
+                      IsEnabled="{Binding IsBusy, Converter={StaticResource InverseBool}}"
+                      Visibility="{Binding DataContext.IsCollectionUpdatesMode, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}, Converter={StaticResource BoolToVisibility}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                        <TextBlock Text="合集更新" Style="{StaticResource TextPageTitle}"/>
+                        <TextBlock Text="{Binding PendingSummary}" Style="{StaticResource TextPageSubtitle}"
+                                   TextTrimming="CharacterEllipsis" ToolTip="{Binding PendingSummary}"/>
+                        <ProgressBar Height="2" Margin="0,8,0,0" IsIndeterminate="True"
+                                     Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                        <TextBlock Text="正在处理合集..." Margin="0,5,0,0"
+                                   Style="{StaticResource TextCaption}" Foreground="{StaticResource TextMutedBrush}"
+                                   Visibility="{Binding IsOperating, Converter={StaticResource BoolToVisibility}}"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="32"/>
+                        </Grid.ColumnDefinitions>
+                        <ComboBox Grid.Column="0" Height="32" Style="{StaticResource DarkComboBox}"
+                                  ItemsSource="{Binding Subscriptions}" SelectedItem="{Binding SelectedSubscription}"
+                                  IsEnabled="{Binding HasSubscriptions}"
+                                  DisplayMemberPath="Title" AutomationProperties.Name="选择跟踪合集"/>
+                        <Button Grid.Column="2" Width="32" Height="32" Padding="0"
+                                Style="{StaticResource ToolbarIconButton}"
+                                Command="{Binding RefreshSelectedCommand}"
+                                IsEnabled="{Binding HasSubscriptions}"
+                                ToolTip="立即获取更新" AutomationProperties.Name="立即获取合集更新">
+                            <TextBlock Text="&#xE72C;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                        </Button>
+                    </Grid>
+
+                    <Border Grid.Row="2" Padding="10,8" Margin="0,0,0,10"
+                            Background="{StaticResource BgInputBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="32"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="下载目录" Style="{StaticResource TextCaption}"/>
+                                <TextBlock Text="{Binding SavedDirectory}" Margin="0,3,0,0"
+                                           Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"
+                                           ToolTip="{Binding SavedDirectory}"/>
+                                <TextBlock Text="原下载目录已不可用，请重新选择" Margin="0,4,0,0"
+                                           Foreground="{StaticResource WarningBrush}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding HasSubscriptions}" Value="True"/>
+                                                        <Condition Binding="{Binding IsSavedDirectoryAvailable}" Value="False"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                            <Button Grid.Column="2" Width="32" Height="32" Padding="0" VerticalAlignment="Center"
+                                    Style="{StaticResource ToolbarIconButton}"
+                                    Command="{Binding RelinkDirectoryCommand}"
+                                    IsEnabled="{Binding HasSubscriptions}"
+                                    ToolTip="重新选择下载目录" AutomationProperties.Name="重新选择合集下载目录">
+                                <TextBlock Text="&#xE8B7;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="3">
+                        <TextBlock Text="正在读取合集..." HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Style="{StaticResource TextCaption}" Foreground="{StaticResource TextMutedBrush}"
+                                   Visibility="{Binding IsLoading, Converter={StaticResource BoolToVisibility}}"/>
+                        <TextBlock Text="暂无已跟踪合集" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextMutedBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding HasSubscriptions}" Value="False"/>
+                                                <Condition Binding="{Binding IsLoading}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <TextBlock Text="当前没有待下载的新视频" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   Foreground="{StaticResource TextMutedBrush}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding HasSubscriptions}" Value="True"/>
+                                                <Condition Binding="{Binding HasPendingItems}" Value="False"/>
+                                                <Condition Binding="{Binding IsLoading}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <ListBox ItemsSource="{Binding PendingItems}" Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                            <ListBox.Style>
+                                <Style TargetType="ListBox">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasPendingItems}" Value="False">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ListBox.Style>
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Focusable" Value="False"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="32"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <CheckBox Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                  AutomationProperties.Name="选择新增视频"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding PositionText}" Style="{StaticResource TextMono}"
+                                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="{Binding Title}" Style="{StaticResource TextCaption}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Title}"/>
+                                            <TextBlock Text="{Binding Url}" Margin="0,2,0,0" Style="{StaticResource TextMono}"
+                                                       Foreground="{StaticResource TextMutedBrush}" FontSize="{StaticResource FontSizeCaption}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding Url}"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="3" Margin="8,0,0,0" Text="{Binding StateText}"
+                                                   Style="{StaticResource TextCaption}" Foreground="{StaticResource AccentBrush}"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+
+                    <StackPanel Grid.Row="4" Margin="0,12,0,0">
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Height="32" Padding="9,3" Style="{StaticResource SurfaceButton}"
+                                    Content="全选" Command="{Binding SelectAllCommand}" IsEnabled="{Binding HasPendingItems}"/>
+                            <Button Grid.Column="1" Height="32" Margin="6,0,0,0" Padding="9,3" Style="{StaticResource SurfaceButton}"
+                                    Content="清空" Command="{Binding ClearSelectionCommand}" IsEnabled="{Binding HasPendingItems}"/>
+                            <Button Grid.Column="3" Height="32" Padding="9,3" Style="{StaticResource SurfaceButton}"
+                                    Content="忽略所选" Command="{Binding IgnoreSelectedCommand}" IsEnabled="{Binding HasSelectedItems}"/>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Button Grid.Column="0" Height="36" Style="{StaticResource SurfaceButton}"
+                                    Content="全部下载" Command="{Binding DownloadAllCommand}" IsEnabled="{Binding HasPendingItems}"/>
+                            <Button Grid.Column="2" Height="36" Style="{StaticResource AccentButton}"
+                                    Content="下载所选" Command="{Binding DownloadSelectedCommand}" IsEnabled="{Binding HasSelectedItems}"/>
+                        </Grid>
+                        <Button Height="32" Margin="0,8,0,0" Style="{StaticResource SurfaceButton}"
+                                Content="停止跟踪此合集" Command="{Binding DeleteSubscriptionCommand}"
+                                IsEnabled="{Binding HasSubscriptions}"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 

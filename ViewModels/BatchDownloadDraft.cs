@@ -12,6 +12,7 @@ public partial class BatchDownloadDraft : ObservableObject
         bool hasProvidedTitle,
         int collectionItemIndex = 0,
         int collectionItemCount = 0,
+        string collectionEntryKey = "",
         IReadOnlyList<MediaResourceInfo>? resources = null)
     {
         Url = url;
@@ -19,6 +20,7 @@ public partial class BatchDownloadDraft : ObservableObject
         HasProvidedTitle = hasProvidedTitle;
         CollectionItemIndex = collectionItemIndex;
         CollectionItemCount = collectionItemCount;
+        CollectionEntryKey = collectionEntryKey;
         Resources = resources ?? [];
     }
 
@@ -29,6 +31,8 @@ public partial class BatchDownloadDraft : ObservableObject
     public int CollectionItemIndex { get; }
 
     public int CollectionItemCount { get; }
+
+    public string CollectionEntryKey { get; }
 
     public IReadOnlyList<MediaResourceInfo> Resources { get; }
 

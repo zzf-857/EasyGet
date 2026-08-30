@@ -32,6 +32,7 @@ public class DownloadManager : IDisposable
     private int _activeTaskCount;
     private int _disposed;
     private int _suppressQueuePersistence;
+    private int _queueRestoreReliable = 1;
     private TaskCompletionSource _idleSignal = CreateCompletedSignal();
     private const int MetadataWorkerCount = 4;
     private const int MetadataQueueCapacity = 128;
@@ -109,9 +110,11 @@ public class DownloadManager : IDisposable
         if (_taskQueuePersistence is null)
             return 0;
 
-        var restoredTasks = await _taskQueuePersistence
-            .RestoreAsync(cancellationToken)
+        var restoreResult = await _taskQueuePersistence
+            .RestoreWithStatusAsync(cancellationToken)
             .ConfigureAwait(true);
+        Volatile.Write(ref _queueRestoreReliable, restoreResult.IsReliable ? 1 : 0);
+        var restoredTasks = restoreResult.Tasks;
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
         var addedCount = 0;
@@ -133,17 +136,98 @@ public class DownloadManager : IDisposable
             Interlocked.Decrement(ref _suppressQueuePersistence);
         }
 
+        if (restoreResult.IsReliable)
+            await ReconcileRestoredCollectionQueueAsync(cancellationToken).ConfigureAwait(true);
+
         foreach (var task in Tasks.Where(task => task.Status == DownloadStatus.Scheduled).ToArray())
             RegisterRestoredScheduledDownload(task);
 
-        ScheduleQueuePersistence();
+        if (restoreResult.IsReliable)
+            ScheduleQueuePersistence();
         return addedCount;
+    }
+
+    private async Task ReconcileRestoredCollectionQueueAsync(
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            var restoredCorrelations = Tasks
+                .Where(task => task.CollectionSubscriptionId > 0
+                               && !string.IsNullOrWhiteSpace(task.CollectionEntryKey)
+                               && !string.IsNullOrWhiteSpace(task.Id))
+                .GroupBy(task => new CollectionTaskCorrelation(
+                    task.CollectionSubscriptionId,
+                    task.CollectionEntryKey,
+                    task.Id))
+                .ToDictionary(group => group.Key, group => group.First().Status);
+            var subscriptions = await _historyService.GetCollectionSubscriptionsAsync()
+                .ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            foreach (var subscription in subscriptions)
+            {
+                var reconciledItems = new List<CollectionSubscriptionItemStateUpdate>();
+                foreach (var item in subscription.Items.Where(item =>
+                             item.State == CollectionSubscriptionItemState.Queued))
+                {
+                    var correlation = new CollectionTaskCorrelation(
+                        subscription.Id,
+                        item.EntryKey,
+                        item.TaskId);
+                    CollectionSubscriptionItemState? reconciledState;
+                    if (!restoredCorrelations.TryGetValue(correlation, out var restoredStatus))
+                    {
+                        reconciledState = CollectionSubscriptionItemState.New;
+                    }
+                    else
+                    {
+                        reconciledState = restoredStatus switch
+                        {
+                            DownloadStatus.Completed => CollectionSubscriptionItemState.Downloaded,
+                            DownloadStatus.Failed => CollectionSubscriptionItemState.Failed,
+                            DownloadStatus.Cancelled => CollectionSubscriptionItemState.New,
+                            _ => null
+                        };
+                    }
+
+                    if (reconciledState is null)
+                        continue;
+                    reconciledItems.Add(new CollectionSubscriptionItemStateUpdate
+                    {
+                        EntryKey = item.EntryKey,
+                        State = reconciledState.Value,
+                        TaskId = "",
+                        ExpectedTaskId = item.TaskId
+                    });
+                }
+
+                if (reconciledItems.Count == 0)
+                    continue;
+
+                await _historyService.UpdateCollectionSubscriptionItemStatesAsync(
+                        subscription.Id,
+                        reconciledItems)
+                    .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[DownloadManager] Could not reconcile restored collection tasks: {ex.Message}");
+        }
     }
 
     /// <summary>Immediately writes the latest recoverable queue snapshot.</summary>
     public Task FlushAsync(CancellationToken cancellationToken = default)
     {
-        if (_taskQueuePersistence is null)
+        if (_taskQueuePersistence is null || Volatile.Read(ref _queueRestoreReliable) == 0)
             return Task.CompletedTask;
 
         return _taskQueuePersistence.FlushAsync(Tasks.ToArray(), cancellationToken);
@@ -234,7 +318,8 @@ public class DownloadManager : IDisposable
     {
         if (_taskQueuePersistence is null
             || Volatile.Read(ref _disposed) != 0
-            || Volatile.Read(ref _suppressQueuePersistence) != 0)
+            || Volatile.Read(ref _suppressQueuePersistence) != 0
+            || Volatile.Read(ref _queueRestoreReliable) == 0)
         {
             return;
         }
@@ -242,7 +327,8 @@ public class DownloadManager : IDisposable
         void ScheduleCore()
         {
             if (Volatile.Read(ref _disposed) != 0
-                || Volatile.Read(ref _suppressQueuePersistence) != 0)
+                || Volatile.Read(ref _suppressQueuePersistence) != 0
+                || Volatile.Read(ref _queueRestoreReliable) == 0)
             {
                 return;
             }
@@ -419,7 +505,7 @@ public class DownloadManager : IDisposable
         }
         catch (Exception ex)
         {
-            FailScheduledDownload(registration, ex);
+            await FailScheduledDownloadAsync(registration, ex).ConfigureAwait(false);
         }
         finally
         {
@@ -488,7 +574,8 @@ public class DownloadManager : IDisposable
                 ? $"[{DateTime.Now:HH:mm:ss}] 计划任务到点，等待下载: {registration.Task.Url}"
                 : $"[{DateTime.Now:HH:mm:ss}] 计划任务到点，正在解析: {registration.Task.Url}");
 
-            if (_taskQueuePersistence is not null)
+            if (_taskQueuePersistence is not null
+                && Volatile.Read(ref _queueRestoreReliable) != 0)
             {
                 try
                 {
@@ -540,7 +627,9 @@ public class DownloadManager : IDisposable
         }
     }
 
-    private void FailScheduledDownload(ScheduledDownload registration, Exception exception)
+    private async Task FailScheduledDownloadAsync(
+        ScheduledDownload registration,
+        Exception exception)
     {
         var isCurrent = false;
         lock (_attemptLock)
@@ -561,6 +650,8 @@ public class DownloadManager : IDisposable
         registration.Task.ErrorMessage = "启动计划下载失败，请重新设置计划";
         System.Diagnostics.Debug.WriteLine(
             $"[DownloadManager] Scheduled download failed: {exception.Message}");
+        await UpdateCollectionSubscriptionItemAfterFinishAsync(registration.Task)
+            .ConfigureAwait(false);
         NotifyTaskFinished(registration.Task);
     }
 
@@ -1060,7 +1151,7 @@ public class DownloadManager : IDisposable
             }
             else
             {
-                CompleteAttemptCleanup(attempt, isCurrent);
+                _ = CompleteAttemptCleanupAsync(attempt, isCurrent);
             }
         }
 
@@ -1072,11 +1163,20 @@ public class DownloadManager : IDisposable
         bool isCurrent,
         Task cancellationCompletion)
     {
-        await cancellationCompletion.ConfigureAwait(false);
-        CompleteAttemptCleanup(attempt, isCurrent);
+        try
+        {
+            await cancellationCompletion.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[DownloadManager] Attempt cancellation cleanup failed: {ex.Message}");
+        }
+
+        await CompleteAttemptCleanupAsync(attempt, isCurrent).ConfigureAwait(false);
     }
 
-    private void CompleteAttemptCleanup(DownloadAttempt attempt, bool isCurrent)
+    private async Task CompleteAttemptCleanupAsync(DownloadAttempt attempt, bool isCurrent)
     {
         try
         {
@@ -1088,18 +1188,23 @@ public class DownloadManager : IDisposable
         }
         finally
         {
-            var idleSignal = attempt.WasRegistered
-                ? CompleteActiveTask()
-                : null;
-            attempt.MarkCleanupComplete();
-
             try
             {
                 if (isCurrent)
-                    NotifyTaskFinishedOnce(attempt);
+                {
+                    if (Volatile.Read(ref _disposed) == 0)
+                    {
+                        await UpdateCollectionSubscriptionItemAfterFinishAsync(attempt.Task)
+                            .ConfigureAwait(false);
+                    }
+                    attempt.MarkCleanupComplete();
+                    if (Volatile.Read(ref _disposed) == 0)
+                        NotifyTaskFinishedOnce(attempt);
+                }
             }
             finally
             {
+                attempt.MarkCleanupComplete();
                 lock (_attemptLock)
                 {
                     if (_activeAttempts.TryGetValue(attempt.Task, out var activeAttempt)
@@ -1109,6 +1214,9 @@ public class DownloadManager : IDisposable
                     }
                 }
 
+                var idleSignal = attempt.WasRegistered
+                    ? CompleteActiveTask()
+                    : null;
                 attempt.SignalCompletion();
                 idleSignal?.TrySetResult();
             }
@@ -1158,6 +1266,43 @@ public class DownloadManager : IDisposable
         }
     }
 
+    private async Task UpdateCollectionSubscriptionItemAfterFinishAsync(DownloadTask task)
+    {
+        if (task.CollectionSubscriptionId <= 0
+            || string.IsNullOrWhiteSpace(task.CollectionEntryKey))
+        {
+            return;
+        }
+
+        var state = task.Status switch
+        {
+            DownloadStatus.Completed => CollectionSubscriptionItemState.Downloaded,
+            DownloadStatus.Failed => CollectionSubscriptionItemState.Failed,
+            DownloadStatus.Cancelled => CollectionSubscriptionItemState.New,
+            _ => (CollectionSubscriptionItemState?)null
+        };
+        if (state is null)
+            return;
+
+        try
+        {
+            await _historyService.UpdateCollectionSubscriptionItemStatesAsync(
+                task.CollectionSubscriptionId,
+                [new CollectionSubscriptionItemStateUpdate
+                {
+                    EntryKey = task.CollectionEntryKey,
+                    State = state.Value,
+                    TaskId = "",
+                    ExpectedTaskId = task.Id
+                }]);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine(
+                $"[DownloadManager] Could not update collection item state: {ex.Message}");
+        }
+    }
+
     private static TaskCompletionSource CreateCompletedSignal()
     {
         var signal = new TaskCompletionSource(
@@ -1168,6 +1313,10 @@ public class DownloadManager : IDisposable
 
     /// <summary>取消任务</summary>
     public void Cancel(string taskId)
+        => _ = CancelAsync(taskId);
+
+    /// <summary>取消任务，并等待无活动下载尝试的任务完成合集状态持久化。</summary>
+    public async Task CancelAsync(string taskId)
     {
         var task = Tasks.FirstOrDefault(t => t.Id == taskId);
         if (task is null)
@@ -1214,12 +1363,18 @@ public class DownloadManager : IDisposable
         finally
         {
             CancelAttemptSource(task, attempt, source);
-            if (notifyFinishingCancellation
-                && attempt is not null
-                && attempt.IsCleanupComplete)
-            {
-                NotifyTaskFinishedOnce(attempt);
-            }
+        }
+
+        if (shouldMarkCancelled && attempt is null)
+        {
+            await UpdateCollectionSubscriptionItemAfterFinishAsync(task).ConfigureAwait(false);
+            NotifyTaskFinished(task);
+        }
+        else if (shouldMarkCancelled && notifyFinishingCancellation)
+        {
+            await attempt!.Completion.ConfigureAwait(false);
+            await UpdateCollectionSubscriptionItemAfterFinishAsync(task).ConfigureAwait(false);
+            NotifyTaskFinishedOnce(attempt);
         }
     }
 
@@ -1340,6 +1495,7 @@ public class DownloadManager : IDisposable
         if (task is null)
             return;
 
+        var previousStatus = task.Status;
         var attempt = await BeginConditionalAttemptAsync(
             task,
             static status => status is DownloadStatus.Failed or DownloadStatus.Cancelled);
@@ -1349,6 +1505,13 @@ public class DownloadManager : IDisposable
         var removedFromQueue = false;
         try
         {
+            if (!await TryMarkCollectionItemQueuedForRetryAsync(task).ConfigureAwait(true))
+            {
+                FinishAttempt(attempt, currentTask => currentTask.Status = previousStatus);
+                await attempt.Completion.ConfigureAwait(true);
+                return;
+            }
+
             // 重置任务状态
             task.Progress = 0;
             task.Speed = 0;
@@ -1358,8 +1521,12 @@ public class DownloadManager : IDisposable
             ClearDouyinTaskAttemptState(task);
             // 从队列中移除再重新入队
             removedFromQueue = Tasks.Remove(task);
-            if (!StartEnqueuedAttempt(task, attempt) && removedFromQueue)
-                RestoreTaskIfMissing(task);
+            if (!StartEnqueuedAttempt(task, attempt))
+            {
+                if (removedFromQueue)
+                    RestoreTaskIfMissing(task);
+                await attempt.Completion.ConfigureAwait(true);
+            }
         }
         catch
         {
@@ -1370,23 +1537,69 @@ public class DownloadManager : IDisposable
             });
             if (removedFromQueue)
                 RestoreTaskIfMissing(task);
+            await attempt.Completion.ConfigureAwait(true);
             throw;
         }
     }
 
+    private async Task<bool> TryMarkCollectionItemQueuedForRetryAsync(DownloadTask task)
+    {
+        if (task.CollectionSubscriptionId <= 0
+            || string.IsNullOrWhiteSpace(task.CollectionEntryKey))
+        {
+            return true;
+        }
+
+        var subscription = await _historyService
+            .GetCollectionSubscriptionAsync(task.CollectionSubscriptionId)
+            .ConfigureAwait(false);
+        var item = subscription?.Items.FirstOrDefault(candidate => string.Equals(
+            candidate.EntryKey,
+            task.CollectionEntryKey,
+            StringComparison.Ordinal));
+        if (item is null)
+            return true;
+        if (!string.IsNullOrEmpty(item.TaskId)
+            && !string.Equals(item.TaskId, task.Id, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var affected = await _historyService.UpdateCollectionSubscriptionItemStatesAsync(
+                task.CollectionSubscriptionId,
+                [new CollectionSubscriptionItemStateUpdate
+                {
+                    EntryKey = task.CollectionEntryKey,
+                    State = CollectionSubscriptionItemState.Queued,
+                    TaskId = task.Id,
+                    ExpectedTaskId = item.TaskId
+                }])
+            .ConfigureAwait(false);
+        return affected > 0;
+    }
+
     /// <summary>取消所有任务</summary>
     public void CancelAll()
+        => _ = CancelAllAsync();
+
+    public async Task CancelAllAsync()
     {
-        foreach (var task in Tasks.ToArray())
+        var cancellations = Tasks
+            .ToArray()
+            .Select(task => CancelOneSafelyAsync(task.Id))
+            .ToArray();
+        await Task.WhenAll(cancellations).ConfigureAwait(false);
+    }
+
+    private async Task CancelOneSafelyAsync(string taskId)
+    {
+        try
         {
-            try
-            {
-                Cancel(task.Id);
-            }
-            catch (Exception)
-            {
-                // A task subscriber must not prevent cancellation of later tasks.
-            }
+            await CancelAsync(taskId).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // A task subscriber must not prevent cancellation of later tasks.
         }
     }
 
@@ -1396,7 +1609,8 @@ public class DownloadManager : IDisposable
             return;
 
         Interlocked.Exchange(ref _suppressQueuePersistence, 1);
-        if (_taskQueuePersistence is not null)
+        if (_taskQueuePersistence is not null
+            && Volatile.Read(ref _queueRestoreReliable) != 0)
         {
             try
             {
@@ -1412,11 +1626,12 @@ public class DownloadManager : IDisposable
             }
         }
 
-        CancelAll();
-
+        ScheduledDownload[] scheduledToCancel;
         DownloadAttempt[] attemptsToCancel;
         lock (_attemptLock)
         {
+            scheduledToCancel = _scheduledDownloads.Values.ToArray();
+            _scheduledDownloads.Clear();
             attemptsToCancel = _activeAttempts.Values
                 .Where(attempt => !attempt.IsFinishing
                     || attempt.WasPauseRequested
@@ -1425,6 +1640,9 @@ public class DownloadManager : IDisposable
             foreach (var attempt in attemptsToCancel)
                 attempt.RequestCancel();
         }
+
+        foreach (var scheduledDownload in scheduledToCancel)
+            scheduledDownload.Cancel();
 
         foreach (var attempt in attemptsToCancel)
         {
@@ -1441,17 +1659,6 @@ public class DownloadManager : IDisposable
             }
 
             CancelAttemptSource(attempt.Task, attempt, attempt.Source);
-            if (attempt.IsFinishing && attempt.IsCleanupComplete)
-            {
-                try
-                {
-                    NotifyTaskFinishedOnce(attempt);
-                }
-                catch (Exception)
-                {
-                    // Event subscribers must not interrupt disposal.
-                }
-            }
         }
 
         _metadataQueue.Writer.TryComplete();
@@ -1786,6 +1993,11 @@ public class DownloadManager : IDisposable
         var sanitized = new string(value.Where(c => !invalid.Contains(c)).ToArray());
         return string.IsNullOrWhiteSpace(sanitized) ? "Item" : sanitized;
     }
+
+    private readonly record struct CollectionTaskCorrelation(
+        long SubscriptionId,
+        string EntryKey,
+        string TaskId);
 
     private sealed class ScheduledDownload : IDisposable
     {

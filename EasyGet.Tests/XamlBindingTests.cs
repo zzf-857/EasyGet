@@ -280,7 +280,7 @@ public class XamlBindingTests
         var source = File.ReadAllText(GetRootPath("MainWindow.xaml"));
 
         Assert.Contains("IsInfo", source, StringComparison.Ordinal);
-        Assert.Contains("检测到链接", source, StringComparison.Ordinal);
+        Assert.Contains("应用通知", source, StringComparison.Ordinal);
         Assert.Contains("ExecuteActionCommand", source, StringComparison.Ordinal);
     }
 

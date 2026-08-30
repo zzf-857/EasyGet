@@ -22,6 +22,8 @@ public sealed class UserDataBackupServiceTests
               "collectionDirectories": ["D:\\Collections\\RAG"],
               "selectedCollectionDirectory": "D:\\Collections\\RAG",
               "globalDownloadRateLimitKilobytesPerSecond": 2048,
+              "automaticCollectionRefreshEnabled": false,
+              "collectionRefreshIntervalHours": 72,
               "themeColor": "Rose",
               "cookieContent": "COOKIE-SECRET-123",
               "legacyCookiePlatform": "bilibili",
@@ -55,6 +57,8 @@ public sealed class UserDataBackupServiceTests
         Assert.Contains("collectionDirectories", preview.IncludedSettingNames);
         Assert.Contains("selectedCollectionDirectory", preview.IncludedSettingNames);
         Assert.Contains("globalDownloadRateLimitKilobytesPerSecond", preview.IncludedSettingNames);
+        Assert.Contains("automaticCollectionRefreshEnabled", preview.IncludedSettingNames);
+        Assert.Contains("collectionRefreshIntervalHours", preview.IncludedSettingNames);
         Assert.Contains("themeColor", preview.IncludedSettingNames);
         Assert.DoesNotContain("cookieContent", preview.IncludedSettingNames);
         Assert.DoesNotContain("tgApiHash", preview.IncludedSettingNames);
@@ -75,6 +79,8 @@ public sealed class UserDataBackupServiceTests
         Assert.Contains("\"collectionDirectories\"", settingsText, StringComparison.Ordinal);
         Assert.Contains("\"selectedCollectionDirectory\"", settingsText, StringComparison.Ordinal);
         Assert.Contains("\"globalDownloadRateLimitKilobytesPerSecond\": 2048", settingsText, StringComparison.Ordinal);
+        Assert.Contains("\"automaticCollectionRefreshEnabled\": false", settingsText, StringComparison.Ordinal);
+        Assert.Contains("\"collectionRefreshIntervalHours\": 72", settingsText, StringComparison.Ordinal);
         Assert.DoesNotContain("COOKIE-SECRET-123", settingsText, StringComparison.Ordinal);
         Assert.DoesNotContain("cookieContent", settingsText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TG-HASH-SECRET", settingsText, StringComparison.Ordinal);
@@ -180,6 +186,94 @@ public sealed class UserDataBackupServiceTests
         Assert.DoesNotContain(
             Directory.EnumerateFiles(root.Path("target"), "*", SearchOption.AllDirectories),
             path => Path.GetFileName(path).Contains(".restore-", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RestoreBackupAsync_RoundTripsCollectionSubscriptionItemsAndBatchMetadata()
+    {
+        using var root = new TestDirectory();
+        var sourcePaths = CreatePaths(root, "collection-source");
+        await WriteSettingsAsync(sourcePaths.SettingsFilePath, "Rose", "source-cookie", "source-hash");
+        using (var history = new HistoryService(sourcePaths.HistoryDatabasePath))
+        {
+            var subscription = await history.UpsertCollectionSubscriptionAsync(
+                new CollectionSubscription
+                {
+                    CanonicalKey = "extractor:bilibili:season-42",
+                    SourceUrl = "https://example.test/collection/42",
+                    Platform = "Bilibili",
+                    Title = "Tracked collection",
+                    OutputDirectory = root.Path("downloads", "collection-42"),
+                    Format = "mkv",
+                    Quality = "1080",
+                    Subtitle = "all",
+                    BatchId = "batch-from-backup",
+                    BatchName = "Tracked collection batch",
+                    AutoCheckEnabled = true,
+                    CheckInterval = TimeSpan.FromHours(12)
+                },
+                [new CollectionSubscriptionItemSnapshot
+                {
+                    EntryKey = "extractor:bilibili:BV1-old",
+                    EntryId = "BV1-old",
+                    Url = "https://example.test/video/old",
+                    Title = "Old video",
+                    Position = 1
+                }],
+                new DateTimeOffset(2026, 8, 30, 1, 0, 0, TimeSpan.Zero));
+            await history.ApplyCollectionSubscriptionSnapshotAsync(
+                subscription.Id,
+                [
+                    new CollectionSubscriptionItemSnapshot
+                    {
+                        EntryKey = "extractor:bilibili:BV1-old",
+                        EntryId = "BV1-old",
+                        Url = "https://example.test/video/old",
+                        Title = "Old video",
+                        Position = 1
+                    },
+                    new CollectionSubscriptionItemSnapshot
+                    {
+                        EntryKey = "extractor:bilibili:BV1-new",
+                        EntryId = "BV1-new",
+                        Url = "https://example.test/video/new",
+                        Title = "New video",
+                        Position = 2
+                    }
+                ],
+                attemptedAtUtc: new DateTimeOffset(2026, 8, 30, 13, 0, 0, TimeSpan.Zero));
+            await history.UpdateCollectionSubscriptionItemStatesAsync(
+                subscription.Id,
+                [new CollectionSubscriptionItemStateUpdate
+                {
+                    EntryKey = "extractor:bilibili:BV1-new",
+                    State = CollectionSubscriptionItemState.Failed,
+                    TaskId = "failed-task-42"
+                }]);
+        }
+
+        var archivePath = root.Path("transfer", "collection-backup.zip");
+        await new UserDataBackupService(sourcePaths).CreateBackupAsync(archivePath);
+
+        var targetPaths = CreatePaths(root, "collection-target");
+        await SeedHistoryAsync(
+            targetPaths.HistoryDatabasePath,
+            "https://example.test/target",
+            "Target history");
+        await WriteSettingsAsync(targetPaths.SettingsFilePath, "Blue", "target-cookie", "target-hash");
+        await new UserDataBackupService(targetPaths).RestoreBackupAsync(archivePath);
+
+        using var restoredHistory = new HistoryService(targetPaths.HistoryDatabasePath);
+        var restored = Assert.Single(await restoredHistory.GetCollectionSubscriptionsAsync());
+        Assert.Equal("batch-from-backup", restored.BatchId);
+        Assert.Equal("Tracked collection batch", restored.BatchName);
+        Assert.Equal("mkv", restored.Format);
+        Assert.Equal(TimeSpan.FromHours(12), restored.CheckInterval);
+        Assert.Equal(2, restored.Items.Count);
+        var failed = restored.Items.Single(item => item.EntryKey == "extractor:bilibili:BV1-new");
+        Assert.Equal(CollectionSubscriptionItemState.Failed, failed.State);
+        Assert.Equal("failed-task-42", failed.TaskId);
+        Assert.True(failed.IsPresent);
     }
 
     [Fact]

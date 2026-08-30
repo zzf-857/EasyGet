@@ -101,6 +101,26 @@ public class HistoryServiceTests
     }
 
     [Fact]
+    public void Constructor_DoesNotQuarantineHealthyDatabaseWhenSchemaMigrationFails()
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "CREATE VIEW collection_subscriptions AS SELECT 1 AS id";
+            command.ExecuteNonQuery();
+        }
+
+        var exception = Assert.Throws<SqliteException>(() => new HistoryService(dbPath));
+
+        Assert.DoesNotContain(exception.SqliteErrorCode, new[] { 11, 26 });
+        Assert.True(File.Exists(dbPath));
+        Assert.Empty(Directory.GetFiles(root.DirectoryPath, "history.corrupt-*.db"));
+    }
+
+    [Fact]
     public void Dispose_ReleasesDatabaseFileImmediately()
     {
         using var root = new TestDirectory();

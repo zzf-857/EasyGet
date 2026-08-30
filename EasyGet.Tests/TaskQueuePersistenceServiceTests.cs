@@ -33,6 +33,8 @@ public sealed class TaskQueuePersistenceServiceTests
             CollectionTitle = "Collection",
             CollectionItemIndex = 2,
             CollectionItemCount = 5,
+            CollectionSubscriptionId = 42,
+            CollectionEntryKey = "extractor:bilibili:BV1example",
             OutputFilePath = root.Path("downloads", "video.mkv"),
             OutputFilePaths = [root.Path("downloads", "video.zh.srt")],
             Progress = 42.5,
@@ -60,6 +62,8 @@ public sealed class TaskQueuePersistenceServiceTests
         Assert.Equal(task.Url, restoredTask.Url);
         Assert.Equal(task.OutputFilePaths, restoredTask.OutputFilePaths);
         Assert.Equal("137+ba/b", restoredTask.SourceFormatSelector);
+        Assert.Equal(42, restoredTask.CollectionSubscriptionId);
+        Assert.Equal("extractor:bilibili:BV1example", restoredTask.CollectionEntryKey);
         Assert.Equal(42.5, restoredTask.Progress);
         Assert.Equal(123_456, restoredTask.DownloadedSize);
         Assert.Equal(DownloadStatus.Paused, restoredTask.Status);
@@ -124,6 +128,38 @@ public sealed class TaskQueuePersistenceServiceTests
         Assert.Empty(restored);
         Assert.False(File.Exists(statePath));
         Assert.Single(Directory.GetFiles(root.DirectoryPath, "queue-state.corrupt-*.json"));
+    }
+
+    [Fact]
+    public async Task RestoreWithStatus_LockedStateIsUnreliableAndRemainsUntouched()
+    {
+        using var root = new TestDirectory();
+        var statePath = root.Path("queue-state.json");
+        using (var seed = new TaskQueuePersistenceService(statePath, TimeSpan.Zero))
+        {
+            await seed.FlushAsync([
+                new DownloadTask
+                {
+                    Id = "locked-task",
+                    Url = "https://example.com/locked",
+                    Status = DownloadStatus.Paused
+                }
+            ]);
+        }
+
+        await using var stateLock = new FileStream(
+            statePath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None);
+        using var persistence = new TaskQueuePersistenceService(statePath, TimeSpan.Zero);
+
+        var result = await persistence.RestoreWithStatusAsync();
+
+        Assert.False(result.IsReliable);
+        Assert.Empty(result.Tasks);
+        Assert.True(File.Exists(statePath));
+        Assert.Empty(Directory.GetFiles(root.DirectoryPath, "queue-state.corrupt-*.json"));
     }
 
     [Fact]

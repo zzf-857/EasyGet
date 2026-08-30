@@ -121,12 +121,15 @@ public partial class App : System.Windows.Application
             services.AddSingleton<TelegramDownloadService>();
             services.AddSingleton<IAppUpdateService, AppUpdateService>();
             services.AddSingleton<BackgroundUpdateCoordinator>();
+            services.AddSingleton<CollectionRefreshService>();
+            services.AddSingleton<CollectionRefreshCoordinator>();
             services.AddSingleton<IVideoInfoProvider, YtDlpVideoInfoProvider>();
             services.AddSingleton<DownloadManager>();
 
             // ViewModel 层
             services.AddSingleton<MainViewModel>();
             services.AddSingleton<DownloadViewModel>();
+            services.AddSingleton<CollectionUpdatesViewModel>();
             services.AddSingleton<BatchDownloadViewModel>();
             services.AddSingleton<HistoryViewModel>();
             services.AddSingleton<SettingsViewModel>();

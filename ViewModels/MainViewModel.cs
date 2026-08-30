@@ -18,6 +18,7 @@ public partial class MainViewModel : ObservableObject
     private readonly FailureRecoveryAdvisor _failureRecoveryAdvisor;
     private readonly TrayIconService? _trayIconService;
     private readonly BackgroundUpdateCoordinator? _backgroundUpdateCoordinator;
+    private readonly CollectionRefreshCoordinator? _collectionRefreshCoordinator;
 
     [ObservableProperty] private ObservableObject? _currentPage;
     [ObservableProperty] private int _selectedNavIndex;
@@ -91,7 +92,8 @@ public partial class MainViewModel : ObservableObject
         LongRunningSessionService? longRunningSession = null,
         FailureRecoveryAdvisor? failureRecoveryAdvisor = null,
         TrayIconService? trayIconService = null,
-        BackgroundUpdateCoordinator? backgroundUpdateCoordinator = null)
+        BackgroundUpdateCoordinator? backgroundUpdateCoordinator = null,
+        CollectionRefreshCoordinator? collectionRefreshCoordinator = null)
     {
         _envService = envService;
         _downloadManager = downloadManager;
@@ -101,6 +103,7 @@ public partial class MainViewModel : ObservableObject
         _failureRecoveryAdvisor = failureRecoveryAdvisor ?? new FailureRecoveryAdvisor();
         _trayIconService = trayIconService;
         _backgroundUpdateCoordinator = backgroundUpdateCoordinator;
+        _collectionRefreshCoordinator = collectionRefreshCoordinator;
 
         DownloadVM = downloadVm;
         BatchDownloadVM = batchDownloadVm;
@@ -123,6 +126,13 @@ public partial class MainViewModel : ObservableObject
 
         BatchDownloadVM.RequestShowNotification += (msg, isSuccess) =>
             ShowToast(msg, isSuccess, isSuccess ? null : "查看队列", isSuccess ? null : () => Navigate("batch"));
+        if (BatchDownloadVM.CollectionUpdatesVM is not null)
+        {
+            BatchDownloadVM.CollectionUpdatesVM.RequestShowNotification += (msg, isSuccess) =>
+                ShowToast(msg, isSuccess, "查看更新", () => NavigateToCollectionUpdates());
+        }
+        if (_collectionRefreshCoordinator is not null)
+            _collectionRefreshCoordinator.UpdatesFound += OnCollectionUpdatesFound;
         DownloadVM.RequestShowNotification += (msg, isSuccess) =>
             ShowToast(msg, isSuccess);
         HistoryVM.RequestShowNotification += (msg, isSuccess) =>
@@ -379,6 +389,10 @@ public partial class MainViewModel : ObservableObject
         {
             await BatchDownloadVM.InitializeAsync();
         }
+        else if (BatchDownloadVM.CollectionUpdatesVM is not null)
+        {
+            await BatchDownloadVM.CollectionUpdatesVM.InitializeAsync();
+        }
 
         StatusMessage = "正在检查运行环境...";
         var report = _readinessService is null || _configService is null
@@ -415,7 +429,43 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = status.IsReady
             ? "Ready"
             : "环境未就绪，请检查设置。";
+        _collectionRefreshCoordinator?.Start();
         _ = CheckForBackgroundUpdateAsync();
+    }
+
+    private void OnCollectionUpdatesFound(object? sender, CollectionUpdatesFoundEventArgs e)
+    {
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            dispatcher.BeginInvoke(() => OnCollectionUpdatesFound(sender, e));
+            return;
+        }
+
+        _ = BatchDownloadVM.CollectionUpdatesVM?.InitializeAsync();
+        var titles = e.NewItems
+            .Select(item => string.IsNullOrWhiteSpace(item.Title) ? item.Url : item.Title.Trim())
+            .Take(3)
+            .ToArray();
+        var titleSummary = string.Join("、", titles);
+        if (e.NewItems.Count > titles.Length)
+            titleSummary += $" 等 {e.NewItems.Count} 个视频";
+
+        var collectionTitle = string.IsNullOrWhiteSpace(e.Subscription.Title)
+            ? "已跟踪合集"
+            : e.Subscription.Title;
+        var message = $"“{collectionTitle}”新增：{titleSummary}";
+        ShowInfoToast(
+            message,
+            "查看更新",
+            () => NavigateToCollectionUpdates(e.Subscription.Id));
+        ShowSystemNotification("合集有新视频", message, false);
+    }
+
+    private void NavigateToCollectionUpdates(long? subscriptionId = null)
+    {
+        Navigate("batch");
+        _ = BatchDownloadVM.ShowCollectionUpdatesAsync(subscriptionId);
     }
 
     private async Task CheckForBackgroundUpdateAsync()

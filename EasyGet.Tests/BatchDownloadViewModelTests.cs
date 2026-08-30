@@ -793,6 +793,536 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
+    public async Task TrackedPlaylist_PersistsCompleteBaselineAndCorrelatesSelectedTasks()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var outputDirectory = root.Path("downloads", "course");
+        Directory.CreateDirectory(outputDirectory);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = outputDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            historyService: history,
+            videoInfoProvider: service);
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "collection-42",
+            ExtractorKey = "ExampleCollection",
+            Title = "完整课程",
+            SourceUrl = "https://example.test/collections/42",
+            Entries =
+            [
+                new PlaylistEntryInfo { Id = "v1", IeKey = "Example", Url = "https://example.test/v1", OriginalTitle = "第一节", OriginalIndex = 1 },
+                new PlaylistEntryInfo { Id = "v2", IeKey = "Example", Url = "https://example.test/v2", OriginalTitle = "第二节", OriginalIndex = 2 },
+                new PlaylistEntryInfo { Id = "v3", IeKey = "Example", Url = "https://example.test/v3", OriginalTitle = "第三节", OriginalIndex = 3 }
+            ]
+        }));
+        viewModel.PlaylistEntries[1].IsSelected = false;
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        var subscription = Assert.Single(await history.GetCollectionSubscriptionsAsync());
+        Assert.Equal("extractor:examplecollection:collection-42", subscription.CanonicalKey);
+        Assert.Equal(Path.GetFullPath(outputDirectory), subscription.OutputDirectory);
+        Assert.Equal(3, subscription.Items.Count);
+        Assert.Equal(CollectionSubscriptionItemState.Known,
+            Assert.Single(subscription.Items, item => item.EntryId == "v2").State);
+        Assert.Equal(0, subscription.PendingNewCount);
+        Assert.Equal(2, manager.Tasks.Count);
+        Assert.All(manager.Tasks, task =>
+        {
+            Assert.Equal(subscription.Id, task.CollectionSubscriptionId);
+            Assert.False(string.IsNullOrWhiteSpace(task.CollectionEntryKey));
+            Assert.Equal(subscription.BatchId, task.BatchId);
+            Assert.Equal(Path.GetFullPath(outputDirectory), task.OutputDirectory);
+        });
+    }
+
+    [Fact]
+    public async Task TrackedPlaylist_WhenEveryEntryIsAlreadyQueued_StillPersistsBaseline()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var outputDirectory = root.Path("downloads");
+        Directory.CreateDirectory(outputDirectory);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = outputDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        manager.Tasks.Add(new DownloadTask
+        {
+            Url = "https://example.test/already-queued",
+            Status = DownloadStatus.Waiting
+        });
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            new YtDlpService(config, new EnvironmentService()),
+            _ => { },
+            historyService: history,
+            videoInfoProvider: service);
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "queued-collection",
+            ExtractorKey = "ExampleCollection",
+            Title = "已在队列中的合集",
+            SourceUrl = "https://example.test/collections/queued",
+            Entries =
+            [
+                new PlaylistEntryInfo
+                {
+                    Id = "queued-1",
+                    IeKey = "Example",
+                    Url = "https://example.test/already-queued",
+                    OriginalTitle = "第一节",
+                    OriginalIndex = 1
+                }
+            ]
+        }));
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+
+        var subscription = Assert.Single(await history.GetCollectionSubscriptionsAsync());
+        var item = Assert.Single(subscription.Items);
+        Assert.Equal("queued-1", item.EntryId);
+        Assert.Equal(CollectionSubscriptionItemState.Known, item.State);
+        Assert.Single(manager.Tasks);
+    }
+
+    [Fact]
+    public async Task TrackedPlaylist_WhenHistoryDuplicatesAreSkipped_StillPersistsBaseline()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var outputDirectory = root.Path("downloads");
+        Directory.CreateDirectory(outputDirectory);
+        const string entryUrl = "https://example.test/already-downloaded";
+        await history.AddAsync(new DownloadHistory
+        {
+            Url = entryUrl,
+            Title = "已经下载",
+            Platform = "Example",
+            Format = "mp4",
+            Quality = "best"
+        });
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = outputDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            new YtDlpService(config, new EnvironmentService()),
+            _ => { },
+            historyService: history,
+            duplicateDetector: new DownloadDuplicateDetector(_ => false),
+            videoInfoProvider: service)
+        {
+            ConfirmFunc = (_, _) => false
+        };
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "downloaded-collection",
+            ExtractorKey = "ExampleCollection",
+            Title = "已下载的合集",
+            SourceUrl = "https://example.test/collections/downloaded",
+            Entries =
+            [
+                new PlaylistEntryInfo
+                {
+                    Id = "downloaded-1",
+                    IeKey = "Example",
+                    Url = entryUrl,
+                    OriginalTitle = "第一节",
+                    OriginalIndex = 1
+                }
+            ]
+        }));
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+
+        var subscription = Assert.Single(await history.GetCollectionSubscriptionsAsync());
+        var item = Assert.Single(subscription.Items);
+        Assert.Equal("downloaded-1", item.EntryId);
+        Assert.Equal(CollectionSubscriptionItemState.Downloaded, item.State);
+        Assert.Equal(0, subscription.PendingNewCount);
+        Assert.Empty(manager.Tasks);
+    }
+
+    [Fact]
+    public async Task TrackedPlaylist_ReimportMarksSkippedNewHistoryDuplicateAsDownloaded()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var outputDirectory = root.Path("downloads");
+        Directory.CreateDirectory(outputDirectory);
+        const string sourceUrl = "https://example.test/collections/reimport-duplicate";
+        const string existingUrl = "https://example.test/existing";
+        const string duplicateUrl = "https://example.test/already-downloaded-new-entry";
+        await history.UpsertCollectionSubscriptionAsync(
+            new CollectionSubscription
+            {
+                CanonicalKey = "extractor:examplecollection:reimport-duplicate",
+                SourceUrl = sourceUrl,
+                Title = "持续更新合集",
+                OutputDirectory = outputDirectory,
+                BatchId = "existing-batch",
+                BatchName = "持续更新合集"
+            },
+            [new CollectionSubscriptionItemSnapshot
+            {
+                EntryKey = "extractor:example:existing",
+                EntryId = "existing",
+                Url = existingUrl,
+                Title = "旧视频",
+                Position = 1
+            }]);
+        await history.AddAsync(new DownloadHistory
+        {
+            Url = duplicateUrl,
+            Title = "已经下载的新视频",
+            Platform = "Example",
+            Format = "mp4",
+            Quality = "best"
+        });
+
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = outputDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            new YtDlpService(config, new EnvironmentService()),
+            _ => { },
+            historyService: history,
+            duplicateDetector: new DownloadDuplicateDetector(_ => false),
+            videoInfoProvider: service)
+        {
+            ConfirmFunc = (_, _) => false
+        };
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "reimport-duplicate",
+            ExtractorKey = "ExampleCollection",
+            Title = "持续更新合集",
+            SourceUrl = sourceUrl,
+            Entries =
+            [
+                new PlaylistEntryInfo
+                {
+                    Id = "existing",
+                    IeKey = "Example",
+                    Url = existingUrl,
+                    OriginalTitle = "旧视频",
+                    OriginalIndex = 1
+                },
+                new PlaylistEntryInfo
+                {
+                    Id = "history-duplicate",
+                    IeKey = "Example",
+                    Url = duplicateUrl,
+                    OriginalTitle = "已经下载的新视频",
+                    OriginalIndex = 2
+                }
+            ]
+        }));
+        viewModel.PlaylistEntries.Single(entry => entry.Id == "existing").IsSelected = false;
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+
+        var subscription = Assert.Single(await history.GetCollectionSubscriptionsAsync());
+        var duplicate = subscription.Items.Single(item => item.EntryId == "history-duplicate");
+        Assert.Equal(CollectionSubscriptionItemState.Downloaded, duplicate.State);
+        Assert.Equal(0, subscription.PendingNewCount);
+        Assert.Empty(manager.Tasks);
+    }
+
+    [Fact]
+    public async Task TrackedPlaylist_WhenEnqueueFails_KeepsLaterSelectionsPending()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var outputDirectory = root.Path("downloads");
+        Directory.CreateDirectory(outputDirectory);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = outputDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            new YtDlpService(config, new EnvironmentService()),
+            _ => { },
+            historyService: history,
+            videoInfoProvider: service);
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "enqueue-failure",
+            ExtractorKey = "ExampleCollection",
+            Title = "中断恢复合集",
+            SourceUrl = "https://example.test/collections/enqueue-failure",
+            Entries =
+            [
+                new PlaylistEntryInfo { Id = "failure-1", IeKey = "Example", Url = "https://example.test/failure-1", OriginalTitle = "第一节", OriginalIndex = 1 },
+                new PlaylistEntryInfo { Id = "failure-2", IeKey = "Example", Url = "https://example.test/failure-2", OriginalTitle = "第二节", OriginalIndex = 2 }
+            ]
+        }));
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        manager.Dispose();
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+
+        var subscription = Assert.Single(await history.GetCollectionSubscriptionsAsync());
+        Assert.Equal(
+            CollectionSubscriptionItemState.Failed,
+            subscription.Items.Single(item => item.EntryId == "failure-1").State);
+        Assert.Equal(
+            CollectionSubscriptionItemState.New,
+            subscription.Items.Single(item => item.EntryId == "failure-2").State);
+    }
+
+    [Fact]
+    public async Task TrackedPlaylist_ReimportUsesOriginalDirectoryAndKeepsUnselectedNewItemsPending()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var originalDirectory = root.Path("downloads", "original");
+        var currentDirectory = root.Path("downloads", "current");
+        Directory.CreateDirectory(originalDirectory);
+        Directory.CreateDirectory(currentDirectory);
+        var oldEntry = new PlaylistEntryInfo
+        {
+            Id = "old",
+            IeKey = "Example",
+            Url = "https://example.test/old",
+            OriginalTitle = "旧视频",
+            OriginalIndex = 1
+        };
+        var sourceUrl = "https://example.test/collections/reimport";
+        await history.UpsertCollectionSubscriptionAsync(
+            new CollectionSubscription
+            {
+                CanonicalKey = "extractor:examplecollection:reimport",
+                SourceUrl = sourceUrl,
+                Platform = "ExampleCollection",
+                Title = "持续更新合集",
+                OutputDirectory = originalDirectory,
+                Format = "mkv",
+                Quality = "720",
+                Subtitle = "all",
+                BatchId = "original-batch",
+                BatchName = "持续更新合集",
+                AutoCheckEnabled = true,
+                CheckInterval = TimeSpan.FromHours(6)
+            },
+            [new CollectionSubscriptionItemSnapshot
+            {
+                EntryKey = oldEntry.StableKey,
+                EntryId = oldEntry.Id,
+                Url = oldEntry.Url,
+                Title = oldEntry.OriginalTitle,
+                Position = oldEntry.OriginalIndex
+            }]);
+
+        var selectedNewEntry = new PlaylistEntryInfo
+        {
+            Id = "selected-new",
+            IeKey = "Example",
+            Url = "https://example.test/selected-new",
+            OriginalTitle = "选中的新增视频",
+            OriginalIndex = 2
+        };
+        var unselectedNewEntry = new PlaylistEntryInfo
+        {
+            Id = "unselected-new",
+            IeKey = "Example",
+            Url = "https://example.test/unselected-new",
+            OriginalTitle = "未选中的新增视频",
+            OriginalIndex = 3
+        };
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = currentDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            new YtDlpService(config, new EnvironmentService()),
+            _ => { },
+            historyService: history,
+            videoInfoProvider: service);
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "reimport",
+            ExtractorKey = "ExampleCollection",
+            Title = "持续更新合集",
+            SourceUrl = sourceUrl,
+            Entries = [oldEntry, selectedNewEntry, unselectedNewEntry]
+        }));
+        viewModel.PlaylistEntries.Single(entry => entry.Id == oldEntry.Id).IsSelected = false;
+        viewModel.PlaylistEntries.Single(entry => entry.Id == unselectedNewEntry.Id).IsSelected = false;
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        var task = Assert.Single(manager.Tasks);
+        Assert.Equal(selectedNewEntry.Url, task.Url);
+        Assert.Equal(Path.GetFullPath(originalDirectory), task.OutputDirectory);
+        Assert.Equal("original-batch", task.BatchId);
+        Assert.Equal("mkv", task.Format);
+        Assert.Equal("720", task.Quality);
+        Assert.Equal("all", task.Subtitle);
+        var subscription = Assert.Single(await history.GetCollectionSubscriptionsAsync());
+        Assert.Equal(Path.GetFullPath(originalDirectory), subscription.OutputDirectory);
+        Assert.Equal("mkv", subscription.Format);
+        Assert.Equal("720", subscription.Quality);
+        Assert.Equal("all", subscription.Subtitle);
+        Assert.Equal(TimeSpan.FromHours(6), subscription.CheckInterval);
+        Assert.Equal(
+            CollectionSubscriptionItemState.New,
+            subscription.Items.Single(item => item.EntryId == unselectedNewEntry.Id).State);
+        Assert.Equal(1, subscription.PendingNewCount);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TrackedPlaylist_ReimportWithInvalidSavedDirectoryRequiresRelinking(
+        bool useMissingAbsoluteDirectory)
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var savedDirectory = useMissingAbsoluteDirectory
+            ? root.Path("missing-original")
+            : "";
+        var currentDirectory = root.Path("current");
+        Directory.CreateDirectory(currentDirectory);
+        var entry = new PlaylistEntryInfo
+        {
+            Id = "entry",
+            IeKey = "Example",
+            Url = "https://example.test/entry",
+            OriginalTitle = "视频",
+            OriginalIndex = 1
+        };
+        const string sourceUrl = "https://example.test/collections/invalid-directory";
+        await history.UpsertCollectionSubscriptionAsync(
+            new CollectionSubscription
+            {
+                CanonicalKey = "extractor:examplecollection:invalid-directory",
+                SourceUrl = sourceUrl,
+                OutputDirectory = savedDirectory,
+                BatchId = "saved-batch",
+                BatchName = "保存的合集"
+            },
+            [new CollectionSubscriptionItemSnapshot
+            {
+                EntryKey = entry.StableKey,
+                EntryId = entry.Id,
+                Url = entry.Url,
+                Title = entry.OriginalTitle,
+                Position = 1
+            }]);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = currentDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            new YtDlpService(config, new EnvironmentService()),
+            _ => { },
+            historyService: history,
+            videoInfoProvider: service);
+        var notification = "";
+        viewModel.RequestShowNotification += (message, _) => notification = message;
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "invalid-directory",
+            ExtractorKey = "ExampleCollection",
+            Title = "保存的合集",
+            SourceUrl = sourceUrl,
+            Entries = [entry]
+        }));
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+
+        Assert.Empty(manager.Tasks);
+        Assert.Contains("合集更新", notification, StringComparison.Ordinal);
+        Assert.False(Directory.Exists(savedDirectory));
+    }
+
+    [Fact]
+    public async Task TrackedPlaylist_OptOutDoesNotCreateSubscription()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var outputDirectory = root.Path("downloads");
+        Directory.CreateDirectory(outputDirectory);
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = outputDirectory;
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            _ => { },
+            historyService: history,
+            videoInfoProvider: service);
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Id = "collection-opt-out",
+            ExtractorKey = "ExampleCollection",
+            Title = "不跟踪合集",
+            SourceUrl = "https://example.test/collections/opt-out",
+            Entries =
+            [
+                new PlaylistEntryInfo { Id = "v1", IeKey = "Example", Url = "https://example.test/v1", OriginalTitle = "第一节", OriginalIndex = 1 }
+            ]
+        }));
+        viewModel.TrackCollectionUpdates = false;
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Empty(await history.GetCollectionSubscriptionsAsync());
+        Assert.All(manager.Tasks, task => Assert.Equal(0, task.CollectionSubscriptionId));
+    }
+
+    [Fact]
     public async Task InitializeAsync_LoadsExistingCollectionsAndSelectionFillsDirectory()
     {
         using var root = new TestDirectory();

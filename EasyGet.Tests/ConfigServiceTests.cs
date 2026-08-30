@@ -482,6 +482,62 @@ public class ConfigServiceTests
             config.GlobalDownloadRateLimitKilobytesPerSecond);
     }
 
+    [Theory]
+    [InlineData(0, AppConfig.MinCollectionRefreshIntervalHours)]
+    [InlineData(24, 24)]
+    [InlineData(169, AppConfig.MaxCollectionRefreshIntervalHours)]
+    public void NormalizeRuntimeConfig_ClampsCollectionRefreshIntervalToSafeRange(
+        int configuredHours,
+        int expectedHours)
+    {
+        var config = new AppConfig
+        {
+            CollectionRefreshIntervalHours = configuredHours
+        };
+
+        ConfigService.NormalizeRuntimeConfig(config);
+
+        Assert.Equal(expectedHours, config.CollectionRefreshIntervalHours);
+    }
+
+    [Fact]
+    public async Task LoadAsync_MigratesVersion4WithCollectionRefreshDefaults()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var configPath = Path.Combine(_tempDir, "config.json");
+        await File.WriteAllTextAsync(
+            configPath,
+            """
+            {
+              "configVersion": 4,
+              "defaultFormat": "mkv"
+            }
+            """);
+
+        var service = new ConfigService(_tempDir);
+        await service.LoadAsync();
+
+        Assert.Equal(AppConfig.CurrentConfigVersion, service.Config.ConfigVersion);
+        Assert.True(service.Config.AutomaticCollectionRefreshEnabled);
+        Assert.Equal(
+            AppConfig.DefaultCollectionRefreshIntervalHours,
+            service.Config.CollectionRefreshIntervalHours);
+
+        using var migrated = JsonDocument.Parse(await File.ReadAllTextAsync(configPath));
+        Assert.Equal(
+            AppConfig.CurrentConfigVersion,
+            migrated.RootElement.GetProperty("configVersion").GetInt32());
+        Assert.True(
+            migrated.RootElement
+                .GetProperty("automaticCollectionRefreshEnabled")
+                .GetBoolean());
+        Assert.Equal(
+            AppConfig.DefaultCollectionRefreshIntervalHours,
+            migrated.RootElement
+                .GetProperty("collectionRefreshIntervalHours")
+                .GetInt32());
+    }
+
     [Fact]
     public async Task LoadAsync_MigratesVersion3WithoutGlobalDownloadRateLimit()
     {

@@ -21,7 +21,7 @@ public partial class SettingsViewModel : ObservableObject
     public string SettingsCategoryDescription => SelectedCategory switch
     {
         "常规" => "外观与基础行为,更改即时生效并自动保存",
-        "下载" => "下载目录、媒体参数与并发性能",
+        "下载" => "下载目录、媒体参数、合集更新与并发性能",
         "网络" => "代理连接与网络访问策略",
         "账号与 Cookie" => "平台登录状态与 Cookie 获取策略",
         "集成" => "Telegram 账号绑定与外部服务",
@@ -176,6 +176,8 @@ public partial class SettingsViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(GlobalDownloadRateLimitDisplayText))]
     [NotifyPropertyChangedFor(nameof(GlobalDownloadRateLimitSliderStep))]
     private int _globalDownloadRateLimitKilobytesPerSecond;
+    [ObservableProperty] private bool _automaticCollectionRefreshEnabled = true;
+    [ObservableProperty] private int _collectionRefreshIntervalHours = AppConfig.DefaultCollectionRefreshIntervalHours;
     [ObservableProperty] private string _settingsSaveStatusMessage = "";
 
     [ObservableProperty] private bool _useProxy;
@@ -281,6 +283,7 @@ public partial class SettingsViewModel : ObservableObject
 
     public string[] FormatOptions { get; } = ["mp4", "mkv", "webm", "mp3", "m4a"];
     public string[] QualityOptions { get; } = ["最高画质", "2160p", "1080p", "720p", "480p"];
+    public int[] CollectionRefreshIntervalOptions { get; } = [6, 12, 24, 72];
     public string[] DouyinModeOptions { get; } =
     [
         "post",
@@ -579,6 +582,8 @@ public partial class SettingsViewModel : ObservableObject
             MaxConcurrentDownloads = c.MaxConcurrentDownloads;
             ConcurrentFragments = c.ConcurrentFragments;
             GlobalDownloadRateLimitKilobytesPerSecond = c.GlobalDownloadRateLimitKilobytesPerSecond;
+            AutomaticCollectionRefreshEnabled = c.AutomaticCollectionRefreshEnabled;
+            CollectionRefreshIntervalHours = c.CollectionRefreshIntervalHours;
             UseProxy = c.UseProxy;
             ProxyAddress = c.ProxyAddress;
             UseAria2c = c.UseAria2c;
@@ -1245,6 +1250,8 @@ public partial class SettingsViewModel : ObservableObject
             c.MaxConcurrentDownloads = MaxConcurrentDownloads;
             c.ConcurrentFragments = ConcurrentFragments;
             c.GlobalDownloadRateLimitKilobytesPerSecond = GlobalDownloadRateLimitKilobytesPerSecond;
+            c.AutomaticCollectionRefreshEnabled = AutomaticCollectionRefreshEnabled;
+            c.CollectionRefreshIntervalHours = CollectionRefreshIntervalHours;
             c.UseProxy = UseProxy;
             c.ProxyAddress = ProxyAddress;
             c.UseAria2c = UseAria2c;
@@ -1322,6 +1329,7 @@ public partial class SettingsViewModel : ObservableObject
 
             ConfigService.NormalizeRuntimeConfig(c);
             SyncNormalizedPerformanceValues(c);
+            SyncNormalizedCollectionRefreshInterval(c);
             SyncNormalizedDouyinValues(c);
 
             _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
@@ -1435,6 +1443,8 @@ public partial class SettingsViewModel : ObservableObject
         AutoSave();
     }
     partial void OnGlobalDownloadRateLimitKilobytesPerSecondChanged(int value) => AutoSave();
+    partial void OnAutomaticCollectionRefreshEnabledChanged(bool value) => AutoSave();
+    partial void OnCollectionRefreshIntervalHoursChanged(int value) => AutoSave();
     partial void OnUseProxyChanged(bool value) => AutoSave();
     partial void OnProxyAddressChanged(string value) => AutoSave();
     partial void OnUseAria2cChanged(bool value) => AutoSave();
@@ -1647,6 +1657,22 @@ public partial class SettingsViewModel : ObservableObject
             MaxConcurrentDownloads = config.MaxConcurrentDownloads;
             ConcurrentFragments = config.ConcurrentFragments;
             GlobalDownloadRateLimitKilobytesPerSecond = config.GlobalDownloadRateLimitKilobytesPerSecond;
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
+    }
+
+    private void SyncNormalizedCollectionRefreshInterval(EasyGet.Models.AppConfig config)
+    {
+        if (CollectionRefreshIntervalHours == config.CollectionRefreshIntervalHours)
+            return;
+
+        _isInitializing = true;
+        try
+        {
+            CollectionRefreshIntervalHours = config.CollectionRefreshIntervalHours;
         }
         finally
         {

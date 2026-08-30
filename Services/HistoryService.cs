@@ -9,7 +9,7 @@ namespace EasyGet.Services;
 /// <summary>
 /// SQLite 下载历史记录管理服务
 /// </summary>
-public class HistoryService : IDisposable
+public partial class HistoryService : IDisposable
 {
     private const string HistoryColumns = "id, url, title, platform, format, quality, file_size, file_path, attachment_file_paths, download_time, thumbnail_url, batch_id, batch_name, batch_directory, folder_id";
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
@@ -40,7 +40,7 @@ public class HistoryService : IDisposable
         {
             OpenAndInitialize();
         }
-        catch (Exception ex) when (ex is SqliteException or InvalidOperationException)
+        catch (SqliteException ex) when (IsCorruptDatabaseError(ex))
         {
             TryDisposeConnection(_connection);
             QuarantineCorruptDatabase(_dbPath);
@@ -55,7 +55,15 @@ public class HistoryService : IDisposable
                 throw;
             }
         }
+        catch
+        {
+            TryDisposeConnection(_connection);
+            throw;
+        }
     }
+
+    private static bool IsCorruptDatabaseError(SqliteException exception)
+        => exception.SqliteErrorCode is 11 or 26; // SQLITE_CORRUPT or SQLITE_NOTADB
 
     private static string GetDefaultDatabasePath()
     {
@@ -195,6 +203,8 @@ public class HistoryService : IDisposable
             ON download_history (folder_id)
             """;
         historyFolderIndex.ExecuteNonQuery();
+
+        InitializeCollectionSubscriptionDatabase();
     }
 
     private void EnsureTextColumn(string columnName)

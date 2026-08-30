@@ -24,8 +24,23 @@ public class VideoInfo
 
 public class PlaylistInfo
 {
+    /// <summary>
+    /// 来源平台为合集分配的稳定 ID。
+    /// </summary>
+    public string Id { get; set; } = "";
+
+    /// <summary>
+    /// yt-dlp 根播放列表元数据中的提取器标识。
+    /// </summary>
+    public string ExtractorKey { get; set; } = "";
+
     public string Title { get; set; } = "";
     public string SourceUrl { get; set; } = "";
+
+    /// <summary>
+    /// 用于持久化订阅的稳定键。平台 ID 优先，来源 URL 仅作回退。
+    /// </summary>
+    public string CanonicalKey => PlaylistIdentity.CreateKey(ExtractorKey, Id, SourceUrl);
 
     /// <summary>
     /// 保留平台原始顺序、标题和章节信息的条目列表。
@@ -36,6 +51,41 @@ public class PlaylistInfo
     /// 兼容旧调用方的扁平 URL 列表；新代码应优先使用 Entries。
     /// </summary>
     public List<string> Urls { get; set; } = [];
+}
+
+public sealed class PlaylistFetchResult
+{
+    private PlaylistFetchResult(
+        bool isSuccess,
+        PlaylistInfo info,
+        string errorMessage,
+        int? exitCode)
+    {
+        IsSuccess = isSuccess;
+        Info = info ?? throw new ArgumentNullException(nameof(info));
+        ErrorMessage = errorMessage;
+        ExitCode = exitCode;
+    }
+
+    public bool IsSuccess { get; }
+
+    /// <summary>
+    /// 始终非 null。失败时可能包含进程退出前成功解析出的部分元数据，调用方不得将其应用为新快照。
+    /// </summary>
+    public PlaylistInfo Info { get; }
+
+    public string ErrorMessage { get; }
+
+    public int? ExitCode { get; }
+
+    internal static PlaylistFetchResult Success(PlaylistInfo info, int exitCode = 0)
+        => new(true, info, "", exitCode);
+
+    internal static PlaylistFetchResult Failure(
+        PlaylistInfo info,
+        string errorMessage,
+        int? exitCode = null)
+        => new(false, info, errorMessage, exitCode);
 }
 
 public class DownloadProgress
@@ -388,7 +438,25 @@ public partial class YtDlpService
 
     public async Task<PlaylistInfo> GetPlaylistInfoAsync(string url, CancellationToken ct = default)
     {
+        var result = await FetchPlaylistInfoAsync(url, ct);
+
+        // 保持旧调用方行为：只要 yt-dlp 已经返回可导入条目，即使最终退出码非零也继续导入；
+        // 结构化刷新调用方则只应在 IsSuccess 时更新持久化快照。
+        return result.Info.Urls.Count > 0
+            ? result.Info
+            : new PlaylistInfo { SourceUrl = url };
+    }
+
+    public async Task<PlaylistFetchResult> FetchPlaylistInfoAsync(
+        string url,
+        CancellationToken ct = default)
+    {
         var empty = new PlaylistInfo { SourceUrl = url };
+        if (string.IsNullOrWhiteSpace(url))
+            return PlaylistFetchResult.Failure(empty, "合集链接不能为空。");
+
+        PlaylistFetchResult? lastFailure = null;
+        PlaylistFetchResult? bestParsedFailure = null;
 
         try
         {
@@ -409,6 +477,9 @@ public partial class YtDlpService
                 }
                 catch (Exception ex)
                 {
+                    lastFailure = PlaylistFetchResult.Failure(
+                        empty,
+                        $"无法获取站点凭据：{ex.Message}");
                     var acquisitionFailure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
                         attempt,
                         [$"ERROR: {ex.Message}"],
@@ -427,25 +498,20 @@ public partial class YtDlpService
                 args.Add(url);
 
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
-                if (!string.IsNullOrWhiteSpace(result.StandardOutput))
+                var fetchResult = ParsePlaylistFetchOutput(
+                    result.StandardOutput,
+                    result.StandardError,
+                    result.ExitCode,
+                    url);
+                if (fetchResult.IsSuccess)
                 {
-                    foreach (var line in EnumerateProcessLines(result.StandardOutput))
-                    {
-                        try
-                        {
-                            var playlist = ParsePlaylistInfoJson(line, url);
-                            if (playlist.Urls.Count == 0)
-                                continue;
-
-                            await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
-                            return playlist;
-                        }
-                        catch
-                        {
-                            // ignore non-json lines
-                        }
-                    }
+                    await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
+                    return fetchResult;
                 }
+
+                lastFailure = fetchResult;
+                if (fetchResult.Info.Urls.Count > (bestParsedFailure?.Info.Urls.Count ?? 0))
+                    bestParsedFailure = fetchResult;
 
                 var failure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
                     attempt,
@@ -461,10 +527,68 @@ public partial class YtDlpService
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[YtDlpService] GetPlaylistInfo failed: {ex.Message}");
+            Debug.WriteLine($"[YtDlpService] FetchPlaylistInfo failed: {ex.Message}");
+            return bestParsedFailure
+                ?? PlaylistFetchResult.Failure(empty, ex.Message);
         }
 
-        return empty;
+        return bestParsedFailure
+            ?? lastFailure
+            ?? PlaylistFetchResult.Failure(empty, "未能获取合集信息。");
+    }
+
+    internal static PlaylistFetchResult ParsePlaylistFetchOutput(
+        string standardOutput,
+        string standardError,
+        int exitCode,
+        string sourceUrl)
+    {
+        var empty = new PlaylistInfo { SourceUrl = sourceUrl };
+        PlaylistInfo? parsedInfo = null;
+
+        foreach (var line in EnumerateProcessLines(standardOutput))
+        {
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                if (document.RootElement.ValueKind != JsonValueKind.Object
+                    || !document.RootElement.TryGetProperty("entries", out var entries)
+                    || entries.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                parsedInfo = ParsePlaylistInfoJson(line, sourceUrl);
+                break;
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                // yt-dlp 或包装脚本可能在 JSON 前后输出普通日志行。
+            }
+        }
+
+        if (parsedInfo is not null && exitCode == 0)
+            return PlaylistFetchResult.Success(parsedInfo, exitCode);
+
+        var errorLines = EnumerateProcessLines(standardError)
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Select(line => line.Trim())
+            .ToList();
+        var errorMessage = errorLines.FirstOrDefault(line => line.StartsWith(
+                "ERROR:",
+                StringComparison.OrdinalIgnoreCase))
+            ?? errorLines.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            errorMessage = parsedInfo is null
+                ? "yt-dlp 未返回有效的合集信息。"
+                : $"yt-dlp 获取合集失败（退出码 {exitCode}）。";
+        }
+
+        return PlaylistFetchResult.Failure(
+            parsedInfo ?? empty,
+            errorMessage,
+            exitCode);
     }
 
     internal static PlaylistInfo ParsePlaylistInfoJson(string json, string sourceUrl)
@@ -473,7 +597,7 @@ public partial class YtDlpService
         var root = doc.RootElement;
         var urls = new List<string>();
         var playlistEntries = new List<PlaylistEntryInfo>();
-        var knownUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var knownEntries = new HashSet<string>(StringComparer.Ordinal);
 
         if (root.TryGetProperty("entries", out var entries)
             && entries.ValueKind == JsonValueKind.Array)
@@ -481,12 +605,15 @@ public partial class YtDlpService
             foreach (var entry in entries.EnumerateArray())
             {
                 var videoUrl = ExtractPlaylistUrl(entry);
-                if (!string.IsNullOrWhiteSpace(videoUrl) && knownUrls.Add(videoUrl))
+                if (!string.IsNullOrWhiteSpace(videoUrl))
                 {
                     var fallbackIndex = playlistEntries.Count + 1;
                     var originalIndex = GetOptionalInt32(entry, "playlist_index");
-                    playlistEntries.Add(new PlaylistEntryInfo
+                    var playlistEntry = new PlaylistEntryInfo
                     {
+                        Id = GetOptionalString(entry, "id").Trim(),
+                        IeKey = GetOptionalString(entry, "ie_key").Trim(),
+                        ExtractorKey = GetOptionalString(entry, "extractor_key").Trim(),
                         Url = videoUrl,
                         OriginalTitle = NormalizeMetadataTitle(GetOptionalString(entry, "title")),
                         OriginalIndex = originalIndex > 0 ? originalIndex : fallbackIndex,
@@ -497,7 +624,11 @@ public partial class YtDlpService
                         Level = GetOptionalInt32(entry, "level"),
                         Kind = ResolvePlaylistEntryKind(entry),
                         Resources = ParsePlaylistResources(entry)
-                    });
+                    };
+                    if (!knownEntries.Add(playlistEntry.StableKey))
+                        continue;
+
+                    playlistEntries.Add(playlistEntry);
                     urls.Add(videoUrl);
                 }
             }
@@ -505,6 +636,8 @@ public partial class YtDlpService
 
         return new PlaylistInfo
         {
+            Id = GetOptionalString(root, "id").Trim(),
+            ExtractorKey = GetOptionalString(root, "extractor_key").Trim(),
             Title = NormalizeMetadataTitle(GetOptionalString(root, "title")),
             SourceUrl = sourceUrl,
             Entries = playlistEntries,

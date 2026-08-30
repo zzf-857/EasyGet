@@ -273,6 +273,44 @@ public class SettingsViewModelTests : IDisposable
     }
 
     [Fact]
+    public void Initialize_LoadsCollectionRefreshSettingsFromConfig()
+    {
+        var config = CreateTempConfigService();
+        config.Config.AutomaticCollectionRefreshEnabled = false;
+        config.Config.CollectionRefreshIntervalHours = 72;
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+
+        viewModel.Initialize();
+
+        Assert.False(viewModel.AutomaticCollectionRefreshEnabled);
+        Assert.Equal(72, viewModel.CollectionRefreshIntervalHours);
+        Assert.Equal([6, 12, 24, 72], viewModel.CollectionRefreshIntervalOptions);
+    }
+
+    [Fact]
+    public async Task CollectionRefreshSettingsChanges_AutoSave()
+    {
+        var config = CreateTempConfigService();
+        var viewModel = CreateViewModel(config, new FakeAppUpdateService());
+        viewModel.Initialize();
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        viewModel.SettingsSaved += () => saved.TrySetResult();
+
+        viewModel.AutomaticCollectionRefreshEnabled = false;
+        viewModel.CollectionRefreshIntervalHours = 72;
+
+        var completed = await Task.WhenAny(saved.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+        Assert.Same(saved.Task, completed);
+        Assert.False(config.Config.AutomaticCollectionRefreshEnabled);
+        Assert.Equal(72, config.Config.CollectionRefreshIntervalHours);
+
+        var reloaded = new ConfigService(config.ConfigDirectory);
+        await reloaded.LoadAsync();
+        Assert.False(reloaded.Config.AutomaticCollectionRefreshEnabled);
+        Assert.Equal(72, reloaded.Config.CollectionRefreshIntervalHours);
+    }
+
+    [Fact]
     public void Initialize_LoadsDouyinTemplateSettingsFromConfig()
     {
         var config = CreateTempConfigService();

@@ -100,17 +100,14 @@ public sealed class TaskQueuePersistenceService : IDisposable
 
     public async Task<IReadOnlyList<DownloadTask>> RestoreAsync(
         CancellationToken cancellationToken = default)
+        => (await RestoreWithStatusAsync(cancellationToken).ConfigureAwait(false)).Tasks;
+
+    internal async Task<TaskQueueRestoreResult> RestoreWithStatusAsync(
+        CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        if (!File.Exists(_stateFilePath))
-            return [];
-
         try
         {
-            var fileInfo = new FileInfo(_stateFilePath);
-            if (fileInfo.Length is <= 0 or > MaxStateFileSize)
-                throw new InvalidDataException("Queue state file size is invalid.");
-
             await using var stream = new FileStream(
                 _stateFilePath,
                 FileMode.Open,
@@ -118,6 +115,9 @@ public sealed class TaskQueuePersistenceService : IDisposable
                 FileShare.Read,
                 bufferSize: 16 * 1024,
                 FileOptions.Asynchronous | FileOptions.SequentialScan);
+            if (stream.Length is <= 0 or > MaxStateFileSize)
+                throw new InvalidDataException("Queue state file size is invalid.");
+
             var document = await JsonSerializer.DeserializeAsync<TaskQueueStateDocument>(
                 stream,
                 JsonOptions,
@@ -137,22 +137,26 @@ public sealed class TaskQueuePersistenceService : IDisposable
                     restored.Add(task);
             }
 
-            return restored;
+            return new TaskQueueRestoreResult(restored, IsReliable: true);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return new TaskQueueRestoreResult([], IsReliable: true);
+        }
         catch (Exception ex) when (ex is JsonException or InvalidDataException or NotSupportedException)
         {
             QuarantineCorruptStateFile();
             Debug.WriteLine($"[TaskQueuePersistence] Corrupt state quarantined: {ex.Message}");
-            return [];
+            return new TaskQueueRestoreResult([], IsReliable: true);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Debug.WriteLine($"[TaskQueuePersistence] State restore skipped: {ex.Message}");
-            return [];
+            return new TaskQueueRestoreResult([], IsReliable: false);
         }
     }
 
@@ -298,6 +302,8 @@ public sealed class TaskQueuePersistenceService : IDisposable
             CollectionTitle = Limit(persisted.CollectionTitle, 4_096),
             CollectionItemIndex = Math.Max(0, persisted.CollectionItemIndex),
             CollectionItemCount = Math.Max(0, persisted.CollectionItemCount),
+            CollectionSubscriptionId = Math.Max(0, persisted.CollectionSubscriptionId),
+            CollectionEntryKey = Limit(persisted.CollectionEntryKey, 4_096),
             OutputFilePath = Limit(persisted.OutputFilePath, 32_768),
             OutputFilePaths = (persisted.OutputFilePaths ?? [])
                 .Where(path => !string.IsNullOrWhiteSpace(path))
@@ -384,6 +390,10 @@ public sealed class TaskQueuePersistenceService : IDisposable
     }
 }
 
+internal readonly record struct TaskQueueRestoreResult(
+    IReadOnlyList<DownloadTask> Tasks,
+    bool IsReliable);
+
 internal sealed class TaskQueueStateDocument
 {
     public int Version { get; set; }
@@ -417,6 +427,8 @@ internal sealed class PersistedDownloadTask
     public string CollectionTitle { get; set; } = "";
     public int CollectionItemIndex { get; set; }
     public int CollectionItemCount { get; set; }
+    public long CollectionSubscriptionId { get; set; }
+    public string CollectionEntryKey { get; set; } = "";
     public string OutputFilePath { get; set; } = "";
     public List<string> OutputFilePaths { get; set; } = [];
     public double Progress { get; set; }
@@ -449,6 +461,8 @@ internal sealed class PersistedDownloadTask
             CollectionTitle = task.CollectionTitle,
             CollectionItemIndex = task.CollectionItemIndex,
             CollectionItemCount = task.CollectionItemCount,
+            CollectionSubscriptionId = task.CollectionSubscriptionId,
+            CollectionEntryKey = task.CollectionEntryKey,
             OutputFilePath = task.OutputFilePath,
             OutputFilePaths = (task.OutputFilePaths ?? []).ToList(),
             Progress = double.IsFinite(task.Progress) ? Math.Clamp(task.Progress, 0, 100) : 0,

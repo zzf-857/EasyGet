@@ -849,11 +849,11 @@ public partial class DownloadViewModel : ObservableObject
     /// 取消当前下载
     /// </summary>
     [RelayCommand]
-    private void CancelDownload()
+    private async Task CancelDownload()
     {
         if (CurrentTask != null)
         {
-            _downloadManager.Cancel(CurrentTask.Id);
+            await _downloadManager.CancelAsync(CurrentTask.Id);
             IsDownloading = false;
             PageState = DownloadPageState.Idle;
         }

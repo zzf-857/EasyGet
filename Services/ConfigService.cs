@@ -756,6 +756,11 @@ public class ConfigService
             AppConfig.MinGlobalDownloadRateLimitKilobytesPerSecond,
             AppConfig.MaxGlobalDownloadRateLimitKilobytesPerSecond);
 
+        config.CollectionRefreshIntervalHours = Math.Clamp(
+            config.CollectionRefreshIntervalHours,
+            AppConfig.MinCollectionRefreshIntervalHours,
+            AppConfig.MaxCollectionRefreshIntervalHours);
+
         NormalizeWindowState(config);
     }
 

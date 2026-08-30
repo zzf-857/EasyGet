@@ -26,6 +26,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly YtDlpService _ytDlpService;
     private readonly IVideoInfoProvider _videoInfoProvider;
     private readonly DownloadPreflightService _preflightService;
+    private readonly HistoryService? _historyService;
     private readonly DownloadDuplicateDetector? _duplicateDetector;
     private readonly ExistingCollectionFolderStore _collectionFolderStore;
     private readonly Func<string, CancellationToken, Task<PlaylistInfo>> _getPlaylistInfoAsync;
@@ -42,6 +43,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private string? _selectedCollectionDirectoryBeforeRefresh;
     private string _pendingCollectionTitle = "";
     private List<string> _pendingCollectionUrls = [];
+    private PlaylistInfo? _pendingCollectionInfo;
     private CancellationTokenSource? _nameResolutionCts;
     private int _inputRevision;
     private bool _suppressDraftInvalidation;
@@ -63,6 +65,10 @@ public partial class BatchDownloadViewModel : ObservableObject
     private bool _isDownloading;
     [ObservableProperty] private bool _isImportingPlaylist;
     [ObservableProperty] private string _playlistUrl = "";
+    [ObservableProperty] private bool _trackCollectionUpdates = true;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBatchDownloadMode))]
+    private bool _isCollectionUpdatesMode;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasPlaylistPreview))]
     private string _playlistTitle = "";
@@ -87,6 +93,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     public ObservableCollection<BatchDownloadDraft> PendingItems { get; } = [];
     public ObservableCollection<PlaylistEntryInfo> PlaylistEntries { get; } = [];
     public ObservableCollection<PlaylistSectionInfo> PlaylistSections { get; } = [];
+    public CollectionUpdatesViewModel? CollectionUpdatesVM { get; }
     public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
         => _collectionFolderStore.Folders;
     public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
@@ -109,6 +116,10 @@ public partial class BatchDownloadViewModel : ObservableObject
     public bool CanRetryFailed => FailedTaskCount > 0;
     public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
     public bool HasPlaylistPreview => PlaylistEntries.Count > 0;
+    public bool IsBatchDownloadMode => !IsCollectionUpdatesMode;
+    public bool HasTrackablePlaylist => _pendingCollectionInfo is not null
+                                        && !string.IsNullOrWhiteSpace(_pendingCollectionInfo.SourceUrl)
+                                        && !string.IsNullOrWhiteSpace(_pendingCollectionInfo.CanonicalKey);
     public bool CanEditPlaylistPreview => IsBatchInputStep && !IsImportingPlaylist && !IsDownloading;
     public int SelectedPlaylistEntryCount => PlaylistEntries.Count(entry => entry.IsSelected);
     public string PlaylistSelectionSummary => PlaylistEntries.Count == 0
@@ -250,6 +261,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         VideoInfo? ResolvedInfo,
         int CollectionItemIndex,
         int CollectionItemCount,
+        string CollectionEntryKey,
         IReadOnlyList<MediaResourceInfo> Resources);
 
     private static string FormatBatchInput(ParsedBatchInput item)
@@ -308,7 +320,8 @@ public partial class BatchDownloadViewModel : ObservableObject
         HistoryService? historyService = null,
         DownloadDuplicateDetector? duplicateDetector = null,
         ExistingCollectionFolderStore? collectionFolderStore = null,
-        IVideoInfoProvider? videoInfoProvider = null)
+        IVideoInfoProvider? videoInfoProvider = null,
+        CollectionUpdatesViewModel? collectionUpdatesViewModel = null)
         : this(
             downloadManager,
             configService,
@@ -320,7 +333,8 @@ public partial class BatchDownloadViewModel : ObservableObject
             duplicateDetector,
             null,
             collectionFolderStore,
-            videoInfoProvider)
+            videoInfoProvider,
+            collectionUpdatesViewModel: collectionUpdatesViewModel)
     {
     }
 
@@ -337,19 +351,22 @@ public partial class BatchDownloadViewModel : ObservableObject
         ExistingCollectionFolderStore? collectionFolderStore = null,
         IVideoInfoProvider? videoInfoProvider = null,
         Func<string, CancellationToken, Task<PlaylistInfo>>? getPlaylistInfoAsync = null,
-        Func<Task<List<DownloadHistory>>>? loadDownloadHistoryAsync = null)
+        Func<Task<List<DownloadHistory>>>? loadDownloadHistoryAsync = null,
+        CollectionUpdatesViewModel? collectionUpdatesViewModel = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
         _ytDlpService = ytDlpService;
         _videoInfoProvider = videoInfoProvider ?? new YtDlpVideoInfoProvider(ytDlpService);
         _preflightService = preflightService ?? new DownloadPreflightService();
+        _historyService = historyService;
         _duplicateDetector = duplicateDetector;
         _collectionFolderStore = collectionFolderStore
             ?? new ExistingCollectionFolderStore(historyService, configService);
-        _getPlaylistInfoAsync = getPlaylistInfoAsync ?? _ytDlpService.GetPlaylistInfoAsync;
+        _getPlaylistInfoAsync = getPlaylistInfoAsync ?? FetchCompletePlaylistInfoAsync;
         _loadDownloadHistoryAsync = loadDownloadHistoryAsync
             ?? (historyService is null ? null : () => historyService.GetAllAsync());
+        CollectionUpdatesVM = collectionUpdatesViewModel;
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
         _selectDirectory = selectDirectory ?? SelectDirectory;
@@ -367,8 +384,51 @@ public partial class BatchDownloadViewModel : ObservableObject
         RefreshQueueState();
     }
 
-    public Task InitializeAsync()
-        => LoadExistingCollectionFoldersAsync(forceRefresh: false);
+    private async Task<PlaylistInfo> FetchCompletePlaylistInfoAsync(
+        string url,
+        CancellationToken cancellationToken)
+    {
+        var result = await _ytDlpService.FetchPlaylistInfoAsync(url, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(
+                string.IsNullOrWhiteSpace(result.ErrorMessage)
+                    ? "未能完整读取合集，请检查链接或登录状态后重试。"
+                    : result.ErrorMessage);
+        }
+
+        return result.Info;
+    }
+
+    public async Task InitializeAsync()
+    {
+        await LoadExistingCollectionFoldersAsync(forceRefresh: false);
+        if (CollectionUpdatesVM is not null)
+            await CollectionUpdatesVM.InitializeAsync();
+    }
+
+    public async Task ShowCollectionUpdatesAsync(long? subscriptionId = null)
+    {
+        IsCollectionUpdatesMode = true;
+        if (CollectionUpdatesVM is null)
+            return;
+
+        if (subscriptionId is > 0)
+            await CollectionUpdatesVM.SelectSubscriptionAsync(subscriptionId.Value);
+        else
+            await CollectionUpdatesVM.InitializeAsync();
+    }
+
+    [RelayCommand]
+    private void SetBatchPageMode(string? mode)
+    {
+        IsCollectionUpdatesMode = string.Equals(
+            mode,
+            "updates",
+            StringComparison.OrdinalIgnoreCase);
+        if (IsCollectionUpdatesMode && CollectionUpdatesVM is not null)
+            _ = CollectionUpdatesVM.InitializeAsync();
+    }
 
     public void RefreshRuntimeConfigDisplay()
     {
@@ -861,7 +921,9 @@ public partial class BatchDownloadViewModel : ObservableObject
         var knownUrls = new HashSet<string>(
             _downloadManager.Tasks.Select(task => task.Url),
             StringComparer.OrdinalIgnoreCase);
-        var validItems = parsedItems.Where(item => knownUrls.Add(item.Url)).ToList();
+        var validItems = isExactCollectionImport && TrackCollectionUpdates
+            ? parsedItems
+            : parsedItems.Where(item => knownUrls.Add(item.Url)).ToList();
         if (validItems.Count == 0)
         {
             RequestShowNotification?.Invoke("没有新增任务：这些链接已经在下载队列中", false);
@@ -884,16 +946,20 @@ public partial class BatchDownloadViewModel : ObservableObject
                       item.Url,
                       StringComparison.OrdinalIgnoreCase)) + 1)
                 : 0;
+            var playlistEntry = isExactCollectionImport
+                ? PlaylistEntries.FirstOrDefault(entry => string.Equals(
+                    entry.Url,
+                    item.Url,
+                    StringComparison.OrdinalIgnoreCase))
+                : null;
             PendingItems.Add(new BatchDownloadDraft(
                 item.Url,
                 item.Title,
                 item.HasProvidedTitle,
                 collectionItemIndex,
                 isExactCollectionImport ? _pendingCollectionUrls.Count : 0,
-                PlaylistEntries.FirstOrDefault(entry => string.Equals(
-                    entry.Url,
-                    item.Url,
-                    StringComparison.OrdinalIgnoreCase))?.Resources));
+                playlistEntry?.StableKey ?? "",
+                playlistEntry?.Resources));
         }
 
         IsNameConfirmationStep = true;
@@ -1055,34 +1121,50 @@ public partial class BatchDownloadViewModel : ObservableObject
         if (!CanStartBatchDownload())
             return;
 
-        var knownUrls = new HashSet<string>(
-            _downloadManager.Tasks.Select(task => task.Url),
-            StringComparer.OrdinalIgnoreCase);
-        var confirmedItems = PendingItems
-            .Where(item => !string.IsNullOrWhiteSpace(item.Title) && knownUrls.Add(item.Url))
+        var draftsAreExactCollectionImport = _draftsAreExactCollectionImport;
+        var draftCollectionTitle = _draftCollectionTitle;
+        var pendingCollectionInfo = _pendingCollectionInfo;
+        var shouldTrackCollection = TrackCollectionUpdates
+                                    && draftsAreExactCollectionImport
+                                    && pendingCollectionInfo is not null
+                                    && !string.IsNullOrWhiteSpace(pendingCollectionInfo.SourceUrl)
+                                    && !string.IsNullOrWhiteSpace(pendingCollectionInfo.CanonicalKey)
+                                    && _historyService is not null;
+        var allConfirmedItems = PendingItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.Title))
             .Select(item => new ConfirmedBatchItem(
                 item.Url,
                 item.Title.Trim(),
                 item.ResolvedInfo,
                 item.CollectionItemIndex,
                 item.CollectionItemCount,
+                item.CollectionEntryKey,
                 item.Resources))
             .ToList();
+        var knownUrls = new HashSet<string>(
+            _downloadManager.Tasks.Select(task => task.Url),
+            StringComparer.OrdinalIgnoreCase);
+        var confirmedItems = allConfirmedItems
+            .Where(item => knownUrls.Add(item.Url))
+            .ToList();
         var urls = confirmedItems.Select(item => item.Url).ToList();
-        if (urls.Count == 0)
+        var skippedHistoryDuplicateUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (urls.Count == 0 && !shouldTrackCollection)
         {
             RequestShowNotification?.Invoke("没有新增任务：这些链接已经在下载队列中", false);
             return;
         }
 
-        var draftsAreExactCollectionImport = _draftsAreExactCollectionImport;
-        var draftCollectionTitle = _draftCollectionTitle;
         IsDownloading = true;
         var enqueuedCount = 0;
         var existingCollection = SelectedCollectionFolder;
         var requestedDownloadDirectory = DownloadDirectory;
         try
         {
+            var existingTrackingSubscription = shouldTrackCollection
+                ? await _historyService!.GetCollectionSubscriptionByCanonicalKeyAsync(
+                    pendingCollectionInfo!.CanonicalKey)
+                : null;
 
             if (_loadDownloadHistoryAsync is not null && _duplicateDetector is not null)
             {
@@ -1095,9 +1177,10 @@ public partial class BatchDownloadViewModel : ObservableObject
                         $"发现 {duplicateUrls.Count} 个链接已在历史或本地文件中。\n是否仍然全部重新下载？选择“否”将跳过重复项。",
                         "批量重复下载确认") != true)
                 {
+                    skippedHistoryDuplicateUrls.UnionWith(duplicateUrls);
                     confirmedItems = confirmedItems.Where(x => !duplicateUrls.Contains(x.Url)).ToList();
                     urls = confirmedItems.Select(x => x.Url).ToList();
-                    if (urls.Count == 0)
+                    if (urls.Count == 0 && !shouldTrackCollection)
                     {
                         RequestShowNotification?.Invoke("已跳过全部重复链接，没有新增任务。", true);
                         return;
@@ -1105,25 +1188,64 @@ public partial class BatchDownloadViewModel : ObservableObject
                 }
             }
 
-            if (existingCollection is not null && !Directory.Exists(existingCollection.Directory))
+            if (existingTrackingSubscription is not null
+                && (string.IsNullOrWhiteSpace(existingTrackingSubscription.OutputDirectory)
+                    || !Path.IsPathFullyQualified(existingTrackingSubscription.OutputDirectory)
+                    || !Directory.Exists(existingTrackingSubscription.OutputDirectory)))
+            {
+                RequestShowNotification?.Invoke(
+                    "该合集保存的下载文件夹已不存在，请前往“合集更新”重新选择下载路径。",
+                    false);
+                return;
+            }
+
+            if (existingTrackingSubscription is null
+                && existingCollection is not null
+                && !Directory.Exists(existingCollection.Directory))
             {
                 RequestShowNotification?.Invoke("所选合集文件夹已不存在，请刷新列表或重新选择。", false);
                 await RefreshExistingCollectionFolders();
                 return;
             }
 
-            var isReusingExistingCollection = existingCollection is not null;
+            var isReusingExistingCollection = existingTrackingSubscription is not null
+                                               || existingCollection is not null;
             var collectionTitle = draftsAreExactCollectionImport
                 && !string.IsNullOrWhiteSpace(draftCollectionTitle)
                     ? draftCollectionTitle
-                    : existingCollection?.Name ?? "";
-            var batch = existingCollection is null
-                ? null
-                : BatchDownloadOrganizer.ReuseExisting(
-                    existingCollection.Directory,
-                    existingCollection.BatchId,
-                    existingCollection.Name,
+                    : existingTrackingSubscription?.Title
+                      ?? existingCollection?.Name
+                      ?? "";
+            DownloadBatchContext? batch;
+            if (existingTrackingSubscription is not null)
+            {
+                var trackedDirectory = existingTrackingSubscription.OutputDirectory;
+                var trackedBatchId = string.IsNullOrWhiteSpace(existingTrackingSubscription.BatchId)
+                    ? BatchDownloadOrganizer.CreateBatchId(
+                        existingTrackingSubscription.SourceUrl,
+                        existingTrackingSubscription.Title)
+                    : existingTrackingSubscription.BatchId;
+                var trackedBatchName = string.IsNullOrWhiteSpace(existingTrackingSubscription.BatchName)
+                    ? ResolveTrackedCollectionName(
+                        existingTrackingSubscription.Title,
+                        trackedDirectory)
+                    : existingTrackingSubscription.BatchName;
+                batch = new DownloadBatchContext(
+                    trackedBatchId,
+                    trackedBatchName,
+                    trackedDirectory,
                     collectionTitle);
+            }
+            else
+            {
+                batch = existingCollection is null
+                    ? null
+                    : BatchDownloadOrganizer.ReuseExisting(
+                        existingCollection.Directory,
+                        existingCollection.BatchId,
+                        existingCollection.Name,
+                        collectionTitle);
+            }
             var outputDirectory = batch?.Directory ?? requestedDownloadDirectory;
 
             var preflight = _preflightService.Check(outputDirectory);
@@ -1154,6 +1276,73 @@ public partial class BatchDownloadViewModel : ObservableObject
                 _ => "best"
             };
 
+            var trackingTasksByKey = new Dictionary<string, DownloadTask>(StringComparer.Ordinal);
+            if (shouldTrackCollection)
+            {
+                foreach (var item in confirmedItems.Where(item =>
+                             !string.IsNullOrWhiteSpace(item.CollectionEntryKey)))
+                {
+                    trackingTasksByKey.TryAdd(item.CollectionEntryKey, new DownloadTask());
+                }
+            }
+
+            CollectionSubscription? trackingSubscription = null;
+            if (shouldTrackCollection)
+            {
+                var collectionInfo = pendingCollectionInfo!;
+                var batchId = batch?.Id
+                              ?? BatchDownloadOrganizer.CreateBatchId(
+                                  collectionInfo.SourceUrl,
+                                  collectionInfo.Title);
+                var batchName = batch?.Name
+                                ?? ResolveTrackedCollectionName(
+                                    collectionInfo.Title,
+                                    outputDirectory);
+                trackingSubscription = await _historyService!.UpsertCollectionSubscriptionAsync(
+                    new CollectionSubscription
+                    {
+                        CanonicalKey = collectionInfo.CanonicalKey,
+                        SourceUrl = collectionInfo.SourceUrl,
+                        Platform = collectionInfo.ExtractorKey,
+                        Title = collectionInfo.Title,
+                        OutputDirectory = outputDirectory,
+                        Format = format,
+                        Quality = quality,
+                        Subtitle = "none",
+                        BatchId = batchId,
+                        BatchName = batchName,
+                        AutoCheckEnabled = true,
+                        CheckInterval = TimeSpan.FromHours(
+                            _configService.Config.CollectionRefreshIntervalHours)
+                    },
+                    BuildCollectionBaseline(collectionInfo, allConfirmedItems),
+                    trackingTasksByKey.Select(pair => new CollectionSubscriptionItemStateUpdate
+                    {
+                        EntryKey = pair.Key,
+                        State = CollectionSubscriptionItemState.Queued,
+                        TaskId = pair.Value.Id,
+                        ExpectedTaskId = ""
+                    }).Concat(allConfirmedItems
+                        .Where(item => skippedHistoryDuplicateUrls.Contains(item.Url)
+                                       && !string.IsNullOrWhiteSpace(item.CollectionEntryKey))
+                        .Select(item => new CollectionSubscriptionItemStateUpdate
+                        {
+                            EntryKey = item.CollectionEntryKey,
+                            State = CollectionSubscriptionItemState.Downloaded,
+                            TaskId = "",
+                            ExpectedTaskId = ""
+                        }))
+                    .ToArray());
+                outputDirectory = trackingSubscription.OutputDirectory;
+                format = trackingSubscription.Format;
+                quality = trackingSubscription.Quality;
+                batch = new DownloadBatchContext(
+                    trackingSubscription.BatchId,
+                    trackingSubscription.BatchName,
+                    outputDirectory,
+                    trackingSubscription.Title);
+            }
+
             for (var index = 0; index < confirmedItems.Count; index++)
             {
                 var item = confirmedItems[index];
@@ -1171,71 +1360,134 @@ public partial class BatchDownloadViewModel : ObservableObject
                         : existingCollection is null
                             ? urls.Count
                             : 0;
-                var task = new DownloadTask
+                var task = new DownloadTask();
+                if (trackingSubscription is not null
+                    && trackingTasksByKey.TryGetValue(item.CollectionEntryKey, out var preparedTask))
                 {
-                    Url = item.Url,
-                    Title = item.Title.Trim(),
-                    Format = format,
-                    Quality = quality,
-                    OutputDirectory = outputDirectory,
-                    BatchId = batch?.Id ?? "",
-                    BatchName = batch?.Name ?? "",
-                    BatchDirectory = batch?.Directory ?? "",
-                    CollectionTitle = batch?.CollectionTitle ?? "",
-                    CollectionItemIndex = batch is null ? 0 : collectionItemIndex,
-                    CollectionItemCount = collectionItemCount
-                };
+                    task = preparedTask;
+                }
+
+                task.Url = item.Url;
+                task.Title = item.Title.Trim();
+                task.Format = format;
+                task.Quality = quality;
+                task.Subtitle = trackingSubscription?.Subtitle ?? "none";
+                task.OutputDirectory = outputDirectory;
+                task.BatchId = batch?.Id ?? "";
+                task.BatchName = batch?.Name ?? "";
+                task.BatchDirectory = batch?.Directory ?? "";
+                task.CollectionTitle = batch?.CollectionTitle ?? "";
+                task.CollectionItemIndex = batch is null ? 0 : collectionItemIndex;
+                task.CollectionItemCount = collectionItemCount;
+                task.CollectionSubscriptionId = trackingSubscription?.Id ?? 0;
+                task.CollectionEntryKey = trackingSubscription is null
+                    ? ""
+                    : item.CollectionEntryKey;
                 var resolvedInfo = item.ResolvedInfo ?? new VideoInfo
                 {
                     Url = item.Url,
                     Title = item.Title.Trim()
                 };
-                await _downloadManager.EnqueueAsync(task, resolvedInfo);
-                enqueuedCount++;
 
-                foreach (var resource in item.Resources.Where(resource => resource.IsSelected))
+                var primaryEnqueued = false;
+                try
                 {
-                    if (string.IsNullOrWhiteSpace(resource.Url))
-                        continue;
+                    await _downloadManager.EnqueueAsync(task, resolvedInfo);
+                    primaryEnqueued = true;
+                    enqueuedCount++;
 
-                    var resourceTitle = string.IsNullOrWhiteSpace(resource.Title)
-                        ? GetResourceFileName(resource.Url)
-                        : resource.Title.Trim();
-                    var resourceExtension = HttpResourceDownloadService.ResolveExtension(
-                        resource.Url,
-                        resource.Extension,
-                        resource.MimeType);
-                    var resourceTask = new DownloadTask
+                    foreach (var resource in item.Resources.Where(resource => resource.IsSelected))
                     {
-                        Url = resource.Url,
-                        Title = resourceTitle,
-                        Format = resourceExtension,
-                        Quality = "best",
-                        OutputDirectory = outputDirectory,
-                        BatchId = batch?.Id ?? "",
-                        BatchName = batch?.Name ?? "",
-                        BatchDirectory = batch?.Directory ?? "",
-                        CollectionTitle = batch?.CollectionTitle ?? "",
-                        ResourceExtension = resourceExtension,
-                        ResourceMimeType = resource.MimeType,
-                        IsNonVideoResource = true
-                    };
-                    await _downloadManager.EnqueueAsync(
-                        resourceTask,
-                        new VideoInfo
+                        if (string.IsNullOrWhiteSpace(resource.Url))
+                            continue;
+
+                        var resourceTitle = string.IsNullOrWhiteSpace(resource.Title)
+                            ? GetResourceFileName(resource.Url)
+                            : resource.Title.Trim();
+                        var resourceExtension = HttpResourceDownloadService.ResolveExtension(
+                            resource.Url,
+                            resource.Extension,
+                            resource.MimeType);
+                        var resourceTask = new DownloadTask
                         {
                             Url = resource.Url,
                             Title = resourceTitle,
-                            Platform = "HTTP资源",
-                            IsResource = true,
-                            Extension = resourceExtension,
-                            MimeType = resource.MimeType
-                        });
-                    enqueuedCount++;
+                            Format = resourceExtension,
+                            Quality = "best",
+                            OutputDirectory = outputDirectory,
+                            BatchId = batch?.Id ?? "",
+                            BatchName = batch?.Name ?? "",
+                            BatchDirectory = batch?.Directory ?? "",
+                            CollectionTitle = batch?.CollectionTitle ?? "",
+                            ResourceExtension = resourceExtension,
+                            ResourceMimeType = resource.MimeType,
+                            IsNonVideoResource = true
+                        };
+                        await _downloadManager.EnqueueAsync(
+                            resourceTask,
+                            new VideoInfo
+                            {
+                                Url = resource.Url,
+                                Title = resourceTitle,
+                                Platform = "HTTP资源",
+                                IsResource = true,
+                                Extension = resourceExtension,
+                                MimeType = resource.MimeType
+                            });
+                        enqueuedCount++;
+                    }
+                }
+                catch
+                {
+                    if (trackingSubscription is not null)
+                    {
+                        var recoveryUpdates = new List<CollectionSubscriptionItemStateUpdate>();
+                        if (!primaryEnqueued && !string.IsNullOrWhiteSpace(task.CollectionEntryKey))
+                        {
+                            recoveryUpdates.Add(new CollectionSubscriptionItemStateUpdate
+                            {
+                                EntryKey = task.CollectionEntryKey,
+                                State = CollectionSubscriptionItemState.Failed,
+                                TaskId = "",
+                                ExpectedTaskId = task.Id
+                            });
+                        }
+
+                        foreach (var pendingItem in confirmedItems.Skip(index + 1))
+                        {
+                            if (!trackingTasksByKey.TryGetValue(
+                                    pendingItem.CollectionEntryKey,
+                                    out var pendingTask))
+                            {
+                                continue;
+                            }
+
+                            recoveryUpdates.Add(new CollectionSubscriptionItemStateUpdate
+                            {
+                                EntryKey = pendingItem.CollectionEntryKey,
+                                State = CollectionSubscriptionItemState.New,
+                                TaskId = "",
+                                ExpectedTaskId = pendingTask.Id
+                            });
+                        }
+
+                        if (recoveryUpdates.Count > 0)
+                        {
+                            await _historyService!.UpdateCollectionSubscriptionItemStatesAsync(
+                                trackingSubscription.Id,
+                                recoveryUpdates);
+                        }
+                    }
+
+                    throw;
                 }
             }
 
-            if (isReusingExistingCollection)
+            if (urls.Count == 0)
+            {
+                RequestShowNotification?.Invoke("合集订阅已保存，没有新增下载任务。", true);
+            }
+            else if (isReusingExistingCollection)
             {
                 RequestShowNotification?.Invoke(
                     $"已将 {urls.Count} 个任务加入合集：{batch!.Name}",
@@ -1280,6 +1532,47 @@ public partial class BatchDownloadViewModel : ObservableObject
            && !IsResolvingNames
            && !IsImportingPlaylist
            && !IsLoadingCollectionFolders;
+
+    private static IReadOnlyCollection<CollectionSubscriptionItemSnapshot> BuildCollectionBaseline(
+        PlaylistInfo playlist,
+        IReadOnlyCollection<ConfirmedBatchItem> confirmedItems)
+    {
+        var confirmedByKey = confirmedItems
+            .Where(item => !string.IsNullOrWhiteSpace(item.CollectionEntryKey))
+            .GroupBy(item => item.CollectionEntryKey, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+
+        return playlist.Entries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.StableKey))
+            .GroupBy(entry => entry.StableKey, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .Select((entry, index) =>
+            {
+                confirmedByKey.TryGetValue(entry.StableKey, out var confirmed);
+                var resolvedTitle = confirmed?.ResolvedInfo?.Title?.Trim() ?? "";
+                return new CollectionSubscriptionItemSnapshot
+                {
+                    EntryKey = entry.StableKey,
+                    EntryId = entry.Id.Trim(),
+                    Url = entry.Url.Trim(),
+                    Title = string.IsNullOrWhiteSpace(entry.OriginalTitle)
+                        ? resolvedTitle
+                        : entry.OriginalTitle.Trim(),
+                    Position = entry.OriginalIndex > 0 ? entry.OriginalIndex : index + 1
+                };
+            })
+            .ToArray();
+    }
+
+    private static string ResolveTrackedCollectionName(string? title, string outputDirectory)
+    {
+        if (!string.IsNullOrWhiteSpace(title))
+            return title.Trim();
+
+        var normalized = Path.TrimEndingDirectorySeparator(outputDirectory);
+        var directoryName = Path.GetFileName(normalized);
+        return string.IsNullOrWhiteSpace(directoryName) ? "合集下载" : directoryName;
+    }
 
     private bool CanStartBatchDownload()
         => IsNameConfirmationStep
@@ -1399,6 +1692,9 @@ public partial class BatchDownloadViewModel : ObservableObject
         PlaylistTitle = playlist.Title.Trim();
         _pendingCollectionTitle = playlist.Title.Trim();
         _pendingCollectionUrls = entries.Select(entry => entry.Url).ToList();
+        _pendingCollectionInfo = ClonePlaylistInfoForTracking(playlist, entries);
+        TrackCollectionUpdates = true;
+        OnPropertyChanged(nameof(HasTrackablePlaylist));
         UpdateUrlsFromPlaylistSelection();
         RequestShowNotification?.Invoke(
             string.IsNullOrWhiteSpace(playlist.Title)
@@ -1411,6 +1707,9 @@ public partial class BatchDownloadViewModel : ObservableObject
     private static PlaylistEntryInfo ClonePlaylistEntry(PlaylistEntryInfo entry, int fallbackIndex)
         => new()
         {
+            Id = entry.Id.Trim(),
+            IeKey = entry.IeKey.Trim(),
+            ExtractorKey = entry.ExtractorKey.Trim(),
             Url = entry.Url.Trim(),
             OriginalTitle = entry.OriginalTitle.Trim(),
             OriginalIndex = entry.OriginalIndex > 0 ? entry.OriginalIndex : fallbackIndex,
@@ -1420,6 +1719,19 @@ public partial class BatchDownloadViewModel : ObservableObject
             Kind = entry.Kind,
             Resources = entry.Resources,
             IsSelected = true
+        };
+
+    private static PlaylistInfo ClonePlaylistInfoForTracking(
+        PlaylistInfo playlist,
+        IReadOnlyCollection<PlaylistEntryInfo> entries)
+        => new()
+        {
+            Id = playlist.Id.Trim(),
+            ExtractorKey = playlist.ExtractorKey.Trim(),
+            Title = playlist.Title.Trim(),
+            SourceUrl = playlist.SourceUrl.Trim(),
+            Entries = entries.Select((entry, index) => ClonePlaylistEntry(entry, index + 1)).ToList(),
+            Urls = entries.Select(entry => entry.Url.Trim()).ToList()
         };
 
     private static string GetResourceFileName(string url)
@@ -1534,6 +1846,9 @@ public partial class BatchDownloadViewModel : ObservableObject
     {
         _pendingCollectionTitle = "";
         _pendingCollectionUrls = [];
+        _pendingCollectionInfo = null;
+        TrackCollectionUpdates = true;
+        OnPropertyChanged(nameof(HasTrackablePlaylist));
     }
 
     [RelayCommand]
@@ -1556,7 +1871,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void CancelTask(string taskId)
+    private async Task CancelTask(string taskId)
     {
         var task = _downloadManager.Tasks.FirstOrDefault(t => t.Id == taskId);
         if (task != null)
@@ -1568,7 +1883,7 @@ public partial class BatchDownloadViewModel : ObservableObject
                 or DownloadStatus.Paused
                 or DownloadStatus.Scheduled)
             {
-                _downloadManager.Cancel(taskId);
+                await _downloadManager.CancelAsync(taskId);
             }
             else
             {
@@ -1647,7 +1962,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     public Func<string, string, bool>? ConfirmFunc { get; set; } = ConfirmationDialogService.Show;
 
     [RelayCommand(CanExecute = nameof(CanStopAll))]
-    private void CancelAll()
+    private async Task CancelAll()
     {
         var unfinishedCount = RemainingTaskCount;
         if (unfinishedCount == 0)
@@ -1662,7 +1977,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         _suppressQueueRefresh = true;
         try
         {
-            _downloadManager.CancelAll();
+            await _downloadManager.CancelAllAsync();
         }
         finally
         {
