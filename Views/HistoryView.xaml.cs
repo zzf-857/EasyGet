@@ -13,9 +13,9 @@ namespace EasyGet.Views;
 public partial class HistoryView : System.Windows.Controls.UserControl
 {
     private const string HistoryItemsDataFormat = "EasyGet.HistoryItems";
-    private const double HistoryCardSlotWidth = 268;
-    private const double HistoryFolderRailMinWidth = 240;
-    private const double HistoryFolderRailMaxWidth = 420;
+    private const double HistoryCardSlotWidth = 280;
+    private const double HistoryFolderRailMinWidth = 220;
+    private const double HistoryFolderRailMaxWidth = 360;
     private const int LargeFolderAnimationThreshold = 20;
     private Point _historyDragStart;
     private bool _historyDragCanStart;

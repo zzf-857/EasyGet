@@ -23,9 +23,9 @@ internal sealed class WindowPlacementManager : IDisposable
     private const uint SWP_NOOWNERZORDER = 0x0200;
     private const uint MONITORINFOF_PRIMARY = 0x0001;
 
-    private const double SidebarWidth = 216;
-    private const double WindowControlsWidth = 120;
-    private const double TitleBarHeight = 46;
+    private const double SidebarWidth = 232;
+    private const double WindowControlsWidth = 129;
+    private const double TitleBarHeight = 64;
     private const double MinimumVisibleTitleBarWidth = 96;
     private const double MinimumVisibleTitleBarHeight = 24;
 

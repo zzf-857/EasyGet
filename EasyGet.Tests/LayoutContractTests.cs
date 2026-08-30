@@ -68,7 +68,7 @@ public class LayoutContractTests
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var style = FindStyle(document, x, "NavRadioButton");
 
-        Assert.Equal(40, GetNumericSetter(style, "Height"));
+        Assert.Equal("{StaticResource NavigationHeight}", GetSetterValue(style, "Height"));
         Assert.DoesNotContain(style.Elements(), element =>
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == "Width");
@@ -78,14 +78,45 @@ public class LayoutContractTests
     public void MainSidebarNavigationUsesSpaciousConsistentRows()
     {
         var document = XDocument.Load(TestRepositoryPaths.GetRootPath("MainWindow.xaml"));
+        var theme = XDocument.Load(TestRepositoryPaths.GetThemePath("Generic.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var style = FindStyle(document, x, "SidebarNavItem");
+        var glyphStyle = FindStyle(document, x, "SidebarNavGlyph");
+        var labelStyle = FindStyle(document, x, "SidebarNavLabel");
+        var panelStyle = FindStyle(document, x, "SidebarNavigationPanel");
 
-        Assert.Equal(48, GetNumericSetter(style, "Height"));
+        Assert.Equal("{StaticResource NavigationHeight}", GetSetterValue(style, "Height"));
+        Assert.Equal("Center", GetSetterValue(glyphStyle, "VerticalAlignment"));
+        Assert.Equal("Center", GetSetterValue(labelStyle, "VerticalAlignment"));
         Assert.Contains(style.Elements(), element =>
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == "Margin"
-            && element.Attribute("Value")?.Value == "0,0,0,8");
+            && element.Attribute("Value")?.Value == "0,0,0,4");
+
+        var compactNavTrigger = style.Descendants().Single(element =>
+            element.Name.LocalName == "DataTrigger"
+            && element.Attribute("Binding")?.Value == "{Binding IsCompactLayout}"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Equal(
+            "{StaticResource NavigationHeight}",
+            compactNavTrigger.Elements().Single(element =>
+                element.Name.LocalName == "Setter"
+                && element.Attribute("Property")?.Value == "Width").Attribute("Value")?.Value);
+        Assert.Equal(
+            "Center",
+            compactNavTrigger.Elements().Single(element =>
+                element.Name.LocalName == "Setter"
+                && element.Attribute("Property")?.Value == "HorizontalAlignment").Attribute("Value")?.Value);
+
+        var compactPanelTrigger = panelStyle.Descendants().Single(element =>
+            element.Name.LocalName == "DataTrigger"
+            && element.Attribute("Binding")?.Value == "{Binding IsCompactLayout}"
+            && element.Attribute("Value")?.Value == "True");
+        var compactPanelMargin = ParseThickness(compactPanelTrigger.Elements().Single(element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == "Margin").Attribute("Value")?.Value);
+        var compactNavigationWidth = GetNumericResource(theme, x, "NavigationHeight");
+        Assert.Equal(compactNavigationWidth, 74 - compactPanelMargin.Left - compactPanelMargin.Right);
 
         var navItems = document.Descendants()
             .Where(element => element.Name.LocalName == "RadioButton")
@@ -93,23 +124,89 @@ public class LayoutContractTests
             .ToList();
 
         Assert.Equal(4, navItems.Count);
+        Assert.Equal("Center", GetSetterValue(glyphStyle, "HorizontalAlignment"));
         Assert.All(navItems, item =>
         {
             var contentGrid = item.Elements().Single(element => element.Name.LocalName == "Grid");
-            var columnWidths = contentGrid.Elements()
-                .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
-                .Elements()
-                .Select(element => element.Attribute("Width")?.Value)
-                .ToArray();
+            Assert.Equal("Center", contentGrid.Attribute("VerticalAlignment")?.Value);
+            var centeredContent = contentGrid.Elements().Single(element =>
+                element.Name.LocalName == "StackPanel");
 
-            Assert.Equal(new[] { "24", "*", "Auto" }, columnWidths);
-            Assert.Contains(contentGrid.Elements(), element =>
+            Assert.Equal("Horizontal", centeredContent.Attribute("Orientation")?.Value);
+            Assert.Equal("Center", centeredContent.Attribute("HorizontalAlignment")?.Value);
+            Assert.Equal("Center", centeredContent.Attribute("VerticalAlignment")?.Value);
+            Assert.Contains(centeredContent.Elements(), element =>
                 element.Name.LocalName == "TextBlock"
                 && element.Attribute("Style")?.Value == "{StaticResource SidebarNavGlyph}");
-            Assert.Contains(contentGrid.Elements(), element =>
+            Assert.Contains(centeredContent.Elements(), element =>
                 element.Name.LocalName == "TextBlock"
                 && element.Attribute("Style")?.Value == "{StaticResource SidebarNavLabel}");
         });
+
+        var batchContent = navItems.Single(item =>
+            item.Attribute("CommandParameter")?.Value == "batch").Elements().Single(element =>
+                element.Name.LocalName == "Grid");
+        var batchBadge = batchContent.Elements().Single(element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute("Style")?.Value == "{StaticResource SidebarBadge}");
+        var badgeStyle = FindStyle(document, x, "SidebarBadge");
+        Assert.Equal("Right", GetSetterValue(badgeStyle, "HorizontalAlignment"));
+        Assert.Equal("Center", GetSetterValue(badgeStyle, "VerticalAlignment"));
+        Assert.Null(batchBadge.Attribute("Grid.Column"));
+    }
+
+    [Fact]
+    public void NavigationGroupsRemainScopedToTheirOwnSurfaces()
+    {
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var theme = XDocument.Load(TestRepositoryPaths.GetThemePath("Generic.xaml"));
+        var main = XDocument.Load(TestRepositoryPaths.GetRootPath("MainWindow.xaml"));
+        var settings = XDocument.Load(TestRepositoryPaths.GetViewPath("SettingsView.xaml"));
+        var history = XDocument.Load(TestRepositoryPaths.GetViewPath("HistoryView.xaml"));
+
+        var sharedStyle = FindStyle(theme, x, "NavRadioButton");
+        Assert.Null(GetSetterValue(sharedStyle, "GroupName"));
+        Assert.Null(GetSetterValue(FindStyle(theme, x, "HistoryFilterRadioButton"), "GroupName"));
+        Assert.Equal("MainNavigation", GetSetterValue(FindStyle(main, x, "SidebarNavItem"), "GroupName"));
+        Assert.Equal("SettingsCategories", GetSetterValue(FindStyle(settings, x, "SettingsNavItem"), "GroupName"));
+
+        var historyFolderFilters = history.Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => element.Attribute("Style")?.Value == "{StaticResource NavRadioButton}")
+            .ToList();
+        Assert.Equal(2, historyFolderFilters.Count);
+        Assert.All(historyFolderFilters, filter =>
+            Assert.Equal("HistoryFolders", filter.Attribute("GroupName")?.Value));
+
+        var historyMediaFilters = history.Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => element.Attribute("Style")?.Value == "{StaticResource HistoryFilterRadioButton}")
+            .ToList();
+        Assert.Equal(3, historyMediaFilters.Count);
+        Assert.All(historyMediaFilters, filter =>
+            Assert.Equal("HistoryMediaFilters", filter.Attribute("GroupName")?.Value));
+
+        var batch = XDocument.Load(TestRepositoryPaths.GetViewPath("BatchDownloadView.xaml"));
+        var queueFilters = batch.Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => element.Attribute("GroupName")?.Value == "BatchQueueFilters")
+            .ToList();
+        Assert.Equal(7, queueFilters.Count);
+    }
+
+    [Fact]
+    public void MainTitleBarKeepsPageNameAccessibleWithoutRenderingDuplicateText()
+    {
+        var document = XDocument.Load(TestRepositoryPaths.GetRootPath("MainWindow.xaml"));
+        var source = document.ToString(SaveOptions.DisableFormatting);
+
+        Assert.DoesNotContain("Text=\"{Binding CurrentPageTitle}\"", source, StringComparison.Ordinal);
+        Assert.Contains(
+            "AutomationProperties.Name=\"{Binding CurrentPageTitle}\"",
+            source,
+            StringComparison.Ordinal);
+        Assert.Contains("SettingsVM.ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("Value=\"剪贴板监视中\"", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -296,26 +393,26 @@ public class LayoutContractTests
     }
 
     [Fact]
-    public void HistoryCardsKeepTitlesSingleLineAndReserveActionsColumn()
+    public void HistoryCardsKeepTwoLineTitlesAndFourStableActionSlots()
     {
         var document = XDocument.Load(TestRepositoryPaths.GetViewPath("HistoryView.xaml"));
         var title = document.Descendants().First(element =>
             element.Name.LocalName == "TextBlock"
             && element.Attribute("Text")?.Value == "{Binding Title}");
         var actions = document.Descendants().First(element =>
-            element.Name.LocalName == "StackPanel"
+            element.Name.LocalName == "Grid"
             && element.Attributes().Any(attribute =>
                 attribute.Name.LocalName == "Name"
                 && attribute.Value == "NormalActions"));
-        var actionColumns = actions.Parent!.Elements()
+        var actionColumns = actions.Elements()
             .First(element => element.Name.LocalName == "Grid.ColumnDefinitions")
             .Elements()
             .Select(element => element.Attribute("Width")?.Value)
             .ToList();
 
-        Assert.Equal("NoWrap", title.Attribute("TextWrapping")?.Value);
+        Assert.Equal("Wrap", title.Attribute("TextWrapping")?.Value);
         Assert.Equal("CharacterEllipsis", title.Attribute("TextTrimming")?.Value);
-        Assert.Equal(new[] { "*", "Auto" }, actionColumns);
+        Assert.Equal(new[] { "*", "*", "*", "*" }, actionColumns);
     }
 
     [Theory]
@@ -324,19 +421,20 @@ public class LayoutContractTests
     [InlineData(1920, 1080)]
     public void TargetViewportsKeepPrimaryWorkAreasUsable(double width, double height)
     {
-        const double compactBreakpoint = 1280;
-        var sidebar = width < compactBreakpoint ? 56 : 216;
+        const double compactBreakpoint = 1180;
+        var sidebar = width <= compactBreakpoint ? 74 : 232;
         var mainWorkspace = width - sidebar;
-        var downloadWorkspace = mainWorkspace - 36;
-        var batchQueueWorkspace = mainWorkspace - 400 - 6;
+        var downloadWorkspace = mainWorkspace - 48;
+        var batchRootWorkspace = mainWorkspace - 48;
+        var batchQueueWorkspace = batchRootWorkspace - 390 - 6;
         var batchQueueContentWorkspace = batchQueueWorkspace - 48;
-        var settingsContentWorkspace = mainWorkspace - 200 - 40;
+        var settingsContentWorkspace = mainWorkspace - 48 - 208 - 20;
 
         Assert.True(height >= 680);
         Assert.True(downloadWorkspace >= 800, $"Download workspace is only {downloadWorkspace}px wide.");
         Assert.True(batchQueueWorkspace >= 560, $"Batch queue workspace is only {batchQueueWorkspace}px wide.");
         Assert.True(batchQueueContentWorkspace >= 512, $"Batch queue content is only {batchQueueContentWorkspace}px wide.");
-        Assert.True(settingsContentWorkspace >= 760, $"Settings content workspace is only {settingsContentWorkspace}px wide.");
+        Assert.True(settingsContentWorkspace >= 720, $"Settings content workspace is only {settingsContentWorkspace}px wide.");
     }
 
     private static IEnumerable<string> GetSurfacePaths()
@@ -363,9 +461,32 @@ public class LayoutContractTests
     }
 
     private static double? GetNumericSetter(XElement style, string property)
-        => ParseNumber(style.Elements().FirstOrDefault(element =>
+    {
+        var value = style.Elements().FirstOrDefault(element =>
             element.Name.LocalName == "Setter"
-            && element.Attribute("Property")?.Value == property)?.Attribute("Value")?.Value);
+            && element.Attribute("Property")?.Value == property)?.Attribute("Value")?.Value;
+        var number = ParseNumber(value);
+        if (number is not null || value is null || style.Document is null)
+            return number;
+
+        const string prefix = "{StaticResource ";
+        if (!value.StartsWith(prefix, StringComparison.Ordinal) || !value.EndsWith('}'))
+            return null;
+
+        var key = value[prefix.Length..^1];
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        return ParseNumber(style.Document.Descendants().FirstOrDefault(element =>
+            element.Attribute(x + "Key")?.Value == key)?.Value);
+    }
+
+    private static string? GetSetterValue(XElement style, string property)
+        => style.Elements().FirstOrDefault(element =>
+            element.Name.LocalName == "Setter"
+            && element.Attribute("Property")?.Value == property)?.Attribute("Value")?.Value;
+
+    private static double? GetNumericResource(XDocument document, XNamespace x, string key)
+        => ParseNumber(document.Descendants().FirstOrDefault(element =>
+            element.Attribute(x + "Key")?.Value == key)?.Value);
 
     private static double? ParseNumber(string? value)
         => double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)

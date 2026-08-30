@@ -16,7 +16,7 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="SelectionHistoryToolbar" TargetType="Grid">
+        <Style x:Key="SelectionHistoryToolbar" TargetType="WrapPanel">
             <Setter Property="Visibility" Value="Collapsed"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding HasSelection}" Value="True">
@@ -24,8 +24,10 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="HistoryFolderRail" TargetType="Border">
+        <Style x:Key="HistoryFolderRail" TargetType="Border" BasedOn="{StaticResource ToolPanelBorder}">
             <Setter Property="Visibility" Value="Visible"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Background" Value="{StaticResource BgSurfaceBrush}"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding DataContext.IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -102,143 +104,52 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="HistoryMetricCell" TargetType="Border">
+            <Setter Property="Padding" Value="16,13"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+        <Style x:Key="HistoryTag" TargetType="Border">
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Padding" Value="9,2"/>
+            <Setter Property="CornerRadius" Value="12"/>
+            <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
     </UserControl.Resources>
 
-    <Grid Margin="24,16,24,16">
+    <Grid Margin="26,24,26,30">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid Grid.Row="0" Margin="0,0,0,20">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,16,0">
-                <TextBlock Text="下载历史" Style="{StaticResource TextPageTitle}"/>
-                <TextBlock Style="{StaticResource TextPageSubtitle}">
-                    <Run Text="显示 "/><Run Text="{Binding VisibleHistoryCount, Mode=OneWay}"/><Run Text=" 条 · 库中共 "/><Run Text="{Binding TotalHistoryCount, Mode=OneWay}"/><Run Text=" 条"/>
+                <TextBlock Text="媒体资料库" Style="{StaticResource TextCaption}" FontFamily="{StaticResource FontFamilyMono}"/>
+                <TextBlock Text="媒体库" Margin="0,7,0,0" Style="{StaticResource TextPageTitle}"/>
+                <TextBlock Margin="0,7,0,0" Style="{StaticResource TextPageSubtitle}" FontSize="{StaticResource FontSizeNavigation}">
+                    <Run Text="显示 "/><Run Text="{Binding VisibleHistoryCount, Mode=OneWay}"/><Run Text=" / "/><Run Text="{Binding TotalHistoryCount, Mode=OneWay}"/><Run Text=" 条记录 · 按整理文件夹归档"/>
                 </TextBlock>
             </StackPanel>
-            <Button Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
-                    Height="32" Padding="12,4"
-                    Style="{StaticResource SurfaceButton}" BorderBrush="{StaticResource ErrorBrush}"
-                    Foreground="{StaticResource ErrorBrush}" Command="{Binding ClearAllCommand}"
-                    Content="清空历史..."/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                <Button Height="34" Padding="12,4" Margin="0,0,8,0"
+                        Style="{StaticResource SurfaceButton}"
+                        Command="{Binding CleanMissingHistoryRecordsCommand}" Content="扫描失效记录"/>
+                <Button Height="34" Padding="12,4"
+                        Style="{StaticResource SurfaceButton}" BorderBrush="{StaticResource ErrorBrush}"
+                        Foreground="{StaticResource ErrorBrush}" Command="{Binding ClearAllCommand}"
+                        Content="清空历史"/>
+            </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1">
-            <Grid Style="{StaticResource RegularHistoryToolbar}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="280"/>
-                    <ColumnDefinition Width="8"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Style="{StaticResource SearchFieldBorder}" Height="40">
-                    <Grid>
-                        <TextBlock Text="&#xE721;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"
-                                   Foreground="{StaticResource TextMutedBrush}"
-                                   HorizontalAlignment="Left" IsHitTestVisible="False"/>
-                        <TextBox x:Name="HistorySearchBox"
-                                 Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
-                                 Background="Transparent" BorderThickness="0" Padding="24,0,8,0"
-                                 VerticalContentAlignment="Center" FontSize="{StaticResource FontSizeBody}"/>
-                        <TextBlock Text="搜索标题、平台或合集名称" Margin="24,0,8,0"
-                                   VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}"
-                                   FontSize="{StaticResource FontSizeCaption}" IsHitTestVisible="False">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding SearchKeyword}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                        <DataTrigger Binding="{Binding SearchKeyword}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </Grid>
-                </Border>
-                <Border Grid.Column="2" Background="{StaticResource BgSurfaceBrush}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1" CornerRadius="8" Padding="4">
-                    <StackPanel Orientation="Horizontal">
-                        <RadioButton Content="全部" Style="{StaticResource HistoryFilterRadioButton}"
-                                     Command="{Binding SetMediaFilterCommand}" CommandParameter="全部"
-                                     IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=全部}"/>
-                        <RadioButton Content="视频" Style="{StaticResource HistoryFilterRadioButton}"
-                                     Command="{Binding SetMediaFilterCommand}" CommandParameter="视频"
-                                     IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=视频}"/>
-                        <RadioButton Content="音频" Style="{StaticResource HistoryFilterRadioButton}"
-                                     Command="{Binding SetMediaFilterCommand}" CommandParameter="音频"
-                                     IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=音频}"/>
-                    </StackPanel>
-                </Border>
-                <Button Grid.Column="4" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}"
-                        Command="{Binding ToggleSelectAllVisibleCommand}" Content="全选当前"/>
-            </Grid>
-
-            <Grid Style="{StaticResource SelectionHistoryToolbar}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="220"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Height="32" Padding="12,4" CornerRadius="5"
-                        Background="{DynamicResource AccentContainerBrush}">
-                    <TextBlock Text="{Binding SelectionSummaryText}" VerticalAlignment="Center"
-                               Style="{StaticResource TextBodyStrong}" Foreground="{DynamicResource AccentBrush}"/>
-                </Border>
-                <Button Grid.Column="1" Height="32" Padding="12,4" Margin="8,0,0,0"
-                        Style="{StaticResource SurfaceButton}" Command="{Binding ClearSelectionCommand}" Content="取消选择"/>
-                <Grid Grid.Column="3" Height="32" Margin="8,0">
-                    <ComboBox Style="{StaticResource DarkComboBox}"
-                              ItemsSource="{Binding BulkTargetFolders}" SelectedItem="{Binding BulkTargetFolder}"
-                              DisplayMemberPath="DisplayName" IsEnabled="{Binding HasBulkTargetFolders}"
-                              ToolTip="{Binding BulkTargetFolder.Directory}"
-                              AutomationProperties.Name="选择目标文件夹"/>
-                    <TextBlock Text="{Binding BulkTargetFolderPlaceholderText}"
-                               Margin="12,0,32,0" VerticalAlignment="Center"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               Foreground="{StaticResource TextMutedBrush}"
-                               TextTrimming="CharacterEllipsis" IsHitTestVisible="False">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding BulkTargetFolder}" Value="{x:Null}">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Grid>
-                <Button Grid.Column="4" Height="32" Padding="12,4" Style="{StaticResource AccentButton}"
-                        Command="{Binding MoveSelectedToFolderCommand}" Content="移动"/>
-                <Button Grid.Column="5" Height="32" Padding="12,4" Margin="8,0,0,0"
-                        Style="{StaticResource SurfaceButton}" Command="{Binding RemoveSelectedFromFolderCommand}" Content="移出文件夹"/>
-                <Button Grid.Column="6" Height="32" Padding="12,4" Margin="8,0,0,0"
-                        Style="{StaticResource SurfaceButton}" Foreground="{StaticResource ErrorBrush}"
-                        Command="{Binding DeleteSelectedCommand}" Content="删除"
-                        ToolTip="左键仅删除记录；右键可同时删除本地文件">
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="同时删除本地文件"
-                                      Command="{Binding PlacementTarget.DataContext.DeleteSelectedFilesAndRecordsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
-            </Grid>
-        </Grid>
-
-        <Grid Grid.Row="2" Margin="0,12,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -280,23 +191,36 @@
 
                 <Border x:Name="HistoryFolderRailHost"
                         Grid.Column="0"
-                        Width="268"
-                        MinWidth="240"
-                        MaxWidth="420"
-                        Margin="-16,0,0,0"
-                        Background="{StaticResource BgSidebarBrush}"
-                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0"
+                        Width="236"
+                        MinWidth="220"
+                        MaxWidth="360"
                         Style="{StaticResource HistoryFolderRail}">
-                    <Grid Margin="8,8,8,8">
+                    <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="*"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
 
-                        <StackPanel Grid.Row="0">
-                            <RadioButton Height="40" Padding="8,0,24,0" Style="{StaticResource NavRadioButton}"
+                        <Border Grid.Row="0" MinHeight="60" Padding="19,12"
+                                BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <TextBlock Text="位置" Style="{StaticResource TextSection}" VerticalAlignment="Center"/>
+                                <ToggleButton x:Name="NewFolderToggle"
+                                              Width="34" Height="34" Padding="0"
+                                              HorizontalAlignment="Right" VerticalAlignment="Center"
+                                              Style="{StaticResource ToolbarToggleButton}"
+                                              Checked="NewFolderToggle_Checked" Unchecked="NewFolderToggle_Unchecked"
+                                              ToolTip="新建整理文件夹" AutomationProperties.Name="新建整理文件夹">
+                                    <TextBlock Text="&#xE838;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                                </ToggleButton>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Row="1" Margin="8">
+                            <RadioButton Height="44" Padding="8,0,24,0" Style="{StaticResource NavRadioButton}"
+                                         GroupName="HistoryFolders"
                                          Command="{Binding ShowAllFoldersCommand}"
                                          IsChecked="{Binding IsShowingAllFolders, Mode=OneWay}">
                                 <Grid>
@@ -305,7 +229,8 @@
                                                Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
                                 </Grid>
                             </RadioButton>
-                            <RadioButton Height="40" Margin="0,4,0,0" Padding="8,0,24,0" Style="{StaticResource NavRadioButton}"
+                            <RadioButton Height="44" Margin="0,2,0,0" Padding="8,0,24,0" Style="{StaticResource NavRadioButton}"
+                                         GroupName="HistoryFolders"
                                          Command="{Binding ShowUnfiledCommand}"
                                          IsChecked="{Binding IsShowingUnfiled, Mode=OneWay}">
                                 <Grid>
@@ -316,11 +241,11 @@
                             </RadioButton>
                         </StackPanel>
 
-                        <TextBlock Grid.Row="1" Text="整理文件夹" Margin="8,12,0,8"
+                        <TextBlock Grid.Row="2" Text="整理文件夹" Margin="20,6,0,8"
                                    Style="{StaticResource TextCaption}" FontWeight="SemiBold"/>
 
-                        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <StackPanel>
+                        <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="8,0,8,12">
                                 <ItemsControl ItemsSource="{Binding HistoryFolders}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
@@ -364,12 +289,12 @@
                                                         </Grid>
                                                     </Button>
                                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0">
-                                                        <Button Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconButton}"
+                                                        <Button Width="34" Height="34" Padding="0" Style="{StaticResource ToolbarIconButton}"
                                                                 Command="{Binding DataContext.BeginRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}" ToolTip="重命名文件夹">
                                                             <TextBlock Text="&#xE70F;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                         </Button>
-                                                        <Button Width="32" Height="32" Padding="0" Margin="4,0,0,0" Style="{StaticResource ToolbarIconButton}"
+                                                        <Button Width="34" Height="34" Padding="0" Margin="4,0,0,0" Style="{StaticResource ToolbarIconButton}"
                                                                 Command="{Binding DataContext.DeleteFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                                 CommandParameter="{Binding}" ToolTip="删除文件夹">
                                                             <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}" Foreground="{StaticResource ErrorBrush}"/>
@@ -378,17 +303,17 @@
                                                 </Grid>
 
                                                 <Grid x:Name="FolderRenameRow" Height="40" Background="{StaticResource BgSurfaceBrush}">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="32"/><ColumnDefinition Width="32"/></Grid.ColumnDefinitions>
-                                                    <TextBox x:Name="FolderRenameTextBox" Margin="4" Padding="8,4" VerticalContentAlignment="Center"
+                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions>
+                                                    <TextBox x:Name="FolderRenameTextBox" Height="32" Margin="4" Padding="8,4" VerticalContentAlignment="Center"
                                                              Style="{StaticResource DarkTextBox}" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
                                                              IsVisibleChanged="FolderRenameTextBox_IsVisibleChanged"
                                                              PreviewKeyDown="FolderRenameTextBox_PreviewKeyDown"/>
-                                                    <Button Grid.Column="1" Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconButton}"
+                                                    <Button Grid.Column="1" Width="34" Height="34" Padding="0" Style="{StaticResource ToolbarIconButton}"
                                                             Command="{Binding DataContext.SaveRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}" ToolTip="保存名称">
                                                         <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                     </Button>
-                                                    <Button Grid.Column="2" Width="32" Height="32" Padding="0" Style="{StaticResource ToolbarIconButton}"
+                                                    <Button Grid.Column="2" Width="34" Height="34" Padding="0" Style="{StaticResource ToolbarIconButton}"
                                                             Command="{Binding DataContext.CancelRenameFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                                             CommandParameter="{Binding}" ToolTip="取消重命名">
                                                         <TextBlock Text="&#xE711;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
@@ -474,11 +399,6 @@
                             </StackPanel>
                         </ScrollViewer>
 
-                        <ToggleButton x:Name="NewFolderToggle" Grid.Row="3" Height="32" Margin="0,8,0,0"
-                                      HorizontalAlignment="Stretch"
-                                      Style="{StaticResource ToolbarToggleButton}"
-                                      Checked="NewFolderToggle_Checked" Unchecked="NewFolderToggle_Unchecked"
-                                      Content="+ 新建文件夹"/>
                         <Popup x:Name="NewFolderPopup" PlacementTarget="{Binding ElementName=NewFolderToggle}"
                                Placement="Top" StaysOpen="False" AllowsTransparency="True"
                                Opened="NewFolderPopup_Opened" Closed="NewFolderPopup_Closed">
@@ -502,7 +422,7 @@
 
                 <Thumb x:Name="HistoryFolderRailResizeThumb"
                        Grid.Column="1"
-                       Width="6"
+                       Width="16"
                        Margin="0"
                        Cursor="SizeWE"
                        Focusable="True"
@@ -514,62 +434,158 @@
                        AutomationProperties.Name="调整历史文件夹栏宽度"
                        ToolTip="拖动调整文件夹栏宽度"/>
 
-                <Grid Grid.Column="2" x:Name="HistoryContentHost" RenderTransformOrigin="0.5,0.5">
-                    <Grid.Style>
-                        <Style TargetType="Grid">
-                            <Setter Property="Margin" Value="16,0,0,0"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding DataContext.IsCompactLayout, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                    <Setter Property="Margin" Value="0"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Grid.Style>
-                    <Grid.RenderTransform><TranslateTransform x:Name="HistoryContentTranslate" Y="0"/></Grid.RenderTransform>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                <Border Grid.Column="2" Style="{StaticResource ToolPanelBorder}" Padding="0" ClipToBounds="True">
+                    <Grid x:Name="HistoryContentHost" RenderTransformOrigin="0.5,0.5">
+                        <Grid.RenderTransform><TranslateTransform x:Name="HistoryContentTranslate" Y="0"/></Grid.RenderTransform>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                    <Border Grid.Row="0" MinHeight="68" Margin="0,0,0,12" Padding="0,4,0,12"
-                            BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-                        <Grid>
+                        <Grid Grid.Row="0" MinHeight="92">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Text="{Binding SelectedFolderTitle, Mode=OneWay}"
-                                           Style="{StaticResource TextSection}" TextTrimming="CharacterEllipsis"/>
-                                <Grid Margin="0,6,0,0">
+                            <Border Grid.Column="0" Style="{StaticResource HistoryMetricCell}">
+                                <StackPanel>
+                                    <TextBlock Text="位置" Style="{StaticResource TextCaption}"/>
+                                    <TextBlock Text="{Binding SelectedFolderTitle, Mode=OneWay}" Margin="0,4,0,0"
+                                               Style="{StaticResource TextBodyStrong}" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding CurrentLocationPathText, Mode=OneWay}"/>
+                                    <TextBlock Text="{Binding CurrentLocationPathText, Mode=OneWay}" Margin="0,2,0,0"
+                                               Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding CurrentLocationPathText, Mode=OneWay}"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" Style="{StaticResource HistoryMetricCell}">
+                                <StackPanel>
+                                    <TextBlock Text="记录" Style="{StaticResource TextCaption}"/>
+                                    <TextBlock Margin="0,4,0,0" Style="{StaticResource TextMono}" FontSize="{StaticResource FontSizeNavigation}">
+                                        <Run Text="{Binding CurrentLocationFileCountText, Mode=OneWay}"/><Run Text=" 项"/>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" Style="{StaticResource HistoryMetricCell}">
+                                <StackPanel>
+                                    <TextBlock Text="占用" Style="{StaticResource TextCaption}"/>
+                                    <TextBlock Text="{Binding CurrentLocationSizeText, Mode=OneWay}" Margin="0,4,0,0"
+                                               Style="{StaticResource TextMono}" FontSize="{StaticResource FontSizeNavigation}" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="3" Style="{StaticResource HistoryMetricCell}" BorderThickness="0,0,0,1">
+                                <StackPanel>
+                                    <TextBlock Text="存储空间" Style="{StaticResource TextCaption}"/>
+                                    <TextBlock Text="{Binding StorageStatusText, Mode=OneWay}" Margin="0,4,0,0"
+                                               Style="{StaticResource TextMono}" FontSize="{StaticResource FontSizeCaption}"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding StorageStatusText, Mode=OneWay}"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Border Grid.Row="1" MinHeight="60" Padding="16,10"
+                                BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid Style="{StaticResource RegularHistoryToolbar}">
                                     <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="300"/>
+                                        <ColumnDefinition Width="10"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="路径" Margin="0,0,8,0" Style="{StaticResource TextCaption}"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding CurrentLocationPathText, Mode=OneWay}"
-                                               Style="{StaticResource TextBody}" TextTrimming="CharacterEllipsis"
-                                               ToolTip="{Binding CurrentLocationPathText, Mode=OneWay}"/>
+                                    <Border Grid.Column="0" Style="{StaticResource SearchFieldBorder}" Height="42">
+                                        <Grid>
+                                            <TextBlock Text="&#xE721;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"
+                                                       Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Left" IsHitTestVisible="False"/>
+                                            <TextBox x:Name="HistorySearchBox"
+                                                     Text="{Binding SearchKeyword, UpdateSourceTrigger=PropertyChanged}"
+                                                     Background="Transparent" BorderThickness="0" Padding="26,0,8,0"
+                                                     VerticalContentAlignment="Center" FontSize="{StaticResource FontSizeBody}"/>
+                                            <TextBlock Text="搜索标题、平台或文件夹" Margin="26,0,8,0"
+                                                       VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="{StaticResource FontSizeCaption}" IsHitTestVisible="False">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding SearchKeyword}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding SearchKeyword}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </Grid>
+                                    </Border>
+                                    <Border Grid.Column="2" Background="{StaticResource BgInputBrush}"
+                                            BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="1" CornerRadius="12" Padding="3">
+                                        <StackPanel Orientation="Horizontal">
+                                            <RadioButton Content="全部" Style="{StaticResource HistoryFilterRadioButton}" GroupName="HistoryMediaFilters"
+                                                         Command="{Binding SetMediaFilterCommand}" CommandParameter="全部"
+                                                         IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=全部}"/>
+                                            <RadioButton Content="视频" Style="{StaticResource HistoryFilterRadioButton}" GroupName="HistoryMediaFilters"
+                                                         Command="{Binding SetMediaFilterCommand}" CommandParameter="视频"
+                                                         IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=视频}"/>
+                                            <RadioButton Content="音频" Style="{StaticResource HistoryFilterRadioButton}" GroupName="HistoryMediaFilters"
+                                                         Command="{Binding SetMediaFilterCommand}" CommandParameter="音频"
+                                                         IsChecked="{Binding SelectedMediaFilter, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=音频}"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <Button Grid.Column="4" Height="34" Padding="12,4" Style="{StaticResource SurfaceButton}"
+                                            Command="{Binding ToggleSelectAllVisibleCommand}" Content="{Binding SelectAllVisibleActionText}"/>
                                 </Grid>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <StackPanel MinWidth="72">
-                                    <TextBlock Text="文件" Style="{StaticResource TextCaption}"/>
-                                    <TextBlock Text="{Binding CurrentLocationFileCountText, Mode=OneWay}"
-                                               Margin="0,4,0,0" Style="{StaticResource TextBodyStrong}"/>
-                                </StackPanel>
-                                <Border Width="1" Height="36" Margin="16,0"
-                                        Background="{StaticResource BorderSubtleBrush}"/>
-                                <StackPanel MinWidth="88">
-                                    <TextBlock Text="占用大小" Style="{StaticResource TextCaption}"/>
-                                    <TextBlock Text="{Binding CurrentLocationSizeText, Mode=OneWay}"
-                                               Margin="0,4,0,0" Style="{StaticResource TextBodyStrong}"/>
-                                </StackPanel>
-                            </StackPanel>
-                        </Grid>
-                    </Border>
 
-                    <Grid Grid.Row="1">
+                                <WrapPanel Style="{StaticResource SelectionHistoryToolbar}" VerticalAlignment="Center">
+                                    <Border Height="34" Padding="12,4" CornerRadius="9" Margin="0,0,8,6"
+                                            Background="{DynamicResource AccentContainerBrush}">
+                                        <TextBlock Text="{Binding SelectionSummaryText}" VerticalAlignment="Center"
+                                                   Style="{StaticResource TextBodyStrong}" Foreground="{DynamicResource AccentBrush}"/>
+                                    </Border>
+                                    <Button Height="34" Padding="12,4" Margin="0,0,8,6"
+                                            Style="{StaticResource SurfaceButton}" Command="{Binding ClearSelectionCommand}" Content="取消选择"/>
+                                    <Grid Width="190" Height="34" Margin="0,0,8,6">
+                                        <ComboBox Height="34" Style="{StaticResource DarkComboBox}"
+                                                  ItemsSource="{Binding BulkTargetFolders}" SelectedItem="{Binding BulkTargetFolder}"
+                                                  DisplayMemberPath="DisplayName" IsEnabled="{Binding HasBulkTargetFolders}"
+                                                  ToolTip="{Binding BulkTargetFolder.Directory}"
+                                                  AutomationProperties.Name="选择目标文件夹"/>
+                                        <TextBlock Text="{Binding BulkTargetFolderPlaceholderText}"
+                                                   Margin="12,0,32,0" VerticalAlignment="Center"
+                                                   FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource TextMutedBrush}"
+                                                   TextTrimming="CharacterEllipsis" IsHitTestVisible="False">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding BulkTargetFolder}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </Grid>
+                                    <Button Height="34" Padding="12,4" Margin="0,0,8,6" Style="{StaticResource AccentButton}"
+                                            Command="{Binding MoveSelectedToFolderCommand}" Content="移动"/>
+                                    <Button Height="34" Padding="12,4" Margin="0,0,8,6"
+                                            Style="{StaticResource SurfaceButton}" Command="{Binding RemoveSelectedFromFolderCommand}" Content="移出文件夹"/>
+                                    <Button Height="34" Padding="12,4" Margin="0,0,0,6"
+                                            Style="{StaticResource SurfaceButton}" Foreground="{StaticResource ErrorBrush}"
+                                            Command="{Binding DeleteSelectedCommand}" Content="删除"
+                                            ToolTip="左键仅删除记录；右键可同时删除本地文件">
+                                        <Button.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="同时删除本地文件"
+                                                          Command="{Binding PlacementTarget.DataContext.DeleteSelectedFilesAndRecordsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                                            </ContextMenu>
+                                        </Button.ContextMenu>
+                                    </Button>
+                                </WrapPanel>
+                            </Grid>
+                        </Border>
+
+                        <Grid Grid.Row="2" Margin="16,16,0,0">
 
                     <StackPanel x:Name="PureEmptyPanel" HorizontalAlignment="Center" VerticalAlignment="Center">
                         <StackPanel.Style>
@@ -631,6 +647,11 @@
                              Background="Transparent" BorderThickness="0"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.CanContentScroll="True"
+                             ScrollViewer.PanningMode="VerticalOnly"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
+                             VirtualizingPanel.ScrollUnit="Pixel"
                              Visibility="{Binding HasDisplayedHistoryCards, Converter={StaticResource BoolToVisibility}}"
                              SizeChanged="HistoryList_SizeChanged">
                         <ListBox.ItemContainerStyle>
@@ -647,105 +668,145 @@
                                     <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate>
-                                            <Grid Width="252" Height="240" Margin="0,0,16,16">
-                                                <Border x:Name="HistoryCard" Background="{StaticResource BgSurfaceBrush}"
-                                                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                                                        CornerRadius="7" ClipToBounds="True" Cursor="Hand"
+                                            <Grid Width="266" Height="340" Margin="0,0,14,14">
+                                                <Border x:Name="HistoryCard" ClipToBounds="True" Cursor="Hand"
                                                         AutomationProperties.HelpText="{Binding FilePath}"
                                                         PreviewMouseLeftButtonDown="HistoryCard_PreviewMouseLeftButtonDown"
                                                         PreviewMouseMove="HistoryCard_PreviewMouseMove"
                                                         PreviewMouseLeftButtonUp="HistoryCard_PreviewMouseLeftButtonUp">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border" BasedOn="{StaticResource MediaCardBorder}">
+                                                            <Setter Property="CornerRadius" Value="12"/>
+                                                            <Style.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+                                                                    <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Grid>
-                                                        <Grid.RowDefinitions><RowDefinition Height="136"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                                                        <Border Grid.Row="0" Background="{StaticResource BgSurfaceHighestBrush}" ClipToBounds="True">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="150"/>
+                                                            <RowDefinition Height="140"/>
+                                                            <RowDefinition Height="50"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Border Grid.Row="0" Background="{StaticResource BgSurfaceHighestBrush}" ClipToBounds="True" CornerRadius="11,11,0,0"
+                                                                BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="0,0,0,1">
                                                             <Grid>
                                                                 <TextBlock Text="&#xEC4F;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizePreview}"
                                                                            Foreground="{StaticResource TextDisabledBrush}"/>
-                                                                 <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"
-                                                                        RenderOptions.BitmapScalingMode="HighQuality"/>
-                                                                <Ellipse Width="8" Height="8"
-                                                                         Margin="8"
-                                                                         HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                                <Image Source="{Binding ThumbnailUrl}" Stretch="UniformToFill"
+                                                                       RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                                <CheckBox Style="{StaticResource CircularCheckBox}"
+                                                                          IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                                                                          HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10"
+                                                                          ToolTip="选择此记录"/>
+                                                                <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10"
+                                                                        Background="{StaticResource ScrimHeavyBrush}" CornerRadius="12" Padding="9,4"
+                                                                        Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}}">
+                                                                    <TextBlock Text="{Binding Platform}" Foreground="{StaticResource TextPrimaryBrush}"
+                                                                               FontFamily="{StaticResource FontFamilyMono}" FontSize="{StaticResource FontSizeMicro}"/>
+                                                                </Border>
+                                                                <Ellipse Width="8" Height="8" Margin="12"
+                                                                         HorizontalAlignment="Left" VerticalAlignment="Bottom"
                                                                          Fill="{DynamicResource AccentBrush}"
                                                                          Visibility="{Binding IsRecentlyCompleted, Converter={StaticResource BoolToVisibility}}"
                                                                          ToolTip="刚刚完成"/>
-                                                                 <CheckBox Style="{StaticResource CircularCheckBox}"
-                                                                           IsChecked="{Binding IsSelected, Mode=TwoWay}"
-                                                                          HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
-                                                                          ToolTip="选择此记录"/>
-                                                                <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8"
-                                                                        Background="{StaticResource ScrimHeavyBrush}" CornerRadius="4" Padding="8,4"
-                                                                        Visibility="{Binding Platform, Converter={StaticResource StringToVisibility}}">
-                                                                    <TextBlock Text="{Binding Platform}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="{StaticResource FontSizeCaption}"/>
-                                                                </Border>
                                                                 <Border x:Name="MissingOverlay" Background="{StaticResource ScrimOverlayBrush}" Visibility="Collapsed">
-                                                                    <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="8,4"
-                                                                            BorderBrush="{StaticResource ErrorBrush}" BorderThickness="1" CornerRadius="4">
-                                                                        <TextBlock Text="文件缺失" Foreground="{StaticResource ErrorBrush}" FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"/>
+                                                                    <Border HorizontalAlignment="Center" VerticalAlignment="Center" Padding="10,5"
+                                                                            Background="{StaticResource ErrorContainerBrush}"
+                                                                            BorderBrush="{StaticResource ErrorBrush}" BorderThickness="1" CornerRadius="12">
+                                                                        <TextBlock Text="文件缺失" Foreground="{StaticResource ErrorBrush}"
+                                                                                   FontSize="{StaticResource FontSizeCaption}" FontWeight="SemiBold"/>
                                                                     </Border>
                                                                 </Border>
                                                             </Grid>
                                                         </Border>
 
-                                                        <Grid Grid.Row="1" Margin="12,8">
-                                                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                                                            <TextBlock Text="{Binding Title}" Style="{StaticResource TextBodyStrong}"
-                                                                       TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                                        <Grid Grid.Row="1" Margin="14,12">
+                                                            <Grid.RowDefinitions>
+                                                                <RowDefinition Height="48"/>
+                                                                <RowDefinition Height="Auto"/>
+                                                                <RowDefinition Height="*"/>
+                                                            </Grid.RowDefinitions>
+                                                            <TextBlock Text="{Binding Title}" Style="{StaticResource TextCardTitle}"
+                                                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis"
+                                                                       LineHeight="22" MaxHeight="44"/>
                                                             <TextBlock Grid.Row="1" Style="{StaticResource TextMono}" FontSize="{StaticResource FontSizeCaption}"
                                                                        Margin="0,4,0,0" Foreground="{StaticResource TextMutedBrush}" TextTrimming="CharacterEllipsis">
-                                                                <Run Text="{Binding FileSizeText, Mode=OneWay}"/><Run Text="  ·  "/><Run Text="{Binding DownloadTime, Mode=OneWay, StringFormat={}{0:MM-dd}}"/><Run Text="  ·  "/><Run Text="{Binding Format, Mode=OneWay}"/>
+                                                                <Run Text="{Binding FileSizeText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding DownloadTime, Mode=OneWay, StringFormat={}{0:MM-dd}}"/><Run Text=" · "/><Run Text="{Binding Format, Mode=OneWay}"/>
                                                             </TextBlock>
-                                                            <Grid Grid.Row="2" Margin="0,4,0,0" VerticalAlignment="Bottom">
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <Grid Grid.Column="0" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                            <StackPanel Grid.Row="2" Orientation="Horizontal" VerticalAlignment="Bottom">
+                                                                <Border Style="{StaticResource HistoryTag}" Margin="0,0,6,0"
+                                                                        Visibility="{Binding HasOrganizerFolder, Converter={StaticResource BoolToVisibility}}">
+                                                                    <TextBlock Text="{Binding OrganizerFolderName}" Style="{StaticResource TextCaption}"
+                                                                               MaxWidth="104" Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"/>
+                                                                </Border>
+                                                                <Border Style="{StaticResource HistoryTag}"
+                                                                        Visibility="{Binding HasAttachmentSummary, Converter={StaticResource BoolToVisibility}}">
+                                                                    <TextBlock Text="{Binding AttachmentSummaryText, Mode=OneWay}" Style="{StaticResource TextCaption}"
+                                                                               MaxWidth="104" TextTrimming="CharacterEllipsis"
+                                                                               ToolTip="{Binding AttachmentSummaryText, Mode=OneWay}"/>
+                                                                </Border>
+                                                            </StackPanel>
+                                                        </Grid>
+
+                                                        <Border Grid.Row="2" Background="{StaticResource BgInputBrush}" CornerRadius="0,0,11,11"
+                                                                BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="0,1,0,0"
+                                                                Padding="8,7">
+                                                            <Grid>
+                                                                <Grid x:Name="NormalActions">
                                                                     <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                        <ColumnDefinition Width="*"/>
                                                                         <ColumnDefinition Width="*"/>
                                                                     </Grid.ColumnDefinitions>
-                                                                    <TextBlock Grid.Column="0" Text="{Binding OrganizerFolderName}" Style="{StaticResource TextCaption}" MaxWidth="72"
-                                                                               Foreground="{DynamicResource AccentBrush}" TextTrimming="CharacterEllipsis"
-                                                                               Visibility="{Binding HasOrganizerFolder, Converter={StaticResource BoolToVisibility}}"/>
-                                                                    <TextBlock Grid.Column="1" Text="{Binding AttachmentSummaryText, Mode=OneWay}" Style="{StaticResource TextCaption}" Margin="4,0,0,0"
-                                                                               Foreground="{StaticResource TextMutedBrush}" TextTrimming="CharacterEllipsis"
-                                                                               ToolTip="{Binding AttachmentSummaryText, Mode=OneWay}"
-                                                                               Visibility="{Binding HasAttachmentSummary, Converter={StaticResource BoolToVisibility}}"/>
-                                                                </Grid>
-                                                                <StackPanel x:Name="NormalActions" Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                                                                    <Button Height="32" Padding="8,4" Background="Transparent" BorderThickness="0"
-                                                                            Style="{StaticResource SurfaceButton}" FontSize="{StaticResource FontSizeCaption}" Content="位置"
-                                                                            Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                            CommandParameter="{Binding AvailableFilePath}"
-                                                                            ToolTip="打开文件夹" AutomationProperties.Name="打开文件夹"/>
-                                                                    <Button Width="32" Height="32" Padding="0" Margin="4,0,0,0" Style="{StaticResource ToolbarIconButton}"
-                                                                            ToolTip="预览文件" Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                            CommandParameter="{Binding AvailableFilePath}" AutomationProperties.Name="预览文件">
+                                                                    <Button Grid.Column="0" Height="34" Margin="2,0" Padding="0"
+                                                                            Background="Transparent" BorderThickness="0" Style="{StaticResource SurfaceButton}"
+                                                                            Command="{Binding DataContext.PreviewFileCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding AvailableFilePath}" ToolTip="播放或预览文件" AutomationProperties.Name="预览文件">
                                                                         <TextBlock Text="&#xE768;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                                     </Button>
-                                                                    <Button Width="32" Height="32" Padding="0" Margin="4,0,0,0" Style="{StaticResource ToolbarIconButton}"
-                                                                            ToolTip="打开来源" Command="{Binding DataContext.OpenSourceUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                            CommandParameter="{Binding Url}">
+                                                                    <Button Grid.Column="1" Height="34" Margin="2,0" Padding="0"
+                                                                            Background="Transparent" BorderThickness="0" Style="{StaticResource SurfaceButton}"
+                                                                            Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding AvailableFilePath}" ToolTip="打开所在文件夹" AutomationProperties.Name="打开文件夹">
+                                                                        <TextBlock Text="&#xE8B7;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                                                                    </Button>
+                                                                    <Button Grid.Column="2" Height="34" Margin="2,0" Padding="0"
+                                                                            Background="Transparent" BorderThickness="0" Style="{StaticResource SurfaceButton}"
+                                                                            Command="{Binding DataContext.OpenSourceUrlCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding Url}" ToolTip="打开来源页" AutomationProperties.Name="打开来源页">
                                                                         <TextBlock Text="&#xE8A7;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
                                                                     </Button>
-                                                                    <Button Width="32" Height="32" Padding="0" Margin="4,0,0,0" Style="{StaticResource ToolbarIconButton}"
-                                                                            ToolTip="删除记录" Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                                                            CommandParameter="{Binding Id}">
+                                                                    <Button Grid.Column="3" Height="34" Margin="2,0" Padding="0"
+                                                                            Background="Transparent" BorderThickness="0" Style="{StaticResource SurfaceButton}"
+                                                                            Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding Id}" ToolTip="删除记录" AutomationProperties.Name="删除记录">
                                                                         <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}" Foreground="{StaticResource ErrorBrush}"/>
                                                                     </Button>
-                                                                </StackPanel>
-                                                                <Button x:Name="MissingAction" Grid.Column="1" Height="32" Padding="12,4" HorizontalAlignment="Right"
-                                                                        Visibility="Collapsed" Style="{StaticResource SurfaceButton}"
-                                                                        Foreground="{DynamicResource AccentBrush}" Content="重新下载"
-                                                                        Command="{Binding DataContext.RedownloadHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                        CommandParameter="{Binding}"/>
+                                                                </Grid>
+                                                                <Grid x:Name="MissingActions" Visibility="Collapsed">
+                                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="42"/></Grid.ColumnDefinitions>
+                                                                    <Button Grid.Column="0" Height="34" Margin="2,0" Padding="12,4"
+                                                                            Style="{StaticResource SurfaceButton}" Foreground="{DynamicResource AccentBrush}" Content="重新下载"
+                                                                            Command="{Binding DataContext.RedownloadHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                            CommandParameter="{Binding}"/>
+                                                                    <Button Grid.Column="1" Height="34" Margin="4,0,0,0" Padding="0"
+                                                                            Background="Transparent" BorderThickness="0" Style="{StaticResource SurfaceButton}"
+                                                                            Command="{Binding DataContext.DeleteItemCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                            CommandParameter="{Binding Id}" ToolTip="删除失效记录" AutomationProperties.Name="删除失效记录">
+                                                                        <TextBlock Text="&#xE74D;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}" Foreground="{StaticResource ErrorBrush}"/>
+                                                                    </Button>
+                                                                </Grid>
                                                             </Grid>
-                                                        </Grid>
+                                                        </Border>
                                                     </Grid>
                                                 </Border>
                                                 <Border x:Name="SelectionRing" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2"
-                                                        CornerRadius="7" IsHitTestVisible="False" Visibility="Collapsed"/>
+                                                        CornerRadius="12" IsHitTestVisible="False" Visibility="Collapsed"/>
                                             </Grid>
                                             <DataTemplate.Triggers>
                                                 <DataTrigger Binding="{Binding IsSelected}" Value="True">
@@ -753,10 +814,9 @@
                                                 </DataTrigger>
                                                 <DataTrigger Binding="{Binding FileExists}" Value="False">
                                                     <Setter TargetName="HistoryCard" Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
-                                                    <Setter TargetName="HistoryCard" Property="BorderThickness" Value="1"/>
                                                     <Setter TargetName="MissingOverlay" Property="Visibility" Value="Visible"/>
                                                     <Setter TargetName="NormalActions" Property="Visibility" Value="Collapsed"/>
-                                                    <Setter TargetName="MissingAction" Property="Visibility" Value="Visible"/>
+                                                    <Setter TargetName="MissingActions" Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
                                             </DataTemplate.Triggers>
                                         </DataTemplate>
@@ -775,6 +835,7 @@
                     </Border>
                     </Grid>
                 </Grid>
+                </Border>
             </Grid>
         </Grid>
     </Grid>

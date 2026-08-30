@@ -14,8 +14,31 @@ public class UiTruthfulnessViewModelTests
 
         context.Main.SelectedNavIndex = 1;
 
-        Assert.Equal("批量下载", context.Main.CurrentPageTitle);
+        Assert.Equal("批量队列", context.Main.CurrentPageTitle);
+        Assert.Same(context.BatchContext.Batch, context.Main.CurrentPage);
         Assert.Matches(@"^v\d+\.\d+\.\d+", context.Main.AppVersion);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public void MainViewModelKeepsCurrentPageSynchronizedWithSelectedNavigation(int selectedIndex)
+    {
+        using var context = CreateViewModelContext();
+        object expectedPage = selectedIndex switch
+        {
+            0 => context.Download,
+            1 => context.BatchContext.Batch,
+            2 => context.History,
+            3 => context.Settings,
+            _ => throw new ArgumentOutOfRangeException(nameof(selectedIndex))
+        };
+
+        context.Main.SelectedNavIndex = selectedIndex;
+
+        Assert.Same(expectedPage, context.Main.CurrentPage);
     }
 
     [Fact]

@@ -15,6 +15,8 @@ namespace EasyGet;
 public partial class MainWindow : Window
 {
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWCP_ROUND = 2;
 
     private readonly MainViewModel _viewModel;
     private readonly ConfigService _configService;
@@ -51,14 +53,14 @@ public partial class MainWindow : Window
 
         Activated += MainWindow_Activated;
         PreviewKeyDown += MainWindow_PreviewKeyDown;
-        SizeChanged += (_, _) => _viewModel.IsCompactLayout = ActualWidth < 1280;
+        SizeChanged += (_, _) => _viewModel.IsCompactLayout = ActualWidth <= 1180;
         StateChanged += MainWindow_StateChanged;
         if (_trayIconService is not null)
         {
             _trayIconService.ShowRequested += RestoreFromTray;
             _trayIconService.ExitRequested += ExitFromTray;
         }
-        _viewModel.IsCompactLayout = Width < 1280;
+        _viewModel.IsCompactLayout = Width <= 1180;
     }
 
     internal static async Task InitializeLoadedServicesAsync(
@@ -328,9 +330,11 @@ public partial class MainWindow : Window
             return;
 
         var useDarkMode = 1;
+        var cornerPreference = DWMWCP_ROUND;
         try
         {
             _ = DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
+            _ = DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPreference, sizeof(int));
         }
         catch (DllNotFoundException)
         {

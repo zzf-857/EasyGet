@@ -45,17 +45,45 @@
             <views:SettingsView/>
         </DataTemplate>
 
+        <Style x:Key="BrandLockup" TargetType="StackPanel">
+            <Setter Property="Visibility" Value="Visible"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="BrandPanel" TargetType="StackPanel">
+            <Setter Property="Margin" Value="18,0"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
+                    <Setter Property="Margin" Value="0"/>
+                    <Setter Property="HorizontalAlignment" Value="Center"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="SidebarNavGlyph" TargetType="TextBlock" BasedOn="{StaticResource IconGlyph}">
             <Setter Property="Width" Value="24"/>
             <Setter Property="Height" Value="24"/>
+            <Setter Property="FontSize" Value="{StaticResource IconSizeBody}"/>
             <Setter Property="LineHeight" Value="24"/>
             <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
             <Setter Property="HorizontalAlignment" Value="Center"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsChecked, RelativeSource={RelativeSource AncestorType=RadioButton}}" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
+
         <Style x:Key="SidebarNavLabel" TargetType="TextBlock">
             <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
-            <Setter Property="FontSize" Value="{StaticResource FontSizeBodyStrong}"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeNavigation}"/>
             <Setter Property="FontWeight" Value="{StaticResource FontWeightSemiBold}"/>
             <Setter Property="LineHeight" Value="{StaticResource LineHeightBody}"/>
             <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
@@ -67,29 +95,57 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
         <Style x:Key="SidebarNavItem" TargetType="RadioButton" BasedOn="{StaticResource NavRadioButton}">
-            <Setter Property="Height" Value="48"/>
-            <Setter Property="Margin" Value="0,0,0,8"/>
+            <Setter Property="GroupName" Value="MainNavigation"/>
+            <Setter Property="Height" Value="{StaticResource NavigationHeight}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
             <Style.Triggers>
                 <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
-                    <Setter Property="Padding" Value="8,0"/>
+                    <Setter Property="Width" Value="{StaticResource NavigationHeight}"/>
+                    <Setter Property="HorizontalAlignment" Value="Center"/>
+                    <Setter Property="Padding" Value="7,0"/>
                 </DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="SidebarBadge" TargetType="Border">
-            <Setter Property="Visibility" Value="Collapsed"/>
+
+        <Style x:Key="SidebarNavigationPanel" TargetType="DockPanel">
+            <Setter Property="Margin" Value="12,14,12,12"/>
             <Style.Triggers>
-                <MultiDataTrigger>
-                    <MultiDataTrigger.Conditions>
-                        <Condition Binding="{Binding HasQueueBadge}" Value="True"/>
-                        <Condition Binding="{Binding IsCompactLayout}" Value="False"/>
-                    </MultiDataTrigger.Conditions>
-                    <Setter Property="Visibility" Value="Visible"/>
-                </MultiDataTrigger>
+                <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
+                    <Setter Property="Margin" Value="11,14,11,12"/>
+                </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="SidebarBadge" TargetType="Border">
+            <Setter Property="Visibility" Value="Collapsed"/>
+            <Setter Property="MinWidth" Value="24"/>
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="7,0"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentStrokeBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasQueueBadge}" Value="True">
+                    <Setter Property="Visibility" Value="Visible"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
+                    <Setter Property="MinWidth" Value="18"/>
+                    <Setter Property="Width" Value="18"/>
+                    <Setter Property="Height" Value="18"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="CornerRadius" Value="9"/>
+                    <Setter Property="Margin" Value="-8,-22,-3,0"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="StatusBarText" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="{StaticResource FontFamilyUI}"/>
+            <Setter Property="FontFamily" Value="{StaticResource FontFamilyMono}"/>
             <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
             <Setter Property="FontWeight" Value="{StaticResource FontWeightNormal}"/>
             <Setter Property="LineHeight" Value="{StaticResource LineHeightCaption}"/>
@@ -99,6 +155,7 @@
             <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
             <Setter Property="Typography.NumeralStyle" Value="Lining"/>
         </Style>
+
         <Style x:Key="EngineDot" TargetType="Ellipse">
             <Setter Property="Fill" Value="{StaticResource SuccessBrush}"/>
             <Style.Triggers>
@@ -107,280 +164,391 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+
+        <Style x:Key="ToastIconSurface" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                    <Setter Property="Background" Value="{StaticResource ErrorContainerBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsInfo}" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource AccentContainerBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="ToastIconGlyph" TargetType="TextBlock" BasedOn="{StaticResource IconGlyph}">
+            <Setter Property="Text" Value="&#xE73E;"/>
+            <Setter Property="Foreground" Value="{StaticResource SuccessBrush}"/>
+            <Setter Property="FontSize" Value="{StaticResource IconSizeSmall}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                    <Setter Property="Text" Value="&#xE814;"/>
+                    <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsInfo}" Value="True">
+                    <Setter Property="Text" Value="&#xE946;"/>
+                    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </Window.Resources>
 
-    <Grid Background="{StaticResource BgPrimaryBrush}">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="32"/>
-        </Grid.RowDefinitions>
+    <Border Background="{StaticResource BgPrimaryBrush}"
+            BorderBrush="{StaticResource BorderPrimaryBrush}"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="64"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="40"/>
+            </Grid.RowDefinitions>
 
-        <!-- The title bar owns the full window width, matching the desktop workbench design. -->
-        <Border Grid.Row="0"
-                Background="{StaticResource BgChromeBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}"
-                BorderThickness="0,0,0,1"
-                MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
-            <Grid>
-                <StackPanel Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                    <Image Source="/Assets/app.png" Width="28" Height="28" Stretch="Uniform"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock Text="EasyGet" Margin="8,0,0,0" Style="{StaticResource TextBodyStrong}"
-                               VerticalAlignment="Center"/>
-                    <Border Margin="8,0,0,0" BorderBrush="{StaticResource BorderPrimaryBrush}"
-                            BorderThickness="1" CornerRadius="4" Padding="4,0">
-                        <TextBlock Text="{Binding AppVersion}" Style="{StaticResource TextMono}"
-                                   FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource TextMutedBrush}"/>
-                    </Border>
-                </StackPanel>
-
-                <TextBlock Text="{Binding CurrentPageTitle}"
-                           Style="{StaticResource TextBodyStrong}"
-                           Foreground="{StaticResource TextSecondaryBrush}"
-                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                           IsHitTestVisible="False"/>
-
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Stretch">
-                    <Button Style="{StaticResource WindowControlButton}" ToolTip="最小化"
-                            AutomationProperties.Name="最小化" Click="MinimizeButton_Click">
-                        <TextBlock Text="&#xE921;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                    </Button>
-                    <Button Style="{StaticResource WindowControlButton}" ToolTip="最大化或还原"
-                            AutomationProperties.Name="最大化或还原" Click="MaximizeButton_Click">
-                        <TextBlock Text="&#xE922;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                    </Button>
-                    <Button Style="{StaticResource WindowCloseButton}" ToolTip="关闭"
-                            AutomationProperties.Name="关闭" Click="CloseButton_Click">
-                        <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding SidebarWidth}"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
-                <DockPanel Margin="8">
-                    <StackPanel DockPanel.Dock="Top">
-                        <RadioButton Style="{StaticResource SidebarNavItem}"
-                                     Command="{Binding NavigateCommand}" CommandParameter="download"
-                                     ToolTip="单个下载" AutomationProperties.Name="单个下载"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=OneWay}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="24"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="&#xE118;" Style="{StaticResource SidebarNavGlyph}"/>
-                                <TextBlock Grid.Column="1" Text="单个下载" Margin="12,0,0,0"
-                                           Style="{StaticResource SidebarNavLabel}"/>
-                            </Grid>
-                        </RadioButton>
-                        <RadioButton Style="{StaticResource SidebarNavItem}"
-                                     Command="{Binding NavigateCommand}" CommandParameter="batch"
-                                     ToolTip="批量下载" AutomationProperties.Name="批量下载"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=OneWay}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="24"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="&#xE8FD;" Style="{StaticResource SidebarNavGlyph}"/>
-                                <TextBlock Grid.Column="1" Text="批量下载" Margin="12,0,0,0"
-                                           Style="{StaticResource SidebarNavLabel}"/>
-                                <Border Grid.Column="2" MinWidth="24" Height="20" Padding="8,0" CornerRadius="8"
-                                        Style="{StaticResource SidebarBadge}"
-                                        Background="{DynamicResource AccentContainerBrush}">
-                                    <TextBlock Text="{Binding QueueTaskCount}" FontSize="{StaticResource FontSizeCaption}"
-                                               Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"
-                                               Typography.NumeralAlignment="Tabular" Typography.NumeralStyle="Lining"/>
-                                </Border>
-                            </Grid>
-                        </RadioButton>
-                        <RadioButton Style="{StaticResource SidebarNavItem}"
-                                     Command="{Binding NavigateCommand}" CommandParameter="history"
-                                     ToolTip="下载历史" AutomationProperties.Name="下载历史"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=OneWay}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="24"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="&#xE81C;" Style="{StaticResource SidebarNavGlyph}"/>
-                                <TextBlock Grid.Column="1" Text="下载历史" Margin="12,0,0,0"
-                                           Style="{StaticResource SidebarNavLabel}"/>
-                            </Grid>
-                        </RadioButton>
-                        <RadioButton Style="{StaticResource SidebarNavItem}"
-                                     Command="{Binding NavigateCommand}" CommandParameter="settings"
-                                     ToolTip="设置" AutomationProperties.Name="设置"
-                                     IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=OneWay}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="24"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="&#xE713;" Style="{StaticResource SidebarNavGlyph}"/>
-                                <TextBlock Grid.Column="1" Text="设置" Margin="12,0,0,0"
-                                           Style="{StaticResource SidebarNavLabel}"/>
-                            </Grid>
-                        </RadioButton>
-                    </StackPanel>
-                </DockPanel>
-            </Border>
-
-            <Grid Grid.Column="1" Background="{StaticResource BgPrimaryBrush}">
-                <controls:CachedPageHost Page="{Binding CurrentPage}"/>
-
-                <ItemsControl ItemsSource="{Binding Notifications}"
-                              HorizontalAlignment="Right" VerticalAlignment="Top"
-                              Margin="16,4,16,0" Panel.ZIndex="100">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Vertical"/>
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type vm:NotificationItem}">
-                            <Grid x:Name="ToastGrid" Width="324" Margin="0,8,0,0"
-                                  behaviors:Motion.PageEnter="True"
-                                  MouseEnter="ToastCard_MouseEnter" MouseLeave="ToastCard_MouseLeave">
-                                <Border x:Name="ToastCard" Background="{StaticResource BgSurfaceHighestBrush}"
-                                        BorderBrush="{StaticResource BorderStrongBrush}"
-                                        BorderThickness="1" CornerRadius="8" Padding="12,8">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Width="3" MinHeight="28" Margin="0,0,10,0"
-                                                CornerRadius="2" VerticalAlignment="Stretch">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="{StaticResource SuccessBrush}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Background" Value="{StaticResource ErrorBrush}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsInfo}" Value="True">
-                                                            <Setter Property="Background" Value="{DynamicResource AccentBrush}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
-                                        <StackPanel Grid.Column="1">
-                                            <TextBlock>
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock" BasedOn="{StaticResource TextBodyStrong}">
-                                                        <Setter Property="Text" Value="任务完成"/>
-                                                        <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSuccess}" Value="False">
-                                                            <Setter Property="Text" Value="需要处理"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsInfo}" Value="True">
-                                                            <Setter Property="Text" Value="应用通知"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <TextBlock Text="{Binding Message}" Margin="0,4,0,0"
-                                                       Style="{StaticResource TextBody}"
-                                                       TextWrapping="Wrap" MaxHeight="40" TextTrimming="CharacterEllipsis"/>
-                                        </StackPanel>
-                                        <Button Grid.Column="2" Height="32" Padding="12,4" Margin="8,0,0,0"
-                                                Style="{StaticResource SurfaceButton}"
-                                                Foreground="{DynamicResource AccentBrush}"
-                                                Command="{Binding ExecuteActionCommand}"
-                                                Content="{Binding ActionLabel}"
-                                                Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}"/>
-                                        <Button Grid.Column="3" Width="32" Height="32" Margin="8,0,0,0"
-                                                Style="{StaticResource ToolbarIconButton}"
-                                                ToolTip="关闭通知" AutomationProperties.Name="关闭通知"
-                                                Command="{Binding CloseCommand}">
-                                            <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                            </Grid>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </Grid>
-        </Grid>
-
-        <Grid Grid.Row="2">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="{Binding SidebarWidth}"/>
-                <ColumnDefinition Width="*"/>
-            </Grid.ColumnDefinitions>
-            <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,1,0">
-                <Button Height="32" Padding="8,0"
-                        Style="{StaticResource SurfaceButton}"
-                        Background="Transparent" BorderThickness="0"
-                        HorizontalContentAlignment="Center"
-                        ToolTip="打开更新与环境设置"
-                        AutomationProperties.Name="打开更新与环境设置"
-                        Command="{Binding NavigateCommand}" CommandParameter="settings">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <Ellipse Width="8" Height="8" Margin="0,0,8,0" Style="{StaticResource EngineDot}"/>
-                        <TextBlock Text="{Binding ToolStatusText}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock" BasedOn="{StaticResource StatusBarText}">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </StackPanel>
-                </Button>
-            </Border>
-            <Border Grid.Column="1" Background="{StaticResource BgChromeBrush}"
-                    BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,0">
-                <Grid Margin="12,0">
+            <Border Grid.Row="0"
+                    Background="{StaticResource BgChromeBrush}"
+                    BorderBrush="{StaticResource BorderPrimaryBrush}"
+                    BorderThickness="0,0,0,1"
+                    AutomationProperties.Name="{Binding CurrentPageTitle}"
+                    MouseLeftButtonDown="TopBar_MouseLeftButtonDown">
+                <Grid>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="{Binding SidebarWidth}"/>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <Grid Grid.Column="0" Margin="0,0,12,0" VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Ellipse Grid.Column="0" Width="8" Height="8" Fill="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
-                        <TextBlock Grid.Column="1" Text="{Binding TaskStatusText}" Style="{StaticResource StatusBarText}"
-                                   TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Column="2" Text="{Binding AggregateSpeedText}" Style="{StaticResource StatusBarText}"
-                                   Foreground="{DynamicResource AccentBrush}" Margin="12,0,0,0"/>
+
+                    <Grid Grid.Column="0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Style="{StaticResource BrandPanel}">
+                            <Image Source="/Assets/app.png" Width="40" Height="40" Stretch="Uniform"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   RenderOptions.BitmapScalingMode="HighQuality"/>
+                            <StackPanel Margin="12,0,0,0" VerticalAlignment="Center" Style="{StaticResource BrandLockup}">
+                                <TextBlock Text="EasyGet"
+                                           FontFamily="{StaticResource FontFamilyDisplay}"
+                                           FontSize="{StaticResource FontSizeBrand}"
+                                           FontWeight="{StaticResource FontWeightSemiBold}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           LineHeight="22" LineStackingStrategy="BlockLineHeight"/>
+                                <TextBlock Text="{Binding AppVersion}"
+                                           Margin="0,2,0,0"
+                                           Style="{StaticResource TextMono}"
+                                           FontSize="{StaticResource FontSizeMicro}"
+                                           LineHeight="14"
+                                           Foreground="{StaticResource TextMutedBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
                     </Grid>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding DiskStatusText}" Style="{StaticResource StatusBarText}" MaxWidth="220" TextTrimming="CharacterEllipsis"/>
-                        <Border Width="1" Height="12" Background="{StaticResource BorderPrimaryBrush}" Margin="12,0"/>
-                        <TextBlock Text="{Binding EngineVersionText}" Style="{StaticResource StatusBarText}" MaxWidth="280" TextTrimming="CharacterEllipsis"/>
-                        <Border Width="1" Height="12" Background="{StaticResource BorderPrimaryBrush}" Margin="12,0"/>
-                        <TextBlock Text="{Binding AppVersion}" Style="{StaticResource StatusBarText}"/>
+
+                    <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                Margin="0,0,9,0"
+                                HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <Border Height="28" Margin="0,0,16,0" Padding="10,0"
+                                VerticalAlignment="Center"
+                                Background="{StaticResource BgSurfaceHighBrush}"
+                                BorderBrush="{StaticResource BorderPrimaryBrush}"
+                                BorderThickness="1" CornerRadius="14"
+                                AutomationProperties.Name="剪贴板监视状态">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding SelectedNavIndex}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Ellipse Width="6" Height="6" Margin="0,0,6,0">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="{DynamicResource AccentBrush}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SettingsVM.ClipboardMonitoringEnabled}" Value="False">
+                                                    <Setter Property="Fill" Value="{StaticResource TextDisabledBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextCaption}">
+                                            <Setter Property="Text" Value="剪贴板监视中"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SettingsVM.ClipboardMonitoringEnabled}" Value="False">
+                                                    <Setter Property="Text" Value="剪贴板监视已关闭"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+                        </Border>
+                        <Button Style="{StaticResource WindowControlButton}" ToolTip="最小化"
+                                AutomationProperties.Name="最小化" Click="MinimizeButton_Click">
+                            <TextBlock Text="&#xE921;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                        </Button>
+                        <Button Style="{StaticResource WindowControlButton}" ToolTip="最大化或还原"
+                                AutomationProperties.Name="最大化或还原" Click="MaximizeButton_Click">
+                            <TextBlock Text="&#xE922;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                        </Button>
+                        <Button Style="{StaticResource WindowCloseButton}" ToolTip="关闭"
+                                AutomationProperties.Name="关闭" Click="CloseButton_Click">
+                            <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
+
+            <Grid Grid.Row="1" MinWidth="0" MinHeight="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{Binding SidebarWidth}"/>
+                    <ColumnDefinition Width="*" MinWidth="0"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
+                    <DockPanel Style="{StaticResource SidebarNavigationPanel}" LastChildFill="False">
+                        <StackPanel DockPanel.Dock="Top">
+                            <RadioButton Style="{StaticResource SidebarNavItem}"
+                                         Command="{Binding NavigateCommand}" CommandParameter="download"
+                                         ToolTip="单个下载" AutomationProperties.Name="单个下载"
+                                         IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=TwoWay}">
+                                <Grid VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE118;" Style="{StaticResource SidebarNavGlyph}"/>
+                                        <TextBlock Text="单个下载" Margin="12,0,0,0"
+                                                   Style="{StaticResource SidebarNavLabel}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </RadioButton>
+
+                            <RadioButton Style="{StaticResource SidebarNavItem}"
+                                         Command="{Binding NavigateCommand}" CommandParameter="batch"
+                                         ToolTip="批量队列" AutomationProperties.Name="批量队列"
+                                         IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=TwoWay}">
+                                <Grid VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE8FD;" Style="{StaticResource SidebarNavGlyph}"/>
+                                        <TextBlock Text="批量队列" Margin="12,0,0,0"
+                                                   Style="{StaticResource SidebarNavLabel}"/>
+                                    </StackPanel>
+                                    <Border Style="{StaticResource SidebarBadge}">
+                                        <TextBlock Text="{Binding QueueTaskCount}"
+                                                   FontFamily="{StaticResource FontFamilyMono}"
+                                                   FontSize="{StaticResource FontSizeMicro}"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   Typography.NumeralAlignment="Tabular" Typography.NumeralStyle="Lining"/>
+                                    </Border>
+                                </Grid>
+                            </RadioButton>
+
+                            <RadioButton Style="{StaticResource SidebarNavItem}"
+                                         Command="{Binding NavigateCommand}" CommandParameter="history"
+                                         ToolTip="媒体库" AutomationProperties.Name="媒体库"
+                                         IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=TwoWay}">
+                                <Grid VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE81C;" Style="{StaticResource SidebarNavGlyph}"/>
+                                        <TextBlock Text="媒体库" Margin="12,0,0,0"
+                                                   Style="{StaticResource SidebarNavLabel}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </RadioButton>
+
+                            <RadioButton Style="{StaticResource SidebarNavItem}"
+                                         Command="{Binding NavigateCommand}" CommandParameter="settings"
+                                         ToolTip="设置" AutomationProperties.Name="设置"
+                                         IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=TwoWay}">
+                                <Grid VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal"
+                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <TextBlock Text="&#xE713;" Style="{StaticResource SidebarNavGlyph}"/>
+                                        <TextBlock Text="设置" Margin="12,0,0,0"
+                                                   Style="{StaticResource SidebarNavLabel}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </RadioButton>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Grid Grid.Column="1" MinWidth="0" Background="{StaticResource BgPrimaryBrush}">
+                    <controls:CachedPageHost Page="{Binding CurrentPage}"/>
+
+                    <ItemsControl ItemsSource="{Binding Notifications}"
+                                  Width="354"
+                                  HorizontalAlignment="Right" VerticalAlignment="Top"
+                                  Margin="0,12,20,0" Panel.ZIndex="100">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Vertical"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type vm:NotificationItem}">
+                                <Grid x:Name="ToastGrid" Width="354" Margin="0,0,0,9"
+                                      behaviors:Motion.PageEnter="True"
+                                      MouseEnter="ToastCard_MouseEnter" MouseLeave="ToastCard_MouseLeave">
+                                    <Border x:Name="ToastCard" Style="{StaticResource ToastCardBorder}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="30"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="34"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <Border Grid.Row="0" Grid.Column="0"
+                                                    Width="30" Height="30" CornerRadius="15"
+                                                    VerticalAlignment="Top"
+                                                    Style="{StaticResource ToastIconSurface}">
+                                                <TextBlock Style="{StaticResource ToastIconGlyph}"/>
+                                            </Border>
+
+                                            <StackPanel Grid.Row="0" Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock>
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock" BasedOn="{StaticResource TextBodyStrong}">
+                                                            <Setter Property="Text" Value="任务完成"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSuccess}" Value="False">
+                                                                    <Setter Property="Text" Value="需要处理"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsInfo}" Value="True">
+                                                                    <Setter Property="Text" Value="应用通知"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBlock Text="{Binding Message}" Margin="0,3,0,0"
+                                                           Style="{StaticResource TextBody}"
+                                                           TextWrapping="Wrap" MaxHeight="48" TextTrimming="CharacterEllipsis"/>
+                                            </StackPanel>
+
+                                            <Button Grid.Row="0" Grid.Column="2" Height="34" MinHeight="34"
+                                                    Padding="12,4" Margin="10,0,0,0"
+                                                    Style="{StaticResource SurfaceButton}"
+                                                    Foreground="{DynamicResource AccentBrush}"
+                                                    Command="{Binding ExecuteActionCommand}"
+                                                    Content="{Binding ActionLabel}"
+                                                    Visibility="{Binding HasAction, Converter={StaticResource BoolToVisibility}}"/>
+
+                                            <Button Grid.Row="0" Grid.Column="3" Width="34" Height="34" MinHeight="34"
+                                                    Margin="4,0,0,0"
+                                                    Style="{StaticResource ToolbarIconButton}"
+                                                    Background="{StaticResource TransparentBrush}"
+                                                    BorderThickness="0"
+                                                    ToolTip="关闭通知" AutomationProperties.Name="关闭通知"
+                                                    Command="{Binding CloseCommand}">
+                                                <TextBlock Text="&#xE8BB;" Style="{StaticResource IconGlyph}" FontSize="{StaticResource IconSizeSmall}"/>
+                                            </Button>
+
+                                            <ProgressBar Grid.Row="1" Grid.ColumnSpan="4"
+                                                         Margin="0,10,0,-8" Height="2"
+                                                         Maximum="1" Value="{Binding RemainingRatio}">
+                                                <ProgressBar.Style>
+                                                    <Style TargetType="ProgressBar" BasedOn="{StaticResource AccentProgressBar}">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsFailure}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ProgressBar.Style>
+                                            </ProgressBar>
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Grid>
+
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="{Binding SidebarWidth}"/>
+                    <ColumnDefinition Width="*" MinWidth="0"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,1,0"
+                        ToolTip="{Binding ToolStatusText}">
+                    <Label Padding="0"
+                           HorizontalContentAlignment="Center"
+                           VerticalContentAlignment="Center"
+                           Focusable="False"
+                           IsHitTestVisible="False"
+                           AutomationProperties.Name="{Binding ToolStatusText}">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Grid Width="14" Height="14">
+                                <Ellipse Width="14" Height="14" Fill="{StaticResource SuccessContainerBrush}"/>
+                                <Ellipse Width="8" Height="8" Style="{StaticResource EngineDot}"/>
+                            </Grid>
+                            <TextBlock Text="{Binding ToolStatusText}" Margin="8,0,0,0">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource StatusBarText}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Label>
+                </Border>
+
+                <Border Grid.Column="1" Background="{StaticResource BgChromeBrush}"
+                        BorderBrush="{StaticResource BorderPrimaryBrush}" BorderThickness="0,1,0,0">
+                    <Grid Margin="16,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="0"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,16,0">
+                            <Grid Width="14" Height="14" Margin="0,0,8,0">
+                                <Ellipse Width="14" Height="14" Fill="{StaticResource SuccessContainerBrush}"/>
+                                <Ellipse Width="8" Height="8" Style="{StaticResource EngineDot}"/>
+                            </Grid>
+                            <TextBlock Text="{Binding TaskStatusText}" Style="{StaticResource StatusBarText}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,18,0">
+                            <TextBlock Text="↓" Style="{StaticResource StatusBarText}"
+                                       Foreground="{DynamicResource AccentBrush}" Margin="0,0,5,0"/>
+                            <TextBlock Text="{Binding AggregateSpeedText}" Style="{StaticResource StatusBarText}"
+                                       Foreground="{DynamicResource AccentBrush}"/>
+                            <Border Width="1" Height="14" Background="{StaticResource BorderPrimaryBrush}" Margin="12,0"/>
+                            <TextBlock Text="{Binding DiskStatusText}" Style="{StaticResource StatusBarText}"
+                                       MaxWidth="170" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding EngineVersionText}" Style="{StaticResource StatusBarText}"
+                                       MaxWidth="230" TextTrimming="CharacterEllipsis"/>
+                            <Border Width="1" Height="14" Background="{StaticResource BorderPrimaryBrush}" Margin="12,0"/>
+                            <TextBlock Text="{Binding AppVersion}" Style="{StaticResource StatusBarText}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
-    </Grid>
+    </Border>
 </Window>

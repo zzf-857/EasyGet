@@ -80,8 +80,8 @@ public class MainWindowStateTests
     }
 
     [Theory]
-    [InlineData(-1064, true)]
-    [InlineData(-1065, false)]
+    [InlineData(-1055, true)]
+    [InlineData(-1056, false)]
     public void EnsureRestoredBoundsVisible_RequiresUsableDraggableTitleBar(
         double left,
         bool shouldKeepPosition)
@@ -99,8 +99,8 @@ public class MainWindowStateTests
     }
 
     [Theory]
-    [InlineData(-1596, true)]
-    [InlineData(-1597, false)]
+    [InlineData(-1582.5, true)]
+    [InlineData(-1582.6, false)]
     public void EnsureRestoredBoundsVisible_ScalesDraggableThresholdWithDpi(
         double left,
         bool shouldKeepPosition)

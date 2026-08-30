@@ -196,6 +196,7 @@ public sealed class ManagedLoginSessionServiceTests
         Assert.Contains("取消", xaml, StringComparison.Ordinal);
         Assert.Contains("AllowedDomainsText", xaml, StringComparison.Ordinal);
         Assert.Contains("AutomationProperties.Name", xaml, StringComparison.Ordinal);
+        Assert.Contains("MinHeight=\"560\"", xaml, StringComparison.Ordinal);
     }
 
     [Fact]

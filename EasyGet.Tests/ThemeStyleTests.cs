@@ -23,7 +23,7 @@ public class ThemeStyleTests
         Assert.NotNull(style);
 
         AssertStyleSetter(style!, "Background", "{StaticResource BgSurfaceBrush}");
-        AssertStyleSetter(style, "BorderBrush", "{StaticResource BorderSubtleBrush}");
+        AssertStyleSetter(style, "BorderBrush", "{StaticResource BorderPrimaryBrush}");
         AssertStyleSetter(style, "BorderThickness", "1");
         AssertStyleSetter(style, "SnapsToDevicePixels", "True");
 
@@ -34,8 +34,8 @@ public class ThemeStyleTests
                 && element.Attribute("Property")?.Value == "CornerRadius")
             ?.Attribute("Value")?.Value;
 
-        Assert.Equal("8", cornerRadius);
-        AssertStyleSetter(style, "Padding", "16");
+        Assert.Equal("16", cornerRadius);
+        AssertStyleSetter(style, "Padding", "18");
     }
 
     [Fact]
@@ -43,18 +43,18 @@ public class ThemeStyleTests
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
 
-        AssertColor(document, "BgChrome", "#121218");
-        AssertColor(document, "BgPrimary", "#1A1A21");
+        AssertColor(document, "BgChrome", "#0D0D12");
+        AssertColor(document, "BgPrimary", "#121218");
         AssertColor(document, "BgSidebar", "#14141A");
         AssertColor(document, "BgSurface", "#1E1E27");
-        AssertColor(document, "BgSurfaceHigh", "#22222C");
-        AssertColor(document, "BgSurfaceHighest", "#262733");
+        AssertColor(document, "BgSurfaceHigh", "#24242F");
+        AssertColor(document, "BgSurfaceHighest", "#2A2A36");
         AssertColor(document, "BgInput", "#16161C");
-        AssertColor(document, "BgHover", "#2A2A35");
+        AssertColor(document, "BgHover", "#30303C");
         AssertColor(document, "TextPrimary", "#EEEFF4");
-        AssertColor(document, "TextSecondary", "#A8ABB8");
-        AssertColor(document, "TextMuted", "#70737F");
-        AssertColor(document, "TextDisabled", "#4A4C58");
+        AssertColor(document, "TextSecondary", "#B5B7C2");
+        AssertColor(document, "TextMuted", "#9699A6");
+        AssertColor(document, "TextDisabled", "#5C5F6C");
         AssertColor(document, "BorderPrimary", "#2A2A35");
         AssertColor(document, "BorderSubtle", "#23232C");
         AssertColor(document, "BorderStrong", "#3A3A46");
@@ -85,17 +85,26 @@ public class ThemeStyleTests
     {
         var document = XDocument.Load(GetThemePath("Generic.xaml"));
 
-        AssertDoubleToken(document, "FontSizeCaption", 12);
-        AssertDoubleToken(document, "FontSizeBody", 14);
-        AssertDoubleToken(document, "FontSizeBodyStrong", 14);
-        AssertDoubleToken(document, "FontSizeSection", 18);
-        AssertDoubleToken(document, "FontSizeCardTitle", 14);
-        AssertDoubleToken(document, "FontSizePageTitle", 20);
+        AssertDoubleToken(document, "FontSizeMicro", 13);
+        AssertDoubleToken(document, "FontSizeCaption", 13);
+        AssertDoubleToken(document, "FontSizeBody", 15);
+        AssertDoubleToken(document, "FontSizeBodyStrong", 16);
+        AssertDoubleToken(document, "FontSizeNavigation", 17);
+        AssertDoubleToken(document, "FontSizeSection", 19);
+        AssertDoubleToken(document, "FontSizeCardTitle", 16);
+        AssertDoubleToken(document, "FontSizePageTitle", 32);
+        AssertDoubleToken(document, "FontSizeBrand", 20);
 
-        AssertDoubleToken(document, "LineHeightCaption", 16);
-        AssertDoubleToken(document, "LineHeightBody", 20);
-        AssertDoubleToken(document, "LineHeightSection", 24);
-        AssertDoubleToken(document, "LineHeightPageTitle", 28);
+        AssertDoubleToken(document, "LineHeightCaption", 18);
+        AssertDoubleToken(document, "LineHeightBody", 24);
+        AssertDoubleToken(document, "LineHeightSection", 26);
+        AssertDoubleToken(document, "LineHeightPageTitle", 38);
+
+        AssertDoubleToken(document, "ControlHeightDefault", 42);
+        AssertDoubleToken(document, "ControlHeightSmall", 34);
+        AssertDoubleToken(document, "NavigationHeight", 52);
+        AssertDoubleToken(document, "TitleBarHeight", 64);
+        AssertDoubleToken(document, "StatusBarHeight", 40);
 
         AssertDoubleToken(document, "IconSizeSmall", 16);
         AssertDoubleToken(document, "IconSizeBody", 20);
@@ -135,23 +144,38 @@ public class ThemeStyleTests
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
 
         var windowControl = FindStyle(document, x, "WindowControlButton");
-        AssertStyleSetter(windowControl, "Width", "48");
-        AssertStyleSetter(windowControl, "Height", "48");
+        AssertStyleSetter(windowControl, "Width", "40");
+        AssertStyleSetter(windowControl, "Height", "34");
 
         var nav = FindStyle(document, x, "NavRadioButton");
-        AssertStyleSetter(nav, "Height", "40");
+        AssertStyleSetter(nav, "Height", "{StaticResource NavigationHeight}");
         Assert.DoesNotContain(nav.Elements(), element =>
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == "Width");
 
         var toolbarToggle = FindStyle(document, x, "ToolbarToggleButton");
-        AssertStyleSetter(toolbarToggle, "MinWidth", "32");
-        AssertStyleSetter(toolbarToggle, "MinHeight", "32");
-        AssertStyleSetter(toolbarToggle, "Height", "32");
+        AssertStyleSetter(toolbarToggle, "MinWidth", "{StaticResource ControlHeightSmall}");
+        AssertStyleSetter(toolbarToggle, "MinHeight", "{StaticResource ControlHeightSmall}");
+        AssertStyleSetter(toolbarToggle, "Height", "{StaticResource ControlHeightSmall}");
 
         var toggleSwitch = FindStyle(document, x, "ToggleSwitch");
-        AssertStyleSetter(toggleSwitch, "Width", "48");
-        AssertStyleSetter(toggleSwitch, "Height", "24");
+        AssertStyleSetter(toggleSwitch, "Width", "44");
+        AssertStyleSetter(toggleSwitch, "Height", "26");
+    }
+
+    [Fact]
+    public void SurfaceButtonTemplateRespectsConfiguredBorderThickness()
+    {
+        var document = XDocument.Load(GetThemePath("Generic.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var style = FindStyle(document, x, "SurfaceButton");
+        var border = style.Descendants().First(element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute(x + "Name")?.Value == "border");
+
+        Assert.Equal(
+            "{TemplateBinding BorderThickness}",
+            border.Attribute("BorderThickness")?.Value);
     }
 
     [Fact]
@@ -656,7 +680,7 @@ public class ThemeStyleTests
 
         Assert.NotNull(style);
         AssertStyleSetter(style!, "Background", "Transparent");
-        AssertStyleSetter(style, "Width", "6");
+        AssertStyleSetter(style, "Width", "10");
 
         var templateSetter = style
             .Elements()

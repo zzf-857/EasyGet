@@ -682,6 +682,18 @@ public partial class SettingsViewModel : ObservableObject
                                          || record.LastSuccessUtc.Value >= record.LastFailureUtc.Value))
                     .OrderByDescending(record => record.LastSuccessUtc)
                     .FirstOrDefault();
+                var authenticatedSuccessful = health
+                    .Where(record => string.Equals(
+                                         record.PlatformId,
+                                         platform.StorageKey,
+                                         StringComparison.Ordinal)
+                                     && IsAuthenticatedCookieSource(record.Source)
+                                     && record.LastSuccessUtc.HasValue
+                                     && record.ConsecutiveFailures == 0
+                                     && (!record.LastFailureUtc.HasValue
+                                         || record.LastSuccessUtc.Value >= record.LastFailureUtc.Value))
+                    .OrderByDescending(record => record.LastSuccessUtc)
+                    .FirstOrDefault();
 
                 var item = CookiePlatformStatuses.FirstOrDefault(status =>
                     string.Equals(status.StorageKey, platform.StorageKey, StringComparison.Ordinal));
@@ -699,6 +711,7 @@ public partial class SettingsViewModel : ObservableObject
                 var browserLoginDetected = detection.TryGetProfile(
                     platform.StorageKey,
                     out var detectedProfile);
+                var authenticatedByHealth = authenticatedSuccessful is not null;
                 if (item.IsOperating)
                 {
                     if (successful is not null)
@@ -707,12 +720,17 @@ public partial class SettingsViewModel : ObservableObject
                 }
 
                 item.IsDetected = browserLoginDetected;
+                item.HasAuthenticatedSession = browserLoginDetected || authenticatedByHealth;
                 if (successful is not null)
                 {
                     verifiedPlatforms++;
                     item.IsAvailable = true;
                     item.NeedsLogin = false;
-                    item.StatusText = $"最近验证可用 · {DescribeCookieSource(successful.Source)}";
+                    item.StatusText = authenticatedByHealth
+                        ? $"最近验证可用 · {DescribeCookieSource(authenticatedSuccessful!.Source)}"
+                        : browserLoginDetected
+                            ? $"已检测到 {detectedProfile.BrowserName} 登录状态 · 下载时自动读取 Cookie"
+                            : $"最近验证可用 · {DescribeCookieSource(successful.Source)}";
                 }
                 else if (browserLoginDetected)
                 {
@@ -723,6 +741,7 @@ public partial class SettingsViewModel : ObservableObject
                 else if (profiles.Count > 0)
                 {
                     item.IsAvailable = false;
+                    item.HasAuthenticatedSession = false;
                     item.NeedsLogin = detection.ReadableProfileCount > 0;
                     item.StatusText = detection.ReadableProfileCount > 0
                         ? "未检测到该平台登录 Cookie · 可点击浏览器登录"
@@ -731,6 +750,7 @@ public partial class SettingsViewModel : ObservableObject
                 else
                 {
                     item.IsAvailable = false;
+                    item.HasAuthenticatedSession = false;
                     item.NeedsLogin = true;
                     item.StatusText = "未发现可复用浏览器配置，首次使用时需要登录";
                 }
@@ -775,6 +795,11 @@ public partial class SettingsViewModel : ObservableObject
             _ => "本地登录状态"
         };
 
+    private static bool IsAuthenticatedCookieSource(CookieSourceKind source)
+        => source is CookieSourceKind.LegacyScoped
+            or CookieSourceKind.Browser
+            or CookieSourceKind.ManagedSession;
+
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task LoginPlatform(CookiePlatformStatusItem? item)
     {
@@ -807,6 +832,7 @@ public partial class SettingsViewModel : ObservableObject
             browserOpened = true;
             item.IsAvailable = false;
             item.IsDetected = false;
+            item.HasAuthenticatedSession = false;
             item.NeedsLogin = false;
             item.StatusText = "已打开系统默认浏览器 · 请完成登录，EasyGet 正在自动检测（最多 3 分钟）";
 
@@ -817,6 +843,7 @@ public partial class SettingsViewModel : ObservableObject
             if (waitResult.Profile is not null)
             {
                 item.IsDetected = true;
+                item.HasAuthenticatedSession = true;
                 item.NeedsLogin = false;
                 item.StatusText = $"已检测到 {waitResult.Profile.BrowserName} 登录状态 · 下载时将优先读取此配置";
                 UpdateCookieStatusSummary(
@@ -827,6 +854,7 @@ public partial class SettingsViewModel : ObservableObject
             }
 
             item.IsDetected = false;
+            item.HasAuthenticatedSession = false;
             item.NeedsLogin = waitResult.AnyReadableProfile;
             item.StatusText = waitResult.AnyUnreadableProfile
                 ? "未能读取正在使用的浏览器 Cookie · 请关闭浏览器后重新扫描，或使用兼容登录"
@@ -967,6 +995,7 @@ public partial class SettingsViewModel : ObservableObject
                     CookieFailureCategory.AuthenticationRequired,
                     cancellationToken);
                 item.IsAvailable = false;
+                item.HasAuthenticatedSession = false;
                 item.NeedsLogin = true;
                 item.StatusText = "未完成兼容登录；系统浏览器登录状态不受影响";
                 return;
@@ -982,6 +1011,7 @@ public partial class SettingsViewModel : ObservableObject
                 profile: null,
                 cancellationToken);
             item.IsAvailable = true;
+            item.HasAuthenticatedSession = true;
             item.NeedsLogin = false;
             item.StatusText = "兼容登录成功 · Cookie 已加密保存";
         }
@@ -992,6 +1022,7 @@ public partial class SettingsViewModel : ObservableObject
         catch (Exception)
         {
             item.IsAvailable = false;
+            item.HasAuthenticatedSession = false;
             item.NeedsLogin = true;
             item.StatusText = "兼容登录失败，请重试或检查 WebView2 运行环境";
         }
@@ -1039,6 +1070,7 @@ public partial class SettingsViewModel : ObservableObject
             }
 
             item.IsAvailable = false;
+            item.HasAuthenticatedSession = false;
             item.NeedsLogin = true;
             item.StatusText = "EasyGet 登录数据已清除；系统浏览器登录不受影响";
             return true;

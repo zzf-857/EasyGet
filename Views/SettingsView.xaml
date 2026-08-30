@@ -6,28 +6,31 @@
 
     <UserControl.Resources>
         <Style x:Key="SettingsRow" TargetType="Border">
-            <Setter Property="MinHeight" Value="56"/>
-            <Setter Property="Padding" Value="0,8"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="MinHeight" Value="76"/>
+            <Setter Property="Padding" Value="19,16"/>
+            <Setter Property="Background" Value="{DynamicResource BgSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="0,0,0,1"/>
         </Style>
         <Style x:Key="SettingsNavItem" TargetType="RadioButton" BasedOn="{StaticResource NavRadioButton}">
-            <Setter Property="Height" Value="40"/>
-            <Setter Property="Margin" Value="0,0,0,4"/>
+            <Setter Property="GroupName" Value="SettingsCategories"/>
+            <Setter Property="Height" Value="44"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+            <Setter Property="Padding" Value="13,0"/>
         </Style>
         <Style x:Key="DangerActionButton" TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
             <Setter Property="Foreground" Value="{StaticResource ErrorBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource ErrorBrush}"/>
-            <Setter Property="Height" Value="32"/>
-            <Setter Property="Padding" Value="12,4"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="12,5"/>
         </Style>
         <Style x:Key="SliderValueBadge" TargetType="Border">
-            <Setter Property="Height" Value="32"/>
+            <Setter Property="Height" Value="34"/>
             <Setter Property="Margin" Value="12,0,0,0"/>
-            <Setter Property="Background" Value="{StaticResource BgInputBrush}"/>
-            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource BgInputBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="CornerRadius" Value="9"/>
         </Style>
         <Style x:Key="SliderValueText" TargetType="TextBlock" BasedOn="{StaticResource TextBodyStrong}">
             <Setter Property="HorizontalAlignment" Value="Center"/>
@@ -55,12 +58,12 @@
             </Style.Triggers>
         </Style>
         <Style x:Key="PerformanceRiskPanel" TargetType="Border">
-            <Setter Property="MinHeight" Value="32"/>
-            <Setter Property="Padding" Value="10,4"/>
-            <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Setter Property="Background" Value="{DynamicResource BgSurfaceHighBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="CornerRadius" Value="9"/>
             <Style.Triggers>
                 <Trigger Property="Tag" Value="Warning">
                     <Setter Property="BorderBrush" Value="{StaticResource WarningBrush}"/>
@@ -93,61 +96,140 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
+        <Style x:Key="SettingsPanelHeader" TargetType="Border">
+            <Setter Property="MinHeight" Value="60"/>
+            <Setter Property="Padding" Value="19,14"/>
+            <Setter Property="Background" Value="{DynamicResource BgSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderSubtleBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        </Style>
+        <Style x:Key="CookiePlatformMark" TargetType="Border">
+            <Setter Property="Width" Value="38"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Background" Value="{StaticResource BgSurfaceHighBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderPrimaryBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="10"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="CookieSuccessBadge" TargetType="Border">
+            <Setter Property="MinWidth" Value="92"/>
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Background" Value="{StaticResource SuccessContainerBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SuccessBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="9"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Right"/>
+        </Style>
+        <Style x:Key="CookieCompatibleLoginButton" TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="12,5"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding HasAuthenticatedSession}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
     </UserControl.Resources>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="200"/>
-            <ColumnDefinition Width="*"/>
-        </Grid.ColumnDefinitions>
+    <Grid Margin="24,20,24,22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-        <Border Grid.Column="0" Background="{StaticResource BgPrimaryBrush}"
-                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
-            <StackPanel Margin="8,16">
-                <StackPanel Margin="8,0,0,12">
-                    <TextBlock Text="设置" Style="{StaticResource TextPageTitle}"/>
-                    <TextBlock Text="环境、下载、登录与性能"
-                               Style="{StaticResource TextPageSubtitle}"/>
-                </StackPanel>
+        <StackPanel>
+            <TextBlock Text="应用设置"
+                       Foreground="{DynamicResource AccentBrush}"
+                       FontSize="{StaticResource FontSizeCaption}"
+                       FontWeight="SemiBold"/>
+            <TextBlock Text="设置" Margin="0,7,0,0" Style="{StaticResource TextPageTitle}"/>
+            <TextBlock Text="{Binding SettingsCategoryDescription}" Margin="0,7,0,0"
+                       Style="{StaticResource TextPageSubtitle}"/>
+        </StackPanel>
 
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="常规"
+        <Grid Grid.Row="1" Margin="0,20,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="208"/>
+                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0"
+                    Padding="8"
+                    VerticalAlignment="Top"
+                    Background="{DynamicResource BgSurfaceBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="16">
+                <StackPanel>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="常规"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=常规}"/>
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="下载"
+                             ToolTip="常规" AutomationProperties.Name="常规"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=常规}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE713;" Style="{StaticResource IconGlyph}"/><TextBlock Text="常规" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="下载"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=下载}"/>
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="网络"
+                             ToolTip="下载" AutomationProperties.Name="下载"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=下载}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE896;" Style="{StaticResource IconGlyph}"/><TextBlock Text="下载" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="网络"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=网络}"/>
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="账号与 Cookie"
+                             ToolTip="网络" AutomationProperties.Name="网络"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=网络}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE774;" Style="{StaticResource IconGlyph}"/><TextBlock Text="网络" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="账号与 Cookie"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=账号与 Cookie}"/>
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="集成"
+                             ToolTip="账号与 Cookie" AutomationProperties.Name="账号与 Cookie"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=账号与 Cookie}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE72E;" Style="{StaticResource IconGlyph}"/><TextBlock Text="账号与 Cookie" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="集成"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=集成}"/>
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="更新与环境"
+                             ToolTip="集成" AutomationProperties.Name="集成"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=集成}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE950;" Style="{StaticResource IconGlyph}"/><TextBlock Text="集成" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="更新与环境"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=更新与环境}"/>
-                <RadioButton Style="{StaticResource SettingsNavItem}" Content="数据管理"
+                             ToolTip="更新与环境" AutomationProperties.Name="更新与环境"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=更新与环境}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE895;" Style="{StaticResource IconGlyph}"/><TextBlock Text="更新与环境" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource SettingsNavItem}"
                              Command="{Binding SelectCategoryCommand}" CommandParameter="数据管理"
-                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=数据管理}"/>
-            </StackPanel>
-        </Border>
+                             ToolTip="数据管理" AutomationProperties.Name="数据管理"
+                             IsChecked="{Binding SelectedCategory, Converter={StaticResource EqualsToBoolConverter}, ConverterParameter=数据管理}">
+                    <StackPanel Orientation="Horizontal"><TextBlock Width="24" Text="&#xE8B7;" Style="{StaticResource IconGlyph}"/><TextBlock Text="数据管理" Margin="11,0,0,0" VerticalAlignment="Center"/></StackPanel>
+                </RadioButton>
+                </StackPanel>
+            </Border>
 
-        <Grid Grid.Column="1" Margin="24,16,24,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-
-            <StackPanel Margin="0,0,0,12">
-                <TextBlock Text="{Binding SettingsCategoryTitle}" Style="{StaticResource TextSection}"/>
-                <TextBlock Text="{Binding SettingsCategoryDescription}" Style="{StaticResource TextPageSubtitle}"/>
-            </StackPanel>
-
-            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                          HorizontalContentAlignment="Stretch">
-                <Grid MaxWidth="1080" HorizontalAlignment="Left">
+            <ScrollViewer x:Name="SettingsContentScroll"
+                          Grid.Column="2"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          HorizontalContentAlignment="Left">
+                <Border MaxWidth="780"
+                        Width="{Binding ViewportWidth, ElementName=SettingsContentScroll}"
+                        HorizontalAlignment="Left"
+                        Background="{DynamicResource BgSurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderSubtleBrush}"
+                        BorderThickness="1"
+                        CornerRadius="16"
+                        ClipToBounds="True">
+                    <DockPanel LastChildFill="True">
+                        <Border DockPanel.Dock="Top" Style="{StaticResource SettingsPanelHeader}">
+                            <TextBlock Text="{Binding SettingsCategoryTitle}"
+                                       VerticalAlignment="Center"
+                                       Style="{StaticResource TextSection}"/>
+                        </Border>
+                        <Grid MaxWidth="1080" HorizontalAlignment="Stretch">
                     <!-- General -->
                     <StackPanel Visibility="{Binding SelectedCategory, Converter={StaticResource EqualsToVisibilityConverter}, ConverterParameter=常规}">
                         <Border Style="{StaticResource SettingsRow}">
@@ -247,7 +329,7 @@
                                     <TextBlock Text="默认保存目录" Style="{StaticResource TextBodyStrong}"/>
                                     <TextBlock Text="{Binding DefaultDownloadPath}" Margin="0,4,0,0" Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}"
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5" Style="{StaticResource SurfaceButton}"
                                         Command="{Binding BrowseDownloadPathCommand}" Content="更改目录"/>
                             </Grid>
                         </Border>
@@ -255,7 +337,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="默认下载格式" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="新任务默认使用的封装格式" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                                <ComboBox Grid.Column="1" Width="180" Height="32" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
+                                <ComboBox Grid.Column="1" Width="180" Height="34" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
                                           ItemsSource="{Binding FormatOptions}" SelectedItem="{Binding DefaultFormat}"/>
                             </Grid>
                         </Border>
@@ -263,7 +345,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="画质上限" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="支持多分辨率的平台将遵循此上限" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                                <ComboBox Grid.Column="1" Width="180" Height="32" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
+                                <ComboBox Grid.Column="1" Width="180" Height="34" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
                                           ItemsSource="{Binding QualityOptions}" SelectedItem="{Binding DefaultQuality}"/>
                             </Grid>
                         </Border>
@@ -286,7 +368,7 @@
                                     <TextBlock Text="合集检查间隔" Style="{StaticResource TextBodyStrong}"/>
                                     <TextBlock Text="手动检查始终可用；此间隔只控制运行期间的自动检查" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <ComboBox Grid.Column="1" Width="180" Height="32" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
+                                <ComboBox Grid.Column="1" Width="180" Height="34" HorizontalAlignment="Right" Style="{StaticResource DarkComboBox}"
                                           ItemsSource="{Binding CollectionRefreshIntervalOptions}"
                                           SelectedItem="{Binding CollectionRefreshIntervalHours, Mode=TwoWay}"
                                           ItemStringFormat="{}{0} 小时"
@@ -303,7 +385,7 @@
                                                    Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
                                     </StackPanel>
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Width="128" Height="32" Padding="10,4"
+                                        <Button Width="128" Height="34" Padding="10,5"
                                                 Style="{StaticResource SurfaceButton}"
                                                 Click="ShowPerformanceDetailsButton_Click"
                                                 ToolTip="查看性能估算依据、风险区间和实际连接预算"
@@ -313,7 +395,7 @@
                                                 <TextBlock Text="查看详细建议" Margin="6,0,0,0" VerticalAlignment="Center"/>
                                             </StackPanel>
                                         </Button>
-                                        <Button Width="128" Height="32" Margin="8,0,0,0" Padding="10,4"
+                                        <Button Width="128" Height="34" Margin="8,0,0,0" Padding="10,5"
                                                 Style="{StaticResource SurfaceButton}"
                                                 Command="{Binding ApplyRecommendedPerformanceSettingsCommand}"
                                                 ToolTip="自动应用当前设备建议的并发分片和同时任务数"
@@ -342,7 +424,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="并发分片" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="{Binding ConcurrentFragmentsDescriptionText}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                                <Grid Grid.Column="1" Width="340" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Grid Grid.Column="1" Width="292" HorizontalAlignment="Right" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="104"/></Grid.ColumnDefinitions>
                                     <Slider Grid.Column="0" Style="{StaticResource AccentSlider}"
                                             Minimum="{Binding Source={x:Static models:AppConfig.MinConcurrentFragments}, Mode=OneTime}"
@@ -362,7 +444,7 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="同时下载任务数" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="允许 1–12 个任务并行运行" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                                <Grid Grid.Column="1" Width="340" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Grid Grid.Column="1" Width="292" HorizontalAlignment="Right" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="104"/></Grid.ColumnDefinitions>
                                     <Slider Grid.Column="0" Style="{StaticResource AccentSlider}"
                                             Minimum="{Binding Source={x:Static models:AppConfig.MinConcurrentDownloadLimit}, Mode=OneTime}"
@@ -385,7 +467,7 @@
                                     <TextBlock Text="全局下载限速" Style="{StaticResource TextBodyStrong}"/>
                                     <TextBlock Text="应用于所有 yt-dlp 下载任务；0 为不限速，最高 1,024 MB/s" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/>
                                 </StackPanel>
-                                <Grid Grid.Column="1" Width="340" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                <Grid Grid.Column="1" Width="292" HorizontalAlignment="Right" VerticalAlignment="Center">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="116"/></Grid.ColumnDefinitions>
                                     <Slider Grid.Column="0" Style="{StaticResource AccentSlider}"
                                             Minimum="0"
@@ -415,14 +497,14 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="代理地址" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="HTTP、HTTPS 或 SOCKS5 地址" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                                <TextBox Grid.Column="1" Width="340" Height="32" HorizontalAlignment="Right" VerticalContentAlignment="Center" Style="{StaticResource DarkTextBox}"
+                                <TextBox Grid.Column="1" Width="292" Height="42" HorizontalAlignment="Right" VerticalContentAlignment="Center" Style="{StaticResource DarkTextBox}"
                                          Text="{Binding ProxyAddress, UpdateSourceTrigger=PropertyChanged}"/>
                             </Grid>
                         </Border>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="19,14,19,16">
                             <TextBlock Text="{Binding SettingsSaveStatusMessage}" Margin="0,0,12,0" VerticalAlignment="Center"
                                        Style="{StaticResource TextCaption}" Visibility="{Binding SettingsSaveStatusMessage, Converter={StaticResource StringToVisibility}}"/>
-                            <Button Height="32" Padding="16,4" Style="{StaticResource AccentButton}" Command="{Binding SaveSettingsCommand}" Content="保存网络设置"/>
+                            <Button Height="34" Padding="16,5" Style="{StaticResource AccentButton}" Command="{Binding SaveSettingsCommand}" Content="保存网络设置"/>
                         </StackPanel>
                     </StackPanel>
 
@@ -431,24 +513,66 @@
                         <Border Style="{StaticResource SettingsRow}">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="智能 Cookie" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="按平台选择系统浏览器或 EasyGet 登录状态" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel><ToggleButton Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding SmartCookieEnabled}"/></Grid>
                         </Border>
-                        <Grid Margin="0,12,0,8">
+                        <Grid Margin="19,14,19,8">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="平台状态" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="{Binding CookieStatusSummary}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                            <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}"
+                            <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5" Style="{StaticResource SurfaceButton}"
                                     Command="{Binding RefreshCookieStatusCommand}" Content="重新扫描"/>
                         </Grid>
                         <ItemsControl ItemsSource="{Binding CookiePlatformStatuses}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border MinHeight="48" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                                    <Border MinHeight="70" BorderBrush="{DynamicResource BorderSubtleBrush}" BorderThickness="0,0,0,1" Padding="19,14">
                                         <Grid>
-                                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                            <StackPanel VerticalAlignment="Center" Margin="0,0,16,0">
-                                                <TextBlock Text="{Binding DisplayName}" Style="{StaticResource TextBodyStrong}"/>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="38"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0" Style="{StaticResource CookiePlatformMark}"
+                                                    ToolTip="{Binding DisplayName}"
+                                                    AutomationProperties.Name="{Binding DisplayName, StringFormat={}{0} 平台图标}">
+                                                <Grid>
+                                                    <TextBlock Text="{Binding PlatformMark}"
+                                                               FontFamily="{StaticResource FontFamilyMono}"
+                                                               FontSize="{StaticResource FontSizeMicro}"
+                                                               Foreground="{StaticResource TextMutedBrush}"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               TextAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource TextBodyStrong}">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding PlatformIcon}" Value="{x:Null}">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <Image Source="{Binding PlatformIcon}"
+                                                           Width="26" Height="26" Stretch="Uniform"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           SnapsToDevicePixels="True"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                </Grid>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,16,0" MinWidth="0">
+                                                <TextBlock Text="{Binding DisplayName}" Style="{StaticResource TextBodyStrong}" TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding StatusText}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis"/>
                                             </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <Button Height="32" MinWidth="104" Padding="12,4" CommandParameter="{Binding}">
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Border Style="{StaticResource CookieSuccessBadge}"
+                                                        Visibility="{Binding HasAuthenticatedSession, Converter={StaticResource BoolToVisibility}}"
+                                                        ToolTip="已检测到可用登录状态"
+                                                        AutomationProperties.Name="登录有效">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="&#xE73E;" Style="{StaticResource IconGlyph}" FontSize="14" Foreground="{StaticResource SuccessBrush}"/>
+                                                        <TextBlock Text="登录有效" Margin="6,0,0,0" Style="{StaticResource TextBodyStrong}" Foreground="{StaticResource SuccessBrush}"/>
+                                                    </StackPanel>
+                                                </Border>
+                                                <Button Height="34" MinWidth="104" Padding="12,5" CommandParameter="{Binding}">
                                                     <Button.Style>
                                                         <Style TargetType="Button" BasedOn="{StaticResource SurfaceButton}">
                                                             <Setter Property="Content" Value="登录并检测"/>
@@ -460,14 +584,17 @@
                                                                     <Setter Property="AutomationProperties.Name" Value="取消登录检测"/>
                                                                     <Setter Property="Command" Value="{Binding DataContext.CancelPlatformLoginCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"/>
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding HasAuthenticatedSession}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Button.Style>
                                                 </Button>
-                                                <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource SurfaceButton}" Content="兼容登录"
-                                                        IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
-                                                        Command="{Binding DataContext.CompatibleLoginPlatformCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
-                                                <Button Width="32" Height="32" Padding="0" Margin="8,0,0,0" Style="{StaticResource ToolbarIconButton}"
+                                                <Button Height="34" Padding="12,5" Margin="8,0,0,0" Style="{StaticResource CookieCompatibleLoginButton}" Content="兼容登录"
+                                                         IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
+                                                         Command="{Binding DataContext.CompatibleLoginPlatformCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" CommandParameter="{Binding}"/>
+                                                <Button Width="34" Height="34" Padding="0" Margin="8,0,0,0" Style="{StaticResource ToolbarIconButton}"
                                                         IsEnabled="{Binding IsOperating, Converter={StaticResource InverseBool}}"
                                                         ToolTip="清除此平台的 EasyGet 登录数据"
                                                         AutomationProperties.Name="清除此平台的 EasyGet 登录数据"
@@ -481,10 +608,10 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <Expander Margin="0,16,0,0">
+                        <Expander Margin="19,16,19,16">
                             <Expander.Header><TextBlock Text="高级：手动导入 Cookie" Style="{StaticResource TextBodyStrong}"/></Expander.Header>
                             <StackPanel Margin="0,12,0,0">
-                                <ComboBox Height="32" Style="{StaticResource DarkComboBox}" ItemsSource="{Binding CookiePlatformOptions}"
+                                <ComboBox Height="42" Style="{StaticResource DarkComboBox}" ItemsSource="{Binding CookiePlatformOptions}"
                                           DisplayMemberPath="DisplayName" SelectedValuePath="StorageKey" SelectedValue="{Binding LegacyCookiePlatform}"/>
                                 <TextBox Height="120" Margin="0,8,0,0" Style="{StaticResource DarkTextBox}"
                                          Text="{Binding CookieContent, UpdateSourceTrigger=LostFocus}" AcceptsReturn="True"
@@ -494,7 +621,7 @@
                                 <Grid Margin="0,8,0,0">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                     <TextBlock Grid.Column="0" Text="{Binding ManualCookieStatusText}" Margin="0,0,16,0" Style="{StaticResource TextCaption}" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                                    <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,0" Style="{StaticResource AccentButton}"
+                                    <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5" Style="{StaticResource AccentButton}"
                                             Command="{Binding SaveSettingsCommand}" Content="加密保存"/>
                                 </Grid>
                             </StackPanel>
@@ -510,38 +637,38 @@
                                 <TextBlock Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center" Text="{Binding TgLoginStatusText}" Foreground="{DynamicResource AccentBrush}" Style="{StaticResource TextBodyStrong}"/>
                             </Grid>
                         </Border>
-                        <Grid Margin="0,12,0,0">
+                        <Grid Margin="19,14,19,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="152"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions><RowDefinition Height="40"/><RowDefinition Height="40"/><RowDefinition Height="40"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="50"/><RowDefinition Height="50"/><RowDefinition Height="50"/></Grid.RowDefinitions>
                             <TextBlock Text="API ID" VerticalAlignment="Center" Style="{StaticResource TextBody}"/>
-                            <TextBox Grid.Column="1" Height="32" MinWidth="320" Style="{StaticResource DarkTextBox}" Text="{Binding TgApiId, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBox Grid.Column="1" Height="42" MinWidth="320" HorizontalAlignment="Stretch" Style="{StaticResource DarkTextBox}" Text="{Binding TgApiId, UpdateSourceTrigger=PropertyChanged}"/>
                             <TextBlock Grid.Row="1" Text="API Hash" VerticalAlignment="Center" Style="{StaticResource TextBody}"/>
-                            <TextBox Grid.Row="1" Grid.Column="1" Height="32" MinWidth="320" Style="{StaticResource DarkTextBox}" Text="{Binding TgApiHash, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBox Grid.Row="1" Grid.Column="1" Height="42" MinWidth="320" HorizontalAlignment="Stretch" Style="{StaticResource DarkTextBox}" Text="{Binding TgApiHash, UpdateSourceTrigger=PropertyChanged}"/>
                             <TextBlock Grid.Row="2" Text="绑定手机号" VerticalAlignment="Center" Style="{StaticResource TextBody}"/>
-                            <TextBox Grid.Row="2" Grid.Column="1" Height="32" MinWidth="320" Style="{StaticResource DarkTextBox}" Text="{Binding TgPhoneNumber, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBox Grid.Row="2" Grid.Column="1" Height="42" MinWidth="320" HorizontalAlignment="Stretch" Style="{StaticResource DarkTextBox}" Text="{Binding TgPhoneNumber, UpdateSourceTrigger=PropertyChanged}"/>
                         </Grid>
-                        <Grid Margin="0,8,0,0" Visibility="{Binding ShowTgCodeInput, Converter={StaticResource BoolToVisibility}}">
+                        <Grid Margin="19,8,19,0" Visibility="{Binding ShowTgCodeInput, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="152"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <TextBlock Text="验证码" VerticalAlignment="Center" Style="{StaticResource TextBody}"/>
-                            <TextBox Grid.Column="1" Height="32" MinWidth="320" Style="{StaticResource DarkTextBox}" Text="{Binding TgVerificationCode, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBox Grid.Column="1" Height="42" MinWidth="320" HorizontalAlignment="Stretch" Style="{StaticResource DarkTextBox}" Text="{Binding TgVerificationCode, UpdateSourceTrigger=PropertyChanged}"/>
                         </Grid>
-                        <Grid Margin="0,8,0,0" Visibility="{Binding ShowTgPasswordInput, Converter={StaticResource BoolToVisibility}}">
+                        <Grid Margin="19,8,19,0" Visibility="{Binding ShowTgPasswordInput, Converter={StaticResource BoolToVisibility}}">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="152"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <TextBlock Text="两步验证密码" VerticalAlignment="Center" Style="{StaticResource TextBody}"/>
-                            <TextBox Grid.Column="1" Height="32" MinWidth="320" Style="{StaticResource DarkTextBox}" Text="{Binding TgTwoFactorPassword, UpdateSourceTrigger=PropertyChanged}"/>
+                            <TextBox Grid.Column="1" Height="42" MinWidth="320" HorizontalAlignment="Stretch" Style="{StaticResource DarkTextBox}" Text="{Binding TgTwoFactorPassword, UpdateSourceTrigger=PropertyChanged}"/>
                         </Grid>
-                        <TextBlock Text="{Binding TgStatusMessage}" Margin="0,8,0,0" Style="{StaticResource TextCaption}"
+                        <TextBlock Text="{Binding TgStatusMessage}" Margin="19,10,19,0" Style="{StaticResource TextCaption}"
                                    Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap"
                                    Visibility="{Binding TgStatusMessage, Converter={StaticResource StringToVisibility}}"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                            <Button Height="32" Padding="16,4" Style="{StaticResource AccentButton}" Content="发送验证码"
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="19,14,19,0">
+                            <Button Height="34" Padding="16,5" Style="{StaticResource AccentButton}" Content="发送验证码"
                                     Command="{Binding SendTgCodeCommand}" Visibility="{Binding ShowTgSendCodeButton, Converter={StaticResource BoolToVisibility}}"/>
-                            <Button Height="32" Padding="16,4" Style="{StaticResource AccentButton}" Content="确认验证码"
+                            <Button Height="34" Padding="16,5" Style="{StaticResource AccentButton}" Content="确认验证码"
                                     Command="{Binding SubmitTgCodeCommand}" Visibility="{Binding ShowTgSubmitCodeButton, Converter={StaticResource BoolToVisibility}}"/>
-                            <Button Height="32" Padding="16,4" Style="{StaticResource AccentButton}" Content="确认密码"
+                            <Button Height="34" Padding="16,5" Style="{StaticResource AccentButton}" Content="确认密码"
                                     Command="{Binding SubmitTgPasswordCommand}" Visibility="{Binding ShowTgPasswordInput, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
-                        <Expander Margin="0,16,0,0">
+                        <Expander Margin="19,16,19,16">
                             <Expander.Header><TextBlock Text="绑定指南" Style="{StaticResource TextBodyStrong}"/></Expander.Header>
                             <TextBlock Margin="0,8,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap">
                                 在 <Hyperlink NavigateUri="https://my.telegram.org" RequestNavigate="Hyperlink_RequestNavigate">my.telegram.org</Hyperlink> 创建 API 应用后填入 API ID、API Hash 和带国际区号的手机号,再完成验证码与两步验证。
@@ -562,17 +689,17 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="EasyGet" Style="{StaticResource TextBodyStrong}"/><TextBlock Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis"><Run Text="{Binding AppVersionText, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding AppRuntimeText, Mode=OneWay}"/></TextBlock></StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding CheckAppUpdateCommand}" Content="检查更新"/>
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5" Style="{StaticResource SurfaceButton}" Command="{Binding CheckAppUpdateCommand}" Content="检查更新"/>
                             </Grid>
                         </Border>
-                        <TextBlock Text="{Binding AppUpdateStatusMessage}" Margin="0,8,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding AppUpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
-                        <ProgressBar Height="4" Margin="0,8,0,0" Maximum="100"
+                        <TextBlock Text="{Binding AppUpdateStatusMessage}" Margin="19,10,19,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding AppUpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+                        <ProgressBar Height="4" Margin="19,8,19,0" Maximum="100"
                                      Style="{StaticResource AccentProgressBar}"
                                      Value="{Binding AppUpdateProgress}"
                                      Visibility="{Binding IsDownloadingAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                            <Button Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding DownloadAppUpdateCommand}" Content="下载更新包" Visibility="{Binding CanDownloadAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
-                            <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource AccentButton}" Command="{Binding InstallAppUpdateCommand}" Content="安装更新" Visibility="{Binding CanInstallAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="19,10,19,0">
+                            <Button Height="34" Padding="12,5" Style="{StaticResource SurfaceButton}" Command="{Binding DownloadAppUpdateCommand}" Content="下载更新包" Visibility="{Binding CanDownloadAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
+                            <Button Height="34" Padding="12,5" Margin="8,0,0,0" Style="{StaticResource AccentButton}" Command="{Binding InstallAppUpdateCommand}" Content="安装更新" Visibility="{Binding CanInstallAppUpdate, Converter={StaticResource BoolToVisibility}}"/>
                         </StackPanel>
                         <Border Style="{StaticResource SettingsRow}" Margin="0,8,0,0">
                             <Grid>
@@ -583,7 +710,7 @@
                                                Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding YtDlpVersionSummary}"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4"
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5"
                                         Style="{StaticResource SurfaceButton}" Command="{Binding UpdateYtDlpCommand}"
                                         IsEnabled="{Binding CanUpdateYtDlp}" Content="更新并应用"/>
                             </Grid>
@@ -601,10 +728,10 @@
                                                Style="{StaticResource TextMono}" TextTrimming="CharacterEllipsis"
                                                ToolTip="{Binding FfmpegVersionSummary}"/>
                                 </StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4"
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5"
                                         Style="{StaticResource SurfaceButton}" Command="{Binding CheckEnvironmentCommand}"
                                         IsEnabled="{Binding CanCheckEnvironment}" Content="重新检测"/>
-                                <Button Grid.Column="2" HorizontalAlignment="Right" Height="32" Padding="12,4" Margin="8,0,0,0"
+                                <Button Grid.Column="2" HorizontalAlignment="Right" Height="34" Padding="12,5" Margin="8,0,0,0"
                                         Style="{StaticResource SurfaceButton}" Command="{Binding UpdateFfmpegCommand}"
                                         IsEnabled="{Binding CanUpdateFfmpeg}" Content="更新并应用"/>
                             </Grid>
@@ -613,20 +740,20 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="抖音专项组件" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="{Binding DouyinSidecarHealthText}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextTrimming="CharacterEllipsis"/></StackPanel>
-                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding CheckDouyinSidecarHealthCommand}" Content="检测"/>
+                                <Button Grid.Column="1" HorizontalAlignment="Right" Height="34" Padding="12,5" Style="{StaticResource SurfaceButton}" Command="{Binding CheckDouyinSidecarHealthCommand}" Content="检测"/>
                             </Grid>
                         </Border>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
-                            <Button Height="32" Padding="16,4" Style="{StaticResource SurfaceButton}"
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="19,14,19,0">
+                            <Button Height="34" Padding="16,5" Style="{StaticResource SurfaceButton}"
                                     Command="{Binding CheckToolUpdatesCommand}"
                                     IsEnabled="{Binding CanCheckToolUpdates}" Content="检查组件更新"/>
-                            <Button Height="32" Padding="16,4" Margin="8,0,0,0"
+                            <Button Height="34" Padding="16,5" Margin="8,0,0,0"
                                     Style="{StaticResource AccentButton}" Command="{Binding InstallMissingToolsCommand}"
                                     IsEnabled="{Binding CanInstallMissingTools}" Content="安装缺失组件"/>
                         </StackPanel>
-                        <TextBlock Text="{Binding InstallStatusStage}" Margin="0,8,0,0" Style="{StaticResource TextCaption}" Visibility="{Binding InstallStatusStage, Converter={StaticResource StringToVisibility}}"/>
-                        <TextBlock Text="{Binding InstallStatusMessage}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding InstallStatusMessage, Converter={StaticResource StringToVisibility}}"/>
-                        <TextBlock Text="{Binding UpdateStatusMessage}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding UpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+                        <TextBlock Text="{Binding InstallStatusStage}" Margin="19,10,19,0" Style="{StaticResource TextCaption}" Visibility="{Binding InstallStatusStage, Converter={StaticResource StringToVisibility}}"/>
+                        <TextBlock Text="{Binding InstallStatusMessage}" Margin="19,4,19,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding InstallStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+                        <TextBlock Text="{Binding UpdateStatusMessage}" Margin="19,4,19,16" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding UpdateStatusMessage, Converter={StaticResource StringToVisibility}}"/>
                     </StackPanel>
 
                     <!-- Data management -->
@@ -636,8 +763,8 @@
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="用户数据备份" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="备份历史记录、整理文件夹和非敏感设置；不包含 Cookie 与登录凭据" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
                                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                                    <Button Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}" Command="{Binding RestoreDataBackupCommand}" Content="恢复"/>
-                                    <Button Height="32" Padding="12,4" Margin="8,0,0,0" Style="{StaticResource AccentButton}" Command="{Binding CreateDataBackupCommand}" Content="创建备份"/>
+                                    <Button Height="34" Padding="12,5" Style="{StaticResource SurfaceButton}" Command="{Binding RestoreDataBackupCommand}" Content="恢复"/>
+                                    <Button Height="34" Padding="12,5" Margin="8,0,0,0" Style="{StaticResource AccentButton}" Command="{Binding CreateDataBackupCommand}" Content="创建备份"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -645,12 +772,12 @@
                             <Grid>
                                 <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="诊断与支持" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="生成脱敏诊断包，用于排查环境、更新和下载失败" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel>
-                                <Button Grid.Column="1" Height="32" Padding="12,4" HorizontalAlignment="Right" Style="{StaticResource SurfaceButton}" Command="{Binding CreateSupportBundleCommand}" Content="生成诊断包"/>
+                                <Button Grid.Column="1" Height="34" Padding="12,5" HorizontalAlignment="Right" Style="{StaticResource SurfaceButton}" Command="{Binding CreateSupportBundleCommand}" Content="生成诊断包"/>
                             </Grid>
                         </Border>
-                        <TextBlock Text="{Binding DataManagementStatusMessage}" Margin="0,8,0,12" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding DataManagementStatusMessage, Converter={StaticResource StringToVisibility}}"/>
-                        <Border Padding="12,8" Margin="0,0,0,12" Background="{StaticResource ErrorContainerBrush}"
-                                BorderBrush="{StaticResource ErrorBrush}" BorderThickness="1" CornerRadius="6">
+                        <TextBlock Text="{Binding DataManagementStatusMessage}" Margin="19,10,19,12" Style="{StaticResource TextCaption}" TextWrapping="Wrap" Visibility="{Binding DataManagementStatusMessage, Converter={StaticResource StringToVisibility}}"/>
+                        <Border Padding="15,13" Margin="19,14,19,14" Background="{StaticResource ErrorContainerBrush}"
+                                BorderBrush="{StaticResource ErrorBrush}" BorderThickness="1" CornerRadius="12">
                             <TextBlock Text="这些操作会删除本机数据,执行前将再次确认。" Style="{StaticResource TextBody}" Foreground="{StaticResource ErrorBrush}"/>
                         </Border>
                         <Border Style="{StaticResource SettingsRow}">
@@ -669,7 +796,9 @@
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><StackPanel Grid.Column="0" Margin="0,0,16,0"><TextBlock Text="Telegram 会话" Style="{StaticResource TextBodyStrong}"/><TextBlock Text="{Binding TgLoginStatusText}" Margin="0,4,0,0" Style="{StaticResource TextCaption}" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource DangerActionButton}" Command="{Binding ConfirmTgLogOutCommand}" Content="移除会话"/></Grid>
                         </Border>
                     </StackPanel>
-                </Grid>
+                        </Grid>
+                    </DockPanel>
+                </Border>
             </ScrollViewer>
         </Grid>
     </Grid>

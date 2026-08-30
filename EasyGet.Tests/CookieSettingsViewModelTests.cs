@@ -2,6 +2,7 @@ using EasyGet.Models;
 using EasyGet.Services;
 using EasyGet.Services.Cookies;
 using EasyGet.ViewModels;
+using System.Xml.Linq;
 using Xunit;
 
 namespace EasyGet.Tests;
@@ -44,7 +45,9 @@ public sealed class CookieSettingsViewModelTests
 
         Assert.Contains(
             viewModel.CookiePlatformStatuses,
-            item => item.PlatformId == "youtube" && item.IsAvailable);
+            item => item.PlatformId == "youtube"
+                    && item.IsAvailable
+                    && item.HasAuthenticatedSession);
         Assert.Contains("1 个浏览器配置", viewModel.CookieStatusSummary, StringComparison.Ordinal);
         Assert.DoesNotContain("Secret Profile", viewModel.CookieStatusSummary, StringComparison.Ordinal);
         Assert.DoesNotContain("secret", viewModel.CookieStatusSummary, StringComparison.OrdinalIgnoreCase);
@@ -53,8 +56,54 @@ public sealed class CookieSettingsViewModelTests
             item => item.StatusText.Contains("Secret Profile", StringComparison.Ordinal));
         var unverified = viewModel.CookiePlatformStatuses.Single(item => item.PlatformId == "twitter");
         Assert.False(unverified.IsAvailable);
+        Assert.False(unverified.HasAuthenticatedSession);
         Assert.False(unverified.NeedsLogin);
         Assert.Contains("自动尝试", unverified.StatusText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(CookieSourceKind.Anonymous, false)]
+    [InlineData(CookieSourceKind.Browser, true)]
+    [InlineData(CookieSourceKind.ManagedSession, true)]
+    [InlineData(CookieSourceKind.LegacyScoped, true)]
+    public async Task RefreshCookieStatusAsync_OnlyAuthenticatedSourcesMarkSession(
+        CookieSourceKind source,
+        bool expectedAuthenticatedSession)
+    {
+        using var root = new TestDirectory();
+        var config = new ConfigService(root.Path("config"));
+        using var history = new HistoryService(root.Path("history.db"));
+        var environment = new EnvironmentService();
+        var manager = new DownloadManager(
+            new YtDlpService(config, environment),
+            history,
+            config);
+        var health = new CookieHealthRecord(
+            "youtube",
+            source,
+            "source",
+            DateTime.UtcNow,
+            null,
+            0,
+            CookieFailureCategory.None);
+        var viewModel = new SettingsViewModel(
+            config,
+            environment,
+            manager,
+            new TelegramDownloadService(config),
+            cookieProfiles: new StaticBrowserProfiles([]),
+            cookieHealthStore: new StaticCookieHealthStore([health]),
+            managedLogin: new FakeManagedLoginSessionService());
+
+        await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
+
+        var youtube = viewModel.CookiePlatformStatuses.Single(item =>
+            item.PlatformId == "youtube");
+        Assert.True(youtube.IsAvailable);
+        Assert.False(youtube.IsDetected);
+        Assert.Equal(expectedAuthenticatedSession, youtube.HasAuthenticatedSession);
+        if (source == CookieSourceKind.Anonymous)
+            Assert.Contains("公开访问", youtube.StatusText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -93,6 +142,7 @@ public sealed class CookieSettingsViewModelTests
             item.PlatformId == "youtube");
         Assert.True(youtube.IsDetected);
         Assert.False(youtube.IsAvailable);
+        Assert.True(youtube.HasAuthenticatedSession);
         Assert.False(youtube.NeedsLogin);
         Assert.Contains("已检测到 Edge 登录状态", youtube.StatusText, StringComparison.Ordinal);
         Assert.Contains("检测到 1 个平台登录", viewModel.CookieStatusSummary, StringComparison.Ordinal);
@@ -173,6 +223,7 @@ public sealed class CookieSettingsViewModelTests
             Assert.Single(browserLauncher.OpenedUris));
         Assert.False(item.IsAvailable);
         Assert.True(item.IsDetected);
+        Assert.True(item.HasAuthenticatedSession);
         Assert.Contains("Edge", item.StatusText, StringComparison.Ordinal);
         Assert.Contains("优先读取", item.StatusText, StringComparison.Ordinal);
     }
@@ -430,6 +481,7 @@ public sealed class CookieSettingsViewModelTests
             await vault.LoadAsync("youtube", CancellationToken.None),
             StringComparison.Ordinal);
         Assert.True(item.IsAvailable);
+        Assert.True(item.HasAuthenticatedSession);
         Assert.Contains("兼容登录成功", item.StatusText, StringComparison.Ordinal);
     }
 
@@ -464,6 +516,7 @@ public sealed class CookieSettingsViewModelTests
         Assert.Equal(CookieSourceKind.ManagedSession, failure.Source);
         Assert.Equal(CookieFailureCategory.AuthenticationRequired, failure.Category);
         Assert.False(item.IsAvailable);
+        Assert.False(item.HasAuthenticatedSession);
         Assert.True(item.NeedsLogin);
     }
 
@@ -493,6 +546,7 @@ public sealed class CookieSettingsViewModelTests
         await viewModel.CompatibleLoginPlatformCommand.ExecuteAsync(item);
 
         Assert.Contains("兼容登录失败", item.StatusText, StringComparison.Ordinal);
+        Assert.False(item.HasAuthenticatedSession);
         Assert.DoesNotContain("Secret Session", item.StatusText, StringComparison.Ordinal);
         Assert.DoesNotContain("secret-value", item.StatusText, StringComparison.Ordinal);
     }
@@ -566,11 +620,13 @@ public sealed class CookieSettingsViewModelTests
             cookieCoordinator: coordinator);
         await viewModel.RefreshCookieStatusCommand.ExecuteAsync(null);
         var item = viewModel.CookiePlatformStatuses.Single(status => status.PlatformId == "youtube");
+        item.HasAuthenticatedSession = true;
 
         await viewModel.ClearPlatformSessionCommand.ExecuteAsync(item);
 
         Assert.Equal(["youtube"], managed.ClearedPlatformIds);
         Assert.Equal(["youtube"], health.ClearedPlatformIds);
+        Assert.False(item.HasAuthenticatedSession);
         Assert.True(item.NeedsLogin);
         Assert.Contains("已清除", item.StatusText, StringComparison.Ordinal);
     }
@@ -1026,6 +1082,7 @@ public sealed class CookieSettingsViewModelTests
     public void SettingsXaml_UsesSmartCookieCommandsAndKeepsManualImportAdvanced()
     {
         var xaml = File.ReadAllText(TestRepositoryPaths.GetViewPath("SettingsView.xaml"));
+        var document = XDocument.Parse(xaml);
 
         Assert.Contains("账号与 Cookie", xaml, StringComparison.Ordinal);
         Assert.Contains("智能 Cookie", xaml, StringComparison.Ordinal);
@@ -1048,6 +1105,79 @@ public sealed class CookieSettingsViewModelTests
         Assert.Contains("AutomationProperties.Name", xaml, StringComparison.Ordinal);
         Assert.Contains("按平台选择系统浏览器或 EasyGet 登录状态", xaml, StringComparison.Ordinal);
         Assert.DoesNotContain("最后才显示一次平台登录窗口", xaml, StringComparison.Ordinal);
+
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Image"
+            && element.Attribute("Source")?.Value == "{Binding PlatformIcon}"
+            && element.Attribute("Stretch")?.Value == "Uniform");
+
+        var successText = Assert.Single(document.Descendants(), element =>
+            element.Name.LocalName == "TextBlock"
+            && element.Attribute("Text")?.Value == "登录有效");
+        Assert.DoesNotContain(successText.Ancestors(), element =>
+            element.Name.LocalName == "Button");
+        var successBorder = successText.Ancestors().First(element =>
+            element.Name.LocalName == "Border");
+        Assert.Contains(
+            "HasAuthenticatedSession",
+            successBorder.Attribute("Visibility")?.Value,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(document.Descendants(), element =>
+            element.Name.LocalName == "Button"
+            && element.Attribute("Content")?.Value == "登录有效");
+
+        var browserLoginButton = Assert.Single(document.Descendants(), element =>
+            element.Name.LocalName == "Button"
+            && element.Descendants().Any(descendant =>
+                descendant.Name.LocalName == "Setter"
+                && descendant.Attribute("Value")?.Value.Contains(
+                    "LoginPlatformCommand",
+                    StringComparison.Ordinal) == true));
+        Assert.Contains(browserLoginButton.Descendants(), IsAuthenticatedCollapseTrigger);
+
+        var compatibleLoginStyle = Assert.Single(document.Descendants(), element =>
+            element.Name.LocalName == "Style"
+            && element.Attributes().Any(attribute =>
+                attribute.Name.LocalName == "Key"
+                && attribute.Value == "CookieCompatibleLoginButton"));
+        Assert.Contains(compatibleLoginStyle.Descendants(), IsAuthenticatedCollapseTrigger);
+
+        static bool IsAuthenticatedCollapseTrigger(XElement element)
+            => element.Name.LocalName == "DataTrigger"
+               && element.Attribute("Binding")?.Value.Contains(
+                   "HasAuthenticatedSession",
+                   StringComparison.Ordinal) == true
+               && element.Descendants().Any(descendant =>
+                   descendant.Name.LocalName == "Setter"
+                   && descendant.Attribute("Property")?.Value == "Visibility"
+                   && descendant.Attribute("Value")?.Value == "Collapsed");
+    }
+
+    [Theory]
+    [InlineData("youtube", "YT", "youtube.png")]
+    [InlineData("bilibili", "BI", "bilibili.png")]
+    [InlineData("douyin", "DY", "douyin.png")]
+    [InlineData("tiktok", "TK", "tiktok.png")]
+    [InlineData("twitter", "X", "x-twitter.png")]
+    [InlineData("instagram", "IG", "instagram.png")]
+    [InlineData("facebook", "FB", "facebook.png")]
+    [InlineData("kuaishou", "KS", "kuaishou.png")]
+    [InlineData("xiaohongshu", "XHS", "xiaohongshu.png")]
+    [InlineData("weibo", "WB", "weibo.png")]
+    [InlineData("twitch", "TW", "twitch.png")]
+    public void CookiePlatformStatusItem_UsesBundledPlatformIcon(
+        string platformId,
+        string expectedMark,
+        string expectedFileName)
+    {
+        var item = CreatePlatformStatusItem(platformId);
+
+        Assert.Equal(expectedMark, item.PlatformMark);
+        Assert.NotNull(item.PlatformIcon);
+        Assert.True(item.PlatformIcon!.IsFrozen);
+        Assert.True(
+            File.Exists(TestRepositoryPaths.GetRootPath(Path.Combine("Assets", "Platforms", expectedFileName))),
+            $"Missing bundled platform icon: {expectedFileName}");
     }
 
     private sealed class StaticBrowserProfiles(IReadOnlyList<BrowserProfile> profiles)

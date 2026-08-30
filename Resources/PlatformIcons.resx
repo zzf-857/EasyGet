@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="youtube" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\youtube.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="bilibili" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\bilibili.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="douyin" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\douyin.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="tiktok" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\tiktok.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="x_twitter" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\x-twitter.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="instagram" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\instagram.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="facebook" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\facebook.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="kuaishou" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\kuaishou.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="xiaohongshu" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\xiaohongshu.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="weibo" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\weibo.png;System.Byte[], mscorlib</value>
+  </data>
+  <data name="twitch" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Assets\Platforms\twitch.png;System.Byte[], mscorlib</value>
+  </data>
+</root>

@@ -6,19 +6,15 @@ namespace EasyGet.Tests;
 public class XamlBindingTests
 {
     [Theory]
-    [InlineData("DownloadView.xaml")]
-    [InlineData("BatchDownloadView.xaml")]
-    [InlineData("HistoryView.xaml")]
-    [InlineData("SettingsView.xaml")]
-    public void PrimaryViewsUseDesignerWorkbenchSurfacesWithoutLegacyPanelCards(string viewFileName)
+    [InlineData("DownloadView.xaml", "DownloadPanel")]
+    [InlineData("BatchDownloadView.xaml", "BatchPanel")]
+    [InlineData("HistoryView.xaml", "ToolPanelBorder")]
+    [InlineData("SettingsView.xaml", "SettingsPanelHeader")]
+    public void PrimaryViewsUseDesignerWorkbenchSemanticSurfaces(string viewFileName, string surfaceKey)
     {
         var source = File.ReadAllText(GetViewPath(viewFileName));
 
-        Assert.True(
-            source.Contains("BgPrimaryBrush", StringComparison.Ordinal)
-            || source.Contains("BgSurfaceBrush", StringComparison.Ordinal)
-            || source.Contains("BgSidebarBrush", StringComparison.Ordinal));
-        Assert.DoesNotContain("ToolPanelBorder", source, StringComparison.Ordinal);
+        Assert.Contains($"StaticResource {surfaceKey}", source, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -74,8 +70,8 @@ public class XamlBindingTests
             .Where(element => element.Name.LocalName == "RowDefinition")
             .Select(element => element.Attribute("Height")?.Value)
             .ToList();
-        Assert.Contains("48", rowHeights);
-        Assert.Contains("32", rowHeights);
+        Assert.Contains("64", rowHeights);
+        Assert.Contains("40", rowHeights);
 
         Assert.Contains("Width=\"{Binding SidebarWidth}\"", source, StringComparison.Ordinal);
         Assert.Contains("TaskStatusText", source, StringComparison.Ordinal);
@@ -87,14 +83,14 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void MainWindowUsesResponsive216And56PixelSidebarAt1280Breakpoint()
+    public void MainWindowUsesResponsive232And74PixelSidebarAt1180Breakpoint()
     {
         var viewModel = File.ReadAllText(GetRootPath(Path.Combine("ViewModels", "MainViewModel.cs")));
         var codeBehind = File.ReadAllText(GetRootPath("MainWindow.xaml.cs"));
 
-        Assert.Contains("IsCompactLayout ? 56 : 216", viewModel, StringComparison.Ordinal);
-        Assert.Contains("ActualWidth < 1280", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("Width < 1280", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("IsCompactLayout ? 74 : 232", viewModel, StringComparison.Ordinal);
+        Assert.Contains("ActualWidth <= 1180", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("Width <= 1180", codeBehind, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -114,7 +110,7 @@ public class XamlBindingTests
     }
 
     [Fact]
-    public void MainWindowSidebarUsesSubtleDividerAndRealEngineFooter()
+    public void MainWindowSidebarUsesSubtleDividerAndNonInteractiveEngineFooter()
     {
         var document = XDocument.Load(GetRootPath("MainWindow.xaml"));
         var sidebar = document.Descendants().FirstOrDefault(element =>
@@ -136,9 +132,18 @@ public class XamlBindingTests
 
         Assert.Contains(engineFooter.Descendants().Attributes("Text"), attribute =>
             attribute.Value.Contains("ToolStatusText", StringComparison.Ordinal));
-        Assert.Contains(engineFooter.Descendants(), element =>
-            element.Name.LocalName == "Button"
-            && element.Attribute("CommandParameter")?.Value == "settings");
+        var engineStatusLabel = engineFooter.Descendants().Single(element =>
+            element.Name.LocalName == "Label"
+            && element.Attribute("AutomationProperties.Name")?.Value == "{Binding ToolStatusText}");
+        Assert.Equal(
+            "{Binding ToolStatusText}",
+            engineStatusLabel.Attribute("AutomationProperties.Name")?.Value);
+        Assert.Equal("False", engineStatusLabel.Attribute("Focusable")?.Value);
+        Assert.Equal("False", engineStatusLabel.Attribute("IsHitTestVisible")?.Value);
+        Assert.DoesNotContain(engineFooter.DescendantsAndSelf(), element =>
+            element.Name.LocalName == "Button");
+        Assert.DoesNotContain(engineFooter.DescendantsAndSelf().Attributes(), attribute =>
+            attribute.Name.LocalName is "Command" or "CommandParameter");
     }
 
     [Fact]
@@ -181,6 +186,7 @@ public class XamlBindingTests
         {
             Assert.Equal(expected[i].Item1, navItems[i].Page);
             Assert.Contains(expected[i].Item2, navItems[i].Binding);
+            Assert.Contains("Mode=TwoWay", navItems[i].Binding, StringComparison.Ordinal);
         }
     }
 
@@ -246,10 +252,78 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void DownloadViewStretchesItsResponsiveTwoColumnWorkspace()
+    {
+        var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
+        var root = document.Root!;
+        var scroller = root.Elements().Single(element =>
+            element.Name.LocalName == "ScrollViewer");
+        var viewport = scroller.Elements().Single(element =>
+            element.Name.LocalName == "Grid");
+        var content = viewport.Elements().Single(element =>
+            element.Name.LocalName == "Grid");
+        var workspace = content.Elements().Single(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Grid.Row")?.Value == "1");
+        var columns = workspace.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .ToArray();
+
+        Assert.Equal("Stretch", root.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Equal("Stretch", scroller.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Equal("Stretch", scroller.Attribute("VerticalContentAlignment")?.Value);
+        Assert.Equal("{Binding ViewportHeight, ElementName=DownloadViewportScroll}", viewport.Attribute("Height")?.Value);
+        Assert.Equal("940", viewport.Attribute("MinHeight")?.Value);
+        Assert.Equal("Stretch", content.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("Stretch", content.Attribute("VerticalAlignment")?.Value);
+        var contentRows = content.Elements()
+            .Single(element => element.Name.LocalName == "Grid.RowDefinitions")
+            .Elements()
+            .Select(element => element.Attribute("Height")?.Value)
+            .ToArray();
+        Assert.Equal(new[] { "Auto", "*" }, contentRows);
+        Assert.DoesNotContain(root.DescendantsAndSelf(), element =>
+            element.Attribute("MaxWidth")?.Value == "1540");
+        Assert.Collection(
+            columns,
+            column =>
+            {
+                Assert.Equal("1.62*", column.Attribute("Width")?.Value);
+                Assert.Equal("520", column.Attribute("MinWidth")?.Value);
+            },
+            column => Assert.Equal("16", column.Attribute("Width")?.Value),
+            column =>
+            {
+                Assert.Equal("0.82*", column.Attribute("Width")?.Value);
+                Assert.Equal("316", column.Attribute("MinWidth")?.Value);
+            });
+
+        var workspaceColumns = workspace.Elements()
+            .Where(element => element.Name.LocalName == "Grid"
+                              && element.Attribute("Grid.Column") is not null)
+            .ToArray();
+        var leftColumn = Assert.Single(workspaceColumns,
+            element => element.Attribute("Grid.Column")?.Value == "0");
+        var rightColumn = Assert.Single(workspaceColumns,
+            element => element.Attribute("Grid.Column")?.Value == "2");
+        Assert.Equal(new[] { "Auto", "16", "*" }, GetDirectGridRowHeights(leftColumn));
+        Assert.Equal(new[] { "Auto", "16", "*" }, GetDirectGridRowHeights(rightColumn));
+
+        var recentList = rightColumn.Descendants().Single(element =>
+            element.Name.LocalName == "ListBox"
+            && (element.Attribute("ItemsSource")?.Value ?? "").Contains("HistoryItems", StringComparison.Ordinal));
+        Assert.Null(recentList.Attribute("Height"));
+        Assert.Equal("180", recentList.Attribute("MinHeight")?.Value);
+    }
+
+    [Fact]
     public void DownloadViewUsesReadableParameterToolbarAndGlobalClipboardState()
     {
         var document = XDocument.Load(GetViewPath("DownloadView.xaml"));
         var source = document.ToString(SaveOptions.DisableFormatting);
+        var shellSource = File.ReadAllText(GetRootPath("MainWindow.xaml"));
         XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
         var optionsPanel = document.Descendants().FirstOrDefault(element =>
             element.Name.LocalName == "Border"
@@ -269,7 +343,7 @@ public class XamlBindingTests
         Assert.Contains("IsScheduledDownloadEnabled", source, StringComparison.Ordinal);
         Assert.Contains("ScheduledStartText", source, StringComparison.Ordinal);
         Assert.Contains("ScheduleValidationMessage", source, StringComparison.Ordinal);
-        Assert.Contains("ClipboardMonitoringEnabled", source, StringComparison.Ordinal);
+        Assert.Contains("ClipboardMonitoringEnabled", shellSource, StringComparison.Ordinal);
         Assert.Contains("RunPrimaryActionCommand", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowClipboardPrompt", source, StringComparison.Ordinal);
     }
@@ -350,7 +424,7 @@ public class XamlBindingTests
             columns,
             column =>
             {
-                Assert.Equal("400", column.Attribute("Width")?.Value);
+                Assert.Equal("390", column.Attribute("Width")?.Value);
                 Assert.Equal("320", column.Attribute("MinWidth")?.Value);
                 Assert.Equal("520", column.Attribute("MaxWidth")?.Value);
             },
@@ -369,6 +443,26 @@ public class XamlBindingTests
         Assert.Equal("True", splitter.Attribute("ShowsPreview")?.Value);
         Assert.Equal("16", splitter.Attribute("KeyboardIncrement")?.Value);
         Assert.Equal("True", splitter.Attribute("IsTabStop")?.Value);
+
+        var optionsScroller = document.Descendants().Single(element =>
+            element.Name.LocalName == "ScrollViewer"
+            && element.Attribute("Grid.Row")?.Value == "2"
+            && element.Descendants().Any(descendant =>
+                descendant.Attribute("Command")?.Value == "{Binding ImportPlaylistCommand}"));
+        Assert.Equal("Auto", optionsScroller.Attribute("VerticalScrollBarVisibility")?.Value);
+
+        var queueFilters = document.Descendants()
+            .Where(element => element.Name.LocalName == "RadioButton")
+            .Where(element => element.Attribute("GroupName")?.Value == "BatchQueueFilters")
+            .ToList();
+        Assert.Equal(7, queueFilters.Count);
+        Assert.All(queueFilters, filter => Assert.Equal("WrapPanel", filter.Parent?.Name.LocalName));
+
+        var queueTitleEditor = document.Descendants().Single(element =>
+            element.Name.LocalName == "TextBox"
+            && (element.Attribute("Text")?.Value ?? "").Contains("Title", StringComparison.Ordinal)
+            && element.Attribute("ToolTip")?.Value == "点击可自定义修改视频名称");
+        Assert.Equal("32", queueTitleEditor.Attribute("Height")?.Value);
 
         var queueSurface = rootGrid.Elements()
             .Single(element => element.Name.LocalName == "Grid"
@@ -546,23 +640,23 @@ public class XamlBindingTests
         var rail = document.Descendants().Single(element =>
             element.Name.LocalName == "Border"
             && element.Attribute(x + "Name")?.Value == "HistoryFolderRailHost");
-        Assert.Equal("268", rail.Attribute("Width")?.Value);
-        Assert.Equal("240", rail.Attribute("MinWidth")?.Value);
-        Assert.Equal("420", rail.Attribute("MaxWidth")?.Value);
+        Assert.Equal("236", rail.Attribute("Width")?.Value);
+        Assert.Equal("220", rail.Attribute("MinWidth")?.Value);
+        Assert.Equal("360", rail.Attribute("MaxWidth")?.Value);
         Assert.Contains("HistoryFolderRail", rail.Attribute("Style")?.Value ?? "", StringComparison.Ordinal);
 
         var resizeThumb = document.Descendants().Single(element =>
             element.Name.LocalName == "Thumb"
             && element.Attribute(x + "Name")?.Value == "HistoryFolderRailResizeThumb");
-        Assert.Equal("6", resizeThumb.Attribute("Width")?.Value);
+        Assert.Equal("16", resizeThumb.Attribute("Width")?.Value);
         Assert.Equal("HistoryFolderRailResizeThumb_DragDelta", resizeThumb.Attribute("DragDelta")?.Value);
         Assert.Equal("HistoryFolderRailResizeThumb_PreviewKeyDown", resizeThumb.Attribute("PreviewKeyDown")?.Value);
         Assert.Equal("True", resizeThumb.Attribute("IsTabStop")?.Value);
         Assert.Contains("HistoryFolderRailResizeThumb", resizeThumb.Attribute("Style")?.Value ?? "", StringComparison.Ordinal);
         Assert.Contains("Cursor=\"SizeWE\"", source, StringComparison.Ordinal);
         Assert.Contains("Math.Clamp", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("HistoryFolderRailMinWidth = 240", codeBehind, StringComparison.Ordinal);
-        Assert.Contains("HistoryFolderRailMaxWidth = 420", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("HistoryFolderRailMinWidth = 220", codeBehind, StringComparison.Ordinal);
+        Assert.Contains("HistoryFolderRailMaxWidth = 360", codeBehind, StringComparison.Ordinal);
 
         var compactFolders = document.Descendants().Single(element =>
             element.Name.LocalName == "Grid"
@@ -585,21 +679,8 @@ public class XamlBindingTests
         var historyContentHost = document.Descendants().Single(element =>
             element.Name.LocalName == "Grid"
             && element.Attribute(x + "Name")?.Value == "HistoryContentHost");
-        var historyContentStyle = historyContentHost.Elements()
-            .Single(element => element.Name.LocalName == "Grid.Style")
-            .Elements()
-            .Single(element => element.Name.LocalName == "Style");
-        Assert.Contains(historyContentStyle.Elements(), element =>
-            element.Name.LocalName == "Setter"
-            && element.Attribute("Property")?.Value == "Margin"
-            && element.Attribute("Value")?.Value == "16,0,0,0");
-        Assert.Contains(historyContentStyle.Descendants(), element =>
-            element.Name.LocalName == "DataTrigger"
-            && (element.Attribute("Binding")?.Value ?? "").Contains("IsCompactLayout", StringComparison.Ordinal)
-            && element.Descendants().Any(setter =>
-                setter.Name.LocalName == "Setter"
-                && setter.Attribute("Property")?.Value == "Margin"
-                && setter.Attribute("Value")?.Value == "0"));
+        Assert.Equal("2", historyContentHost.Parent?.Attribute("Grid.Column")?.Value);
+        Assert.Contains("ToolPanelBorder", historyContentHost.Parent?.Attribute("Style")?.Value ?? "", StringComparison.Ordinal);
         Assert.Contains("CompactHistoryFolders", source, StringComparison.Ordinal);
         Assert.Contains("IsCompactLayout", source, StringComparison.Ordinal);
         Assert.Contains("CompactFolderCombo_SelectionChanged", source, StringComparison.Ordinal);
@@ -683,15 +764,30 @@ public class XamlBindingTests
         var codeBehind = File.ReadAllText(GetViewPath("HistoryView.xaml.cs"));
         var card = document.Descendants().FirstOrDefault(element =>
             element.Name.LocalName == "Grid"
-            && element.Attribute("Width")?.Value == "252"
-            && element.Attribute("Height")?.Value == "240");
+            && element.Attribute("Width")?.Value == "266"
+            && element.Attribute("Height")?.Value == "340");
 
         Assert.Contains("HistoryCardRows", source, StringComparison.Ordinal);
         Assert.Contains("HistoryList_SizeChanged", source, StringComparison.Ordinal);
         Assert.Contains("ItemsSource=\"{Binding HistoryCardRows}\"", source, StringComparison.Ordinal);
         Assert.NotNull(card);
-        Assert.Equal("0,0,16,16", card!.Attribute("Margin")?.Value);
-        Assert.Contains("private const double HistoryCardSlotWidth = 268;", codeBehind, StringComparison.Ordinal);
+        Assert.Equal("0,0,14,14", card!.Attribute("Margin")?.Value);
+        Assert.Contains("private const double HistoryCardSlotWidth = 280;", codeBehind, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HistoryListUsesPixelScrollingWithRecyclingVirtualization()
+    {
+        var document = XDocument.Load(GetViewPath("HistoryView.xaml"));
+        var x = XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml");
+        var historyList = document.Descendants()
+            .Single(element => element.Name.LocalName == "ListBox"
+                               && element.Attribute(x + "Name")?.Value == "HistoryList");
+
+        Assert.Equal("True", historyList.Attribute("ScrollViewer.CanContentScroll")?.Value);
+        Assert.Equal("Pixel", historyList.Attribute("VirtualizingPanel.ScrollUnit")?.Value);
+        Assert.Equal("True", historyList.Attribute("VirtualizingPanel.IsVirtualizing")?.Value);
+        Assert.Equal("Recycling", historyList.Attribute("VirtualizingPanel.VirtualizationMode")?.Value);
     }
 
     [Fact]
@@ -701,7 +797,7 @@ public class XamlBindingTests
         var source = document.ToString(SaveOptions.DisableFormatting);
         var searchColumn = document.Descendants().FirstOrDefault(element =>
             element.Name.LocalName == "ColumnDefinition"
-            && element.Attribute("Width")?.Value == "280");
+            && element.Attribute("Width")?.Value == "300");
 
         Assert.NotNull(searchColumn);
         Assert.Contains("SearchKeyword", source, StringComparison.Ordinal);
@@ -725,7 +821,7 @@ public class XamlBindingTests
         Assert.Contains("DisplayMemberPath=\"DisplayName\"", source, StringComparison.Ordinal);
         Assert.Contains("BulkTargetFolderPlaceholderText", source, StringComparison.Ordinal);
         Assert.Contains("IsEnabled=\"{Binding HasBulkTargetFolders}\"", source, StringComparison.Ordinal);
-        Assert.Contains("CurrentLocationPathText", source, StringComparison.Ordinal);
+        Assert.Contains("Text=\"{Binding CurrentLocationPathText, Mode=OneWay}\"", source, StringComparison.Ordinal);
         Assert.Contains("CurrentLocationFileCountText", source, StringComparison.Ordinal);
         Assert.Contains("CurrentLocationSizeText", source, StringComparison.Ordinal);
         Assert.Contains("CreateFolderCommand", source, StringComparison.Ordinal);
@@ -806,6 +902,41 @@ public class XamlBindingTests
     }
 
     [Fact]
+    public void SettingsViewKeepsNavigationAttachedToItsViewportBoundContent()
+    {
+        var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        var rootGrid = document.Root!.Elements()
+            .Single(element => element.Name.LocalName == "Grid");
+        var workspace = rootGrid.Elements().Single(element =>
+            element.Name.LocalName == "Grid"
+            && element.Attribute("Grid.Row")?.Value == "1");
+        var columns = workspace.Elements()
+            .Single(element => element.Name.LocalName == "Grid.ColumnDefinitions")
+            .Elements()
+            .Where(element => element.Name.LocalName == "ColumnDefinition")
+            .ToArray();
+        var scroller = workspace.Elements().Single(element =>
+            element.Name.LocalName == "ScrollViewer"
+            && element.Attribute(x + "Name")?.Value == "SettingsContentScroll");
+        var content = scroller.Elements().Single(element =>
+            element.Name.LocalName == "Border");
+
+        Assert.Collection(
+            columns,
+            column => Assert.Equal("208", column.Attribute("Width")?.Value),
+            column => Assert.Equal("20", column.Attribute("Width")?.Value),
+            column => Assert.Equal("*", column.Attribute("Width")?.Value));
+        Assert.Equal("2", scroller.Attribute("Grid.Column")?.Value);
+        Assert.Equal("Left", scroller.Attribute("HorizontalContentAlignment")?.Value);
+        Assert.Equal(
+            "{Binding ViewportWidth, ElementName=SettingsContentScroll}",
+            content.Attribute("Width")?.Value);
+        Assert.Equal("780", content.Attribute("MaxWidth")?.Value);
+        Assert.Equal("Left", content.Attribute("HorizontalAlignment")?.Value);
+    }
+
+    [Fact]
     public void SettingsViewStretchesReadableContentAndKeepsInputsUsable()
     {
         var document = XDocument.Load(GetViewPath("SettingsView.xaml"));
@@ -820,7 +951,7 @@ public class XamlBindingTests
         var ffmpegButton = FindButtonByCommand(document, "CheckEnvironmentCommand");
 
         Assert.NotNull(content);
-        Assert.Equal("Left", content!.Attribute("HorizontalAlignment")?.Value);
+        Assert.Equal("Stretch", content!.Attribute("HorizontalAlignment")?.Value);
         Assert.NotEmpty(telegramInputs);
         Assert.All(telegramInputs, input => Assert.Equal("320", input.Attribute("MinWidth")?.Value));
         Assert.Equal("1", ffmpegButton?.Attribute("Grid.Column")?.Value);
@@ -933,12 +1064,38 @@ public class XamlBindingTests
         Assert.Equal("True", cancel!.Attribute("IsDefault")?.Value);
         Assert.Contains("DestructiveBrush", source, StringComparison.Ordinal);
         Assert.Contains("ConfirmText", source, StringComparison.Ordinal);
+
+        Assert.Equal(
+            "{Binding Source={x:Static SystemParameters.WorkArea}, Path=Height, Mode=OneTime}",
+            document.Root?.Attribute("MaxHeight")?.Value);
+        var rows = document.Root!
+            .Descendants()
+            .First(element => element.Name.LocalName == "Grid"
+                && element.Elements().Any(child => child.Name.LocalName == "Grid.RowDefinitions"))
+            .Elements()
+            .Single(element => element.Name.LocalName == "Grid.RowDefinitions")
+            .Elements()
+            .Select(element => element.Attribute("Height")?.Value)
+            .ToArray();
+        Assert.Equal(new[] { "Auto", "*", "Auto" }, rows);
+        var messageScroller = document.Descendants().Single(element =>
+            element.Name.LocalName == "ScrollViewer"
+            && element.Attribute(XNamespace.Get("http://schemas.microsoft.com/winfx/2006/xaml") + "Name")?.Value
+                == "DialogMessageScroller");
+        Assert.Equal("1", messageScroller.Attribute("Grid.Row")?.Value);
+        Assert.Equal("Auto", messageScroller.Attribute("VerticalScrollBarVisibility")?.Value);
+        Assert.Contains(document.Descendants(), element =>
+            element.Name.LocalName == "Border"
+            && element.Attribute("Grid.Row")?.Value == "2"
+            && element.Descendants().Any(descendant =>
+                descendant.Name.LocalName == "Button"
+                && descendant.Attribute("IsCancel")?.Value == "True"));
     }
 
     [Theory]
-    [InlineData("DownloadView.xaml", "单个下载")]
-    [InlineData("BatchDownloadView.xaml", "批量下载")]
-    [InlineData("HistoryView.xaml", "下载历史")]
+    [InlineData("DownloadView.xaml", "单个视频下载")]
+    [InlineData("BatchDownloadView.xaml", "批量队列")]
+    [InlineData("HistoryView.xaml", "媒体库")]
     [InlineData("SettingsView.xaml", "设置")]
     public void MainPageTitlesUseCompactDesignerTypography(string viewFileName, string titleText)
     {
@@ -1000,6 +1157,13 @@ public class XamlBindingTests
             element.Name.LocalName == "Button"
             && element.Attributes("Command").Any(attribute =>
                 attribute.Value.Contains(commandName, StringComparison.Ordinal)));
+
+    private static string?[] GetDirectGridRowHeights(XElement grid)
+        => grid.Elements()
+            .Single(element => element.Name.LocalName == "Grid.RowDefinitions")
+            .Elements()
+            .Select(element => element.Attribute("Height")?.Value)
+            .ToArray();
 
     private static string AutomationName(XElement element)
         => element.Attributes()

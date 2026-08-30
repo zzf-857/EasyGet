@@ -5,100 +5,109 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         mc:Ignorable="d"
-        Width="1040"
-        Height="760"
-        MinWidth="760"
+        Width="840"
+        Height="620"
+        MinWidth="720"
         MinHeight="560"
         WindowStartupLocation="CenterOwner"
-        Background="{DynamicResource BgPrimaryBrush}"
+        Background="{DynamicResource BgSurfaceBrush}"
         Foreground="{DynamicResource TextPrimaryBrush}"
         ShowInTaskbar="True"
         AutomationProperties.Name="平台智能登录窗口">
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="56" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0"
-                Padding="16,8"
-                Background="{DynamicResource BgChromeBrush}"
-                BorderBrush="{DynamicResource BorderSubtleBrush}"
-                BorderThickness="0,0,0,1">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Ellipse Width="8" Height="8" Fill="{StaticResource SuccessBrush}" Margin="0,0,8,0"/>
-                    <TextBlock Style="{StaticResource TextBodyStrong}" Text="{Binding WindowHeading}" />
-                </StackPanel>
-                <TextBlock Grid.Column="1" Margin="16,0" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextMutedBrush}" FontSize="{StaticResource FontSizeCaption}"
-                           Text="登录数据仅保存在本机,EasyGet 不显示或上传 Cookie 内容。"
-                           TextTrimming="CharacterEllipsis" />
-                <Border Grid.Column="2" Padding="8,4" CornerRadius="4"
-                        Background="{DynamicResource AccentContainerBrush}"
-                        ToolTip="允许读取的登录域名">
-                    <TextBlock Foreground="{DynamicResource AccentBrush}" FontSize="{StaticResource FontSizeCaption}"
-                               Text="{Binding AllowedDomainsText, StringFormat=允许域名: {0}}"
-                               TextTrimming="CharacterEllipsis" MaxWidth="360"
-                               AutomationProperties.Name="允许读取的登录域名" />
-                </Border>
-            </Grid>
-        </Border>
+        <Grid Margin="20,17,20,14">
+            <StackPanel>
+                <TextBlock Style="{StaticResource TextSection}"
+                           Text="{Binding WindowHeading}" />
+                <TextBlock Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextMutedBrush}"
+                           FontSize="{StaticResource FontSizeCaption}"
+                           Text="{Binding AllowedDomainsText, StringFormat=仅允许访问以下官方域名：{0}}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip="{Binding AllowedDomainsText}"
+                           AutomationProperties.Name="允许读取的登录域名" />
+            </StackPanel>
+        </Grid>
 
-        <Border Grid.Row="1"
-                Margin="12"
-                Background="{DynamicResource BgSurfaceHighestBrush}"
-                BorderBrush="{DynamicResource BorderPrimaryBrush}"
-                BorderThickness="1"
-                CornerRadius="6"
-                ClipToBounds="True">
-            <wv2:WebView2 x:Name="Browser"
-                          AutomationProperties.Name="平台登录网页" />
-        </Border>
+        <Grid Grid.Row="1" Margin="20,0,20,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border Padding="15,13"
+                    Background="{DynamicResource AccentContainerBrush}"
+                    BorderBrush="{DynamicResource AccentBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="&#xEA18;"
+                               Margin="0,0,9,0"
+                               Style="{StaticResource IconGlyph}"
+                               Foreground="{DynamicResource AccentBrush}"
+                               FontSize="{StaticResource IconSizeBody}" />
+                    <TextBlock Grid.Column="1"
+                               Style="{StaticResource TextCaption}"
+                               Text="登录在内嵌 WebView2 中完成，凭据通过 Windows 加密后仅保存在本机。"
+                               TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <Border Grid.Row="1"
+                    MinHeight="260"
+                    Margin="0,14"
+                    Background="{DynamicResource BgInputBrush}"
+                    BorderBrush="{DynamicResource BorderSubtleBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    ClipToBounds="True">
+                <wv2:WebView2 x:Name="Browser"
+                              AutomationProperties.Name="平台登录网页" />
+            </Border>
+
+            <TextBlock x:Name="StatusText"
+                       Grid.Row="2"
+                       Style="{StaticResource TextCaption}"
+                       Foreground="{DynamicResource TextSecondaryBrush}"
+                       Text="请在上方网页完成登录，然后点击继续。"
+                       TextWrapping="Wrap"
+                       AutomationProperties.LiveSetting="Polite" />
+        </Grid>
 
         <Border Grid.Row="2"
-                Padding="16,12"
-                Background="{DynamicResource BgSurfaceBrush}"
+                Padding="20,14"
+                Background="{DynamicResource BgPrimaryBrush}"
                 BorderBrush="{DynamicResource BorderSubtleBrush}"
                 BorderThickness="0,1,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusText"
-                           Style="{StaticResource TextBody}"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextSecondaryBrush}"
-                           Text="请在上方网页完成登录，然后点击继续。"
-                           TextWrapping="Wrap"
-                           AutomationProperties.LiveSetting="Polite" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="CancelButton"
-                        Grid.Column="1"
-                        Margin="16,0,8,0"
-                        MinWidth="112"
-                        Height="32" Padding="16,4"
+                        MinWidth="88"
+                        Height="34" Padding="14,5"
+                        Margin="0,0,9,0"
                         Content="取消"
                         Style="{StaticResource SurfaceButton}"
                         Click="CancelButton_Click"
                         AutomationProperties.Name="取消平台登录" />
                 <Button x:Name="ContinueButton"
-                        Grid.Column="2"
-                        MinWidth="168"
-                        Height="32" Padding="16,4"
+                        MinWidth="144"
+                        Height="34" Padding="14,5"
                         Content="已完成登录，继续"
                         Style="{StaticResource AccentButton}"
                         IsDefault="True"
                         Click="ContinueButton_Click"
                         AutomationProperties.Name="完成登录并继续下载" />
-            </Grid>
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

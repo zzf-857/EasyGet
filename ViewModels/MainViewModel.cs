@@ -39,7 +39,7 @@ public partial class MainViewModel : ObservableObject
 
     public string AppVersion { get; } = $"v{GetAssemblyVersion()}";
 
-    public double SidebarWidth => IsCompactLayout ? 56 : 216;
+    public double SidebarWidth => IsCompactLayout ? 74 : 232;
     public int RunningTaskCount => _downloadManager.Tasks.Count(task =>
         task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging);
     public int WaitingTaskCount => _downloadManager.Tasks.Count(task => task.Status == DownloadStatus.Waiting);
@@ -70,9 +70,9 @@ public partial class MainViewModel : ObservableObject
     public string CurrentPageTitle => SelectedNavIndex switch
     {
         0 => "单个视频下载",
-        1 => "批量下载",
-        2 => "下载历史",
-        3 => "设置中心",
+        1 => "批量队列",
+        2 => "媒体库",
+        3 => "设置",
         _ => "EasyGet"
     };
 
@@ -373,6 +373,14 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSelectedNavIndexChanged(int value)
     {
+        CurrentPage = value switch
+        {
+            0 => DownloadVM,
+            1 => BatchDownloadVM,
+            2 => HistoryVM,
+            3 => SettingsVM,
+            _ => CurrentPage
+        };
         OnPropertyChanged(nameof(CurrentPageTitle));
     }
 
