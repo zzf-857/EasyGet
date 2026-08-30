@@ -72,6 +72,43 @@ public class YtDlpMetadataTests
     }
 
     [Fact]
+    public void ParsePlaylistInfoJson_PreservesOriginalTitlesOrderSectionsAndResources()
+    {
+        const string json = """
+            {
+              "title": "课程目录",
+              "entries": [
+                {
+                  "url": "https://example.test/lesson-1",
+                  "title": "第一章：基础",
+                  "playlist_index": 3,
+                  "section_title": "第一章",
+                  "attachments": [
+                    { "url": "https://example.test/notes.pdf", "filename": "讲义.pdf", "ext": "pdf", "mime_type": "application/pdf" }
+                  ]
+                },
+                {
+                  "url": "https://example.test/lesson-2",
+                  "title": "第二章：实践",
+                  "playlist_index": 7,
+                  "section_title": "第二章"
+                }
+              ]
+            }
+            """;
+
+        var info = YtDlpService.ParsePlaylistInfoJson(json, "https://example.test/course");
+
+        Assert.Equal([3, 7], info.Entries.Select(entry => entry.OriginalIndex).ToArray());
+        Assert.Equal(["第一章：基础", "第二章：实践"], info.Entries.Select(entry => entry.OriginalTitle).ToArray());
+        Assert.Equal(["第一章", "第二章"], info.Entries.Select(entry => entry.SectionTitle).ToArray());
+        var resource = Assert.Single(info.Entries[0].Resources);
+        Assert.Equal("讲义.pdf", resource.Title);
+        Assert.Equal("pdf", resource.Extension);
+        Assert.Equal(info.Urls, info.Entries.Select(entry => entry.Url).ToList());
+    }
+
+    [Fact]
     public void ParseVideoInfoJson_IgnoresNonStringMetadataFields()
     {
         const string json = """

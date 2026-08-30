@@ -117,6 +117,7 @@ public partial class App : System.Windows.Application
             services.AddSingleton<IYangshipinDownloadService, YangshipinDownloadService>();
             services.AddSingleton<YtDlpService>();
             services.AddSingleton<M3u8DownloadService>();
+            services.AddSingleton<HttpResourceDownloadService>();
             services.AddSingleton<TelegramDownloadService>();
             services.AddSingleton<IAppUpdateService, AppUpdateService>();
             services.AddSingleton<BackgroundUpdateCoordinator>();

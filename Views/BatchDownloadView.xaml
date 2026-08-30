@@ -249,6 +249,119 @@
                         <Button Grid.Column="2" Height="32" Padding="12,4" Style="{StaticResource SurfaceButton}"
                                 Command="{Binding ImportPlaylistCommand}" Content="导入"/>
                     </Grid>
+                    <Border Margin="0,10,0,0" Padding="10" Background="{StaticResource BgInputBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                            CornerRadius="5" Visibility="{Binding HasPlaylistPreview, Converter={StaticResource BoolToVisibility}}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="课程目录预览" Style="{StaticResource TextBodyStrong}"/>
+                                    <TextBlock Text="{Binding PlaylistTitle}" Style="{StaticResource TextCaption}"
+                                               TextTrimming="CharacterEllipsis" ToolTip="{Binding PlaylistTitle}"/>
+                                </StackPanel>
+                                <Button Grid.Column="1" Margin="8,0,0,0" Padding="8,2"
+                                        Style="{StaticResource SurfaceButton}" Content="全选"
+                                        Command="{Binding SelectAllPlaylistEntriesCommand}"
+                                        IsEnabled="{Binding CanEditPlaylistPreview}"/>
+                                <Button Grid.Column="2" Margin="6,0,0,0" Padding="8,2"
+                                        Style="{StaticResource SurfaceButton}" Content="清空"
+                                        Command="{Binding ClearPlaylistSelectionCommand}"
+                                        IsEnabled="{Binding CanEditPlaylistPreview}"/>
+                            </Grid>
+                            <TextBlock Grid.Row="1" Margin="0,5,0,5" Text="{Binding PlaylistSelectionSummary}"
+                                       Style="{StaticResource TextCaption}"/>
+                            <ItemsControl Grid.Row="2" ItemsSource="{Binding PlaylistSections}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="0,0,6,5" Padding="7,2" Style="{StaticResource SurfaceButton}"
+                                                Content="{Binding DisplayText}"
+                                                Command="{Binding DataContext.SelectPlaylistSectionCommand, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                CommandParameter="{Binding Title}"
+                                                IsEnabled="{Binding DataContext.CanEditPlaylistPreview, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <ListBox Grid.Row="3" MaxHeight="210" ItemsSource="{Binding PlaylistEntries}"
+                                     Background="Transparent" BorderThickness="0" Padding="0"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <Setter Property="Padding" Value="0"/>
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        <Setter Property="Focusable" Value="False"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="ListBoxItem">
+                                                    <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="32"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox Grid.Row="0" Grid.Column="0" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                      IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                      IsEnabled="{Binding DataContext.CanEditPlaylistPreview, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                      AutomationProperties.Name="选择课程条目"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding DisplayIndex}" Style="{StaticResource TextMono}"
+                                                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding DisplayTitle}" Style="{StaticResource TextCaption}"
+                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayTitle}" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Row="0" Grid.Column="3" Text="{Binding KindText}" Style="{StaticResource TextCaption}"
+                                                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                            <ItemsControl Grid.Row="1" Grid.ColumnSpan="4" Margin="24,2,0,0"
+                                                          ItemsSource="{Binding Resources}"
+                                                          Visibility="{Binding HasResources, Converter={StaticResource BoolToVisibility}}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,1">
+                                                            <CheckBox Margin="0,0,5,0" VerticalAlignment="Center"
+                                                                      IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                      IsEnabled="{Binding DataContext.CanEditPlaylistPreview, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                                                                      AutomationProperties.Name="选择课程附属资源"/>
+                                                            <TextBlock Text="附属：" Style="{StaticResource TextCaption}"
+                                                                       Foreground="{StaticResource TextMutedBrush}"/>
+                                                            <TextBlock Text="{Binding DisplayTitle}" Style="{StaticResource TextCaption}"
+                                                                       TextTrimming="CharacterEllipsis" ToolTip="{Binding DisplayTitle}"/>
+                                                        </StackPanel>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Grid>
+                    </Border>
                     <Border Height="40" Margin="0,8,0,0" Background="{StaticResource BgInputBrush}"
                             BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
                             CornerRadius="5">

@@ -30,7 +30,7 @@ internal static partial class CollectionNamingService
         if (string.IsNullOrWhiteSpace(candidate))
             candidate = fullTitle;
 
-        if (LeadingSequenceRegex().IsMatch(candidate) || oneBasedIndex <= 0)
+        if (oneBasedIndex <= 0)
             return candidate;
 
         var width = Math.Max(2, Math.Max(1, itemCount).ToString().Length);
@@ -74,9 +74,4 @@ internal static partial class CollectionNamingService
         @"^[pP]\d{1,4}(?:\s*[-_:：.]\s*|\s+)",
         RegexOptions.CultureInvariant)]
     private static partial Regex LeadingPartMarkerRegex();
-
-    [GeneratedRegex(
-        @"^\d{1,4}(?:[.、_\-：:]|\s)",
-        RegexOptions.CultureInvariant)]
-    private static partial Regex LeadingSequenceRegex();
 }

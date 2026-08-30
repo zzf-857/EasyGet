@@ -59,6 +59,15 @@ public partial class DownloadTask : ObservableObject
     /// <summary>下载画质</summary>
     public string Quality { get; set; } = "best";
 
+    /// <summary>是否为普通 HTTP 非视频资源（文档、图片、压缩包或直链音频等）。</summary>
+    public bool IsNonVideoResource { get; set; }
+
+    /// <summary>普通资源的已知扩展名，不含点号。</summary>
+    public string ResourceExtension { get; set; } = "";
+
+    /// <summary>普通资源的 MIME 类型（如由播放列表元数据提供）。</summary>
+    public string ResourceMimeType { get; set; } = "";
+
     /// <summary>解析后由用户选择的 yt-dlp 源格式选择器；为空时按画质自动选择。</summary>
     public string SourceFormatSelector { get; set; } = "";
 

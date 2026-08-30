@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.IO;
 using System.ComponentModel;
 using System.Threading.Channels;
 using EasyGet.Models;
@@ -14,6 +15,7 @@ public class DownloadManager : IDisposable
     private readonly IYtDlpDownloadService _ytDlpService;
     private readonly M3u8DownloadService _m3u8DownloadService;
     private readonly TelegramDownloadService _telegramDownloadService;
+    private readonly HttpResourceDownloadService _resourceDownloadService;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly TaskQueuePersistenceService? _taskQueuePersistence;
@@ -50,14 +52,16 @@ public class DownloadManager : IDisposable
         ConfigService configService,
         M3u8DownloadService? m3u8DownloadService = null,
         TelegramDownloadService? telegramDownloadService = null,
-        TaskQueuePersistenceService? taskQueuePersistence = null)
+        TaskQueuePersistenceService? taskQueuePersistence = null,
+        HttpResourceDownloadService? resourceDownloadService = null)
         : this(
             new YtDlpDownloadServiceAdapter(ytDlpService),
             historyService,
             configService,
             m3u8DownloadService,
             telegramDownloadService,
-            taskQueuePersistence)
+            taskQueuePersistence,
+            resourceDownloadService)
     {
     }
 
@@ -67,11 +71,13 @@ public class DownloadManager : IDisposable
         ConfigService configService,
         M3u8DownloadService? m3u8DownloadService = null,
         TelegramDownloadService? telegramDownloadService = null,
-        TaskQueuePersistenceService? taskQueuePersistence = null)
+        TaskQueuePersistenceService? taskQueuePersistence = null,
+        HttpResourceDownloadService? resourceDownloadService = null)
     {
         _ytDlpService = ytDlpService;
         _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());
         _telegramDownloadService = telegramDownloadService ?? new TelegramDownloadService(configService);
+        _resourceDownloadService = resourceDownloadService ?? new HttpResourceDownloadService(configService);
         _historyService = historyService;
         _configService = configService;
         _taskQueuePersistence = taskQueuePersistence;
@@ -605,6 +611,9 @@ public class DownloadManager : IDisposable
             bool metadataResolved;
             try
             {
+                // Fail fast before a route starts network work when the target is a file,
+                // inaccessible, or otherwise cannot be used as a download directory.
+                Directory.CreateDirectory(task.OutputDirectory);
                 metadataResolved = PrepareAttemptForPipeline(task, resolvedInfo);
             }
             catch (Exception ex)
@@ -646,7 +655,12 @@ public class DownloadManager : IDisposable
         VideoInfo? resolvedInfo = null)
     {
         if (resolvedInfo is null
-            && DownloadRouteResolver.TryCreateLocalVideoInfo(task.Url, out var localInfo))
+            && DownloadRouteResolver.TryCreateLocalVideoInfo(
+                task.Url,
+                out var localInfo,
+                resourceHint: task.IsNonVideoResource,
+                resourceExtensionHint: task.ResourceExtension,
+                resourceMimeType: task.ResourceMimeType))
         {
             resolvedInfo = localInfo;
         }
@@ -1565,7 +1579,7 @@ public class DownloadManager : IDisposable
         CancellationToken token)
     {
         Action<string> log = line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}");
-        var engine = DownloadRouteResolver.Resolve(task.Url);
+        var engine = DownloadRouteResolver.Resolve(task.Url, task.IsNonVideoResource);
 
         if (engine == DownloadEngine.M3u8)
         {
@@ -1589,6 +1603,12 @@ public class DownloadManager : IDisposable
         if (engine == DownloadEngine.Telegram)
         {
             await _telegramDownloadService.DownloadAsync(task, progress, log, token);
+            return;
+        }
+
+        if (engine == DownloadEngine.Resource)
+        {
+            await _resourceDownloadService.DownloadAsync(task, progress, log, token);
             return;
         }
 
@@ -1740,6 +1760,14 @@ public class DownloadManager : IDisposable
         task.Duration = info.Duration;
         task.ThumbnailUrl = info.Thumbnail;
         task.FileSize = info.FileSize;
+        if (info.IsResource)
+        {
+            task.IsNonVideoResource = true;
+            task.ResourceExtension = info.Extension;
+            task.ResourceMimeType = info.MimeType;
+            if (!string.IsNullOrWhiteSpace(info.Extension))
+                task.Format = info.Extension;
+        }
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 标题: {task.Title}");
         LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] 平台: {info.Platform} | 时长: {task.DurationText}");
     }

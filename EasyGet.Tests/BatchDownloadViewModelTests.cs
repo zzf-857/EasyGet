@@ -320,6 +320,57 @@ public class BatchDownloadViewModelTests
         Assert.Equal(1, service.MetadataRequestCount);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ResolveBatchNames_RetriesTransientMissingOrBlankMetadata(
+        bool firstAttemptReturnsNull)
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var attemptCount = 0;
+        var service = new BlockingYtDlpDownloadService
+        {
+            MetadataResultFactory = url =>
+            {
+                if (Interlocked.Increment(ref attemptCount) == 1)
+                {
+                    return firstAttemptReturnsNull
+                        ? null
+                        : new VideoInfo { Url = url, Title = "", Platform = "Bilibili" };
+                }
+
+                return new VideoInfo
+                {
+                    Url = url,
+                    Title = "重试后获取的标题",
+                    Platform = "Bilibili"
+                };
+            }
+        };
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            UrlsText = "https://www.bilibili.com/video/BV12Hbz6aEEg"
+        };
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+
+        var draft = Assert.Single(viewModel.PendingItems);
+        Assert.Equal("重试后获取的标题", draft.Title);
+        Assert.False(draft.HasResolutionMessage);
+        Assert.Equal(2, service.MetadataRequestCount);
+        Assert.Equal(2, Volatile.Read(ref attemptCount));
+        Assert.True(viewModel.StartBatchDownloadCommand.CanExecute(null));
+    }
+
     [Fact]
     public async Task ResolveBatchNames_FailedItemCanContinueAfterUserSuppliesTitle()
     {
@@ -362,7 +413,7 @@ public class BatchDownloadViewModelTests
 
         Assert.Equal(2, manager.Tasks.Count);
         Assert.Equal("手动补充标题", manager.Tasks.Single(task => task.Url == missing.Url).Title);
-        Assert.Equal(2, service.MetadataRequestCount);
+        Assert.Equal(3, service.MetadataRequestCount);
     }
 
     [Fact]
@@ -394,6 +445,7 @@ public class BatchDownloadViewModelTests
         Assert.Empty(viewModel.PendingItems);
         Assert.Empty(manager.Tasks);
         Assert.Equal("https://example.com/new", viewModel.UrlsText);
+        Assert.Equal(1, service.MetadataRequestCount);
     }
 
     [Fact]
@@ -613,7 +665,7 @@ public class BatchDownloadViewModelTests
         });
         Assert.Equal([1, 2], manager.Tasks.Select(task => task.CollectionItemIndex).ToArray());
         Assert.Equal(
-            ["00.【指南】完整路径", "01.环境安装"],
+            ["01. 00.【指南】完整路径", "02. 01.环境安装"],
             manager.Tasks.Select(task => task.Title).ToArray());
         Assert.Equal("", viewModel.UrlsText);
     }
@@ -677,6 +729,67 @@ public class BatchDownloadViewModelTests
             Assert.Equal("RAG 系列课程", task.CollectionTitle);
             Assert.Equal("RAG 系列课程", task.BatchName);
         });
+    }
+
+    [Fact]
+    public async Task PlaylistPreview_AllowsPartialSelectionAndKeepsSourceIndexes()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        config.Config.DefaultDownloadPath = root.Path("downloads");
+        var collectionDirectory = root.Path("course");
+        Directory.CreateDirectory(collectionDirectory);
+        var service = new BlockingYtDlpDownloadService();
+        service.Release();
+        using var manager = new DownloadManager(service, history, config);
+        var ytDlp = new YtDlpService(config, new EnvironmentService());
+        var viewModel = new BatchDownloadViewModel(
+            manager,
+            config,
+            ytDlp,
+            videoInfoProvider: service)
+        {
+            SelectedCollectionFolder = new ExistingCollectionFolder
+            {
+                BatchId = "batch-course",
+                Name = "课程目录",
+                Directory = collectionDirectory
+            }
+        };
+
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Title = "课程目录",
+            Entries =
+            [
+                new PlaylistEntryInfo { Url = "https://example.test/one", OriginalTitle = "第一节", OriginalIndex = 1, SectionTitle = "第一章" },
+                new PlaylistEntryInfo { Url = "https://example.test/two", OriginalTitle = "第二节", OriginalIndex = 4, SectionTitle = "第二章" },
+                new PlaylistEntryInfo { Url = "https://example.test/three", OriginalTitle = "第三节", OriginalIndex = 8, SectionTitle = "第三章" }
+            ]
+        }));
+
+        viewModel.ClearPlaylistSelectionCommand.Execute(null);
+        Assert.Equal(0, viewModel.SelectedPlaylistEntryCount);
+        Assert.True(string.IsNullOrEmpty(viewModel.UrlsText));
+
+        viewModel.SelectAllPlaylistEntriesCommand.Execute(null);
+        Assert.Equal(3, viewModel.SelectedPlaylistEntryCount);
+        Assert.Contains("https://example.test/two", viewModel.UrlsText, StringComparison.Ordinal);
+
+        viewModel.PlaylistEntries[1].IsSelected = false;
+        Assert.DoesNotContain("https://example.test/two", viewModel.UrlsText, StringComparison.Ordinal);
+        Assert.Equal(2, viewModel.SelectedPlaylistEntryCount);
+        Assert.Equal(3, viewModel.PlaylistSections.Count);
+
+        await viewModel.ResolveBatchNamesCommand.ExecuteAsync(null);
+        Assert.Equal(0, service.MetadataRequestCount);
+        await viewModel.StartBatchDownloadCommand.ExecuteAsync(null);
+        await manager.WaitForIdleAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal([1, 8], manager.Tasks.Select(task => task.CollectionItemIndex).ToArray());
+        Assert.All(manager.Tasks, task => Assert.Equal(3, task.CollectionItemCount));
+        Assert.Equal(["01. 第一节", "08. 第三节"], manager.Tasks.Select(task => task.Title).ToArray());
     }
 
     [Fact]

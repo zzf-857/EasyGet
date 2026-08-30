@@ -286,6 +286,9 @@ public sealed class TaskQueuePersistenceService : IDisposable
             ThumbnailUrl = Limit(persisted.ThumbnailUrl, 32_768),
             Format = Limit(persisted.Format, 64, "mp4"),
             Quality = Limit(persisted.Quality, 64, "best"),
+            IsNonVideoResource = persisted.IsNonVideoResource,
+            ResourceExtension = Limit(persisted.ResourceExtension, 32),
+            ResourceMimeType = Limit(persisted.ResourceMimeType, 128),
             SourceFormatSelector = Limit(persisted.SourceFormatSelector, 256),
             Subtitle = Limit(persisted.Subtitle, 64, "none"),
             OutputDirectory = Limit(persisted.OutputDirectory, 32_768),
@@ -402,6 +405,9 @@ internal sealed class PersistedDownloadTask
     public string ThumbnailUrl { get; set; } = "";
     public string Format { get; set; } = "mp4";
     public string Quality { get; set; } = "best";
+    public bool IsNonVideoResource { get; set; }
+    public string ResourceExtension { get; set; } = "";
+    public string ResourceMimeType { get; set; } = "";
     public string SourceFormatSelector { get; set; } = "";
     public string Subtitle { get; set; } = "none";
     public string OutputDirectory { get; set; } = "";
@@ -431,6 +437,9 @@ internal sealed class PersistedDownloadTask
             ThumbnailUrl = task.ThumbnailUrl,
             Format = task.Format,
             Quality = task.Quality,
+            IsNonVideoResource = task.IsNonVideoResource,
+            ResourceExtension = task.ResourceExtension,
+            ResourceMimeType = task.ResourceMimeType,
             SourceFormatSelector = task.SourceFormatSelector,
             Subtitle = task.Subtitle,
             OutputDirectory = task.OutputDirectory,

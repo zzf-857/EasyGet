@@ -17,6 +17,10 @@ namespace EasyGet.ViewModels;
 /// </summary>
 public partial class BatchDownloadViewModel : ObservableObject
 {
+    private const int MetadataResolutionConcurrency = 4;
+    private const int MetadataRetryConcurrency = 1;
+    private static readonly TimeSpan MetadataRetryDelay = TimeSpan.FromMilliseconds(500);
+
     private readonly DownloadManager _downloadManager;
     private readonly ConfigService _configService;
     private readonly YtDlpService _ytDlpService;
@@ -31,6 +35,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly Func<string, string?> _selectDirectory;
     private readonly HashSet<DownloadTask> _trackedQueueTasks = [];
     private readonly HashSet<BatchDownloadDraft> _trackedPendingItems = [];
+    private readonly HashSet<PlaylistEntryInfo> _trackedPlaylistEntries = [];
     private readonly object _queueStateLock = new();
     private volatile bool _suppressQueueRefresh;
     private string _downloadRootDirectory = "";
@@ -44,6 +49,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private string _draftCollectionTitle = "";
     private bool _applyingSharedDestination;
     private bool _isRefreshingDestinationOptions;
+    private bool _updatingPlaylistSelection;
     private Task<bool> _destinationPersistenceTask = Task.FromResult(true);
 
     [ObservableProperty] private string _urlsText = "";
@@ -57,6 +63,9 @@ public partial class BatchDownloadViewModel : ObservableObject
     private bool _isDownloading;
     [ObservableProperty] private bool _isImportingPlaylist;
     [ObservableProperty] private string _playlistUrl = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPlaylistPreview))]
+    private string _playlistTitle = "";
     [ObservableProperty] private string _selectedQueueFilter = "全部";
     [ObservableProperty] private string _downloadDirectory = "";
     [ObservableProperty]
@@ -76,6 +85,8 @@ public partial class BatchDownloadViewModel : ObservableObject
     public ObservableCollection<DownloadTask> QueueTasks => _downloadManager.Tasks;
     public ObservableCollection<DownloadTask> VisibleQueueTasks { get; } = [];
     public ObservableCollection<BatchDownloadDraft> PendingItems { get; } = [];
+    public ObservableCollection<PlaylistEntryInfo> PlaylistEntries { get; } = [];
+    public ObservableCollection<PlaylistSectionInfo> PlaylistSections { get; } = [];
     public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
         => _collectionFolderStore.Folders;
     public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
@@ -97,6 +108,12 @@ public partial class BatchDownloadViewModel : ObservableObject
     public bool CanClearFinished => QueueTasks.Any(task => task.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled);
     public bool CanRetryFailed => FailedTaskCount > 0;
     public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
+    public bool HasPlaylistPreview => PlaylistEntries.Count > 0;
+    public bool CanEditPlaylistPreview => IsBatchInputStep && !IsImportingPlaylist && !IsDownloading;
+    public int SelectedPlaylistEntryCount => PlaylistEntries.Count(entry => entry.IsSelected);
+    public string PlaylistSelectionSummary => PlaylistEntries.Count == 0
+        ? ""
+        : $"已选择 {SelectedPlaylistEntryCount}/{PlaylistEntries.Count} 个条目";
     public bool IsBatchInputStep => !IsNameConfirmationStep;
     public string BatchConfirmationSummary => IsResolvingNames
         ? $"正在解析 {PendingItems.Count} 个视频的名称..."
@@ -232,7 +249,8 @@ public partial class BatchDownloadViewModel : ObservableObject
         string Title,
         VideoInfo? ResolvedInfo,
         int CollectionItemIndex,
-        int CollectionItemCount);
+        int CollectionItemCount,
+        IReadOnlyList<MediaResourceInfo> Resources);
 
     private static string FormatBatchInput(ParsedBatchInput item)
         => item.HasProvidedTitle ? $"{item.Title}---{item.Url}" : item.Url;
@@ -344,6 +362,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         _collectionFolderStore.FoldersRefreshed += OnCollectionFoldersRefreshed;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
         PendingItems.CollectionChanged += OnPendingItemsChanged;
+        PlaylistEntries.CollectionChanged += OnPlaylistEntriesChanged;
         SynchronizeQueueSubscriptions();
         RefreshQueueState();
     }
@@ -560,6 +579,61 @@ public partial class BatchDownloadViewModel : ObservableObject
         StartBatchDownloadCommand.NotifyCanExecuteChanged();
     }
 
+    private void OnPlaylistEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        SynchronizePlaylistEntrySubscriptions();
+        RebuildPlaylistSections();
+        OnPropertyChanged(nameof(HasPlaylistPreview));
+        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
+        OnPropertyChanged(nameof(PlaylistSelectionSummary));
+    }
+
+    private void OnPlaylistEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(PlaylistEntryInfo.IsSelected))
+            return;
+
+        if (!_updatingPlaylistSelection)
+            UpdateUrlsFromPlaylistSelection();
+        RebuildPlaylistSections();
+        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
+        OnPropertyChanged(nameof(PlaylistSelectionSummary));
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+    }
+
+    private void SynchronizePlaylistEntrySubscriptions()
+    {
+        foreach (var entry in _trackedPlaylistEntries
+                     .Where(entry => !PlaylistEntries.Contains(entry))
+                     .ToList())
+        {
+            entry.PropertyChanged -= OnPlaylistEntryPropertyChanged;
+            _trackedPlaylistEntries.Remove(entry);
+        }
+
+        foreach (var entry in PlaylistEntries.Where(entry => _trackedPlaylistEntries.Add(entry)))
+            entry.PropertyChanged += OnPlaylistEntryPropertyChanged;
+    }
+
+    private void RebuildPlaylistSections()
+    {
+        var sectionStates = PlaylistEntries
+            .GroupBy(entry => string.IsNullOrWhiteSpace(entry.SectionTitle)
+                ? "未分组"
+                : entry.SectionTitle.Trim(), StringComparer.Ordinal)
+            .Select(group => new PlaylistSectionInfo
+            {
+                Title = group.Key,
+                EntryCount = group.Count(),
+                SelectedEntryCount = group.Count(entry => entry.IsSelected)
+            })
+            .ToList();
+
+        PlaylistSections.Clear();
+        foreach (var section in sectionStates)
+            PlaylistSections.Add(section);
+    }
+
     private void OnPendingItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(BatchDownloadDraft.Title))
@@ -689,6 +763,9 @@ public partial class BatchDownloadViewModel : ObservableObject
         if (!_suppressDraftInvalidation && IsNameConfirmationStep)
             ResetNameConfirmation();
 
+        if (!_updatingPlaylistSelection && PlaylistEntries.Count > 0)
+            ClearPlaylistPreview();
+
         LinkCount = string.IsNullOrWhiteSpace(value)
             ? 0
             : ParseBatchInput(value).Count;
@@ -697,6 +774,7 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     partial void OnIsDownloadingChanged(bool value)
     {
+        OnPropertyChanged(nameof(CanEditPlaylistPreview));
         ResolveBatchNamesCommand.NotifyCanExecuteChanged();
         StartBatchDownloadCommand.NotifyCanExecuteChanged();
         EditBatchInputCommand.NotifyCanExecuteChanged();
@@ -717,6 +795,7 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     partial void OnIsNameConfirmationStepChanged(bool value)
     {
+        OnPropertyChanged(nameof(CanEditPlaylistPreview));
         ResolveBatchNamesCommand.NotifyCanExecuteChanged();
         StartBatchDownloadCommand.NotifyCanExecuteChanged();
         EditBatchInputCommand.NotifyCanExecuteChanged();
@@ -736,6 +815,7 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     partial void OnIsImportingPlaylistChanged(bool value)
     {
+        OnPropertyChanged(nameof(CanEditPlaylistPreview));
         ImportPlaylistCommand.NotifyCanExecuteChanged();
         ResolveBatchNamesCommand.NotifyCanExecuteChanged();
         StartBatchDownloadCommand.NotifyCanExecuteChanged();
@@ -772,9 +852,12 @@ public partial class BatchDownloadViewModel : ObservableObject
         var parsedItems = ParseBatchInput(UrlsText);
         var parsedUrls = parsedItems.Select(item => item.Url).ToList();
         var isExactCollectionImport = _pendingCollectionUrls.Count > 0
-                                      && parsedUrls.Count == _pendingCollectionUrls.Count
-                                      && parsedUrls.ToHashSet(StringComparer.OrdinalIgnoreCase)
-                                          .SetEquals(_pendingCollectionUrls);
+                                      && parsedUrls.Count == parsedUrls
+                                          .Distinct(StringComparer.OrdinalIgnoreCase)
+                                          .Count()
+                                      && parsedUrls.All(url => _pendingCollectionUrls.Contains(
+                                          url,
+                                          StringComparer.OrdinalIgnoreCase));
         var knownUrls = new HashSet<string>(
             _downloadManager.Tasks.Select(task => task.Url),
             StringComparer.OrdinalIgnoreCase);
@@ -792,17 +875,25 @@ public partial class BatchDownloadViewModel : ObservableObject
         foreach (var item in validItems)
         {
             var collectionItemIndex = isExactCollectionImport
-                ? _pendingCollectionUrls.FindIndex(url => string.Equals(
-                    url,
+                ? PlaylistEntries.FirstOrDefault(entry => string.Equals(
+                    entry.Url,
                     item.Url,
-                    StringComparison.OrdinalIgnoreCase)) + 1
+                    StringComparison.OrdinalIgnoreCase))?.OriginalIndex
+                  ?? (_pendingCollectionUrls.FindIndex(url => string.Equals(
+                      url,
+                      item.Url,
+                      StringComparison.OrdinalIgnoreCase)) + 1)
                 : 0;
             PendingItems.Add(new BatchDownloadDraft(
                 item.Url,
                 item.Title,
                 item.HasProvidedTitle,
                 collectionItemIndex,
-                isExactCollectionImport ? _pendingCollectionUrls.Count : 0));
+                isExactCollectionImport ? _pendingCollectionUrls.Count : 0,
+                PlaylistEntries.FirstOrDefault(entry => string.Equals(
+                    entry.Url,
+                    item.Url,
+                    StringComparison.OrdinalIgnoreCase))?.Resources));
         }
 
         IsNameConfirmationStep = true;
@@ -851,11 +942,47 @@ public partial class BatchDownloadViewModel : ObservableObject
         IReadOnlyCollection<BatchDownloadDraft> drafts,
         CancellationToken cancellationToken)
     {
-        using var gate = new SemaphoreSlim(4, 4);
+        await ResolvePendingNamesAttemptAsync(
+            drafts,
+            MetadataResolutionConcurrency,
+            reportFailures: false,
+            cancellationToken);
+
+        var retryDrafts = drafts
+            .Where(draft => !draft.HasProvidedTitle && string.IsNullOrWhiteSpace(draft.Title))
+            .ToArray();
+        if (retryDrafts.Length == 0)
+            return;
+
+        await Task.Delay(MetadataRetryDelay, cancellationToken);
+        await ResolvePendingNamesAttemptAsync(
+            retryDrafts,
+            MetadataRetryConcurrency,
+            reportFailures: true,
+            cancellationToken);
+    }
+
+    private async Task ResolvePendingNamesAttemptAsync(
+        IReadOnlyCollection<BatchDownloadDraft> drafts,
+        int maxConcurrency,
+        bool reportFailures,
+        CancellationToken cancellationToken)
+    {
+        using var gate = new SemaphoreSlim(maxConcurrency, maxConcurrency);
         var resolutions = drafts.Select(async draft =>
         {
             if (draft.HasProvidedTitle)
             {
+                if (_draftsAreExactCollectionImport
+                    && !string.IsNullOrWhiteSpace(_draftCollectionTitle))
+                {
+                    draft.Title = CollectionNamingService.BuildItemTitle(
+                        draft.Title,
+                        _draftCollectionTitle,
+                        draft.CollectionItemIndex,
+                        draft.CollectionItemCount);
+                }
+
                 draft.ResolvedInfo = DownloadRouteResolver.TryCreateLocalVideoInfo(
                     draft.Url,
                     out var localInfo)
@@ -873,9 +1000,8 @@ public partial class BatchDownloadViewModel : ObservableObject
                 draft.ResolvedInfo = info;
                 if (info is null)
                 {
-                    draft.ResolutionMessage = draft.HasProvidedTitle
-                        ? "未读取到元数据，下载时将重试解析"
-                        : "未能解析名称，请手动输入后继续";
+                    if (reportFailures)
+                        draft.ResolutionMessage = "自动重试后仍未解析名称，请手动输入后继续";
                     return;
                 }
 
@@ -893,17 +1019,25 @@ public partial class BatchDownloadViewModel : ObservableObject
                 }
 
                 if (string.IsNullOrWhiteSpace(draft.Title))
-                    draft.ResolutionMessage = "未能解析名称，请手动输入后继续";
+                {
+                    if (reportFailures)
+                        draft.ResolutionMessage = "自动重试后仍未解析名称，请手动输入后继续";
+                }
+                else
+                {
+                    draft.ResolutionMessage = "";
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw;
             }
-            catch
+            catch (Exception ex)
             {
-                draft.ResolutionMessage = draft.HasProvidedTitle
-                    ? "元数据解析失败，下载时将重试解析"
-                    : "名称解析失败，请手动输入后继续";
+                Debug.WriteLine(
+                    $"[BatchDownloadViewModel] Name resolution failed for {draft.Url}: {ex.Message}");
+                if (reportFailures)
+                    draft.ResolutionMessage = "自动重试后仍未解析名称，请手动输入后继续";
             }
             finally
             {
@@ -931,7 +1065,8 @@ public partial class BatchDownloadViewModel : ObservableObject
                 item.Title.Trim(),
                 item.ResolvedInfo,
                 item.CollectionItemIndex,
-                item.CollectionItemCount))
+                item.CollectionItemCount,
+                item.Resources))
             .ToList();
         var urls = confirmedItems.Select(item => item.Url).ToList();
         if (urls.Count == 0)
@@ -1057,6 +1192,47 @@ public partial class BatchDownloadViewModel : ObservableObject
                 };
                 await _downloadManager.EnqueueAsync(task, resolvedInfo);
                 enqueuedCount++;
+
+                foreach (var resource in item.Resources.Where(resource => resource.IsSelected))
+                {
+                    if (string.IsNullOrWhiteSpace(resource.Url))
+                        continue;
+
+                    var resourceTitle = string.IsNullOrWhiteSpace(resource.Title)
+                        ? GetResourceFileName(resource.Url)
+                        : resource.Title.Trim();
+                    var resourceExtension = HttpResourceDownloadService.ResolveExtension(
+                        resource.Url,
+                        resource.Extension,
+                        resource.MimeType);
+                    var resourceTask = new DownloadTask
+                    {
+                        Url = resource.Url,
+                        Title = resourceTitle,
+                        Format = resourceExtension,
+                        Quality = "best",
+                        OutputDirectory = outputDirectory,
+                        BatchId = batch?.Id ?? "",
+                        BatchName = batch?.Name ?? "",
+                        BatchDirectory = batch?.Directory ?? "",
+                        CollectionTitle = batch?.CollectionTitle ?? "",
+                        ResourceExtension = resourceExtension,
+                        ResourceMimeType = resource.MimeType,
+                        IsNonVideoResource = true
+                    };
+                    await _downloadManager.EnqueueAsync(
+                        resourceTask,
+                        new VideoInfo
+                        {
+                            Url = resource.Url,
+                            Title = resourceTitle,
+                            Platform = "HTTP资源",
+                            IsResource = true,
+                            Extension = resourceExtension,
+                            MimeType = resource.MimeType
+                        });
+                    enqueuedCount++;
+                }
             }
 
             if (isReusingExistingCollection)
@@ -1081,6 +1257,7 @@ public partial class BatchDownloadViewModel : ObservableObject
             }
             ResetNameConfirmation();
             ClearPendingCollectionImport();
+            ClearPlaylistPreview();
             SelectedQueueFilter = "进行中";
         }
         catch (Exception ex)
@@ -1184,27 +1361,173 @@ public partial class BatchDownloadViewModel : ObservableObject
     internal bool ApplyPlaylistImport(PlaylistInfo playlist)
     {
         ArgumentNullException.ThrowIfNull(playlist);
-        if (playlist.Urls.Count == 0)
+        var sourceEntries = playlist.Entries.Count > 0
+            ? playlist.Entries
+            : playlist.Urls.Select((url, index) => new PlaylistEntryInfo
+            {
+                Url = url,
+                OriginalIndex = index + 1,
+                Kind = PlaylistEntryKind.Unknown
+            }).ToList();
+        var entries = sourceEntries
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Url))
+            .GroupBy(entry => entry.Url.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Select((entry, index) => ClonePlaylistEntry(entry, index + 1))
+            .ToList();
+        if (entries.Count == 0)
             return false;
 
-        var urls = playlist.Urls
-            .Where(url => !string.IsNullOrWhiteSpace(url))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (urls.Count == 0)
-            return false;
         if (!IsBatchInputStep || IsResolvingNames || IsDownloading)
             return false;
 
-        UrlsText = string.Join("\n", urls);
+        _updatingPlaylistSelection = true;
+        try
+        {
+            foreach (var tracked in _trackedPlaylistEntries)
+                tracked.PropertyChanged -= OnPlaylistEntryPropertyChanged;
+            _trackedPlaylistEntries.Clear();
+            PlaylistEntries.Clear();
+            foreach (var entry in entries)
+                PlaylistEntries.Add(entry);
+        }
+        finally
+        {
+            _updatingPlaylistSelection = false;
+        }
+
+        PlaylistTitle = playlist.Title.Trim();
         _pendingCollectionTitle = playlist.Title.Trim();
-        _pendingCollectionUrls = urls;
+        _pendingCollectionUrls = entries.Select(entry => entry.Url).ToList();
+        UpdateUrlsFromPlaylistSelection();
         RequestShowNotification?.Invoke(
             string.IsNullOrWhiteSpace(playlist.Title)
-                ? $"已导入 {urls.Count} 个播放列表条目"
-                : $"已导入“{playlist.Title}”的 {urls.Count} 个条目",
+                ? $"已导入 {entries.Count} 个播放列表条目"
+                : $"已导入“{playlist.Title}”的 {entries.Count} 个条目",
             true);
         return true;
+    }
+
+    private static PlaylistEntryInfo ClonePlaylistEntry(PlaylistEntryInfo entry, int fallbackIndex)
+        => new()
+        {
+            Url = entry.Url.Trim(),
+            OriginalTitle = entry.OriginalTitle.Trim(),
+            OriginalIndex = entry.OriginalIndex > 0 ? entry.OriginalIndex : fallbackIndex,
+            SectionTitle = entry.SectionTitle.Trim(),
+            ParentTitle = entry.ParentTitle.Trim(),
+            Level = Math.Max(0, entry.Level),
+            Kind = entry.Kind,
+            Resources = entry.Resources,
+            IsSelected = true
+        };
+
+    private static string GetResourceFileName(string url)
+    {
+        try
+        {
+            var uri = new Uri(url);
+            var name = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
+            return string.IsNullOrWhiteSpace(name) ? "课程资源" : name;
+        }
+        catch (UriFormatException)
+        {
+            return "课程资源";
+        }
+    }
+
+    private void UpdateUrlsFromPlaylistSelection()
+    {
+        if (PlaylistEntries.Count == 0)
+            return;
+
+        _updatingPlaylistSelection = true;
+        try
+        {
+            UrlsText = string.Join(
+                "\n",
+                PlaylistEntries
+                    .Where(entry => entry.IsSelected)
+                    .OrderBy(entry => entry.OriginalIndex)
+                    .Select(entry => FormatBatchInput(new ParsedBatchInput(
+                        entry.Url,
+                        entry.OriginalTitle,
+                        !string.IsNullOrWhiteSpace(entry.OriginalTitle)))));
+        }
+        finally
+        {
+            _updatingPlaylistSelection = false;
+        }
+    }
+
+    [RelayCommand]
+    private void SelectAllPlaylistEntries() => SetPlaylistSelection(true);
+
+    [RelayCommand]
+    private void ClearPlaylistSelection() => SetPlaylistSelection(false);
+
+    private void SetPlaylistSelection(bool selected)
+    {
+        if (PlaylistEntries.Count == 0)
+            return;
+
+        _updatingPlaylistSelection = true;
+        try
+        {
+            foreach (var entry in PlaylistEntries)
+                entry.IsSelected = selected;
+        }
+        finally
+        {
+            _updatingPlaylistSelection = false;
+        }
+
+        UpdateUrlsFromPlaylistSelection();
+        RebuildPlaylistSections();
+        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
+        OnPropertyChanged(nameof(PlaylistSelectionSummary));
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand]
+    private void SelectPlaylistSection(string? sectionTitle)
+    {
+        if (string.IsNullOrWhiteSpace(sectionTitle) || PlaylistEntries.Count == 0)
+            return;
+
+        _updatingPlaylistSelection = true;
+        try
+        {
+            foreach (var entry in PlaylistEntries)
+            {
+                var currentTitle = string.IsNullOrWhiteSpace(entry.SectionTitle)
+                    ? "未分组"
+                    : entry.SectionTitle.Trim();
+                if (string.Equals(currentTitle, sectionTitle, StringComparison.Ordinal))
+                    entry.IsSelected = true;
+            }
+        }
+        finally
+        {
+            _updatingPlaylistSelection = false;
+        }
+
+        UpdateUrlsFromPlaylistSelection();
+        RebuildPlaylistSections();
+        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
+        OnPropertyChanged(nameof(PlaylistSelectionSummary));
+        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+    }
+
+    private void ClearPlaylistPreview()
+    {
+        foreach (var tracked in _trackedPlaylistEntries)
+            tracked.PropertyChanged -= OnPlaylistEntryPropertyChanged;
+        _trackedPlaylistEntries.Clear();
+        PlaylistEntries.Clear();
+        PlaylistSections.Clear();
+        PlaylistTitle = "";
+        ClearPendingCollectionImport();
     }
 
     private void ClearPendingCollectionImport()

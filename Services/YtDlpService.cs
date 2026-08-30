@@ -17,12 +17,24 @@ public class VideoInfo
     public long FileSize { get; set; }
     public string Url { get; set; } = "";
     public IReadOnlyList<VideoFormatInfo> AvailableFormats { get; set; } = [];
+    public bool IsResource { get; set; }
+    public string Extension { get; set; } = "";
+    public string MimeType { get; set; } = "";
 }
 
 public class PlaylistInfo
 {
     public string Title { get; set; } = "";
     public string SourceUrl { get; set; } = "";
+
+    /// <summary>
+    /// 保留平台原始顺序、标题和章节信息的条目列表。
+    /// </summary>
+    public List<PlaylistEntryInfo> Entries { get; set; } = [];
+
+    /// <summary>
+    /// 兼容旧调用方的扁平 URL 列表；新代码应优先使用 Entries。
+    /// </summary>
     public List<string> Urls { get; set; } = [];
 }
 
@@ -460,6 +472,7 @@ public partial class YtDlpService
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
         var urls = new List<string>();
+        var playlistEntries = new List<PlaylistEntryInfo>();
         var knownUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         if (root.TryGetProperty("entries", out var entries)
@@ -469,7 +482,24 @@ public partial class YtDlpService
             {
                 var videoUrl = ExtractPlaylistUrl(entry);
                 if (!string.IsNullOrWhiteSpace(videoUrl) && knownUrls.Add(videoUrl))
+                {
+                    var fallbackIndex = playlistEntries.Count + 1;
+                    var originalIndex = GetOptionalInt32(entry, "playlist_index");
+                    playlistEntries.Add(new PlaylistEntryInfo
+                    {
+                        Url = videoUrl,
+                        OriginalTitle = NormalizeMetadataTitle(GetOptionalString(entry, "title")),
+                        OriginalIndex = originalIndex > 0 ? originalIndex : fallbackIndex,
+                        SectionTitle = NormalizeMetadataTitle(
+                            GetOptionalString(entry, "section_title")),
+                        ParentTitle = NormalizeMetadataTitle(
+                            GetOptionalString(entry, "chapter")),
+                        Level = GetOptionalInt32(entry, "level"),
+                        Kind = ResolvePlaylistEntryKind(entry),
+                        Resources = ParsePlaylistResources(entry)
+                    });
                     urls.Add(videoUrl);
+                }
             }
         }
 
@@ -477,8 +507,74 @@ public partial class YtDlpService
         {
             Title = NormalizeMetadataTitle(GetOptionalString(root, "title")),
             SourceUrl = sourceUrl,
+            Entries = playlistEntries,
             Urls = urls
         };
+    }
+
+    private static PlaylistEntryKind ResolvePlaylistEntryKind(JsonElement entry)
+    {
+        var videoCodec = GetOptionalString(entry, "vcodec");
+        var audioCodec = GetOptionalString(entry, "acodec");
+        if (!string.IsNullOrWhiteSpace(videoCodec)
+            && !string.Equals(videoCodec, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return PlaylistEntryKind.Video;
+        }
+
+        if (!string.IsNullOrWhiteSpace(audioCodec)
+            && !string.Equals(audioCodec, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return PlaylistEntryKind.Audio;
+        }
+
+        var extension = GetOptionalString(entry, "ext");
+        return string.IsNullOrWhiteSpace(extension)
+            ? PlaylistEntryKind.Unknown
+            : PlaylistEntryKind.Resource;
+    }
+
+    private static IReadOnlyList<MediaResourceInfo> ParsePlaylistResources(JsonElement entry)
+    {
+        var resources = new List<MediaResourceInfo>();
+        foreach (var propertyName in new[] { "attachments", "resources", "files" })
+        {
+            if (!entry.TryGetProperty(propertyName, out var items)
+                || items.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var item in items.EnumerateArray())
+            {
+                var resourceUrl = GetOptionalString(item, "url");
+                if (string.IsNullOrWhiteSpace(resourceUrl)
+                    || !IsAbsoluteHttpUrl(resourceUrl)
+                    || resources.Any(resource => string.Equals(
+                        resource.Url,
+                        resourceUrl,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                resources.Add(new MediaResourceInfo
+                {
+                    Url = resourceUrl,
+                    Title = NormalizeMetadataTitle(
+                        GetOptionalString(item, "title"))
+                        is { Length: > 0 } title
+                        ? title
+                        : NormalizeMetadataTitle(GetOptionalString(item, "filename")),
+                    Extension = GetOptionalString(item, "ext").Trim().ToLowerInvariant(),
+                    MimeType = GetOptionalString(item, "mime_type").Trim(),
+                    Kind = PlaylistEntryKind.Resource,
+                    OriginalIndex = resources.Count + 1
+                });
+            }
+        }
+
+        return resources;
     }
 
     internal static string ExtractPlaylistUrlFromJson(string json)

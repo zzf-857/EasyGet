@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using EasyGet.Models;
@@ -117,6 +121,79 @@ public class M3u8DownloadServiceTests
         var segments = M3u8DownloadService.ParseSegments(m3u8Content, m3u8Url);
 
         Assert.Equal(["https://example.com/path/segment0.ts"], segments);
+    }
+
+    [Fact]
+    public void ParseMediaPlaylist_TracksAesKeyInitSegmentAndByteRanges()
+    {
+        const string m3u8Url = "https://example.com/video/index.m3u8";
+        const string content = """
+            #EXTM3U
+            #EXT-X-MEDIA-SEQUENCE:42
+            #EXT-X-KEY:METHOD=AES-128,URI="../keys/key.bin"
+            #EXT-X-MAP:URI="init.mp4"
+            #EXTINF:4,
+            #EXT-X-BYTERANGE:16@0
+            media.mp4
+            #EXTINF:4,
+            #EXT-X-BYTERANGE:16
+            media.mp4
+            """;
+
+        var playlist = M3u8DownloadService.ParseMediaPlaylist(content, m3u8Url);
+
+        Assert.Equal("https://example.com/video/init.mp4", playlist.InitializationSegment!.Url);
+        Assert.Equal("https://example.com/keys/key.bin", playlist.Segments[0].KeyUrl);
+        Assert.Equal(42, playlist.Segments[0].SequenceNumber);
+        Assert.Equal(43, playlist.Segments[1].SequenceNumber);
+        Assert.Equal(16, playlist.Segments[0].RangeLength);
+        Assert.Equal(0, playlist.Segments[0].RangeOffset);
+        Assert.Equal(16, playlist.Segments[1].RangeOffset);
+        Assert.Equal(16, playlist.Segments[1].RangeLength);
+    }
+
+    [Fact]
+    public async Task DownloadAsync_FollowsHighestBandwidthMasterPlaylistVariant()
+    {
+        using var root = new TestDirectory();
+        using var server = new MasterPlaylistDownloadServer();
+        var config = new ConfigService(root.Path("config"));
+        var service = new M3u8DownloadService(config, new EnvironmentService());
+        var task = new DownloadTask
+        {
+            Url = server.MasterUrl,
+            Title = "最高码率测试",
+            OutputDirectory = root.Path("downloads")
+        };
+
+        await service.DownloadAsync(task);
+
+        Assert.Equal(DownloadStatus.Completed, task.Status);
+        Assert.Equal("high-quality", File.ReadAllText(task.OutputFilePath));
+        Assert.Contains("/high/index.m3u8", server.RequestedPaths);
+        Assert.DoesNotContain("/low/index.m3u8", server.RequestedPaths);
+    }
+
+    [Fact]
+    public void DecryptAes128_RemovesHlsPkcs7Padding()
+    {
+        var key = Enumerable.Range(0, 16).Select(value => (byte)value).ToArray();
+        var iv = Enumerable.Range(16, 16).Select(value => (byte)value).ToArray();
+        var plaintext = Encoding.ASCII.GetBytes("HLS segment payload");
+        byte[] ciphertext;
+        using (var aes = Aes.Create())
+        {
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Key = key;
+            aes.IV = iv;
+            using var encryptor = aes.CreateEncryptor();
+            ciphertext = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
+        }
+
+        var decrypted = M3u8DownloadService.DecryptAes128(ciphertext, key, iv);
+
+        Assert.Equal(plaintext, decrypted);
     }
 
     [Fact]
@@ -598,5 +675,126 @@ public class M3u8DownloadServiceTests
     private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
     {
         public void Report(T value) => report(value);
+    }
+
+    private sealed class MasterPlaylistDownloadServer : IDisposable
+    {
+        private readonly TcpListener _listener = new(IPAddress.Loopback, 0);
+        private readonly CancellationTokenSource _cancellation = new();
+        private readonly Task _serverTask;
+        private readonly object _pathsLock = new();
+        private readonly List<string> _requestedPaths = [];
+
+        public MasterPlaylistDownloadServer()
+        {
+            _listener.Start();
+            var port = ((IPEndPoint)_listener.LocalEndpoint).Port;
+            MasterUrl = $"http://127.0.0.1:{port}/master.m3u8";
+            _serverTask = Task.Run(ServeAsync);
+        }
+
+        public string MasterUrl { get; }
+
+        public IReadOnlyList<string> RequestedPaths
+        {
+            get
+            {
+                lock (_pathsLock)
+                    return _requestedPaths.ToArray();
+            }
+        }
+
+        private async Task ServeAsync()
+        {
+            try
+            {
+                while (!_cancellation.IsCancellationRequested)
+                {
+                    var client = await _listener.AcceptTcpClientAsync(_cancellation.Token);
+                    _ = ServeClientAsync(client);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        }
+
+        private async Task ServeClientAsync(TcpClient client)
+        {
+            using (client)
+            {
+                try
+                {
+                    using var stream = client.GetStream();
+                    var requestBuffer = new byte[2048];
+                    var request = new StringBuilder();
+                    while (!request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
+                    {
+                        var read = await stream.ReadAsync(requestBuffer, _cancellation.Token);
+                        if (read == 0)
+                            return;
+                        request.Append(Encoding.ASCII.GetString(requestBuffer, 0, read));
+                    }
+
+                    var requestLine = request.ToString().Split("\r\n", 2, StringSplitOptions.None)[0];
+                    var requestParts = requestLine.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    var path = requestParts.Length > 1 ? requestParts[1] : "/";
+                    lock (_pathsLock)
+                        _requestedPaths.Add(path);
+
+                    var body = path switch
+                    {
+                        "/master.m3u8" => "#EXTM3U\n"
+                            + "#EXT-X-STREAM-INF:BANDWIDTH=800000\n"
+                            + "low/index.m3u8\n"
+                            + "#EXT-X-STREAM-INF:BANDWIDTH=2400000\n"
+                            + "high/index.m3u8\n",
+                        "/low/index.m3u8" => "#EXTM3U\n#EXTINF:1,\nsegment.ts\n",
+                        "/high/index.m3u8" => "#EXTM3U\n#EXTINF:1,\nsegment.ts\n",
+                        "/low/segment.ts" => "low-quality",
+                        "/high/segment.ts" => "high-quality",
+                        _ => "not found"
+                    };
+                    var status = path is "/master.m3u8" or "/low/index.m3u8" or "/high/index.m3u8"
+                        or "/low/segment.ts" or "/high/segment.ts"
+                        ? "200 OK"
+                        : "404 Not Found";
+                    var bodyBytes = Encoding.UTF8.GetBytes(body);
+                    var headers = Encoding.ASCII.GetBytes(
+                        $"HTTP/1.1 {status}\r\n"
+                        + "Content-Type: application/vnd.apple.mpegurl\r\n"
+                        + $"Content-Length: {bodyBytes.Length}\r\n"
+                        + "Connection: close\r\n\r\n");
+                    await stream.WriteAsync(headers, _cancellation.Token);
+                    await stream.WriteAsync(bodyBytes, _cancellation.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (IOException)
+                {
+                }
+                catch (ObjectDisposedException)
+                {
+                }
+            }
+        }
+
+        public void Dispose()
+        {
+            _cancellation.Cancel();
+            _listener.Stop();
+            try
+            {
+                _serverTask.Wait(TimeSpan.FromSeconds(1));
+            }
+            catch (AggregateException)
+            {
+            }
+            _cancellation.Dispose();
+        }
     }
 }

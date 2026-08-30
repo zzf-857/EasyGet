@@ -65,6 +65,7 @@ temp_ffmpeg*.txt
 
 ## Misc
 .worktrees/
+/mediago-main.zip
 nul
 *.tmp
 *.bak

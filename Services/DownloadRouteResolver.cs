@@ -6,12 +6,13 @@ internal enum DownloadEngine
 {
     YtDlp,
     M3u8,
-    Telegram
+    Telegram,
+    Resource
 }
 
 internal static class DownloadRouteResolver
 {
-    internal static DownloadEngine Resolve(string? url)
+    internal static DownloadEngine Resolve(string? url, bool resourceHint = false)
     {
         if (M3u8DownloadService.IsM3u8Url(url ?? ""))
             return DownloadEngine.M3u8;
@@ -19,15 +20,21 @@ internal static class DownloadRouteResolver
         if (TelegramDownloadService.IsTelegramUrl(url))
             return DownloadEngine.Telegram;
 
+        if (resourceHint || HttpResourceDownloadService.IsResourceUrl(url))
+            return DownloadEngine.Resource;
+
         return DownloadEngine.YtDlp;
     }
 
     internal static bool TryCreateLocalVideoInfo(
         string url,
         out VideoInfo info,
-        DateTime? now = null)
+        DateTime? now = null,
+        bool resourceHint = false,
+        string? resourceExtensionHint = null,
+        string? resourceMimeType = null)
     {
-        switch (Resolve(url))
+        switch (Resolve(url, resourceHint))
         {
             case DownloadEngine.M3u8:
                 info = CreateM3u8VideoInfo(url, now ?? DateTime.Now);
@@ -35,10 +42,46 @@ internal static class DownloadRouteResolver
             case DownloadEngine.Telegram:
                 info = CreateTelegramVideoInfo(url);
                 return true;
+            case DownloadEngine.Resource:
+                info = CreateResourceInfo(url, resourceExtensionHint, resourceMimeType);
+                return true;
             default:
                 info = null!;
                 return false;
         }
+    }
+
+    private static VideoInfo CreateResourceInfo(
+        string url,
+        string? extensionHint = null,
+        string? mimeType = null)
+    {
+        var title = "课程资源";
+        var extension = HttpResourceDownloadService.ResolveExtension(url, extensionHint, mimeType);
+        try
+        {
+            var uri = new Uri(url);
+            var fileName = Path.GetFileName(Uri.UnescapeDataString(uri.AbsolutePath));
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                title = Path.GetFileNameWithoutExtension(fileName);
+                if (string.IsNullOrWhiteSpace(title))
+                    title = fileName;
+            }
+        }
+        catch (UriFormatException)
+        {
+        }
+
+        return new VideoInfo
+        {
+            Title = title,
+            Platform = "HTTP资源",
+            Url = url,
+            IsResource = true,
+            Extension = extension,
+            MimeType = mimeType?.Trim() ?? ""
+        };
     }
 
     private static VideoInfo CreateM3u8VideoInfo(string url, DateTime now)

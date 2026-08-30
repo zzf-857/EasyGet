@@ -1,10 +1,14 @@
 using System;
 using System.Buffers;
+using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,6 +23,9 @@ public class M3u8DownloadService
 
     private readonly ConfigService _configService;
     private readonly EnvironmentService _envService;
+
+    private const int ManifestMaxRetries = 3;
+    private const int MaxPlaylistNestingDepth = 4;
 
     public M3u8DownloadService(ConfigService configService, EnvironmentService envService)
     {
@@ -107,7 +114,11 @@ public class M3u8DownloadService
             string m3u8Content;
             try
             {
-                m3u8Content = await httpClient.GetStringAsync(task.Url, ct);
+                m3u8Content = await GetPlaylistContentWithRetryAsync(
+                    httpClient,
+                    task.Url,
+                    logCallback,
+                    ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -118,9 +129,20 @@ public class M3u8DownloadService
                 throw new Exception($"无法获取 m3u8 文件: {ex.Message}", ex);
             }
 
-            var segments = ParseSegments(m3u8Content, task.Url);
+            var playlist = await LoadMediaPlaylistAsync(
+                httpClient,
+                m3u8Content,
+                task.Url,
+                logCallback,
+                ct);
+            var segmentRequests = playlist.Segments;
+            var segments = segmentRequests.Select(segment => segment.Url).ToList();
             var totalSegments = segments.Count;
             logCallback?.Invoke($"[m3u8] 共解析出 {totalSegments} 个视频分片。");
+
+            long totalDownloadedBytes = 0;
+            long lastReportedBytes = 0;
+            long completedSegments = 0;
 
             if (totalSegments == 0)
             {
@@ -132,12 +154,26 @@ public class M3u8DownloadService
                 Directory.CreateDirectory(tempDir);
             }
 
+            var keyCache = new ConcurrentDictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
+            string? initializationPath = null;
+            if (playlist.InitializationSegment is not null)
+            {
+                initializationPath = Path.Combine(tempDir, "init.segment");
+                logCallback?.Invoke("[m3u8] 正在下载 fMP4 初始化片段...");
+                var initializationDownloaded = await DownloadRequestWithRetryAsync(
+                    httpClient,
+                    playlist.InitializationSegment,
+                    initializationPath,
+                    bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
+                    logCallback,
+                    keyCache,
+                    ct);
+                if (!initializationDownloaded)
+                    throw new IOException("M3U8 初始化片段下载失败，已停止合并。");
+            }
+
             // 2. 多线程下载分片
             logCallback?.Invoke("[m3u8] 开始多线程下载分片...");
-            long totalDownloadedBytes = 0;
-            long lastReportedBytes = 0;
-            long completedSegments = 0;
-
             var stopwatch = Stopwatch.StartNew();
             using var speedReportCancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var speedReportTask = RunPeriodicProgressReporterAsync(
@@ -181,11 +217,13 @@ public class M3u8DownloadService
                     maxParallelSegments,
                     (index, segUrl) => DownloadSegmentWithRetryAsync(
                         httpClient,
+                        segmentRequests[index],
                         segUrl,
                         index,
                         tempDir,
                         bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
                         logCallback,
+                        keyCache,
                         ct),
                     _ =>
                     {
@@ -211,11 +249,13 @@ public class M3u8DownloadService
                         maxParallelSegments,
                         (index, segUrl) => DownloadSegmentWithRetryAsync(
                             httpClient,
+                            segmentRequests[index],
                             segUrl,
                             index,
                             tempDir,
                             bytes => Interlocked.Add(ref totalDownloadedBytes, bytes),
                             logCallback,
+                            keyCache,
                             ct),
                         _ => Interlocked.Increment(ref completedSegments),
                         logCallback,
@@ -241,6 +281,18 @@ public class M3u8DownloadService
             // 4. 拼接分片为单个 ts 文件
             using (var outfile = new FileStream(outputTsPath, FileMode.Create, FileAccess.Write, FileShare.None, SegmentIoBufferSize, useAsync: true))
             {
+                if (initializationPath is not null)
+                {
+                    await using var initializationFile = new FileStream(
+                        initializationPath,
+                        FileMode.Open,
+                        FileAccess.Read,
+                        FileShare.Read,
+                        SegmentIoBufferSize,
+                        useAsync: true);
+                    await initializationFile.CopyToAsync(outfile, SegmentIoBufferSize, ct);
+                }
+
                 for (int i = 0; i < totalSegments; i++)
                 {
                     var partPath = Path.Combine(tempDir, $"{i:D4}.ts");
@@ -363,36 +415,435 @@ public class M3u8DownloadService
         if (!playlist.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase))
             throw new NotSupportedException("不是有效的 M3U8 播放列表");
 
-        var segments = new List<string>();
-        var baseUri = new Uri(m3u8Url);
+        var mediaPlaylist = ParseMediaPlaylist(m3u8Content, m3u8Url);
+        if (mediaPlaylist.Segments.Any(segment => !string.IsNullOrWhiteSpace(segment.KeyUrl)))
+            throw new NotSupportedException("该 m3u8 视频流被加密，当前同步解析入口不执行解密。");
 
-        foreach (var line in EnumeratePlaylistLines(playlist))
+        return mediaPlaylist.Segments
+            .Select(segment => segment.Url)
+            .ToList();
+    }
+
+    internal static M3u8MediaPlaylist ParseMediaPlaylist(string m3u8Content, string m3u8Url)
+    {
+        ArgumentNullException.ThrowIfNull(m3u8Content);
+        var playlist = StripPlaylistPreamble(m3u8Content);
+        if (!playlist.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("不是有效的 M3U8 播放列表");
+
+        var baseUri = CreatePlaylistUri(m3u8Url);
+        var segments = new List<M3u8SegmentRequest>();
+        M3u8SegmentRequest? initializationSegment = null;
+        M3u8KeyState? currentKey = null;
+        long? previousByteRangeEnd = null;
+        string? previousByteRangeUrl = null;
+        var nextSequence = 0L;
+        var hasVariant = false;
+        var hasMediaSegment = false;
+        string? pendingByteRangeText = null;
+        var lines = EnumeratePlaylistLines(playlist).ToList();
+
+        for (var lineIndex = 0; lineIndex < lines.Count; lineIndex++)
         {
-            var trimmedLine = line.Span.Trim();
+            var trimmedLine = lines[lineIndex].Span.Trim();
             if (trimmedLine.IsEmpty)
                 continue;
 
-            // 主播放列表和加密媒体列表都不能按普通 TS 分片直接拼接。
             if (trimmedLine.StartsWith("#EXT-X-STREAM-INF", StringComparison.OrdinalIgnoreCase))
+            {
+                hasVariant = true;
+                continue;
+            }
+
+            if (trimmedLine.StartsWith("#EXT-X-MEDIA-SEQUENCE:", StringComparison.OrdinalIgnoreCase))
+            {
+                if (long.TryParse(
+                        trimmedLine["#EXT-X-MEDIA-SEQUENCE:".Length..].Trim(),
+                        NumberStyles.Integer,
+                        CultureInfo.InvariantCulture,
+                        out var parsedSequence)
+                    && parsedSequence >= 0)
+                {
+                    nextSequence = parsedSequence;
+                }
+                continue;
+            }
+
+            if (trimmedLine.StartsWith("#EXT-X-KEY:", StringComparison.OrdinalIgnoreCase))
+            {
+                currentKey = ParseKeyState(trimmedLine["#EXT-X-KEY:".Length..].ToString(), baseUri, nextSequence);
+                continue;
+            }
+
+            if (trimmedLine.StartsWith("#EXT-X-MAP:", StringComparison.OrdinalIgnoreCase))
+            {
+                var attributes = ParseAttributeList(trimmedLine["#EXT-X-MAP:".Length..].ToString());
+                var mapUrl = ResolveRequiredUri(attributes, "URI", baseUri, "初始化片段");
+                M3u8ByteRange? mapRange = null;
+                if (attributes.TryGetValue("BYTERANGE", out var mapRangeText))
+                {
+                    if (!TryParseByteRange(mapRangeText, 0, out var parsedMapRange))
+                        throw new NotSupportedException($"无法解析 M3U8 初始化片段字节范围: {mapRangeText}");
+                    mapRange = parsedMapRange;
+                }
+                var parsedMap = new M3u8SegmentRequest(
+                    mapUrl,
+                    currentKey?.KeyUrl,
+                    currentKey?.InitializationVector,
+                    mapRange?.Length,
+                    mapRange?.Offset,
+                    nextSequence);
+                if (initializationSegment is not null
+                    && (!string.Equals(initializationSegment.Url, parsedMap.Url, StringComparison.Ordinal)
+                        || initializationSegment.RangeLength != parsedMap.RangeLength
+                        || initializationSegment.RangeOffset != parsedMap.RangeOffset))
+                {
+                    throw new NotSupportedException("该 M3U8 包含多个初始化片段，当前无法安全拼接。");
+                }
+
+                initializationSegment = parsedMap;
+                continue;
+            }
+
+            if (trimmedLine.StartsWith("#EXT-X-BYTERANGE:", StringComparison.OrdinalIgnoreCase))
+            {
+                pendingByteRangeText = trimmedLine["#EXT-X-BYTERANGE:".Length..].ToString().Trim();
+                continue;
+            }
+
+            if (trimmedLine.StartsWith("#", StringComparison.Ordinal))
+                continue;
+
+            if (hasVariant && !hasMediaSegment)
             {
                 throw new NotSupportedException(
                     "该 m3u8 是主播放列表，包含多个码率的子播放列表。请提供具体媒体播放列表链接后重试。");
             }
 
-            if (trimmedLine.StartsWith("#EXT-X-KEY", StringComparison.OrdinalIgnoreCase))
+            var segmentUrl = new Uri(baseUri, trimmedLine.ToString()).AbsoluteUri;
+            M3u8ByteRange? byteRange = null;
+            if (pendingByteRangeText is not null)
             {
-                throw new NotSupportedException("该 m3u8 视频流被加密，当前暂不支持下载。");
+                var fallbackOffset = string.Equals(previousByteRangeUrl, segmentUrl, StringComparison.Ordinal)
+                    ? previousByteRangeEnd
+                    : null;
+                if (!TryParseByteRange(pendingByteRangeText, fallbackOffset, out var parsedByteRange))
+                {
+                    throw new NotSupportedException($"无法解析 M3U8 字节范围: {pendingByteRangeText}");
+                }
+
+                byteRange = parsedByteRange;
+                previousByteRangeEnd = parsedByteRange.Offset + parsedByteRange.Length;
+                previousByteRangeUrl = segmentUrl;
+                pendingByteRangeText = null;
             }
 
-            if (!trimmedLine.StartsWith("#", StringComparison.Ordinal))
+            segments.Add(new M3u8SegmentRequest(
+                segmentUrl,
+                currentKey?.KeyUrl,
+                currentKey?.InitializationVector ?? CreateInitializationVector(nextSequence),
+                byteRange?.Length,
+                byteRange?.Offset,
+                nextSequence));
+            hasMediaSegment = true;
+            nextSequence++;
+        }
+
+        if (hasVariant)
+        {
+            throw new NotSupportedException(
+                "该 m3u8 是主播放列表，包含多个码率的子播放列表。请提供具体媒体播放列表链接后重试。");
+        }
+
+        return new M3u8MediaPlaylist(segments, initializationSegment);
+    }
+
+    private async Task<M3u8MediaPlaylist> LoadMediaPlaylistAsync(
+        HttpClient httpClient,
+        string initialContent,
+        string initialUrl,
+        Action<string>? logCallback,
+        CancellationToken ct)
+    {
+        var content = initialContent;
+        var url = initialUrl;
+
+        for (var depth = 0; depth < MaxPlaylistNestingDepth; depth++)
+        {
+            if (!TryParseMasterPlaylist(content, url, out var variants))
+                return ParseMediaPlaylist(content, url);
+
+            var selected = variants
+                .OrderByDescending(variant => variant.Bandwidth)
+                .ThenByDescending(variant => variant.Height)
+                .FirstOrDefault();
+            if (selected is null)
+                throw new NotSupportedException("M3U8 主播放列表没有可用的媒体变体。");
+
+            logCallback?.Invoke(
+                $"[m3u8] 检测到主播放列表，选择最高码率变体: {selected.Bandwidth} bps"
+                + (selected.Height > 0 ? $" ({selected.Height}p)" : ""));
+            url = selected.Url;
+            content = await GetPlaylistContentWithRetryAsync(httpClient, url, logCallback, ct);
+        }
+
+        throw new NotSupportedException("M3U8 子播放列表嵌套层级过深，已停止解析。");
+    }
+
+    private static bool TryParseMasterPlaylist(
+        string content,
+        string playlistUrl,
+        out List<M3u8Variant> variants)
+    {
+        variants = [];
+        var normalized = StripPlaylistPreamble(content);
+        if (!normalized.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase))
+            throw new NotSupportedException("不是有效的 M3U8 播放列表");
+
+        var baseUri = CreatePlaylistUri(playlistUrl);
+        M3u8VariantBuilder? pending = null;
+        foreach (var line in EnumeratePlaylistLines(normalized))
+        {
+            var trimmed = line.Span.Trim();
+            if (trimmed.IsEmpty)
+                continue;
+
+            if (trimmed.StartsWith("#EXT-X-STREAM-INF:", StringComparison.OrdinalIgnoreCase))
             {
-                // 用 Uri 类自动解析相对路径拼接
-                var segmentUri = new Uri(baseUri, trimmedLine.ToString());
-                segments.Add(segmentUri.AbsoluteUri);
+                var attributes = ParseAttributeList(trimmed["#EXT-X-STREAM-INF:".Length..].ToString());
+                pending = new M3u8VariantBuilder(
+                    ParseLongAttribute(attributes, "BANDWIDTH"),
+                    ParseResolutionHeight(attributes.GetValueOrDefault("RESOLUTION")));
+                continue;
+            }
+
+            if (pending is not null && !trimmed.StartsWith("#", StringComparison.Ordinal))
+            {
+                variants.Add(new M3u8Variant(
+                    new Uri(baseUri, trimmed.ToString()).AbsoluteUri,
+                    pending.Bandwidth,
+                    pending.Height));
+                pending = null;
             }
         }
 
-        return segments;
+        return variants.Count > 0;
+    }
+
+    private async Task<string> GetPlaylistContentWithRetryAsync(
+        HttpClient httpClient,
+        string url,
+        Action<string>? logCallback,
+        CancellationToken ct)
+    {
+        Exception? lastException = null;
+        for (var attempt = 1; attempt <= ManifestMaxRetries; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var response = await httpClient.GetAsync(
+                    url,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    ct);
+                response.EnsureSuccessStatusCode();
+                return await response.Content.ReadAsStringAsync(ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException)
+            {
+                lastException = ex;
+                if (attempt == ManifestMaxRetries)
+                    break;
+
+                logCallback?.Invoke($"[m3u8] 清单请求失败，将在第 {attempt} 次重试: {ex.Message}");
+                await Task.Delay(TimeSpan.FromMilliseconds(350 * attempt), ct);
+            }
+        }
+
+        throw new IOException($"无法获取 M3U8 清单: {lastException?.Message}", lastException);
+    }
+
+    private static Uri CreatePlaylistUri(string value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new NotSupportedException("M3U8 地址必须是有效的 HTTP/HTTPS 链接。");
+        }
+
+        return uri;
+    }
+
+    private static M3u8KeyState? ParseKeyState(
+        string value,
+        Uri baseUri,
+        long sequence)
+    {
+        var attributes = ParseAttributeList(value);
+        var method = attributes.GetValueOrDefault("METHOD", "NONE");
+        if (string.Equals(method, "NONE", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        if (!string.Equals(method, "AES-128", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException(
+                $"该 M3U8 使用 {method} 加密方式，当前仅支持 AES-128。");
+        }
+
+        if (attributes.TryGetValue("KEYFORMAT", out var keyFormat)
+            && !string.Equals(keyFormat, "identity", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new NotSupportedException("该 M3U8 使用非 identity 密钥格式，当前无法解密。");
+        }
+
+        var keyUrl = ResolveRequiredUri(attributes, "URI", baseUri, "AES-128 密钥");
+        byte[]? iv = null;
+        if (attributes.TryGetValue("IV", out var ivText))
+            iv = ParseInitializationVector(ivText);
+
+        return new M3u8KeyState(keyUrl, iv, sequence);
+    }
+
+    private static byte[] ParseInitializationVector(string text)
+    {
+        var normalized = text.Trim();
+        if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized[2..];
+        if (normalized.Length > 32 || normalized.Length == 0)
+            throw new NotSupportedException("M3U8 AES-128 IV 长度无效。");
+
+        normalized = normalized.PadLeft(32, '0');
+        var iv = new byte[16];
+        for (var index = 0; index < iv.Length; index++)
+        {
+            if (!byte.TryParse(
+                    normalized.AsSpan(index * 2, 2),
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out iv[index]))
+            {
+                throw new NotSupportedException("M3U8 AES-128 IV 不是有效的十六进制值。");
+            }
+        }
+
+        return iv;
+    }
+
+    private static byte[] CreateInitializationVector(long sequence)
+    {
+        var iv = new byte[16];
+        BinaryPrimitives.WriteUInt64BigEndian(iv.AsSpan(8), checked((ulong)sequence));
+        return iv;
+    }
+
+    private static Dictionary<string, string> ParseAttributeList(string value)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var start = 0;
+        var inQuotes = false;
+        for (var index = 0; index <= value.Length; index++)
+        {
+            var isEnd = index == value.Length;
+            if (!isEnd && value[index] == '"')
+                inQuotes = !inQuotes;
+            if (!isEnd && (value[index] != ',' || inQuotes))
+                continue;
+
+            var item = value[start..index].Trim();
+            var equals = item.IndexOf('=');
+            if (equals > 0)
+            {
+                var key = item[..equals].Trim();
+                var itemValue = item[(equals + 1)..].Trim();
+                if (itemValue.Length >= 2 && itemValue[0] == '"' && itemValue[^1] == '"')
+                    itemValue = itemValue[1..^1];
+                result[key] = itemValue;
+            }
+
+            start = index + 1;
+        }
+
+        return result;
+    }
+
+    private static string ResolveRequiredUri(
+        IReadOnlyDictionary<string, string> attributes,
+        string attributeName,
+        Uri baseUri,
+        string description)
+    {
+        if (!attributes.TryGetValue(attributeName, out var value)
+            || string.IsNullOrWhiteSpace(value))
+        {
+            throw new NotSupportedException($"M3U8 {description}缺少 URI。");
+        }
+
+        return new Uri(baseUri, value.Trim()).AbsoluteUri;
+    }
+
+    private static long ParseLongAttribute(
+        IReadOnlyDictionary<string, string> attributes,
+        string name)
+        => attributes.TryGetValue(name, out var value)
+           && long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result)
+            ? Math.Max(0, result)
+            : 0;
+
+    private static int ParseResolutionHeight(string? resolution)
+    {
+        if (string.IsNullOrWhiteSpace(resolution))
+            return 0;
+        var separator = resolution.IndexOf('x');
+        return separator >= 0
+               && int.TryParse(
+                   resolution[(separator + 1)..],
+                   NumberStyles.Integer,
+                   CultureInfo.InvariantCulture,
+                   out var height)
+            ? Math.Max(0, height)
+            : 0;
+    }
+
+    private static bool TryParseByteRange(
+        string? value,
+        long? fallbackOffset,
+        out M3u8ByteRange range)
+    {
+        range = default;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var parts = value.Trim().Split('@', 2);
+        if (!long.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var length)
+            || length <= 0)
+        {
+            return false;
+        }
+
+        long offset;
+        if (parts.Length == 2)
+        {
+            if (!long.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out offset)
+                || offset < 0)
+            {
+                return false;
+            }
+        }
+        else if (fallbackOffset is { } previousOffset)
+        {
+            offset = previousOffset;
+        }
+        else
+        {
+            return false;
+        }
+
+        range = new M3u8ByteRange(length, offset);
+        return true;
     }
 
     internal static string StripPlaylistPreamble(string content)
@@ -619,67 +1070,248 @@ public class M3u8DownloadService
     }
 
     /// <summary>
-    /// 带有重试机制的单分片下载
+    /// 带有重试、字节范围和 AES-128 解密能力的单分片下载。
     /// </summary>
-    private static async Task<bool> DownloadSegmentWithRetryAsync(
+    private static Task<bool> DownloadSegmentWithRetryAsync(
         HttpClient httpClient,
+        M3u8SegmentRequest request,
         string url,
         int index,
         string tempDir,
         Action<int>? onBytesRead,
         Action<string>? logCallback,
+        ConcurrentDictionary<string, byte[]> keyCache,
         CancellationToken ct)
     {
         var filePath = Path.Combine(tempDir, $"{index:D4}.ts");
+        return DownloadRequestWithRetryAsync(
+            httpClient,
+            request with { Url = url },
+            filePath,
+            onBytesRead,
+            logCallback,
+            keyCache,
+            ct);
+    }
+
+    private static async Task<bool> DownloadRequestWithRetryAsync(
+        HttpClient httpClient,
+        M3u8SegmentRequest request,
+        string filePath,
+        Action<int>? onBytesRead,
+        Action<string>? logCallback,
+        ConcurrentDictionary<string, byte[]> keyCache,
+        CancellationToken ct)
+    {
         const int maxRetries = 5;
-        var buffer = ArrayPool<byte>.Shared.Rent(SegmentIoBufferSize);
-
-        try
+        for (var attempt = 1; attempt <= maxRetries; attempt++)
         {
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            ct.ThrowIfCancellationRequested();
+            try
             {
-                if (ct.IsCancellationRequested)
-                    return false;
+                using var httpRequest = new HttpRequestMessage(HttpMethod.Get, request.Url);
+                if (request.RangeLength is { } rangeLength && request.RangeOffset is { } rangeOffset)
+                {
+                    httpRequest.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(
+                        rangeOffset,
+                        checked(rangeOffset + rangeLength - 1));
+                }
 
+                using var response = await httpClient.SendAsync(
+                    httpRequest,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    ct);
+                response.EnsureSuccessStatusCode();
+                await using var responseStream = await response.Content.ReadAsStreamAsync(ct);
+
+                if (request.RangeLength is null && string.IsNullOrWhiteSpace(request.KeyUrl))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+                    await using var output = new FileStream(
+                        filePath,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        SegmentIoBufferSize,
+                        useAsync: true);
+                    var streamingBuffer = ArrayPool<byte>.Shared.Rent(SegmentIoBufferSize);
+                    var streamedBytes = 0L;
+                    try
+                    {
+                        int read;
+                        while ((read = await responseStream.ReadAsync(
+                                   streamingBuffer.AsMemory(0, SegmentIoBufferSize),
+                                   ct)) > 0)
+                        {
+                            await output.WriteAsync(streamingBuffer.AsMemory(0, read), ct);
+                            streamedBytes += read;
+                            onBytesRead?.Invoke(read);
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(streamingBuffer);
+                    }
+
+                    if (streamedBytes <= 0)
+                        throw new IOException("服务器返回了空的 M3U8 分片。");
+
+                    return true;
+                }
+
+                using var memory = new MemoryStream();
+                var buffer = ArrayPool<byte>.Shared.Rent(SegmentIoBufferSize);
                 try
                 {
-                    using var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
-                    response.EnsureSuccessStatusCode();
-
-                    using var stream = await response.Content.ReadAsStreamAsync(ct);
-                    using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, SegmentIoBufferSize, useAsync: true);
-
                     int read;
-                    while ((read = await stream.ReadAsync(buffer.AsMemory(0, SegmentIoBufferSize), ct)) > 0)
+                    while ((read = await responseStream.ReadAsync(
+                               buffer.AsMemory(0, SegmentIoBufferSize),
+                               ct)) > 0)
                     {
-                        await fileStream.WriteAsync(buffer.AsMemory(0, read), ct);
-                        onBytesRead?.Invoke(read);
+                        await memory.WriteAsync(buffer.AsMemory(0, read), ct);
                     }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer);
+                }
+                var bytes = memory.ToArray();
+                onBytesRead?.Invoke(bytes.Length);
 
-                    return true; // 下载成功
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                if (request.RangeLength is { } expectedLength)
                 {
-                    throw;
-                }
-                catch (Exception ex)
-                {
-                    if (attempt == maxRetries || ct.IsCancellationRequested)
+                    if (bytes.Length < expectedLength)
+                        throw new IOException($"服务器返回的字节范围长度不足（期望 {expectedLength}，实际 {bytes.Length}）。");
+
+                    if (response.StatusCode == HttpStatusCode.OK)
                     {
-                        logCallback?.Invoke($"[m3u8] 分片 {index} 下载最终失败 (尝试了 {maxRetries} 次): {ex.Message}");
-                        return false;
+                        var offset = checked((int)request.RangeOffset!.Value);
+                        if (offset > bytes.Length - expectedLength)
+                            throw new IOException("服务器忽略了 M3U8 字节范围请求。");
+                        bytes = bytes.AsSpan(offset, checked((int)expectedLength)).ToArray();
                     }
-
-                    // 线性避让退避
-                    await Task.Delay(1000 * attempt, ct);
+                    else if (bytes.Length > expectedLength)
+                    {
+                        bytes = bytes[..checked((int)expectedLength)];
+                    }
                 }
+
+                if (!string.IsNullOrWhiteSpace(request.KeyUrl))
+                {
+                    var key = await GetKeyBytesAsync(
+                        httpClient,
+                        request.KeyUrl,
+                        keyCache,
+                        logCallback,
+                        ct);
+                    bytes = DecryptAes128(bytes, key, request.InitializationVector
+                        ?? CreateInitializationVector(request.SequenceNumber));
+                }
+
+                if (bytes.Length == 0)
+                    throw new IOException("服务器返回了空的 M3U8 分片。");
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+                await File.WriteAllBytesAsync(filePath, bytes, ct);
+                return true;
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                TryDeleteTemporaryFile(filePath);
+                if (attempt == maxRetries || ct.IsCancellationRequested)
+                {
+                    logCallback?.Invoke($"[m3u8] 分片下载最终失败 (尝试了 {maxRetries} 次): {ex.Message}");
+                    return false;
+                }
 
-            return false;
+                await Task.Delay(TimeSpan.FromMilliseconds(500 * attempt), ct);
+            }
         }
-        finally
+
+        return false;
+    }
+
+    private static async Task<byte[]> GetKeyBytesAsync(
+        HttpClient httpClient,
+        string keyUrl,
+        ConcurrentDictionary<string, byte[]> keyCache,
+        Action<string>? logCallback,
+        CancellationToken ct)
+    {
+        if (keyCache.TryGetValue(keyUrl, out var cached))
+            return cached;
+
+        Exception? lastException = null;
+        for (var attempt = 1; attempt <= ManifestMaxRetries; attempt++)
         {
-            ArrayPool<byte>.Shared.Return(buffer);
+            try
+            {
+                var bytes = await httpClient.GetByteArrayAsync(keyUrl, ct);
+                if (bytes.Length != 16)
+                    throw new CryptographicException($"AES-128 密钥长度无效（实际 {bytes.Length} 字节）。");
+                keyCache[keyUrl] = bytes;
+                return bytes;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                lastException = ex;
+                if (attempt == ManifestMaxRetries)
+                    break;
+                logCallback?.Invoke($"[m3u8] 密钥请求失败，将在第 {attempt} 次重试: {ex.Message}");
+                await Task.Delay(TimeSpan.FromMilliseconds(350 * attempt), ct);
+            }
         }
+
+        throw new IOException($"无法获取 M3U8 AES-128 密钥: {lastException?.Message}", lastException);
+    }
+
+    internal static byte[] DecryptAes128(byte[] encryptedBytes, byte[] key, byte[] initializationVector)
+    {
+        ArgumentNullException.ThrowIfNull(encryptedBytes);
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(initializationVector);
+        if (key.Length != 16 || initializationVector.Length != 16)
+            throw new CryptographicException("AES-128 密钥或 IV 长度无效。");
+        if (encryptedBytes.Length == 0 || encryptedBytes.Length % 16 != 0)
+            throw new CryptographicException("AES-128 分片长度不是 16 字节的整数倍。");
+
+        using var aes = Aes.Create();
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+        aes.Key = key;
+        aes.IV = initializationVector;
+        using var decryptor = aes.CreateDecryptor();
+        return decryptor.TransformFinalBlock(encryptedBytes, 0, encryptedBytes.Length);
     }
 }
+
+internal sealed record M3u8MediaPlaylist(
+    IReadOnlyList<M3u8SegmentRequest> Segments,
+    M3u8SegmentRequest? InitializationSegment);
+
+internal sealed record M3u8SegmentRequest(
+    string Url,
+    string? KeyUrl,
+    byte[]? InitializationVector,
+    long? RangeLength,
+    long? RangeOffset,
+    long SequenceNumber);
+
+internal sealed record M3u8KeyState(
+    string KeyUrl,
+    byte[]? InitializationVector,
+    long SequenceNumber);
+
+internal readonly record struct M3u8ByteRange(long Length, long Offset);
+
+internal sealed record M3u8Variant(string Url, long Bandwidth, int Height);
+
+internal sealed record M3u8VariantBuilder(long Bandwidth, int Height);
