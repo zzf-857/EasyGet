@@ -1,5 +1,20 @@
 # Changelog
 
+## 1.4.6 - 2026-08-30
+
+### Collection Subscriptions
+- Persist collection source links and their original download directories after batch import, then support manual checks and configurable scheduled refreshes for newly published videos.
+- List newly discovered video titles in a dedicated update view, allow selecting individual entries or downloading all updates, and keep new downloads in the collection's original directory.
+- Track queued, downloaded, skipped, cancelled, and retried collection entries across restarts while avoiding duplicate downloads and preserving subscription state through backup and restore.
+
+### Streaming Downloads
+- Improve multi-entry collection parsing and naming, preserve collection metadata throughout the download queue, and route direct HTTP media resources through a dedicated downloader.
+- Harden M3U8 downloads, retry and cancellation behavior, output reservation, progress reporting, and task persistence for long-running streaming downloads.
+
+### Tests
+- Add focused coverage for collection refresh coordination, subscription persistence, update selection, download-state synchronization, HTTP resources, M3U8 downloads, configuration, history, backup, and queue recovery.
+- Verified 1404 automated tests pass; 1 live network test remains explicitly skipped.
+
 ## 1.4.5 - 2026-08-14
 
 ### Release Recovery
