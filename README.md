@@ -22,17 +22,17 @@
 
 EasyGet 是一款基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 并扩展专用解析器的 Windows 桌面视频下载工具，支持 YouTube、Bilibili、X(Twitter)、Instagram、抖音、央视频等网站的视频下载。项目采用 WPF + MVVM 架构，提供暗色主题、多任务队列、下载历史、智能登录与 Cookie、播放列表导入和环境自动安装等能力。
 
-## 🖼️ 当前界面
+## 🖼️ 界面设计存档（v1.0）
 
-以下截图基于当前版本截取，示例路径与历史内容已做脱敏处理。
+以下图片是 2026-06-11 的 v1.0 设计与过程存档，部分素材为概念图，仅作历史参考，不代表当前版本的实机界面。
 
 | 视频下载 | 批量下载 |
 |---|---|
-| ![视频下载页](docs/screenshots/download-view.png) | ![批量下载页](docs/screenshots/batch-download-view.png) |
+| ![视频下载页](Designer/v1.0/2026-06-11-readme-screenshots/download-view.png) | ![批量下载页](Designer/v1.0/2026-06-11-readme-screenshots/batch-download-view.png) |
 
 | 历史记录 | 设置 |
 |---|---|
-| ![历史记录页](docs/screenshots/history-view.png) | ![设置页](docs/screenshots/settings-view.png) |
+| ![历史记录页](Designer/v1.0/2026-06-11-readme-screenshots/history-view.png) | ![设置页](Designer/v1.0/2026-06-11-readme-screenshots/settings-view.png) |
 
 ## ✨ 功能特性
 

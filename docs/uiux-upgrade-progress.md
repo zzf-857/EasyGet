@@ -49,7 +49,7 @@
 - `ViewModels/SettingsViewModel.cs`（修改）
 - `EasyGet.Tests/XamlBindingTests.cs`（修改）
 - `EasyGet.Tests/UiTruthfulnessViewModelTests.cs`（新增）
-- `docs/screenshots/uiux-v2/UX-001-download-status.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-001-download-status.png`（新增）
 
 **实现说明**：
 侧栏账号文案改为绑定 `MainViewModel.AppVersion`，版本号统一来自程序集版本。
@@ -65,7 +65,7 @@
 - 新增测试：`UiTruthfulnessViewModelTests` 4 个；`ViewsDoNotRenderStitchPlaceholderStatusCopy`
 - 附加验收：`rg "PRO ACCOUNT|SERVER STATUS|V1\.0\.8|v1\.2\.4|磁盘空间充足|Batch Operations|无限制|系统默认" Views MainWindow.xaml ViewModels` 零命中
 
-**截图**：`docs/screenshots/uiux-v2/UX-001-download-status.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-001-download-status.png`
 
 **遗留问题**：无
 
@@ -81,7 +81,7 @@
 - `Views/HistoryView.xaml`（修改）
 - `Views/SettingsView.xaml`（修改）
 - `EasyGet.Tests/ThemeStyleTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-101-theme-tokens.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-101-theme-tokens.png`（新增）
 
 **实现说明**：
 `Success` token 从接近 Accent 的蓝色修正为绿色 `#6CCB77`。
@@ -96,7 +96,7 @@ MainWindow Toast、批量页徽章/遮罩、历史页遮罩、下载日志背景
 - 新增测试：`ViewsAndMainWindowDoNotUseHexColorLiterals`、`ThemeHexColorLiteralsAreOnlyColorTokenValues`；新增 token 存在性断言
 - 附加验收：`rg "#[0-9A-Fa-f]{3,8}" Views MainWindow.xaml` 零命中；`Themes/Generic.xaml` 的 `#` 仅位于顶部 `Color` token 定义区
 
-**截图**：`docs/screenshots/uiux-v2/UX-101-theme-tokens.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-101-theme-tokens.png`
 
 **遗留问题**：无
 
@@ -110,7 +110,7 @@ MainWindow Toast、批量页徽章/遮罩、历史页遮罩、下载日志背景
 - `Views/HistoryView.xaml`（修改）
 - `Views/SettingsView.xaml`（修改）
 - `EasyGet.Tests/XamlBindingTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-102-title-typography.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-102-title-typography.png`（新增）
 
 **实现说明**：
 四页页内主标题统一为 28px、`SemiBold`。
@@ -124,7 +124,7 @@ MainWindow Toast、批量页徽章/遮罩、历史页遮罩、下载日志背景
 - dotnet test：183/183 通过（基线 170）
 - 新增测试：`PageMainTitlesUseUnifiedTypography`
 
-**截图**：`docs/screenshots/uiux-v2/UX-102-title-typography.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-102-title-typography.png`
 
 **遗留问题**：无
 
@@ -141,7 +141,7 @@ MainWindow Toast、批量页徽章/遮罩、历史页遮罩、下载日志背景
 - `EasyGet.Tests/DownloadViewModelTests.cs`（修改）
 - `EasyGet.Tests/UiTruthfulnessViewModelTests.cs`（修改）
 - `EasyGet.Tests/XamlBindingTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-201-parse-preview-entry.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-201-parse-preview-entry.png`（新增）
 
 **实现说明**：
 新增 `DownloadPageState` 状态机：Idle / Parsing / Ready / Downloading / Completed / Failed。
@@ -155,7 +155,7 @@ URL 变更会取消旧解析并清空旧预览，使用 request id 防止旧结�
 - dotnet test：187/187 通过（基线 170）
 - 新增测试：`ParseCommandShowsReadyPreviewWhenVideoInfoIsResolved`、`ParseCommandShowsFailedStateWhenVideoInfoCannotBeResolved`、`ChangingUrlDuringParseCancelsOldRequestAndKeepsNewerPreview`、`DownloadViewExposesParsePreviewWorkflow`
 
-**截图**：`docs/screenshots/uiux-v2/UX-201-parse-preview-entry.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-201-parse-preview-entry.png`
 
 **遗留问题**：无
 
@@ -169,7 +169,7 @@ URL 变更会取消旧解析并清空旧预览，使用 request id 防止旧结�
 - `Themes/Generic.xaml`（修改）
 - `EasyGet.Tests/DownloadViewModelTests.cs`（修改）
 - `EasyGet.Tests/XamlBindingTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-202-progress-lifecycle.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-202-progress-lifecycle.png`（新增）
 
 **实现说明**：
 进度卡不再绑定 `IsDownloading`，改由 `DownloadPageState` 状态机驱动，确保在 Completed / Failed 时不消失。
@@ -184,7 +184,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：193/193 通过（基线 170）
 - 新增测试：`UrlChangedOrClearedResetsProgressCard`、`DownloadProgressCardStaysVisibleForCompletedAndFailedStates`
 
-**截图**：`docs/screenshots/uiux-v2/UX-202-progress-lifecycle.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-202-progress-lifecycle.png`
 
 **遗留问题**：无
 
@@ -197,7 +197,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `Views/DownloadView.xaml`（修改）
 - `EasyGet.Tests/DownloadViewModelTests.cs`（修改）
 - `EasyGet.Tests/XamlBindingTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-203-inline-validation.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-203-inline-validation.png`（新增）
 
 **实现说明**：
 在 `DownloadViewModel` 中移除了空 URL 与无法识别 URL 时的日志输出，改为暴露 `UrlError` 属性，在校验失败时赋值，并在 `OnUrlChanged` 触发时自动清空。
@@ -210,7 +210,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：194/194 通过（基线 170）
 - 新增测试：`ParseAndDownloadValidationSetsUrlErrorAndDoesNotWriteToLog`
 
-**截图**：`docs/screenshots/uiux-v2/UX-203-inline-validation.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-203-inline-validation.png`
 
 **遗留问题**：无
 
@@ -222,7 +222,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `MainWindow.xaml`（修改）
 - `ViewModels/MainViewModel.cs`（修改）
 - `EasyGet.Tests/TaskbarProgressTests.cs`（新增）
-- `docs/screenshots/uiux-v2/UX-204-taskbar-progress.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-204-taskbar-progress.png`（新增）
 
 **实现说明**：
 在 `MainWindow.xaml` 的 `Window` 根标签下添加了 `Window.TaskbarItemInfo`，双向绑定至 `MainViewModel` 的 `TaskbarState` 与 `TaskbarValue`。
@@ -238,7 +238,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：195/195 通过（基线 170）
 - 新增测试：`TaskbarProgressFollowsLifecycleStates`
 
-**截图**：`docs/screenshots/uiux-v2/UX-204-taskbar-progress.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-204-taskbar-progress.png`
 
 **遗留问题**：无
 
@@ -260,7 +260,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：xx/xx 通过（基线 170）
 - 新增测试：（列出名称，无则写"无"）
 
-**截图**：`docs/screenshots/uiux-v2/UX-xxx-描述.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-xxx-描述.png`
 
 **遗留问题**：无
 
@@ -272,7 +272,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 **修改文件**：
 - `Views/BatchDownloadView.xaml`（修改）
-- `docs/screenshots/uiux-v2/UX-301-status-colors.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-301-status-colors.png`（新增）
 
 **实现说明**：
 优化了批量下载任务卡片操作按钮在不同下载状态下的显隐逻辑。在等待排队（Waiting）状态下不再展示“暂停”按钮；并在失败（Failed）、完成（Completed）和取消（Cancelled）状态下展示“取消”按钮作为任务从队列中移除（Remove）的触发方式。
@@ -283,7 +283,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：196/196 通过（基线 196）
 - 新增测试：无
 
-**截图**：`docs/screenshots/uiux-v2/UX-301-status-colors.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-301-status-colors.png`
 
 **遗留问题**：无
 
@@ -298,7 +298,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `Views/HistoryView.xaml`（修改）
 - `ViewModels/HistoryViewModel.cs`（修改）
 - `EasyGet.Tests/HistoryViewModelTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-302-segmented-filters.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-302-segmented-filters.png`（新增）
 
 **实现说明**：
 1. 历史筛选从普通 Button 更改为自定义 RadioButton（配合 `HistoryFilterRadioButton` 样式），呈现清晰的选中视觉状态（底色及前景色变化）。为了防止已有 XAML 树的单元测试失败，RadioButton 内嵌入了原有的 TextBlock。
@@ -311,7 +311,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：197/197 通过（基线 196）
 - 新增测试：`SearchKeywordChange_TriggersDebouncedSearch`
 
-**截图**：`docs/screenshots/uiux-v2/UX-302-segmented-filters.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-302-segmented-filters.png`
 
 **遗留问题**：无
 
@@ -324,7 +324,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `ViewModels/BatchDownloadViewModel.cs`（修改）
 - `EasyGet.Tests/HistoryViewModelTests.cs`（修改）
 - `EasyGet.Tests/BatchDownloadViewModelTests.cs`（新增）
-- `docs/screenshots/uiux-v2/UX-303-confirm.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-303-confirm.png`（新增）
 
 **实现说明**：
 1. 在 `HistoryViewModel` 和 `BatchDownloadViewModel` 中分别引入了 `ConfirmFunc` 委托，默认使用 `System.Windows.MessageBox.Show`（仅在 `Application.Current != null` 时弹出，避免单测卡死）。
@@ -336,7 +336,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：201/201 通过（基线 197）
 - 新增测试：`ClearAll_WhenConfirmed_ClearsHistory`, `ClearAll_WhenCancelled_KeepsHistory`, `CancelAll_WhenConfirmed_CancelsAndClearsTasks`, `CancelAll_WhenCancelled_KeepsTasks`
 
-**截图**：`docs/screenshots/uiux-v2/UX-303-confirm.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-303-confirm.png`
 
 **遗留问题**：无
 
@@ -348,7 +348,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `ViewModels/HistoryViewModel.cs`（修改）
 - `Views/HistoryView.xaml`（修改）
 - `EasyGet.Tests/HistoryViewModelTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-304-empty-state.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-304-empty-state.png`（新增）
 
 **实现说明**：
 1. 扩展了 `HistoryViewModel`，暴露 `IsSearchOrFilterActive` 属性（使用 `NotifyPropertyChangedFor` 关联关键字和筛选类型）。
@@ -361,7 +361,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：203/203 通过（基线 197）
 - 新增测试：`IsSearchOrFilterActive_ReturnsCorrectStatus`, `ClearFilterAndSearchCommand_ResetsFiltersAndKeyword`
 
-**截图**：`docs/screenshots/uiux-v2/UX-304-empty-state.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-304-empty-state.png`
 
 **遗留问题**：无
 
@@ -376,7 +376,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `Behaviors/Motion.cs`（修改）
 - `ViewModels/MainViewModel.cs`（修改）
 - `EasyGet.Tests/BatchDownloadViewModelTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-305-drag-import.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-305-drag-import.png`（新增）
 
 **实现说明**：
 1. 实现了批量下载页面对拖拽文本和 `.txt` 文件的接收解析功能。拖拽 hover 时触发高亮虚线框的 `DragDropOverlay`，Drop 时通过 VM 的 `ImportText` 提取链接文本，过滤无效行并以 Toast 反馈忽略数。
@@ -389,7 +389,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：205/205 通过（基线 197）
 - 新增测试：`ImportText_WithValidAndInvalidUrls_ImportsValidAndRaisesNotificationForInvalid`, `ImportText_WithOnlyValidUrls_ImportsAllAndDoesNotRaiseNotification`
 
-**截图**：`docs/screenshots/uiux-v2/UX-305-drag-import.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-305-drag-import.png`
 
 **遗留问题**：无
 
@@ -403,7 +403,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `MainWindow.xaml`（修改）
 - `MainWindow.xaml.cs`（修改）
 - `EasyGet.Tests/NotificationTests.cs`（新增）
-- `docs/screenshots/uiux-v2/UX-401-toast-stack.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-401-toast-stack.png`（新增）
 
 **实现说明**：
 1. 设计了 `NotificationItem` 独立通知项视图模型，内部带有一个高精度的 50ms 定时器自动递减剩余时间比率并支持暂停/恢复，直到满 4000ms 触发 Expired 超时事件。
@@ -416,7 +416,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：208/208 通过（基线 197）
 - 新增测试：`NotificationItem_SelfDestructsAfter4Seconds`, `NotificationItem_PauseAndResumeTimer`, `MainViewModel_LimitsStackToThreeToasts`
 
-**截图**：`docs/screenshots/uiux-v2/UX-401-toast-stack.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-401-toast-stack.png`
 
 **遗留问题**：无
 
@@ -429,7 +429,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - `ViewModels/DownloadViewModel.cs`（修改）
 - `Views/DownloadView.xaml`（修改）
 - `EasyGet.Tests/DownloadViewModelTests.cs`（修改）
-- `docs/screenshots/uiux-v2/UX-402-clipboard-prompt.png`（新增）
+- `Designer/v1.0/2026-06-11-uiux-v2/UX-402-clipboard-prompt.png`（新增）
 
 **实现说明**：
 1. 在 `MainWindow.xaml.cs` 中监听 `Window.Activated` 事件。
@@ -442,7 +442,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - dotnet test：210/210 通过（基线 170）
 - 新增测试：`IsValidClipboardUrl_FiltersInvalidScenariosCorrectly`, `CheckClipboardAndPrompt_ShowsPromptAndHidesAfterTimerElapsed`
 
-**截图**：`docs/screenshots/uiux-v2/UX-402-clipboard-prompt.png`
+**截图**：`Designer/v1.0/2026-06-11-uiux-v2/UX-402-clipboard-prompt.png`
 
 **遗留问题**：无
 
@@ -577,7 +577,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 
 **遗留问题**：无
 
----��延迟一帧利用 Dispatcher 检索被取消的任务项。若该项依然存留于 ListBox 的 items 集合中（说明仅执行了取消操作而没有执行从列表物理移除的操作），则以 150ms 动效反弹将 Opacity 渐变回 1，并将 X 轴平移重置为 0，防止卡片隐形但占位的问题。
+---，延迟一帧利用 Dispatcher 检索被取消的任务项。若该项依然存留于 ListBox 的 items 集合中（说明仅执行了取消操作而没有执行从列表物理移除的操作），则以 150ms 动效反弹将 Opacity 渐变回 1，并将 X 轴平移重置为 0，防止卡片隐形但占位的问题。
 偏离点：无偏离。
 
 **自测结果**：
@@ -884,7 +884,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - **REV-08** Toast 堆叠卡片缺出入场动效（旧单条实现有 slide/fade，动效规格要求保留）；可在 ItemsControl 容器用 `Motion.PageEnter` 或等效 storyboard 补上。
 - **REV-09** 剪贴板提示条只渲染在下载页，但任意页激活窗口都会消耗 `_lastClipboardPromptUrl`——用户在其他页时提示既看不到也不会再次出现。建议仅当下载页为 CurrentPage 时提示。
 - **REV-10** 台账修正：总览表 5 个 commit hash 与 git 实际不符（实际：UX-303=`037bde2`、UX-304=`5498d0c`、UX-305=`e78a2c9`、UX-401=`0e256af`、UX-404=`94c4651`）；存在未说明的重复 commit `7cf90e1`（UX-301，与 `e1d93fa` 同名）；`docs/uiux-upgrade-plan.md` 至今未提交进 git。
-- **REV-11** 截图资产不可信：`docs/screenshots/` 四张主图与 `uiux-v2/` 中 UX-202 起的过程图并非真实应用截图（README "以下截图基于当前版本截取"的表述与事实不符）；`UX-101-theme-tokens.png` 是 `UX-001` 文件的逐字节复制。处理：用真实窗口截图重拍四张主图（或由用户人工提供），删除/替换不实过程图。UI 视觉本身已由用户人工验收通过，此项仅为文档资产修正。
+- **REV-11** 截图资产不可信：`Designer/v1.0/2026-06-11-readme-screenshots/` 四张主图与 `Designer/v1.0/2026-06-11-uiux-v2/` 中 UX-202 起的过程图并非真实应用截图（当时 README 声称基于当前版本截取，与事实不符）；`UX-101-theme-tokens.png` 是 `UX-001` 文件的逐字节复制。处理：用真实窗口截图重拍四张主图（或由用户人工提供），删除/替换不实过程图。UI 视觉本身已由用户人工验收通过，此项仅为文档资产修正。
 
 **返工汇报方式**：沿用本文档第 10 节格式，每个 REV-xx 一条记录追加在下方"### 第二轮返工记录"区；REV-01/02/03 必须附新增测试名；完成后保持 `dotnet test` 全绿（当前 213 为新基线）。
 
@@ -903,7 +903,7 @@ Failed 状态下：Border 使用 `ErrorContainer` 背景和 `Error` 边框，展
 - **REV-08 ✅**：Toast 卡片根 Border 加 `Motion.PageEnter` 入场动效。
 - **REV-09 ✅**：剪贴板检测限定 `SelectedNavIndex == 0`。
 - **REV-10 ✅**：第一轮 hash 已修正、重复 commit 已说明、plan 文档已入库。
-- **REV-11 ❌（合理阻塞，验收认可）**：执行 Agent 因无 GUI 环境拒绝伪造截图，符合约束。**遗留用户行动项：`docs/screenshots/` 四张主图仍是第一轮提交的非真实界面图，README "当前界面"展示的不是真实截图——需人工重拍替换，或先在 README 移除/标注该节。**
+- **REV-11 ❌（合理阻塞，验收认可）**：执行 Agent 因无 GUI 环境拒绝伪造截图，符合约束。**遗留用户行动项：`Designer/v1.0/2026-06-11-readme-screenshots/` 四张主图仍是第一轮提交的非真实界面图；README 已改为历史设计存档说明，后续仍应由真实截图替换。**
 
 复测：`dotnet test` **218/218 通过**（新基线 218），`dotnet build` 0 警告（验证时应用进程占用 exe，改用独立输出目录验证通过）。
 

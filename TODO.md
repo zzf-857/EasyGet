@@ -39,7 +39,7 @@
   - 提交说明：`参考 VibeTracker 重塑 UI 基底`
 
 - [x] 2026-06-09 补充 README 当前界面截图
-  - 内容：从当前运行的 EasyGet 窗口截取视频下载、批量下载、历史记录和设置四个主页面，保存到 `docs/screenshots/`；对截图中的本地下载路径和历史记录内容做示例化脱敏，并在 README 简介后新增“当前界面”截图展示区。
+  - 内容：从当前运行的 EasyGet 窗口截取视频下载、批量下载、历史记录和设置四个主页面，保存到 `Designer/v1.0/2026-06-11-readme-screenshots/`；对截图中的本地下载路径和历史记录内容做示例化脱敏，并在 README 简介后新增界面设计存档区。
   - 验证：逐张视觉核对 4 张截图，确认页面内容分别对应视频下载、批量下载、历史记录和设置；`git diff --check` 无空白错误；`dotnet test EasyGet.Tests\EasyGet.Tests.csproj`，118 个测试全部通过；`dotnet build EasyGet.csproj -c Release` 首次因截图预览窗口锁定 `EasyGet.exe` 失败，关闭 EasyGet 预览进程后重跑成功，0 个警告、0 个错误。
   - 提交说明：`补充 README 当前界面截图`
 

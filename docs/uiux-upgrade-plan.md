@@ -8,7 +8,7 @@
 
 ## 1. 现状基线（执行 Agent 必读，已验证）
 
-当前代码**已经完成**了一轮基于 `stitch_easyget/` 设计稿（4 张 PNG，是本次升级的视觉目标参照）的重构，不要重做这些：
+当前代码**已经完成**了一轮基于 `Designer/v1.0/2026-06-09-stitch-reference/` 设计稿（4 张 PNG，是本次升级的视觉目标参照）的重构，不要重做这些：
 
 - ✅ 240px 品牌侧栏 + 自绘窗口 chrome + 顶栏（`MainWindow.xaml`）
 - ✅ 暗色主题 token 体系与 14+ 控件样式（`Themes/Generic.xaml`，含 `MotionDurationFast/Medium`、`MotionEaseOut` 动效资源）
@@ -19,7 +19,7 @@
 
 **测试基线：`dotnet test EasyGet.Tests\EasyGet.Tests.csproj` = 170 个全部通过（2026-06-11 验证），`dotnet build` 0 警告 0 错误。** 交付时不允许低于此基线。
 
-`docs/v1.0版本 screenshots/` 是旧版界面存档，仅作历史对比，不代表当前状态。
+`Designer/v1.0/2026-06-10-legacy-screenshots/` 是旧版界面存档，仅作历史对比，不代表当前状态。
 
 ### 关键文件索引
 
@@ -65,17 +65,17 @@
 19. Toast 单条互斥，无堆叠、无倒计时可视化（`MainWindow.xaml:197`、`MainViewModel.cs:79` 4 秒定时器）。
 20. 批量页播放列表输入框无任何标签/占位提示，是页面上一个"裸"文本框（`BatchDownloadView.xaml:119-122`）。
 21. 无键盘快捷键；无拖拽导入。
-22. README "当前界面"截图引用 `docs/screenshots/*.png`，这些文件已在工作区删除，链接全部失效。
+22. README 界面图引用 `Designer/v1.0/2026-06-11-readme-screenshots/*.png`；这些文件是历史设计素材，不代表当前实机状态。
 
 ## 3. 全局约束（违反任意一条该任务即验收不通过）
 
-1. **真实性原则（本轮新增，最重要）**：UI 上任何文案/数字/状态必须可由真实应用状态推导。不允许为了"还原设计稿"保留装饰性假元素。设计稿（`stitch_easyget/`）只约束布局与风格，不约束文案内容。
+1. **真实性原则（本轮新增，最重要）**：UI 上任何文案/数字/状态必须可由真实应用状态推导。不允许为了"还原设计稿"保留装饰性假元素。设计稿（`Designer/v1.0/2026-06-09-stitch-reference/`）只约束布局与风格，不约束文案内容。
 2. **禁止硬编码颜色**：所有颜色引用 `Generic.xaml` token；需要新色先定义 `Color` + `SolidColorBrush` token（含半透明遮罩色）。
 3. **动效**必须使用 `MotionDuration*`/`MotionEase*` 资源，遵循已有动效规格（克制、只动 transform/opacity、可中断不影响可用性）。
 4. **MVVM 边界**：code-behind 只允许纯视觉逻辑；业务状态一律进 ViewModel；新增命令用 CommunityToolkit 源生成器。
 5. **不修改 `Services/` 的下载与解析行为**。允许新增对现有方法的调用（如 `GetVideoInfoAsync`）、允许新增事件订阅；不允许改动其内部实现与参数语义。
 6. **每个任务完成后**：`dotnet build EasyGet.csproj`（0 警告）+ `dotnet test EasyGet.Tests\EasyGet.Tests.csproj`（≥170 通过，删除过时断言须在进度文档说明）。
-7. **每个涉及可见变化的任务必须截图**：运行应用，截图存 `docs/screenshots/uiux-v2/`，命名 `<任务ID>-<描述>.png`。
+7. **每个涉及可见变化的任务必须截图**：运行应用，截图存 `Designer/v1.0/2026-06-11-uiux-v2/`，命名 `<任务ID>-<描述>.png`。
 8. 中文文案风格与现有一致；可交互控件保留/补充 `AutomationProperties.Name` 与 `ToolTip`。
 
 ---
@@ -195,7 +195,7 @@
 **验收**：逐条手测生效且无输入框冲突。
 
 ### UX-404 README 截图与文档收尾
-对应问题 22。全部任务完成后：重新截四页新图存 `docs/screenshots/`（沿用原文件名，README 链接即恢复）；README"当前界面"措辞核对；`docs/screenshots/uiux-v2/` 过程截图保留。
+对应问题 22。全部任务完成后：重新截四页新图存 `Designer/v1.0/2026-06-11-readme-screenshots/`（沿用原文件名）；核对 README 的历史存档说明；`Designer/v1.0/2026-06-11-uiux-v2/` 过程截图保留。
 
 **验收**：README 中四个图片链接在仓库内有效。
 
@@ -228,7 +228,7 @@ UX-001（独立，最先）
    - 修改/新增文件清单（精确路径）
    - 实现说明（3-8 行：做了什么、关键决策、**与计划的偏离点**——无偏离写"无偏离"）
    - 自测结果（build 是否 0 警告；test 通过数/总数，基线 170；新增测试列名称）
-   - 截图路径（`docs/screenshots/uiux-v2/<任务ID>-*.png`）
+   - 截图路径（`Designer/v1.0/2026-06-11-uiux-v2/<任务ID>-*.png`）
    - 遗留问题/对后续任务的影响（没有写"无"）
 4. **偏离必须声明**：换方案、跳过子项、改了计划外文件，都必须写进"偏离点"并给理由。未声明的偏离按缺陷处理。
 5. **阻塞处理**：某任务被卡住时记 ❌ 并继续做不依赖它的任务，不要停摆等待。

@@ -252,7 +252,7 @@ Expected: process starts without immediate build/runtime crash. Then inspect run
 
 - [ ] **Step 4: Commit implementation**
 
-Stage only code, test, plan, and spec-related files. Do not stage `handoff/` or `stitch_easyget/`.
+Stage only code, test, plan, and spec-related files. Do not stage `handoff/` or the archived design assets under `Designer/`.
 
 Commit:
 

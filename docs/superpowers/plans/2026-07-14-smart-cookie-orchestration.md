@@ -1232,14 +1232,14 @@ Expected: `artifacts/publish/win-x64/EasyGet.exe` launches and required WebView2
 
 - [ ] **Step 5: Render and inspect settings/login UI**
 
-Capture settings and managed-login windows at 100%, 125%, and 150% scaling. Verify no clipping, keyboard focus reaches login/cancel/clear actions, platform domains are visible, and Cookie values never appear. Store sanitized screenshots under `docs/screenshots/smart-cookie/`.
+Capture settings and managed-login windows at 100%, 125%, and 150% scaling. Verify no clipping, keyboard focus reaches login/cancel/clear actions, platform domains are visible, and Cookie values never appear. Store sanitized screenshots under `Designer/v1.2/2026-07-14-smart-cookie/`.
 
 - [ ] **Step 6: Update README and commit the verified feature**
 
 Document supported browsers, automatic fallback order, privacy boundaries, first-login behavior, and local session directories.
 
 ```powershell
-git add README.md docs/smart-cookie-manual-acceptance.md docs/screenshots/smart-cookie EasyGet.Tests
+git add README.md docs/smart-cookie-manual-acceptance.md Designer/v1.2/2026-07-14-smart-cookie EasyGet.Tests
 git commit -m "docs: 完善智能 Cookie 验收与隐私说明"
 git push origin codex/smart-cookie
 ```

@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EasyGet · 全界面 UI 升级设计稿</title>
+  <style>
+    :root {
+      --bg: oklch(98% 0.005 250);
+      --surface: oklch(100% 0 0);
+      --fg: oklch(22% 0.02 240);
+      --muted: oklch(50% 0.018 240);
+      --border: oklch(90% 0.008 240);
+      --accent: oklch(58% 0.16 145);
+      --font-display: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+      --font-body: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'IBM Plex Mono', ui-monospace, Menlo, monospace;
+      --accent-soft: color-mix(in oklch, var(--accent) 12%, var(--surface));
+      --fg-soft: color-mix(in oklch, var(--fg) 5%, var(--surface));
+      --danger-soft: color-mix(in oklch, var(--fg) 8%, var(--surface));
+      --shadow: 0 18px 48px color-mix(in oklch, var(--fg) 12%, transparent);
+      --radius: 6px;
+      --sidebar: 224px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { width: 100%; min-height: 100%; }
+    html { background: var(--bg); -webkit-text-size-adjust: 100%; }
+    body { margin: 0; overflow: hidden; color: var(--fg); background: var(--bg); font: 14px/1.5 var(--font-body); letter-spacing: 0; text-rendering: optimizeLegibility; }
+    button, input, textarea, select { color: inherit; font: inherit; letter-spacing: 0; }
+    button { cursor: pointer; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    a { color: inherit; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, h3 { font-family: var(--font-display); letter-spacing: 0; text-wrap: balance; }
+    h1 { font-size: 24px; line-height: 1.2; font-weight: 680; }
+    h2 { font-size: 17px; line-height: 1.3; font-weight: 680; }
+    h3 { font-size: 14px; line-height: 1.35; font-weight: 650; }
+    svg { display: block; }
+    .hidden { display: none !important; }
+    .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .muted { color: var(--muted); }
+    .meta { color: var(--muted); font: 11px/1.4 var(--font-mono); }
+    .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+    .icon-sm { width: 15px; height: 15px; }
+    .row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+    .stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .grid-2-1 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 16px; align-items: start; }
+    .grid-1-2 { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+
+    .app { height: 100vh; min-height: 680px; display: grid; grid-template-rows: 48px minmax(0, 1fr) 30px; background: var(--surface); }
+    .topnav { border-bottom: 1px solid var(--border); background: color-mix(in oklch, var(--surface) 94%, transparent); backdrop-filter: blur(14px); z-index: 20; }
+    .topnav-inner { height: 48px; display: grid; grid-template-columns: var(--sidebar) 1fr auto; align-items: center; }
+    .brand { height: 100%; padding: 0 18px; display: flex; align-items: center; gap: 10px; border-right: 1px solid var(--border); }
+    .brand-mark { width: 25px; height: 25px; display: grid; place-items: center; color: var(--surface); background: var(--fg); border-radius: 5px; }
+    .brand-mark .icon { width: 15px; height: 15px; }
+    .logo { font-size: 14px; font-weight: 700; }
+    .version { padding: 2px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--muted); font: 10px/1.4 var(--font-mono); }
+    .window-title { padding-left: 20px; color: var(--muted); font-size: 12px; }
+    .window-actions { height: 100%; display: flex; }
+    .window-btn { width: 48px; height: 100%; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
+    .window-btn:hover { background: var(--fg-soft); color: var(--fg); }
+    .window-btn.close:hover { background: var(--fg); color: var(--surface); }
+    .window-btn:focus-visible, .nav-item:focus-visible, .btn:focus-visible, .icon-btn:focus-visible, .segment:focus-visible, .filter:focus-visible, .settings-tab:focus-visible { outline: 2px solid var(--fg); outline-offset: -2px; }
+
+    .shell { min-height: 0; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+    .sidebar { min-height: 0; padding: 14px 10px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--bg); }
+    .nav-list { display: flex; flex-direction: column; gap: 4px; }
+    .nav-item { position: relative; width: 100%; min-height: 44px; padding: 0 12px; display: flex; align-items: center; gap: 12px; border: 0; border-radius: var(--radius); background: transparent; color: var(--muted); text-align: left; }
+    .nav-item:hover { background: var(--fg-soft); color: var(--fg); }
+    .nav-item.active { background: var(--surface); color: var(--fg); font-weight: 650; box-shadow: inset 0 0 0 1px var(--border); }
+    .nav-item.active::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 2px; background: var(--accent); }
+    .nav-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-badge { margin-left: auto; min-width: 20px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 999px; text-align: center; font: 10px/1.5 var(--font-mono); }
+    .sidebar-health { margin-top: auto; padding: 12px; border-top: 1px solid var(--border); }
+    .health-line { display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px; }
+    .health-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--fg); }
+
+    .workspace { min-width: 0; min-height: 0; overflow: auto; background: var(--bg); }
+    .section { min-height: 100%; padding: 24px 28px 36px; }
+    .app-screen { display: none; }
+    .app-screen.active { display: block; }
+    .page-head { margin-bottom: 18px; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+    .page-title { display: flex; flex-direction: column; gap: 5px; }
+    .page-title p { color: var(--muted); font-size: 13px; }
+    .eyebrow { margin-bottom: 6px; color: var(--muted); font: 11px/1.4 var(--font-mono); text-transform: uppercase; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+    .card-pad { padding: 18px; }
+    .card-head { min-height: 44px; padding: 0 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .card-head h2 { font-size: 14px; }
+    .section-label { margin: 2px 0 8px; color: var(--muted); font: 11px/1.4 var(--font-mono); text-transform: uppercase; }
+    .divider { height: 1px; background: var(--border); }
+
+    .btn { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--fg); font-weight: 620; white-space: nowrap; }
+    .btn:hover { border-color: var(--fg); background: var(--fg-soft); }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { border-color: var(--accent); background: var(--accent); color: var(--surface); }
+    .btn-primary:hover { border-color: var(--fg); background: var(--fg); color: var(--surface); }
+    .btn-ghost { border-color: transparent; background: transparent; }
+    .btn-danger { border-style: dashed; }
+    .btn-sm { min-height: 36px; padding: 0 10px; font-size: 12px; }
+    .icon-btn { width: 44px; height: 44px; padding: 0; display: inline-grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--muted); }
+    .icon-btn:hover { border-color: var(--fg); color: var(--fg); background: var(--fg-soft); }
+    .input, .select, .textarea { width: 100%; min-height: 44px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 9px 12px; outline: 0; }
+    .input:hover, .select:hover, .textarea:hover { border-color: color-mix(in oklch, var(--fg) 40%, var(--border)); }
+    .input:focus, .select:focus, .textarea:focus { border-color: var(--fg); box-shadow: 0 0 0 2px var(--fg-soft); }
+    .textarea { min-height: 150px; resize: vertical; line-height: 1.55; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { color: var(--muted); font-size: 12px; }
+    .field-error { min-height: 18px; color: var(--fg); font-size: 12px; font-weight: 650; }
+    .input-action { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+    .input-action .input { min-width: 0; }
+
+    .segment-control { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .segment { min-height: 36px; padding: 0 12px; border: 0; border-radius: 4px; background: transparent; color: var(--muted); }
+    .segment:hover { color: var(--fg); }
+    .segment.active { background: var(--fg); color: var(--surface); }
+    .pill { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); background: var(--surface); font: 10px/1.4 var(--font-mono); white-space: nowrap; }
+    .pill.strong { color: var(--fg); border-color: color-mix(in oklch, var(--fg) 35%, var(--border)); }
+    .status-pill { min-width: 66px; justify-content: center; }
+    .switch { position: relative; width: 44px; height: 24px; flex: 0 0 auto; }
+    .switch input { position: absolute; opacity: 0; pointer-events: none; }
+    .switch span { position: absolute; inset: 0; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); transition: .15s ease; }
+    .switch span::after { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; border-radius: 50%; background: var(--muted); transition: .15s ease; }
+    .switch input:checked + span { border-color: var(--fg); background: var(--fg); }
+    .switch input:checked + span::after { transform: translateX(20px); background: var(--surface); }
+    .switch input:focus-visible + span { outline: 2px solid var(--fg); outline-offset: 2px; }
+    .check { width: 18px; height: 18px; accent-color: var(--fg); }
+
+    .download-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(310px, .8fr); gap: 16px; align-items: start; }
+    .source-bar { padding: 18px; }
+    .quick-options { margin-top: 14px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .stage { min-height: 330px; display: grid; place-items: center; overflow: hidden; }
+    .empty { max-width: 430px; padding: 44px 24px; text-align: center; color: var(--muted); }
+    .empty-icon { width: 48px; height: 48px; margin: 0 auto 16px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 50%; }
+    .empty h2 { margin-bottom: 6px; color: var(--fg); }
+    .preview { width: 100%; display: grid; grid-template-columns: minmax(240px, 42%) minmax(0, 1fr); min-height: 330px; }
+    .media-art { position: relative; min-height: 330px; background: var(--fg); color: var(--surface); overflow: hidden; }
+    .media-art::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(135deg, transparent 0 24px, color-mix(in oklch, var(--surface) 7%, transparent) 24px 25px); }
+    .media-mark { position: absolute; left: 24px; bottom: 24px; font: 700 44px/1 var(--font-display); }
+    .media-tag { position: absolute; top: 18px; left: 18px; border-color: color-mix(in oklch, var(--surface) 35%, transparent); color: var(--surface); background: color-mix(in oklch, var(--fg) 80%, transparent); }
+    .preview-copy { padding: 24px; display: flex; flex-direction: column; justify-content: space-between; gap: 20px; }
+    .preview-title { font-size: 20px; line-height: 1.35; }
+    .preview-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); border-radius: var(--radius); }
+    .preview-stat { padding: 12px; }
+    .preview-stat + .preview-stat { border-left: 1px solid var(--border); }
+    .preview-stat span { display: block; }
+    .progress-track { height: 7px; overflow: hidden; border-radius: 999px; background: var(--border); }
+    .progress-bar { width: 0; height: 100%; background: var(--fg); transition: width .25s ease; }
+    .recent-row, .log-row { min-height: 62px; display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--border); }
+    .file-mark { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 5px; color: var(--muted); }
+    .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    details { border-top: 1px solid var(--border); }
+    summary { min-height: 44px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; color: var(--muted); }
+    .log-box { max-height: 150px; overflow: auto; padding: 12px 16px; background: var(--fg); color: var(--surface); font: 11px/1.6 var(--font-mono); }
+
+    .batch-layout { display: grid; grid-template-columns: minmax(320px, 390px) minmax(0, 1fr); gap: 16px; align-items: start; }
+    .batch-pane { display: none; }
+    .batch-pane.active { display: block; }
+    .filters { display: flex; flex-wrap: wrap; gap: 6px; }
+    .filter { min-height: 36px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--muted); }
+    .filter:hover { color: var(--fg); background: var(--fg-soft); }
+    .filter.active { border-color: var(--border); background: var(--surface); color: var(--fg); font-weight: 650; }
+    .ds-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .ds-table th, .ds-table td { padding: 11px 12px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    .ds-table th { color: var(--muted); background: var(--bg); font: 10px/1.4 var(--font-mono); text-transform: uppercase; }
+    .ds-table tbody tr:hover { background: var(--fg-soft); }
+    .task-cell { min-width: 0; }
+    .task-cell strong, .task-cell span { display: block; }
+    .task-actions { display: flex; justify-content: flex-end; gap: 4px; }
+    .task-actions .icon-btn { width: 36px; height: 36px; }
+    .queue-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border-top: 1px solid var(--border); }
+    .queue-summary > div { padding: 12px 16px; background: var(--surface); }
+    .queue-summary strong { display: block; font: 15px/1.4 var(--font-mono); }
+    .confirm-list { max-height: 260px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+    .confirm-item { padding: 10px; display: grid; grid-template-columns: minmax(0, 1fr) 36px; gap: 8px; border-bottom: 1px solid var(--border); }
+    .confirm-item:last-child { border-bottom: 0; }
+
+    .history-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; align-items: start; }
+    .folder-rail { position: sticky; top: 0; overflow: hidden; }
+    .folder-btn { width: 100%; min-height: 42px; padding: 0 12px; display: flex; align-items: center; gap: 10px; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--muted); text-align: left; }
+    .folder-btn:hover, .folder-btn.active { background: var(--fg-soft); color: var(--fg); }
+    .folder-btn.active { font-weight: 650; }
+    .folder-btn .num { margin-left: auto; font-size: 11px; }
+    .library-summary { display: grid; grid-template-columns: 1.5fr .6fr .6fr; border-bottom: 1px solid var(--border); }
+    .library-summary > div { padding: 12px 16px; }
+    .library-summary > div + div { border-left: 1px solid var(--border); }
+    .selection-bar { padding: 10px 12px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--border); background: var(--fg-soft); }
+    .history-grid { padding: 14px; display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 12px; }
+    .history-card { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .history-card:hover { border-color: color-mix(in oklch, var(--fg) 45%, var(--border)); }
+    .history-thumb { aspect-ratio: 16/9; position: relative; display: grid; place-items: center; background: var(--fg-soft); border-bottom: 1px solid var(--border); }
+    .history-thumb .icon { width: 30px; height: 30px; color: var(--muted); }
+    .history-check { position: absolute; top: 10px; left: 10px; z-index: 2; }
+    .missing-label { position: absolute; right: 10px; top: 10px; }
+    .history-body { padding: 13px; }
+    .history-body h3 { margin: 7px 0 5px; }
+    .history-actions { padding: 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; border-top: 1px solid var(--border); }
+    .history-actions .icon-btn { width: auto; height: 36px; }
+
+    .settings-layout { display: grid; grid-template-columns: 200px minmax(0, 760px); gap: 18px; align-items: start; }
+    .settings-nav { position: sticky; top: 0; overflow: hidden; }
+    .settings-tab { width: 100%; min-height: 42px; padding: 0 12px; display: flex; align-items: center; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--muted); text-align: left; }
+    .settings-tab:hover, .settings-tab.active { background: var(--fg-soft); color: var(--fg); }
+    .settings-tab.active { font-weight: 650; }
+    .settings-panel { display: none; }
+    .settings-panel.active { display: block; }
+    .setting-group + .setting-group { margin-top: 14px; }
+    .setting-row { min-height: 64px; padding: 10px 14px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, auto); gap: 18px; align-items: center; border-top: 1px solid var(--border); }
+    .setting-row:first-of-type { border-top: 0; }
+    .setting-row p { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    .setting-control { display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-width: 0; }
+    .setting-control .select, .setting-control .input { width: min(320px, 100%); }
+    .swatches { display: flex; gap: 8px; }
+    .swatch { width: 28px; height: 28px; border: 3px solid var(--surface); border-radius: 50%; box-shadow: 0 0 0 1px var(--border); }
+    .swatch.active { box-shadow: 0 0 0 2px var(--fg); }
+    .platform-row { min-height: 58px; padding: 8px 14px; display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 12px; align-items: center; border-top: 1px solid var(--border); }
+    .range { width: min(270px, 100%); accent-color: var(--fg); }
+
+    .pagefoot { display: grid; grid-template-columns: var(--sidebar) 1fr; border-top: 1px solid var(--border); background: var(--surface); color: var(--muted); font: 10px/1 var(--font-mono); }
+    .foot-health { padding: 0 14px; display: flex; align-items: center; gap: 8px; border-right: 1px solid var(--border); }
+    .foot-status { padding: 0 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; overflow: hidden; }
+    .foot-status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .toast-stack { position: fixed; right: 18px; top: 62px; z-index: 80; width: min(360px, calc(100vw - 36px)); display: flex; flex-direction: column; gap: 8px; }
+    .toast { padding: 12px; display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 10px; align-items: center; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+    .toast-mark { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--fg); color: var(--surface); }
+    .toast button { width: 36px; height: 36px; border: 0; background: transparent; }
+    .modal-layer { position: fixed; inset: 0; z-index: 100; display: none; align-items: center; justify-content: center; padding: 24px; background: color-mix(in oklch, var(--fg) 48%, transparent); }
+    .modal-layer.open { display: flex; }
+    .modal { width: min(560px, 100%); max-height: calc(100vh - 48px); overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); }
+    .modal.wide { width: min(860px, 100%); }
+    .modal-head { min-height: 54px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .modal-body { padding: 18px; }
+    .modal-actions { padding: 12px 16px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border); }
+    .webview { min-height: 280px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: var(--radius); background: var(--fg-soft); color: var(--muted); text-align: center; }
+
+    @media (max-width: 1120px) {
+      :root { --sidebar: 64px; }
+      .nav-label, .nav-badge, .version, .sidebar-health, .foot-health span { display: none; }
+      .brand { justify-content: center; padding: 0; }
+      .brand .logo { display: none; }
+      .nav-item { justify-content: center; padding: 0; }
+      .nav-item.active::before { top: 10px; bottom: 10px; }
+      .batch-layout, .download-layout { grid-template-columns: 1fr; }
+      .history-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); }
+    }
+    @media (max-width: 820px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; }
+      .workspace { overflow: visible; }
+      .section { padding: 18px 14px 28px; }
+      .grid-2, .grid-3, .grid-4, .grid-2-1, .grid-1-2, .preview, .history-layout, .settings-layout { grid-template-columns: 1fr; }
+      .quick-options { grid-template-columns: 1fr; }
+      .folder-rail, .settings-nav { position: static; }
+      .history-grid { grid-template-columns: 1fr; }
+      .settings-nav { display: grid; grid-template-columns: repeat(2, 1fr); }
+      .setting-row, .platform-row { grid-template-columns: 1fr; }
+      .setting-control { justify-content: flex-start; }
+      .library-summary { grid-template-columns: 1fr; }
+      .library-summary > div + div { border-left: 0; border-top: 1px solid var(--border); }
+      .ds-table { min-width: 720px; }
+      .table-scroll { overflow-x: auto; }
+      .page-head { align-items: stretch; flex-direction: column; }
+      .foot-status span:nth-child(2) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.08A1.7 1.7 0 0 0 9 19.37a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.63 15 1.7 1.7 0 0 0 3.08 14H3v-4h.08A1.7 1.7 0 0 0 4.63 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.63 1.7 1.7 0 0 0 10 3.08V3h4v.08A1.7 1.7 0 0 0 15 4.63a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.37 9 1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v11H3z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5M4 18v-5h5"/><path d="M6.1 9A7 7 0 0 1 18 6l2 5M18 15a7 7 0 0 1-11.9 3L4 13"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 3h7v7M21 3l-9 9"/><path d="M18 13v7H4V6h7"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  </svg>
+
+  <div class="app" data-od-id="easyget-app-shell">
+    <header class="topnav" data-od-id="titlebar">
+      <div class="topnav-inner">
+        <div class="brand"><span class="brand-mark"><svg class="icon"><use href="#i-download"/></svg></span><span class="logo">EasyGet</span><span class="version">v1.4.6</span></div>
+        <div class="window-title" id="windowTitle">单个视频下载</div>
+        <div class="window-actions" aria-label="窗口控制">
+          <button class="window-btn" title="最小化" aria-label="最小化">―</button>
+          <button class="window-btn" title="最大化或还原" aria-label="最大化或还原">□</button>
+          <button class="window-btn close" title="关闭" aria-label="关闭">×</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar" data-od-id="primary-navigation">
+        <nav class="nav-list" aria-label="主导航">
+          <button class="nav-item active" data-page="download" data-title="单个视频下载" data-od-id="nav-download"><svg class="icon"><use href="#i-download"/></svg><span class="nav-label">单个下载</span></button>
+          <button class="nav-item" data-page="batch" data-title="批量下载" data-od-id="nav-batch"><svg class="icon"><use href="#i-list"/></svg><span class="nav-label">批量下载</span><span class="nav-badge">3</span></button>
+          <button class="nav-item" data-page="history" data-title="下载历史" data-od-id="nav-history"><svg class="icon"><use href="#i-history"/></svg><span class="nav-label">下载历史</span></button>
+          <button class="nav-item" data-page="settings" data-title="设置中心" data-od-id="nav-settings"><svg class="icon"><use href="#i-settings"/></svg><span class="nav-label">设置</span></button>
+        </nav>
+        <div class="sidebar-health"><div class="health-line"><span class="health-dot"></span><span>下载工具已就绪</span></div></div>
+      </aside>
+
+      <main class="workspace" id="content">
+        <section class="section app-screen active" data-screen="download" data-od-id="screen-download">
+          <div class="page-head">
+            <div class="page-title"><p class="eyebrow">下载工作台</p><h1 data-od-id="heading-download">单个下载</h1><p>粘贴链接后解析，再确认格式与保存位置</p></div>
+            <span class="pill strong"><span class="health-dot"></span>剪贴板监视</span>
+          </div>
+          <div class="download-layout">
+            <div class="stack">
+              <div class="card source-bar" data-od-id="download-source-panel">
+                <div class="field"><label for="videoUrl">视频链接</label><div class="input-action"><input class="input" id="videoUrl" placeholder="粘贴抖音、YouTube、Bilibili、X、TikTok 等平台链接" /><button class="icon-btn" id="pasteUrl" title="粘贴视频链接" aria-label="粘贴视频链接"><svg class="icon"><use href="#i-link"/></svg></button><button class="btn btn-primary" id="parseVideo" data-od-id="cta-parse-video">解析</button></div><div class="field-error" id="urlError" aria-live="polite"></div></div>
+                <div class="quick-options">
+                  <div class="field"><label>格式</label><select class="select"><option>mp4</option><option>mkv</option><option>webm</option><option>mp3（仅音频）</option><option>m4a（仅音频）</option></select></div>
+                  <div class="field"><label>画质上限</label><select class="select"><option>最高画质</option><option>2160p（4K）</option><option>1080p</option><option>720p</option><option>480p</option></select></div>
+                  <div class="field"><label>字幕</label><select class="select"><option>不下载</option><option>自动字幕</option><option>全部字幕</option></select></div>
+                </div>
+              </div>
+
+              <div class="card stage" data-od-id="download-state-stage">
+                <div class="download-state" data-state="idle">
+                  <div class="empty"><div class="empty-icon"><svg class="icon"><use href="#i-link"/></svg></div><h2>等待链接</h2><p>支持普通视频、播放列表、m3u8、央视频、Telegram 媒体与抖音专用解析。</p></div>
+                </div>
+                <div class="download-state hidden" data-state="parsing">
+                  <div class="empty"><div class="empty-icon"><svg class="icon"><use href="#i-refresh"/></svg></div><h2>正在解析视频信息</h2><p>正在获取封面、标题、时长和预估大小</p><button class="btn" id="cancelParse" style="margin-top:18px">取消解析</button></div>
+                </div>
+                <div class="download-state hidden" data-state="ready" style="width:100%">
+                  <div class="preview"><div class="media-art"><span class="pill media-tag">Bilibili · 示例预览</span><div class="media-mark">EG / 01</div></div><div class="preview-copy"><div class="stack"><span class="meta">解析完成 · 真实源流可选</span><input class="input preview-title" value="[示例] 设计模式 · 原型模式" aria-label="自定义视频名称"/><div class="preview-stats"><div class="preview-stat"><span class="meta">时长</span><span class="num">--:--</span></div><div class="preview-stat"><span class="meta">预估大小</span><span class="num">--</span></div><div class="preview-stat"><span class="meta">封装</span><span class="num">MP4</span></div></div></div><button class="btn btn-primary" id="startDownload" data-od-id="cta-start-download"><svg class="icon"><use href="#i-download"/></svg>开始下载</button></div></div>
+                </div>
+                <div class="download-state hidden" data-state="downloading" style="width:100%;padding:28px"><div class="stack"><div class="row-between"><div><span class="meta">下载中</span><h2 style="margin-top:4px">[示例] 设计模式 · 原型模式</h2></div><span class="pill status-pill">下载中</span></div><div class="progress-track"><div class="progress-bar" id="singleProgress"></div></div><div class="row-between"><span class="num" id="singleProgressText">0.0%</span><span class="meta">速度 -- · 剩余 --:--</span></div><div class="row"><button class="btn" id="cancelDownload">取消</button></div></div></div>
+                <div class="download-state hidden" data-state="complete"><div class="empty"><div class="empty-icon"><svg class="icon"><use href="#i-check"/></svg></div><h2>下载完成</h2><p>[示例] 设计模式 · 原型模式</p><div class="row" style="justify-content:center;margin-top:18px"><button class="btn"><svg class="icon"><use href="#i-folder"/></svg>打开文件夹</button><button class="btn"><svg class="icon"><use href="#i-play"/></svg>播放</button></div></div></div>
+                <div class="download-state hidden" data-state="failed"><div class="empty"><div class="empty-icon"><svg class="icon"><use href="#i-x"/></svg></div><h2>处理失败</h2><p>示例状态：任务已取消，可重新解析或重试下载。</p><div class="row" style="justify-content:center;margin-top:18px"><button class="btn" id="retryParse">重新解析</button><button class="btn" id="retryDownload">重试下载</button></div></div></div>
+              </div>
+            </div>
+
+            <aside class="stack" data-od-id="download-config-panel">
+              <div class="card card-pad stack">
+                <div class="row-between"><h2>下载配置</h2><span class="meta">4 分片 · 代理未启用</span></div>
+                <div class="field"><label>保存位置</label><div class="input-action"><select class="select" style="grid-column:span 2"><option>临时下载 · 下载目录</option><option>[示例] 学习资料合集</option></select><button class="icon-btn" title="选择新文件夹作为合集" aria-label="添加合集目录"><svg class="icon"><use href="#i-folder"/></svg></button></div></div>
+                <div class="field"><label>源流</label><select class="select" disabled><option>解析后可选择真实媒体源流</option></select></div>
+                <div class="row-between"><div><h3>定时下载</h3><p class="muted" style="font-size:12px">计划开始时间</p></div><label class="switch"><input type="checkbox" id="scheduleToggle" aria-label="启用定时下载"><span></span></label></div>
+                <input class="input" id="scheduleTime" type="datetime-local" disabled aria-label="计划开始时间" />
+              </div>
+              <div class="card" data-od-id="recent-downloads">
+                <div class="card-head"><h2>最近完成</h2><button class="btn btn-ghost btn-sm" data-go="history">查看全部历史</button></div>
+                <div style="padding:0 16px"><div class="recent-row"><span class="file-mark"><svg class="icon"><use href="#i-play"/></svg></span><div class="truncate"><strong>[示例] 原型模式</strong><div class="meta">文件大小 --</div></div><button class="icon-btn" title="打开位置" aria-label="打开位置"><svg class="icon icon-sm"><use href="#i-folder"/></svg></button></div><div class="recent-row"><span class="file-mark"><svg class="icon"><use href="#i-play"/></svg></span><div class="truncate"><strong>[示例] 组合模式</strong><div class="meta">文件大小 --</div></div><button class="icon-btn" title="打开位置" aria-label="打开位置"><svg class="icon icon-sm"><use href="#i-folder"/></svg></button></div></div>
+                <details><summary><span>运行日志</span><span class="meta">0 行</span></summary><div class="log-box">等待下载任务…</div></details>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="section app-screen" data-screen="batch" data-od-id="screen-batch">
+          <div class="page-head"><div class="page-title"><p class="eyebrow">队列工作台</p><h1 data-od-id="heading-batch">批量下载</h1><p>批量链接、播放列表与已跟踪合集共用同一下载队列</p></div><div class="segment-control" role="tablist"><button class="segment active" data-batch-mode="batch">批量下载</button><button class="segment" data-batch-mode="updates">合集更新 <span class="num">0</span></button></div></div>
+          <div class="batch-pane active" data-batch-pane="batch">
+            <div class="batch-layout">
+              <div class="stack">
+                <div class="card card-pad stack" data-od-id="batch-input-panel">
+                  <div><h2>链接列表</h2><p class="muted" style="font-size:12px;margin-top:3px">每行一个链接；支持“视频标题---视频链接”</p></div>
+                  <textarea class="textarea" id="batchUrls" aria-label="批量视频链接" placeholder="粘贴多条视频链接"></textarea>
+                  <div class="row-between"><span class="meta"><span id="batchCount">0</span> 个有效链接</span><button class="btn btn-sm" id="pasteBatch">粘贴剪贴板</button></div>
+                  <div class="grid-2"><div class="field"><label>下载格式</label><select class="select"><option>mp4</option><option>mkv</option><option>mp3（仅音频）</option></select></div><div class="field"><label>清晰度优先</label><select class="select"><option>最高画质</option><option>1080p</option><option>720p</option></select></div></div>
+                  <div class="field"><label>保存位置</label><select class="select"><option>临时下载 · 下载目录</option><option>[示例] 学习资料合集</option></select></div>
+                  <button class="btn btn-primary" id="resolveBatch" data-od-id="cta-resolve-batch">解析并确认名称</button>
+                  <div class="divider"></div>
+                  <div><h2>播放列表 / 合集</h2></div>
+                  <div class="input-action" style="grid-template-columns:minmax(0,1fr) auto"><input class="input" id="playlistUrl" placeholder="YouTube、Bilibili 等播放列表链接"/><button class="btn" id="importPlaylist">导入</button></div>
+                  <div class="card card-pad hidden" id="playlistPreview"><div class="row-between"><strong>[示例] 课程目录预览</strong><span class="pill">示例数据</span></div><label class="row" style="margin-top:12px"><input class="check" type="checkbox" checked>01 · 课程介绍</label><label class="row" style="margin-top:8px"><input class="check" type="checkbox" checked>02 · 核心概念</label><label class="row" style="margin-top:8px"><input class="check" type="checkbox">附属：课程资料.pdf</label><label class="row" style="margin-top:12px"><input class="check" type="checkbox">跟踪后续更新</label></div>
+                </div>
+                <div class="card card-pad stack hidden" id="batchConfirm" data-od-id="batch-name-confirmation"><div class="row-between"><h2>确认下载名称</h2><span class="pill">示例数据</span></div><div class="confirm-list"><div class="confirm-item"><input class="input" value="[示例] 开源项目发布说明"/><button class="icon-btn" title="移除此项" aria-label="移除此项"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="confirm-item"><input class="input" value="[示例] 课程章节 08"/><button class="icon-btn" title="移除此项" aria-label="移除此项"><svg class="icon"><use href="#i-x"/></svg></button></div></div><div class="row"><button class="btn" id="editBatch">返回修改</button><button class="btn btn-primary" id="confirmBatch">确认并下载</button></div></div>
+              </div>
+
+              <div class="card" data-od-id="batch-queue-panel">
+                <div class="card-head"><div><h2>下载队列</h2><span class="meta">示例数据 · 3 个任务</span></div><div class="row"><button class="btn btn-sm">全部暂停</button><button class="btn btn-sm">全部恢复</button><button class="btn btn-sm">重试失败</button><button class="icon-btn" title="更多队列操作" aria-label="更多队列操作"><svg class="icon"><use href="#i-more"/></svg></button></div></div>
+                <div class="filters" style="padding:10px 12px;border-bottom:1px solid var(--border)" data-od-id="queue-filters"><button class="filter active" data-filter="all">全部 <span class="num">3</span></button><button class="filter" data-filter="running">进行中 <span class="num">1</span></button><button class="filter" data-filter="waiting">等待 <span class="num">1</span></button><button class="filter" data-filter="scheduled">计划 <span class="num">0</span></button><button class="filter" data-filter="paused">已暂停 <span class="num">0</span></button><button class="filter" data-filter="failed">失败 <span class="num">1</span></button><button class="filter" data-filter="complete">已完成 <span class="num">0</span></button></div>
+                <div class="table-scroll"><table class="ds-table"><thead><tr><th style="width:42%">任务</th><th style="width:16%">状态</th><th style="width:15%">进度</th><th style="width:12%">速度</th><th style="width:15%;text-align:right">操作</th></tr></thead><tbody id="queueBody">
+                  <tr data-kind="running"><td class="task-cell"><strong>[示例] 开源项目发布说明</strong><span class="meta">Bilibili · 最高画质 · 大小 --</span></td><td><span class="pill status-pill strong">下载中</span></td><td><div class="progress-track"><div class="progress-bar" style="width:42%"></div></div><span class="meta num">42%</span></td><td class="num">--</td><td><div class="task-actions"><button class="icon-btn" title="暂停" aria-label="暂停"><svg class="icon icon-sm"><use href="#i-pause"/></svg></button><button class="icon-btn" title="取消" aria-label="取消"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div></td></tr>
+                  <tr data-kind="waiting"><td class="task-cell"><strong>[示例] 课程章节 08</strong><span class="meta">YouTube · 1080p · 大小 --</span></td><td><span class="pill status-pill">等待中</span></td><td><span class="meta num">0%</span></td><td class="num">--</td><td><div class="task-actions"><button class="icon-btn" title="取消" aria-label="取消"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div></td></tr>
+                  <tr data-kind="failed"><td class="task-cell"><strong>[示例] 访谈片段</strong><span class="meta">X / Twitter · mp4 · 登录状态需要更新</span></td><td><span class="pill status-pill">失败</span></td><td><span class="meta num">0%</span></td><td class="num">--</td><td><div class="task-actions"><button class="icon-btn" title="重试" aria-label="重试"><svg class="icon icon-sm"><use href="#i-refresh"/></svg></button><button class="icon-btn" title="取消" aria-label="取消"><svg class="icon icon-sm"><use href="#i-x"/></svg></button></div></td></tr>
+                </tbody></table></div>
+                <div class="queue-summary"><div><span class="meta">总进度</span><strong>14%</strong></div><div><span class="meta">总速度</span><strong>--</strong></div><div><span class="meta">预计剩余</span><strong>--:--</strong></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="batch-pane" data-batch-pane="updates">
+            <div class="card" data-od-id="collection-updates-panel"><div class="card-head"><h2>合集更新</h2><span class="meta">0 个待下载视频</span></div><div class="grid-1-2" style="padding:18px"><div class="stack"><div class="field"><label>选择跟踪合集</label><select class="select" disabled><option>暂无已跟踪合集</option></select></div><div class="field"><label>下载目录</label><input class="input" value="--" disabled></div><div class="row"><button class="btn" disabled>立即获取更新</button><button class="btn" disabled>重新选择目录</button></div></div><div class="empty" style="margin:auto"><div class="empty-icon"><svg class="icon"><use href="#i-refresh"/></svg></div><h2>当前没有待下载的新视频</h2><p>跟踪合集后，可在此选择新增视频、忽略条目或停止跟踪。</p></div></div></div>
+          </div>
+        </section>
+
+        <section class="section app-screen" data-screen="history" data-od-id="screen-history">
+          <div class="page-head"><div class="page-title"><p class="eyebrow">媒体资料库</p><h1 data-od-id="heading-history">下载历史</h1><p>显示 <span id="visibleHistory" class="num">3</span> 条 · 库中共 <span class="num">3</span> 条示例记录</p></div><button class="btn btn-danger" data-confirm-title="清空下载历史" data-confirm-message="将删除资料库中的全部历史记录，不会删除媒体文件。" data-od-id="history-clear">清空历史…</button></div>
+          <div class="history-layout">
+            <aside class="card folder-rail" data-od-id="history-folder-rail"><div class="card-head"><h2>资料库位置</h2><button class="icon-btn" id="newFolder" title="新建文件夹" aria-label="新建文件夹">＋</button></div><button class="folder-btn active"><svg class="icon"><use href="#i-history"/></svg>全部下载<span class="num">3</span></button><button class="folder-btn"><svg class="icon"><use href="#i-folder"/></svg>未整理<span class="num">1</span></button><div class="section-label" style="padding:12px 12px 4px">整理文件夹</div><button class="folder-btn"><svg class="icon"><use href="#i-folder"/></svg>[示例] 学习资料<span class="num">1</span></button><div class="section-label" style="padding:12px 12px 4px">批量文件夹</div><button class="folder-btn"><svg class="icon"><use href="#i-list"/></svg>[示例] 课程合集<span class="num">1</span></button><div class="card-pad hidden" id="newFolderPanel"><div class="field"><label>新建整理文件夹</label><input class="input" id="folderName" placeholder="文件夹名称"></div><div class="row" style="margin-top:8px"><button class="btn btn-sm" id="cancelFolder">取消</button><button class="btn btn-sm" id="createFolder">创建</button></div></div></aside>
+            <div class="card" data-od-id="history-library">
+              <div class="card-head"><div class="row"><div class="input-action" style="grid-template-columns:minmax(220px,1fr);width:min(420px,52vw)"><input class="input" id="historySearch" placeholder="搜索标题、平台或合集名称" aria-label="搜索下载历史"></div><div class="segment-control"><button class="segment active" data-media="all">全部</button><button class="segment" data-media="video">视频</button><button class="segment" data-media="audio">音频</button></div></div><button class="btn btn-sm" id="selectAllHistory">全选当前</button></div>
+              <div class="selection-bar hidden" id="historySelection"><strong id="selectionText">已选择 0 项</strong><button class="btn btn-sm" id="clearSelection">取消选择</button><select class="select" style="width:190px"><option>选择目标文件夹</option><option>[示例] 学习资料</option></select><button class="btn btn-sm">移动</button><button class="btn btn-sm">移出文件夹</button><button class="btn btn-sm btn-danger" data-confirm-title="删除所选记录" data-confirm-message="将删除所选历史记录。此操作不会删除本地媒体文件。">删除</button></div>
+              <div class="library-summary"><div><span class="meta">路径</span><div class="truncate">全部下载</div></div><div><span class="meta">文件</span><div class="num">3 项示例</div></div><div><span class="meta">占用大小</span><div class="num">--</div></div></div>
+              <div class="history-grid" id="historyGrid">
+                <article class="history-card" data-media-type="video" data-title="设计模式 原型模式 Bilibili" data-od-id="history-card-prototype"><input class="check history-check" type="checkbox" aria-label="选择此记录"><div class="history-thumb"><svg class="icon"><use href="#i-play"/></svg></div><div class="history-body"><span class="pill">Bilibili</span><h3>[示例] 设计模式 · 原型模式</h3><p class="meta">大小 -- · 日期 -- · mp4</p></div><div class="history-actions"><button class="icon-btn" title="打开文件夹" aria-label="打开文件夹"><svg class="icon icon-sm"><use href="#i-folder"/></svg></button><button class="icon-btn" title="预览文件" aria-label="预览文件"><svg class="icon icon-sm"><use href="#i-eye"/></svg></button><button class="icon-btn" title="打开来源" aria-label="打开来源"><svg class="icon icon-sm"><use href="#i-external"/></svg></button><button class="icon-btn" title="删除记录" aria-label="删除记录" data-confirm-title="删除历史记录" data-confirm-message="将删除这条历史记录，不会删除本地媒体文件。"><svg class="icon icon-sm"><use href="#i-trash"/></svg></button></div></article>
+                <article class="history-card" data-media-type="video" data-title="课程章节 YouTube" data-od-id="history-card-course"><input class="check history-check" type="checkbox" aria-label="选择此记录"><div class="history-thumb"><svg class="icon"><use href="#i-play"/></svg></div><div class="history-body"><span class="pill">YouTube</span><h3>[示例] 公开课 · 第 09 章</h3><p class="meta">大小 -- · 日期 -- · mkv</p></div><div class="history-actions"><button class="icon-btn" title="打开文件夹" aria-label="打开文件夹"><svg class="icon icon-sm"><use href="#i-folder"/></svg></button><button class="icon-btn" title="预览文件" aria-label="预览文件"><svg class="icon icon-sm"><use href="#i-eye"/></svg></button><button class="icon-btn" title="打开来源" aria-label="打开来源"><svg class="icon icon-sm"><use href="#i-external"/></svg></button><button class="icon-btn" title="删除记录" aria-label="删除记录" data-confirm-title="删除历史记录" data-confirm-message="将删除这条历史记录，不会删除本地媒体文件。"><svg class="icon icon-sm"><use href="#i-trash"/></svg></button></div></article>
+                <article class="history-card" data-media-type="audio" data-title="访谈音频 X Twitter" data-od-id="history-card-missing"><input class="check history-check" type="checkbox" aria-label="选择此记录"><div class="history-thumb"><span class="pill missing-label">文件缺失</span><svg class="icon"><use href="#i-play"/></svg></div><div class="history-body"><span class="pill">X / Twitter</span><h3>[示例] 访谈音频片段</h3><p class="meta">大小 -- · 日期 -- · m4a</p></div><div class="history-actions" style="grid-template-columns:1fr"><button class="btn btn-sm">重新下载</button></div></article>
+              </div>
+              <div class="empty hidden" id="historyEmpty" style="margin:auto"><div class="empty-icon"><svg class="icon"><use href="#i-search"/></svg></div><h2>没有匹配的历史记录</h2><button class="btn" id="clearHistorySearch" style="margin-top:16px">清除搜索与筛选</button></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="section app-screen" data-screen="settings" data-od-id="screen-settings">
+          <div class="page-head"><div class="page-title"><p class="eyebrow">系统偏好</p><h1 data-od-id="heading-settings">设置</h1><p id="settingsDescription">主题与系统行为</p></div></div>
+          <div class="settings-layout">
+            <aside class="card settings-nav" data-od-id="settings-categories"><button class="settings-tab active" data-setting="general" data-description="主题与系统行为">常规</button><button class="settings-tab" data-setting="downloadSettings" data-description="保存位置、格式与性能">下载</button><button class="settings-tab" data-setting="network" data-description="代理与网络访问">网络</button><button class="settings-tab" data-setting="accounts" data-description="智能登录与加密 Cookie">账号与 Cookie</button><button class="settings-tab" data-setting="integration" data-description="Telegram 媒体直链">集成</button><button class="settings-tab" data-setting="updates" data-description="应用、引擎与组件维护">更新与环境</button><button class="settings-tab" data-setting="data" data-description="备份、诊断与本机数据">数据管理</button></aside>
+            <div>
+              <div class="settings-panel active" data-setting-panel="general">
+                <div class="card setting-group" data-od-id="settings-general"><div class="card-head"><h2>常规</h2><span class="meta">自动保存</span></div><div class="setting-row"><div><h3>主题配色</h3><p>用于主操作、选中态和关键进度</p></div><div class="setting-control swatches" aria-label="主题配色"><button class="swatch active" title="星空靛蓝" style="background:oklch(58% .18 270)"></button><button class="swatch" title="极光青" style="background:oklch(65% .12 185)"></button><button class="swatch" title="玫瑰粉" style="background:oklch(65% .16 15)"></button><button class="swatch" title="琥珀金" style="background:oklch(72% .15 75)"></button><button class="swatch" title="经典浅蓝" style="background:oklch(63% .15 240)"></button></div></div><div class="setting-row"><div><h3>剪贴板监视</h3><p>窗口激活时检测媒体链接并显示解析提示</p></div><div class="setting-control"><label class="switch"><input type="checkbox" checked aria-label="剪贴板监视"><span></span></label></div></div><div class="setting-row"><div><h3>下载时防止休眠</h3><p>存在活动下载时保持 Windows 唤醒</p></div><div class="setting-control"><label class="switch"><input type="checkbox" checked aria-label="下载时防止休眠"><span></span></label></div></div><div class="setting-row"><div><h3>最小化到系统托盘</h3><p>最小化后继续在后台运行下载任务</p></div><div class="setting-control"><label class="switch"><input type="checkbox" checked aria-label="最小化到系统托盘"><span></span></label></div></div><div class="setting-row"><div><h3>系统下载通知</h3><p>任务完成或失败时显示系统托盘通知</p></div><div class="setting-control"><label class="switch"><input type="checkbox" checked aria-label="系统下载通知"><span></span></label></div></div></div>
+              </div>
+
+              <div class="settings-panel" data-setting-panel="downloadSettings">
+                <div class="card setting-group" data-od-id="settings-download"><div class="card-head"><h2>下载默认值</h2><span class="meta">自动保存</span></div><div class="setting-row"><div><h3>默认保存目录</h3><p>下载目录</p></div><div class="setting-control"><button class="btn">更改目录</button></div></div><div class="setting-row"><div><h3>默认下载格式</h3><p>新任务默认使用的封装格式</p></div><div class="setting-control"><select class="select"><option>mp4</option><option>mkv</option><option>webm</option><option>mp3</option><option>m4a</option></select></div></div><div class="setting-row"><div><h3>画质上限</h3><p>支持多分辨率的平台遵循此上限</p></div><div class="setting-control"><select class="select"><option>最高画质</option><option>2160p（4K）</option><option>1080p</option><option>720p</option></select></div></div><div class="setting-row"><div><h3>自动检查合集更新</h3><p>EasyGet 运行或驻留托盘期间定期检查</p></div><div class="setting-control"><label class="switch"><input type="checkbox" checked aria-label="自动检查合集更新"><span></span></label></div></div><div class="setting-row"><div><h3>合集检查间隔</h3><p>手动检查始终可用</p></div><div class="setting-control"><select class="select"><option>每 24 小时</option><option>每 12 小时</option><option>每 6 小时</option></select></div></div></div>
+                <div class="card setting-group"><div class="card-head"><h2>性能</h2><button class="btn btn-sm" data-modal-open="performance">查看详细建议</button></div><div class="setting-row"><div><h3>性能配置建议</h3><p>当前设备建议：使用稳妥基线</p></div><div class="setting-control"><button class="btn">应用推荐配置</button></div></div><div class="setting-row"><div><h3>并发分片</h3><p>yt-dlp 单任务连接数</p></div><div class="setting-control"><input class="range" type="range" min="1" max="32" value="4" aria-label="并发分片"><span class="pill num">4 分片</span></div></div><div class="setting-row"><div><h3>同时下载任务数</h3><p>允许 1–12 个任务并行运行</p></div><div class="setting-control"><input class="range" type="range" min="1" max="12" value="4" aria-label="同时下载任务数"><span class="pill num">4 个</span></div></div><div class="setting-row"><div><h3>全局下载限速</h3><p>0 为不限速</p></div><div class="setting-control"><input class="range" type="range" min="0" max="100" value="0" aria-label="全局下载限速"><span class="pill num">不限速</span></div></div><div class="setting-row"><div><h3>aria2c 外部下载器</h3><p>不可用时自动回退到 yt-dlp</p></div><div class="setting-control"><label class="switch"><input type="checkbox" aria-label="aria2c 外部下载器"><span></span></label></div></div></div>
+              </div>
+
+              <div class="settings-panel" data-setting-panel="network"><div class="card setting-group" data-od-id="settings-network"><div class="card-head"><h2>网络代理</h2></div><div class="setting-row"><div><h3>启用网络代理</h3><p>媒体解析与下载请求通过代理访问</p></div><div class="setting-control"><label class="switch"><input id="proxyToggle" type="checkbox" aria-label="启用网络代理"><span></span></label></div></div><div class="setting-row"><div><h3>代理地址</h3><p>HTTP、HTTPS 或 SOCKS5 地址</p></div><div class="setting-control"><input class="input" id="proxyAddress" placeholder="http://host:port" disabled></div></div><div class="setting-row"><div><span class="meta" id="networkSaveStatus">尚未更改</span></div><div class="setting-control"><button class="btn btn-primary" id="saveNetwork" data-od-id="cta-save-network">保存网络设置</button></div></div></div></div>
+
+              <div class="settings-panel" data-setting-panel="accounts"><div class="card setting-group" data-od-id="settings-accounts"><div class="card-head"><h2>智能 Cookie</h2><label class="switch"><input type="checkbox" checked aria-label="智能 Cookie"><span></span></label></div><div class="setting-row"><div><h3>平台状态</h3><p>尚未检测本机登录状态</p></div><div class="setting-control"><button class="btn">重新扫描</button></div></div><div class="platform-row"><div><strong>YouTube</strong><div class="meta">系统浏览器状态待检测</div></div><span class="pill">未检测</span><div class="row"><button class="btn btn-sm" data-login-platform="YouTube">兼容登录</button><button class="icon-btn" title="清除此平台登录数据" aria-label="清除 YouTube 登录数据" data-confirm-title="清除 YouTube 登录数据" data-confirm-message="将清除此平台的 EasyGet 登录数据与加密 Cookie。"><svg class="icon"><use href="#i-trash"/></svg></button></div></div><div class="platform-row"><div><strong>Bilibili</strong><div class="meta">系统浏览器状态待检测</div></div><span class="pill">未检测</span><div class="row"><button class="btn btn-sm" data-login-platform="Bilibili">兼容登录</button><button class="icon-btn" title="清除此平台登录数据" aria-label="清除 Bilibili 登录数据" data-confirm-title="清除 Bilibili 登录数据" data-confirm-message="将清除此平台的 EasyGet 登录数据与加密 Cookie。"><svg class="icon"><use href="#i-trash"/></svg></button></div></div><details><summary><span>高级：手动导入 Cookie</span><svg class="icon icon-sm"><use href="#i-chevron"/></svg></summary><div class="card-pad stack"><select class="select" aria-label="Cookie 平台"><option>选择平台</option><option>YouTube</option><option>Bilibili</option><option>抖音</option></select><textarea class="textarea" style="min-height:110px" placeholder="Header、JSON 或 Netscape 格式"></textarea><div class="row-between"><span class="meta">未配置 Cookie</span><button class="btn btn-primary">加密保存</button></div></div></details></div></div>
+
+              <div class="settings-panel" data-setting-panel="integration"><div class="card setting-group" data-od-id="settings-integration"><div class="card-head"><h2>Telegram</h2><span class="pill">未登录</span></div><div class="setting-row"><div><h3>API ID</h3></div><div class="setting-control"><input class="input" placeholder="API ID"></div></div><div class="setting-row"><div><h3>API Hash</h3></div><div class="setting-control"><input class="input" placeholder="API Hash"></div></div><div class="setting-row"><div><h3>绑定手机号</h3></div><div class="setting-control"><input class="input" placeholder="手机号"></div></div><div class="setting-row"><div><span class="meta">账号绑定状态：未登录</span></div><div class="setting-control"><button class="btn btn-primary" id="sendTelegramCode">发送验证码</button></div></div><details><summary><span>绑定指南</span><svg class="icon icon-sm"><use href="#i-chevron"/></svg></summary><div class="card-pad muted">使用 Telegram 官方 API ID 与 API Hash 完成账号绑定；验证码与两步验证密码仅用于当前登录流程。</div></details></div></div>
+
+              <div class="settings-panel" data-setting-panel="updates"><div class="card setting-group" data-od-id="settings-updates"><div class="card-head"><h2>更新与环境</h2><label class="row"><span class="meta">自动检查更新</span><span class="switch"><input type="checkbox" checked aria-label="自动检查更新"><span></span></span></label></div><div class="setting-row"><div><h3>EasyGet</h3><p>v1.4.6 · .NET 8 · Windows x64</p></div><div class="setting-control"><button class="btn">检查更新</button></div></div><div class="setting-row"><div><h3>yt-dlp</h3><p>当前版本：已检测</p></div><div class="setting-control"><button class="btn">更新并应用</button></div></div><div class="setting-row"><div><h3>ffmpeg</h3><p>当前版本：已检测</p></div><div class="setting-control"><button class="btn">重新检测</button><button class="btn">更新并应用</button></div></div><div class="setting-row"><div><h3>抖音专项组件</h3><p>组件健康状态待检测</p></div><div class="setting-control"><button class="btn">检测</button></div></div><div class="setting-row"><div><span class="meta">运行组件维护</span></div><div class="setting-control"><button class="btn">检查组件更新</button><button class="btn btn-primary">安装缺失组件</button></div></div></div></div>
+
+              <div class="settings-panel" data-setting-panel="data"><div class="card setting-group" data-od-id="settings-data"><div class="card-head"><h2>备份与支持</h2></div><div class="setting-row"><div><h3>用户数据备份</h3><p>历史记录、整理文件夹与非敏感设置；不包含 Cookie 和登录凭据</p></div><div class="setting-control"><button class="btn">恢复</button><button class="btn btn-primary">创建备份</button></div></div><div class="setting-row"><div><h3>诊断与支持</h3><p>生成脱敏诊断包</p></div><div class="setting-control"><button class="btn">生成诊断包</button></div></div></div><div class="card setting-group"><div class="card-head"><h2>本机数据</h2><span class="pill">操作前再次确认</span></div><div class="setting-row"><div><h3>下载历史</h3><p>删除资料库中的全部历史记录，不删除媒体文件</p></div><div class="setting-control"><button class="btn btn-danger" data-confirm-title="清空下载历史" data-confirm-message="将删除资料库中的全部历史记录，不会删除媒体文件。">清空历史</button></div></div><div class="setting-row"><div><h3>失效历史记录</h3><p>清理本地文件已不存在的历史记录</p></div><div class="setting-control"><button class="btn" data-confirm-title="扫描并清理失效记录" data-confirm-message="将扫描并删除本地文件已不存在的历史记录。">扫描并清理</button></div></div><div class="setting-row"><div><h3>EasyGet 登录数据</h3><p>清除所有平台的兼容登录与加密 Cookie</p></div><div class="setting-control"><button class="btn btn-danger" data-confirm-title="清除全部登录" data-confirm-message="将清除所有平台的兼容登录与加密 Cookie。">清除全部登录</button></div></div><div class="setting-row"><div><h3>手动 Cookie</h3><p>移除手动导入并加密保存的 Cookie</p></div><div class="setting-control"><button class="btn btn-danger" data-confirm-title="清除手动 Cookie" data-confirm-message="将移除手动导入并加密保存的 Cookie。">清除 Cookie</button></div></div><div class="setting-row"><div><h3>Telegram 会话</h3><p>当前状态：未登录</p></div><div class="setting-control"><button class="btn btn-danger" data-confirm-title="移除 Telegram 会话" data-confirm-message="将移除当前 Telegram 登录会话。">移除会话</button></div></div></div></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="pagefoot" data-od-id="statusbar"><div class="foot-health"><span class="health-dot"></span><span>下载工具已就绪</span></div><div class="foot-status"><span>1 进行中 · 1 等待 · 0 计划 · 1 失败</span><span>↓ -- · 系统盘可用空间 --</span><span>yt-dlp 已就绪 · ffmpeg 已就绪 · v1.4.6</span></div></footer>
+  </div>
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <div class="modal-layer" id="modalLayer" role="presentation">
+    <section class="modal" data-modal="confirm" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" data-od-id="dialog-confirmation"><div class="modal-head"><h2 id="confirmTitle">请确认操作</h2><button class="icon-btn" data-close-modal title="关闭" aria-label="关闭确认弹窗"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="modal-body"><p id="confirmMessage">操作前请确认。</p></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn btn-primary" id="confirmAction">确认</button></div></section>
+    <section class="modal wide hidden" data-modal="performance" role="dialog" aria-modal="true" aria-labelledby="performanceTitle" data-od-id="dialog-performance"><div class="modal-head"><div><h2 id="performanceTitle">详细性能建议</h2><span class="meta">估算依据与手动调优边界</span></div><button class="icon-btn" data-close-modal title="关闭" aria-label="关闭详细性能建议"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="modal-body stack"><div class="card card-pad"><span class="meta">当前设备建议</span><h2 style="margin-top:5px">使用稳妥的并发基线</h2><p class="muted" style="margin-top:5px">实际吞吐还受磁盘、网络、平台限流与前台负载影响。</p></div><div class="table-scroll"><table class="ds-table"><thead><tr><th>评估项</th><th>本机 / 当前值</th><th>建议基线</th><th>判断依据</th></tr></thead><tbody><tr><td>CPU</td><td>运行时检测</td><td>动态建议</td><td>静态分级</td></tr><tr><td>同时任务</td><td class="num">4</td><td>设备建议</td><td>连接预算</td></tr><tr><td>并发分片</td><td class="num">4</td><td>设备建议</td><td>单任务连接数</td></tr></tbody></table></div><p class="meta">若磁盘满载、速度剧烈波动或失败率升高，应优先降低同时任务数。</p></div><div class="modal-actions"><button class="btn" data-close-modal>关闭</button><button class="btn btn-primary" id="applyPerformance">应用推荐配置</button></div></section>
+    <section class="modal wide hidden" data-modal="login" role="dialog" aria-modal="true" aria-labelledby="loginTitle" data-od-id="dialog-managed-login"><div class="modal-head"><div><h2 id="loginTitle">登录平台</h2><span class="meta" id="allowedDomains">允许域名：平台官方域名</span></div><button class="icon-btn" data-close-modal title="关闭" aria-label="关闭平台登录窗口"><svg class="icon"><use href="#i-x"/></svg></button></div><div class="modal-body stack"><div class="pill strong" style="align-self:flex-start">登录数据仅保存在本机</div><div class="webview"><div><div class="empty-icon"><svg class="icon"><use href="#i-external"/></svg></div><h2>平台官方登录网页</h2><p>WebView2 登录区域</p></div></div><p class="muted">请在上方网页完成登录，然后点击继续。</p></div><div class="modal-actions"><button class="btn" data-close-modal>取消</button><button class="btn btn-primary" id="continueLogin">已完成登录，继续</button></div></section>
+  </div>
+
+  <script>
+    (() => {
+      const q = (s, r = document) => r.querySelector(s);
+      const qa = (s, r = document) => [...r.querySelectorAll(s)];
+      const titles = { download: '单个视频下载', batch: '批量下载', history: '下载历史', settings: '设置中心' };
+      let downloadTimer;
+
+      function showPage(page) {
+        qa('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
+        qa('.app-screen').forEach(s => s.classList.toggle('active', s.dataset.screen === page));
+        q('#windowTitle').textContent = titles[page];
+        localStorage.setItem('easyget-design-screen', page);
+      }
+      qa('.nav-item').forEach(b => b.addEventListener('click', () => showPage(b.dataset.page)));
+      qa('[data-go]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.go)));
+
+      function toast(message) {
+        const el = document.createElement('div');
+        el.className = 'toast';
+        el.innerHTML = `<span class="toast-mark"><svg class="icon icon-sm"><use href="#i-check"/></svg></span><div><strong>${message}</strong><div class="meta">EasyGet</div></div><button aria-label="关闭通知">×</button>`;
+        q('#toastStack').append(el);
+        el.querySelector('button').addEventListener('click', () => el.remove());
+        setTimeout(() => el.remove(), 4200);
+      }
+
+      function setDownloadState(state) {
+        qa('.download-state').forEach(el => el.classList.toggle('hidden', el.dataset.state !== state));
+      }
+      q('#parseVideo').addEventListener('click', () => {
+        const input = q('#videoUrl');
+        if (!input.value.trim()) { q('#urlError').textContent = '请输入有效的视频链接'; input.focus(); return; }
+        q('#urlError').textContent = ''; setDownloadState('parsing');
+        setTimeout(() => setDownloadState('ready'), 800);
+      });
+      q('#pasteUrl').addEventListener('click', () => { q('#videoUrl').value = 'https://www.bilibili.com/video/示例'; q('#urlError').textContent = ''; });
+      q('#cancelParse').addEventListener('click', () => setDownloadState('idle'));
+      q('#retryParse').addEventListener('click', () => setDownloadState('ready'));
+      q('#retryDownload').addEventListener('click', () => q('#startDownload').click());
+      q('#startDownload').addEventListener('click', () => {
+        setDownloadState('downloading'); clearInterval(downloadTimer); let p = 0;
+        downloadTimer = setInterval(() => { p = Math.min(100, p + 4); q('#singleProgress').style.width = `${p}%`; q('#singleProgressText').textContent = `${p.toFixed(1)}%`; if (p === 100) { clearInterval(downloadTimer); setDownloadState('complete'); toast('下载完成'); } }, 180);
+      });
+      q('#cancelDownload').addEventListener('click', () => { clearInterval(downloadTimer); setDownloadState('failed'); });
+      q('#scheduleToggle').addEventListener('change', e => q('#scheduleTime').disabled = !e.target.checked);
+
+      qa('[data-batch-mode]').forEach(b => b.addEventListener('click', () => { qa('[data-batch-mode]').forEach(x => x.classList.toggle('active', x === b)); qa('[data-batch-pane]').forEach(x => x.classList.toggle('active', x.dataset.batchPane === b.dataset.batchMode)); }));
+      q('#batchUrls').addEventListener('input', e => q('#batchCount').textContent = e.target.value.split(/\n/).filter(x => x.trim()).length);
+      q('#pasteBatch').addEventListener('click', () => { q('#batchUrls').value = 'https://example.com/video-1\nhttps://example.com/video-2'; q('#batchCount').textContent = '2'; });
+      q('#resolveBatch').addEventListener('click', () => { if (!q('#batchUrls').value.trim()) { toast('请先添加批量链接'); return; } q('#batchConfirm').classList.remove('hidden'); });
+      q('#editBatch').addEventListener('click', () => q('#batchConfirm').classList.add('hidden'));
+      q('#confirmBatch').addEventListener('click', () => { q('#batchConfirm').classList.add('hidden'); toast('任务已加入下载队列'); });
+      q('#importPlaylist').addEventListener('click', () => { if (!q('#playlistUrl').value.trim()) q('#playlistUrl').value = 'https://www.youtube.com/playlist?list=示例'; q('#playlistPreview').classList.remove('hidden'); });
+      qa('.filter').forEach(b => b.addEventListener('click', () => { qa('.filter').forEach(x => x.classList.toggle('active', x === b)); qa('#queueBody tr').forEach(row => row.classList.toggle('hidden', b.dataset.filter !== 'all' && row.dataset.kind !== b.dataset.filter)); }));
+
+      function filterHistory() {
+        const term = q('#historySearch').value.trim().toLowerCase();
+        const media = q('[data-media].active').dataset.media;
+        let visible = 0;
+        qa('.history-card').forEach(card => { const match = (!term || card.dataset.title.toLowerCase().includes(term)) && (media === 'all' || card.dataset.mediaType === media); card.classList.toggle('hidden', !match); if (match) visible++; });
+        q('#visibleHistory').textContent = visible; q('#historyGrid').classList.toggle('hidden', visible === 0); q('#historyEmpty').classList.toggle('hidden', visible !== 0);
+      }
+      q('#historySearch').addEventListener('input', filterHistory);
+      qa('[data-media]').forEach(b => b.addEventListener('click', () => { qa('[data-media]').forEach(x => x.classList.toggle('active', x === b)); filterHistory(); }));
+      q('#clearHistorySearch').addEventListener('click', () => { q('#historySearch').value = ''; qa('[data-media]').forEach((x, i) => x.classList.toggle('active', i === 0)); filterHistory(); });
+      function updateSelection() { const n = qa('.history-check:checked').length; q('#historySelection').classList.toggle('hidden', n === 0); q('#selectionText').textContent = `已选择 ${n} 项`; }
+      qa('.history-check').forEach(c => c.addEventListener('change', updateSelection));
+      q('#selectAllHistory').addEventListener('click', () => { qa('.history-card:not(.hidden) .history-check').forEach(c => c.checked = true); updateSelection(); });
+      q('#clearSelection').addEventListener('click', () => { qa('.history-check').forEach(c => c.checked = false); updateSelection(); });
+      q('#newFolder').addEventListener('click', () => q('#newFolderPanel').classList.toggle('hidden'));
+      q('#cancelFolder').addEventListener('click', () => q('#newFolderPanel').classList.add('hidden'));
+      q('#createFolder').addEventListener('click', () => { if (!q('#folderName').value.trim()) { q('#folderName').focus(); return; } toast('整理文件夹已创建'); q('#folderName').value = ''; q('#newFolderPanel').classList.add('hidden'); });
+
+      qa('.settings-tab').forEach(b => b.addEventListener('click', () => { qa('.settings-tab').forEach(x => x.classList.toggle('active', x === b)); qa('.settings-panel').forEach(x => x.classList.toggle('active', x.dataset.settingPanel === b.dataset.setting)); q('#settingsDescription').textContent = b.dataset.description; }));
+      qa('.swatch').forEach(b => b.addEventListener('click', () => { qa('.swatch').forEach(x => x.classList.toggle('active', x === b)); toast(`主题已切换为${b.title}`); }));
+      q('#proxyToggle').addEventListener('change', e => q('#proxyAddress').disabled = !e.target.checked);
+      q('#saveNetwork').addEventListener('click', () => { q('#networkSaveStatus').textContent = '网络设置已保存'; toast('网络设置已保存'); });
+      q('#sendTelegramCode').addEventListener('click', () => toast('请填写 Telegram API 与手机号信息'));
+
+      const modalLayer = q('#modalLayer');
+      function openModal(name) { qa('[data-modal]').forEach(m => m.classList.toggle('hidden', m.dataset.modal !== name)); modalLayer.classList.add('open'); }
+      function closeModal() { modalLayer.classList.remove('open'); }
+      qa('[data-close-modal]').forEach(b => b.addEventListener('click', closeModal));
+      qa('[data-modal-open]').forEach(b => b.addEventListener('click', () => openModal(b.dataset.modalOpen)));
+      qa('[data-confirm-title]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); q('#confirmTitle').textContent = b.dataset.confirmTitle; q('#confirmMessage').textContent = b.dataset.confirmMessage; openModal('confirm'); }));
+      q('#confirmAction').addEventListener('click', () => { closeModal(); toast('操作已确认（设计稿演示）'); });
+      qa('[data-login-platform]').forEach(b => b.addEventListener('click', () => { q('#loginTitle').textContent = `登录 ${b.dataset.loginPlatform}`; q('#allowedDomains').textContent = `允许域名：${b.dataset.loginPlatform} 官方域名`; openModal('login'); }));
+      q('#continueLogin').addEventListener('click', () => { closeModal(); toast('登录流程继续'); });
+      q('#applyPerformance').addEventListener('click', () => { closeModal(); toast('已应用推荐性能配置'); });
+      modalLayer.addEventListener('click', e => { if (e.target === modalLayer) closeModal(); });
+      document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (modalLayer.classList.contains('open')) closeModal(); else if (qa('.history-check:checked').length) { qa('.history-check').forEach(c => c.checked = false); updateSelection(); } } });
+
+      const saved = localStorage.getItem('easyget-design-screen');
+      if (titles[saved]) showPage(saved);
+    })();
+  </script>
+</body>
+</html>

@@ -8,7 +8,7 @@ Upgrade EasyGet's interaction feel with restrained desktop motion that matches t
 
 The current WPF app already has a Stitch-inspired dark UI and shared styles in `Themes/Generic.xaml`. Existing motion is mostly limited to button hover overlay opacity and pressed scale. Navigation selection, page replacement, toggle switches, and toast notifications still change abruptly.
 
-The exported Stitch references in `stitch_easyget` consistently use:
+The exported Stitch references in `Designer/v1.0/2026-06-09-stitch-reference` consistently use:
 
 - 150-300ms interaction durations.
 - Subtle active scale around 0.95-0.97.
