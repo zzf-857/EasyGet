@@ -924,6 +924,7 @@ public class ReleaseScriptTests
         Assert.Contains("--paginate", script, StringComparison.Ordinal);
         Assert.Contains("--slurp", script, StringComparison.Ordinal);
         Assert.Contains("Invoke-GhUtf8Json", script, StringComparison.Ordinal);
+        Assert.Contains("& $Command @Arguments | Out-Host", script, StringComparison.Ordinal);
         Assert.Contains("StandardOutputEncoding = [System.Text.UTF8Encoding]::new($false)", script, StringComparison.Ordinal);
         Assert.Contains("zzf-857/EasyGet", script, StringComparison.Ordinal);
         Assert.Contains("Set-ProjectVersionPreservingWhitespace", script, StringComparison.Ordinal);

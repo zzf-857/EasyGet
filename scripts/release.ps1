@@ -52,7 +52,7 @@ function Invoke-NativeCommand {
         [Parameter(Mandatory = $true)][string]$Description
     )
 
-    & $Command @Arguments
+    & $Command @Arguments | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "$Description failed with exit code $LASTEXITCODE."
     }
