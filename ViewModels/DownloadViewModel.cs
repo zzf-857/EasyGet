@@ -27,19 +27,17 @@ public partial class DownloadViewModel : ObservableObject
     private readonly DownloadPreflightService _preflightService;
     private readonly HistoryService? _historyService;
     private readonly DownloadDuplicateDetector? _duplicateDetector;
-    private readonly ExistingCollectionFolderStore _collectionFolderStore;
+    private readonly DownloadDestinationViewModel _destination;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
-    private readonly Func<string, string?> _selectDirectory;
+    private readonly CoalescedUiRefresh _logRefresh;
+    private readonly object _pendingLogGate = new();
+    private readonly Queue<string> _pendingLogLines = new();
+    private bool _isFlushingLogs;
     private CancellationTokenSource? _parseCts;
     private CancellationTokenSource? _downloadPreparationCts;
     private int _parseRequestId;
     private int _inputRevision;
-    private string _downloadRootDirectory = "";
-    private string? _selectedCollectionDirectoryBeforeRefresh;
-    private bool _applyingSharedDestination;
-    private bool _isRefreshingDestinationOptions;
-    private Task<bool> _destinationPersistenceTask = Task.FromResult(true);
 
     // 输入
     [ObservableProperty]
@@ -49,9 +47,16 @@ public partial class DownloadViewModel : ObservableObject
     [ObservableProperty] private string _selectedQuality = "best";
     [ObservableProperty] private string _selectedSubtitle = "none";
     [ObservableProperty] private SourceFormatChoice? _selectedSourceFormat;
-    [ObservableProperty] private string _downloadDirectory = "";
-    [ObservableProperty]
-    private ExistingCollectionFolder? _selectedCollectionFolder;
+    public string DownloadDirectory
+    {
+        get => _destination.DownloadDirectory;
+        set => _destination.DownloadDirectory = value;
+    }
+    public ExistingCollectionFolder? SelectedCollectionFolder
+    {
+        get => _destination.SelectedCollectionFolder;
+        set => _destination.SelectedCollectionFolder = value;
+    }
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditDownloadDestination))]
     [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
@@ -111,7 +116,7 @@ public partial class DownloadViewModel : ObservableObject
     public ObservableCollection<string> LogLines { get; } = [];
     public ObservableCollection<SourceFormatChoice> SourceFormatOptions { get; } = [];
     public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
-        => _collectionFolderStore.Folders;
+        => _destination.ExistingCollectionFolders;
     public string LogText => string.Join(Environment.NewLine, LogLines);
 
     // 选项列表
@@ -144,13 +149,13 @@ public partial class DownloadViewModel : ObservableObject
     public bool HasResolvedSourceFormats => SourceFormatOptions.Count > 1;
     public bool UsesAutomaticSourceFormat => string.IsNullOrWhiteSpace(SelectedSourceFormat?.Selector);
     public string StartDownloadButtonText => IsScheduledDownloadEnabled ? "加入计划" : "开始下载";
-    public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
+    public bool IsLoadingCollectionFolders => _destination.IsLoadingCollectionFolders;
     public bool CanEditDownloadDestination
         => !IsDownloading && !IsPreparingDownload && !IsLoadingCollectionFolders;
     public bool CanSelectExistingCollectionFolder
-        => _collectionFolderStore.HasFolders && CanEditDownloadDestination;
+        => _destination.HasFolders && CanEditDownloadDestination;
     public string ExistingCollectionFolderPlaceholder
-        => $"临时下载 · {_downloadRootDirectory}";
+        => _destination.ExistingCollectionFolderPlaceholder;
 
     public event Action<string, bool>? RequestShowNotification;
 
@@ -185,7 +190,8 @@ public partial class DownloadViewModel : ObservableObject
         HistoryService? historyService = null,
         DownloadDuplicateDetector? duplicateDetector = null,
         ExistingCollectionFolderStore? collectionFolderStore = null,
-        Func<string, string?>? selectDirectory = null)
+        Func<string, string?>? selectDirectory = null,
+        System.Windows.Threading.Dispatcher? logDispatcher = null)
     {
         _downloadManager = downloadManager;
         _configService = configService;
@@ -193,32 +199,60 @@ public partial class DownloadViewModel : ObservableObject
         _preflightService = preflightService ?? new DownloadPreflightService();
         _historyService = historyService;
         _duplicateDetector = duplicateDetector;
-        _collectionFolderStore = collectionFolderStore
-            ?? new ExistingCollectionFolderStore(historyService, configService);
+        _destination = new DownloadDestinationViewModel(configService,
+            collectionFolderStore ?? new ExistingCollectionFolderStore(historyService, configService),
+            selectDirectory);
+        _destination.PropertyChanged += OnDestinationPropertyChanged;
+        _destination.NotificationRequested += (message, success) => RequestShowNotification?.Invoke(message, success);
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
-        _selectDirectory = selectDirectory ?? SelectDirectory;
-        _downloadRootDirectory = _configService.Config.DefaultDownloadPath;
-        DownloadDirectory = _downloadRootDirectory;
-        _configService.DefaultDownloadPathChanged += OnSharedDefaultDownloadPathChanged;
-        _configService.SelectedCollectionDirectoryChanged += OnSharedSelectedCollectionDirectoryChanged;
-        _collectionFolderStore.PropertyChanged += OnCollectionFolderStorePropertyChanged;
-        _collectionFolderStore.FoldersRefreshing += OnCollectionFoldersRefreshing;
-        _collectionFolderStore.FoldersRefreshed += OnCollectionFoldersRefreshed;
-        LogLines.CollectionChanged += (_, _) => OnPropertyChanged(nameof(LogText));
+        _logRefresh = new CoalescedUiRefresh(FlushLogLines, logDispatcher);
+        LogLines.CollectionChanged += (_, _) =>
+        {
+            if (!_isFlushingLogs)
+                OnPropertyChanged(nameof(LogText));
+        };
         RebuildSourceFormatOptions();
 
         // 转发下载管理器的日志
-        _downloadManager.LogReceived += line =>
+        _downloadManager.LogReceived += AppendLogLine;
+    }
+
+    internal void AppendLogLine(string line)
+    {
+        lock (_pendingLogGate)
         {
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-            {
+            _pendingLogLines.Enqueue(line);
+            while (_pendingLogLines.Count > MaxLogLines)
+                _pendingLogLines.Dequeue();
+        }
+        _logRefresh.Request();
+    }
+
+    private void FlushLogLines()
+    {
+        string[] lines;
+        lock (_pendingLogGate)
+        {
+            lines = _pendingLogLines.ToArray();
+            _pendingLogLines.Clear();
+        }
+        if (lines.Length == 0)
+            return;
+
+        _isFlushingLogs = true;
+        try
+        {
+            foreach (var line in lines)
                 LogLines.Add(line);
-                // 保持最新日志窗口，避免长时间下载时 UI 文本无限增长。
-                while (LogLines.Count > MaxLogLines)
-                    LogLines.RemoveAt(0);
-            });
-        };
+            while (LogLines.Count > MaxLogLines)
+                LogLines.RemoveAt(0);
+        }
+        finally
+        {
+            _isFlushingLogs = false;
+            OnPropertyChanged(nameof(LogText));
+        }
     }
 
     partial void OnUrlChanged(string value)
@@ -315,8 +349,7 @@ public partial class DownloadViewModel : ObservableObject
     public void RefreshRuntimeConfigDisplay()
     {
         var config = _configService.Config;
-        OnSharedDefaultDownloadPathChanged(config.DefaultDownloadPath);
-        OnSharedSelectedCollectionDirectoryChanged(config.SelectedCollectionDirectory);
+        _destination.RefreshFromConfiguration();
         ProxyStatusText = DescribeProxyStatus(config);
         ConcurrentFragmentsText = DescribeConcurrentFragments(config);
     }
@@ -352,189 +385,44 @@ public partial class DownloadViewModel : ObservableObject
     /// 浏览选择下载目录
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanEditDestination))]
-    private async Task BrowseDirectory()
-    {
-        var selectedDirectory = _selectDirectory(DownloadDirectory);
-        if (string.IsNullOrWhiteSpace(selectedDirectory))
-            return;
-
-        try
-        {
-            SelectedCollectionFolder = await _collectionFolderStore.RegisterCollectionAsync(
-                selectedDirectory);
-            if (!await _destinationPersistenceTask)
-            {
-                RequestShowNotification?.Invoke(
-                    "合集已选择，但保存失败；应用退出时将再次尝试保存。",
-                    false);
-            }
-        }
-        catch (Exception ex) when (ex is IOException
-                                   or UnauthorizedAccessException
-                                   or ArgumentException
-                                   or NotSupportedException
-                                   or InvalidOperationException)
-        {
-            RequestShowNotification?.Invoke($"无法添加合集目录：{ex.Message}", false);
-        }
-    }
+    private Task BrowseDirectory() => _destination.BrowseAsync();
 
     [RelayCommand(CanExecute = nameof(CanClearSelectedCollectionFolder))]
-    private void ClearSelectedCollectionFolder()
-        => SelectedCollectionFolder = null;
+    private void ClearSelectedCollectionFolder() => SelectedCollectionFolder = null;
 
     private bool CanClearSelectedCollectionFolder()
         => SelectedCollectionFolder is not null && CanEditDestination();
 
-    private bool CanEditDestination()
-        => CanEditDownloadDestination;
+    private bool CanEditDestination() => CanEditDownloadDestination;
 
     [RelayCommand(CanExecute = nameof(CanEditDestination))]
     private Task RefreshExistingCollectionFolders()
         => LoadExistingCollectionFoldersAsync(forceRefresh: true);
 
-    private async Task LoadExistingCollectionFoldersAsync(bool forceRefresh)
+    private Task LoadExistingCollectionFoldersAsync(bool forceRefresh)
+        => _destination.LoadAsync(forceRefresh);
+
+    private void OnDestinationPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        try
+        if (e.PropertyName != nameof(DownloadDestinationViewModel.HasFolders))
+            OnPropertyChanged(e.PropertyName);
+        if (e.PropertyName is nameof(DownloadDestinationViewModel.IsLoadingCollectionFolders)
+            or nameof(DownloadDestinationViewModel.HasFolders))
         {
-            if (forceRefresh)
-                await _collectionFolderStore.RefreshAsync();
-            else
-                await _collectionFolderStore.EnsureLoadedAsync();
-
-            OnSharedSelectedCollectionDirectoryChanged(
-                _configService.Config.SelectedCollectionDirectory);
+            OnPropertyChanged(nameof(CanEditDownloadDestination));
+            OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
         }
-        catch (Exception ex)
-        {
-            RequestShowNotification?.Invoke($"读取已有合集失败：{ex.Message}", false);
-        }
+        if (e.PropertyName is nameof(DownloadDestinationViewModel.SelectedCollectionFolder)
+            or nameof(DownloadDestinationViewModel.IsLoadingCollectionFolders))
+            NotifyDestinationCommandsCanExecuteChanged();
+
     }
-
-    private void OnCollectionFolderStorePropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        switch (e.PropertyName)
-        {
-            case nameof(ExistingCollectionFolderStore.IsLoading):
-                OnPropertyChanged(nameof(IsLoadingCollectionFolders));
-                OnPropertyChanged(nameof(CanEditDownloadDestination));
-                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
-                NotifyDestinationCommandsCanExecuteChanged();
-                break;
-            case nameof(ExistingCollectionFolderStore.HasFolders):
-                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
-                break;
-            case nameof(ExistingCollectionFolderStore.Placeholder):
-                OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
-                break;
-        }
-    }
-
-    private void OnCollectionFoldersRefreshing(object? sender, EventArgs e)
-    {
-        _selectedCollectionDirectoryBeforeRefresh = SelectedCollectionFolder?.Directory
-            ?? _configService.Config.SelectedCollectionDirectory;
-        _isRefreshingDestinationOptions = true;
-    }
-
-    private void OnCollectionFoldersRefreshed(object? sender, EventArgs e)
-    {
-        var selectedPath = _selectedCollectionDirectoryBeforeRefresh
-            ?? SelectedCollectionFolder?.Directory
-            ?? _configService.Config.SelectedCollectionDirectory;
-        _selectedCollectionDirectoryBeforeRefresh = null;
-        try
-        {
-            OnSharedSelectedCollectionDirectoryChanged(selectedPath ?? "");
-        }
-        finally
-        {
-            _isRefreshingDestinationOptions = false;
-        }
-    }
-
-    partial void OnSelectedCollectionFolderChanged(ExistingCollectionFolder? value)
-    {
-        DownloadDirectory = value?.Directory ?? _downloadRootDirectory;
-        ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
-        if (_applyingSharedDestination || _isRefreshingDestinationOptions)
-            return;
-
-        _configService.UpdateSelectedCollectionDirectory(value?.Directory);
-        _destinationPersistenceTask = _configService.SaveAsync();
-    }
-
-    private void OnSharedDefaultDownloadPathChanged(string path)
-    {
-        void Apply()
-        {
-            _downloadRootDirectory = path;
-            if (SelectedCollectionFolder is null)
-                DownloadDirectory = path;
-            OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
-        }
-
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-            Apply();
-        else
-            dispatcher.Invoke(Apply);
-    }
-
-    private void OnSharedSelectedCollectionDirectoryChanged(string directory)
-    {
-        void Apply()
-        {
-            var selected = string.IsNullOrWhiteSpace(directory)
-                ? null
-                : ExistingCollectionFolderStore.PathsEqual(
-                    SelectedCollectionFolder?.Directory,
-                    directory)
-                    && Directory.Exists(directory)
-                    ? SelectedCollectionFolder
-                    : _collectionFolderStore.FindByDirectory(directory);
-            _applyingSharedDestination = true;
-            try
-            {
-                SelectedCollectionFolder = selected;
-            }
-            finally
-            {
-                _applyingSharedDestination = false;
-            }
-
-            DownloadDirectory = selected?.Directory ?? _downloadRootDirectory;
-            if (!string.IsNullOrWhiteSpace(directory) && selected is null)
-            {
-                _configService.UpdateSelectedCollectionDirectory(null);
-                _destinationPersistenceTask = _configService.SaveAsync();
-            }
-        }
-
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-            Apply();
-        else
-            dispatcher.Invoke(Apply);
-    }
-
     private void NotifyDestinationCommandsCanExecuteChanged()
     {
         BrowseDirectoryCommand.NotifyCanExecuteChanged();
         RefreshExistingCollectionFoldersCommand.NotifyCanExecuteChanged();
         ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
     }
-
-    private static string? SelectDirectory(string currentDirectory)
-    {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "选择文件夹作为合集",
-            InitialDirectory = currentDirectory
-        };
-        return dialog.ShowDialog() == true ? dialog.FolderName : null;
-    }
-
     [RelayCommand(AllowConcurrentExecutions = true, CanExecute = nameof(CanParse))]
     private async Task Parse()
     {
@@ -797,7 +685,7 @@ public partial class DownloadViewModel : ObservableObject
         {
             if (e.PropertyName is nameof(DownloadTask.OutputFilePath) or nameof(DownloadTask.ErrorMessage))
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                UiDispatcher.Post(() =>
                 {
                     if (CurrentTask != task) return;
                     OnPropertyChanged(nameof(CurrentOutputLocationText));
@@ -807,7 +695,7 @@ public partial class DownloadViewModel : ObservableObject
 
             if (e.PropertyName == nameof(DownloadTask.Status))
             {
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                UiDispatcher.Post(() =>
                 {
                     if (CurrentTask != task) return;
 
@@ -945,11 +833,12 @@ public partial class DownloadViewModel : ObservableObject
     [RelayCommand]
     private void CopyLog()
     {
-        if (LogLines.Count > 0)
+        var text = GetLogTextForCopy();
+        if (text.Length > 0)
         {
             try
             {
-                System.Windows.Clipboard.SetDataObject(LogText, true);
+                System.Windows.Clipboard.SetDataObject(text, true);
             }
             catch
             {
@@ -958,12 +847,20 @@ public partial class DownloadViewModel : ObservableObject
         }
     }
 
+    internal string GetLogTextForCopy()
+    {
+        FlushLogLines();
+        return LogText;
+    }
+
     /// <summary>
     /// 清空日志
     /// </summary>
     [RelayCommand]
     private void ClearLog()
     {
+        lock (_pendingLogGate)
+            _pendingLogLines.Clear();
         LogLines.Clear();
     }
 

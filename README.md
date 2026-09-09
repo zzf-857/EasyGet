@@ -12,7 +12,7 @@
   <img src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet" alt=".NET 8"/>
   <img src="https://img.shields.io/badge/WPF-Desktop-0078D4?logo=windows" alt="WPF"/>
   <img src="https://img.shields.io/badge/Architecture-MVVM-green" alt="MVVM"/>
-  <img src="https://img.shields.io/badge/Version-1.4.1-blue" alt="Version"/>
+  <img src="https://img.shields.io/github/v/release/zzf-857/EasyGet?label=Version" alt="Version"/>
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License"/>
 </p>
 

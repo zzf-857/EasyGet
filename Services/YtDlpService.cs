@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using EasyGet.Models;
 using EasyGet.Services.Cookies;
@@ -113,6 +112,7 @@ public partial class YtDlpService
     private readonly EnvironmentService _envService;
     private readonly CookieAcquisitionCoordinator _cookieCoordinator;
     private readonly IYangshipinDownloadService _yangshipinDownloadService;
+    private readonly DouyinUrlResolver _douyinUrlResolver;
 
     public YtDlpService(ConfigService configService, EnvironmentService envService)
         : this(
@@ -149,6 +149,7 @@ public partial class YtDlpService
         _envService = envService;
         _cookieCoordinator = cookieCoordinator;
         _yangshipinDownloadService = yangshipinDownloadService;
+        _douyinUrlResolver = new DouyinUrlResolver(configService);
     }
 
     private static CookieAcquisitionCoordinator CreateDefaultCookieCoordinator(ConfigService configService)
@@ -188,6 +189,7 @@ public partial class YtDlpService
 
         try
         {
+            url = await _douyinUrlResolver.ResolveAsync(url, ct);
             var attempts = await _cookieCoordinator.BuildAttemptsAsync(url, ct);
             foreach (var attempt in attempts)
             {
@@ -225,12 +227,12 @@ public partial class YtDlpService
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
                 if (!string.IsNullOrWhiteSpace(result.StandardOutput))
                 {
-                    var firstJson = EnumerateProcessLines(result.StandardOutput)
+                    var firstJson = YtDlpMetadataParser.EnumerateProcessLines(result.StandardOutput)
                         .FirstOrDefault(line => line.StartsWith("{", StringComparison.Ordinal));
 
                     if (!string.IsNullOrWhiteSpace(firstJson))
                     {
-                        var info = ParseVideoInfoJson(firstJson, url);
+                        var info = YtDlpMetadataParser.ParseVideoInfoJson(firstJson, url);
                         if (info is not null)
                         {
                             await _cookieCoordinator.RecordSuccessAsync(attempt, ct);
@@ -241,7 +243,7 @@ public partial class YtDlpService
 
                 var failure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
                     attempt,
-                    EnumerateProcessLines(result.StandardError),
+                    YtDlpMetadataParser.EnumerateProcessLines(result.StandardError),
                     ct);
                 if (!failure.ShouldTryNextCookieSource)
                     break;
@@ -280,157 +282,6 @@ public partial class YtDlpService
         }
 
         return null;
-    }
-
-    internal static VideoInfo? ParseVideoInfoJson(string json, string url)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-
-        var title = NormalizeMetadataTitle(GetOptionalString(root, "title"));
-        var platform = GetOptionalString(root, "extractor_key");
-        if (string.IsNullOrWhiteSpace(platform))
-            platform = GetOptionalString(root, "extractor");
-
-        return new VideoInfo
-        {
-            Title = title,
-            Platform = platform,
-            Duration = GetOptionalDouble(root, "duration"),
-            Thumbnail = GetThumbnail(root),
-            FileSize = GetFileSize(root),
-            Url = url,
-            AvailableFormats = GetAvailableFormats(root)
-        };
-    }
-
-    private static string NormalizeMetadataTitle(string title)
-        => title.Replace("\r", "").Replace("\n", " ").Trim();
-
-    private static string GetThumbnail(JsonElement root)
-    {
-        var thumbnail = GetOptionalString(root, "thumbnail");
-        if (!string.IsNullOrWhiteSpace(thumbnail)
-            || !root.TryGetProperty("thumbnails", out var thumbnails)
-            || thumbnails.ValueKind != JsonValueKind.Array)
-        {
-            return thumbnail;
-        }
-
-        foreach (var item in thumbnails.EnumerateArray())
-        {
-            var candidate = GetOptionalString(item, "url");
-            if (!string.IsNullOrWhiteSpace(candidate))
-                thumbnail = candidate;
-        }
-
-        return thumbnail;
-    }
-
-    private static long GetFileSize(JsonElement root)
-    {
-        var fileSize = GetOptionalInt64(root, "filesize_approx");
-        return fileSize > 0 ? fileSize : GetOptionalInt64(root, "filesize");
-    }
-
-    private static IReadOnlyList<VideoFormatInfo> GetAvailableFormats(JsonElement root)
-    {
-        if (!root.TryGetProperty("formats", out var formatsElement)
-            || formatsElement.ValueKind != JsonValueKind.Array)
-        {
-            return [];
-        }
-
-        var formats = new List<VideoFormatInfo>();
-        var seenIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in formatsElement.EnumerateArray())
-        {
-            var formatId = GetOptionalString(item, "format_id").Trim();
-            if (!IsSafeFormatId(formatId) || !seenIds.Add(formatId))
-                continue;
-
-            var format = new VideoFormatInfo(
-                formatId,
-                GetOptionalString(item, "ext").Trim().ToLowerInvariant(),
-                GetOptionalString(item, "vcodec").Trim(),
-                GetOptionalString(item, "acodec").Trim(),
-                GetOptionalInt32(item, "width"),
-                GetOptionalInt32(item, "height"),
-                GetOptionalDouble(item, "fps"),
-                GetOptionalDouble(item, "tbr"),
-                GetOptionalDouble(item, "abr"),
-                GetFileSize(item),
-                GetOptionalString(item, "format_note").Trim());
-            if (format.HasVideo || format.HasAudio)
-                formats.Add(format);
-        }
-
-        var videoFormats = formats
-            .Where(format => format.HasVideo)
-            .OrderByDescending(format => format.Height)
-            .ThenByDescending(format => format.FramesPerSecond)
-            .ThenByDescending(format => format.TotalBitrateKilobytesPerSecond)
-            .ThenByDescending(format => format.IsCombined)
-            .Take(36);
-        var audioFormats = formats
-            .Where(format => format.HasAudio && !format.HasVideo)
-            .OrderByDescending(format => format.AudioBitrateKilobytesPerSecond)
-            .ThenByDescending(format => format.TotalBitrateKilobytesPerSecond)
-            .Take(16);
-
-        return videoFormats
-            .Concat(audioFormats)
-            .DistinctBy(format => format.FormatId, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private static bool IsSafeFormatId(string formatId)
-        => formatId.Length is > 0 and <= 80
-           && formatId.All(character => char.IsAsciiLetterOrDigit(character)
-                                        || character is '.' or '_' or '-');
-
-    private static string GetOptionalString(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value)
-            || value.ValueKind != JsonValueKind.String)
-        {
-            return "";
-        }
-
-        return value.GetString() ?? "";
-    }
-
-    private static long GetOptionalInt64(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value)
-            || value.ValueKind != JsonValueKind.Number
-            || !value.TryGetInt64(out var number))
-        {
-            return 0;
-        }
-
-        return Math.Max(0, number);
-    }
-
-    private static int GetOptionalInt32(JsonElement element, string propertyName)
-    {
-        var number = GetOptionalInt64(element, propertyName);
-        return number > int.MaxValue ? int.MaxValue : (int)number;
-    }
-
-    private static double GetOptionalDouble(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value)
-            || value.ValueKind != JsonValueKind.Number
-            || !value.TryGetDouble(out var number))
-        {
-            return 0;
-        }
-
-        return Math.Max(0, number);
     }
 
     public async Task<List<string>> GetPlaylistUrlsAsync(string url, CancellationToken ct = default)
@@ -498,7 +349,7 @@ public partial class YtDlpService
                 args.Add(url);
 
                 var result = await RunProcessAsync(GetYtDlpPath(), args, TimeSpan.FromSeconds(60), ct);
-                var fetchResult = ParsePlaylistFetchOutput(
+                var fetchResult = YtDlpMetadataParser.ParsePlaylistFetchOutput(
                     result.StandardOutput,
                     result.StandardError,
                     result.ExitCode,
@@ -515,7 +366,7 @@ public partial class YtDlpService
 
                 var failure = await _cookieCoordinator.ClassifyAndRecordFailureAsync(
                     attempt,
-                    EnumerateProcessLines(result.StandardError),
+                    YtDlpMetadataParser.EnumerateProcessLines(result.StandardError),
                     ct);
                 if (!failure.ShouldTryNextCookieSource)
                     break;
@@ -537,207 +388,6 @@ public partial class YtDlpService
             ?? PlaylistFetchResult.Failure(empty, "未能获取合集信息。");
     }
 
-    internal static PlaylistFetchResult ParsePlaylistFetchOutput(
-        string standardOutput,
-        string standardError,
-        int exitCode,
-        string sourceUrl)
-    {
-        var empty = new PlaylistInfo { SourceUrl = sourceUrl };
-        PlaylistInfo? parsedInfo = null;
-
-        foreach (var line in EnumerateProcessLines(standardOutput))
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(line);
-                if (document.RootElement.ValueKind != JsonValueKind.Object
-                    || !document.RootElement.TryGetProperty("entries", out var entries)
-                    || entries.ValueKind != JsonValueKind.Array)
-                {
-                    continue;
-                }
-
-                parsedInfo = ParsePlaylistInfoJson(line, sourceUrl);
-                break;
-            }
-            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
-            {
-                // yt-dlp 或包装脚本可能在 JSON 前后输出普通日志行。
-            }
-        }
-
-        if (parsedInfo is not null && exitCode == 0)
-            return PlaylistFetchResult.Success(parsedInfo, exitCode);
-
-        var errorLines = EnumerateProcessLines(standardError)
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Select(line => line.Trim())
-            .ToList();
-        var errorMessage = errorLines.FirstOrDefault(line => line.StartsWith(
-                "ERROR:",
-                StringComparison.OrdinalIgnoreCase))
-            ?? errorLines.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(errorMessage))
-        {
-            errorMessage = parsedInfo is null
-                ? "yt-dlp 未返回有效的合集信息。"
-                : $"yt-dlp 获取合集失败（退出码 {exitCode}）。";
-        }
-
-        return PlaylistFetchResult.Failure(
-            parsedInfo ?? empty,
-            errorMessage,
-            exitCode);
-    }
-
-    internal static PlaylistInfo ParsePlaylistInfoJson(string json, string sourceUrl)
-    {
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var urls = new List<string>();
-        var playlistEntries = new List<PlaylistEntryInfo>();
-        var knownEntries = new HashSet<string>(StringComparer.Ordinal);
-
-        if (root.TryGetProperty("entries", out var entries)
-            && entries.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var entry in entries.EnumerateArray())
-            {
-                var videoUrl = ExtractPlaylistUrl(entry);
-                if (!string.IsNullOrWhiteSpace(videoUrl))
-                {
-                    var fallbackIndex = playlistEntries.Count + 1;
-                    var originalIndex = GetOptionalInt32(entry, "playlist_index");
-                    var playlistEntry = new PlaylistEntryInfo
-                    {
-                        Id = GetOptionalString(entry, "id").Trim(),
-                        IeKey = GetOptionalString(entry, "ie_key").Trim(),
-                        ExtractorKey = GetOptionalString(entry, "extractor_key").Trim(),
-                        Url = videoUrl,
-                        OriginalTitle = NormalizeMetadataTitle(GetOptionalString(entry, "title")),
-                        OriginalIndex = originalIndex > 0 ? originalIndex : fallbackIndex,
-                        SectionTitle = NormalizeMetadataTitle(
-                            GetOptionalString(entry, "section_title")),
-                        ParentTitle = NormalizeMetadataTitle(
-                            GetOptionalString(entry, "chapter")),
-                        Level = GetOptionalInt32(entry, "level"),
-                        Kind = ResolvePlaylistEntryKind(entry),
-                        Resources = ParsePlaylistResources(entry)
-                    };
-                    if (!knownEntries.Add(playlistEntry.StableKey))
-                        continue;
-
-                    playlistEntries.Add(playlistEntry);
-                    urls.Add(videoUrl);
-                }
-            }
-        }
-
-        return new PlaylistInfo
-        {
-            Id = GetOptionalString(root, "id").Trim(),
-            ExtractorKey = GetOptionalString(root, "extractor_key").Trim(),
-            Title = NormalizeMetadataTitle(GetOptionalString(root, "title")),
-            SourceUrl = sourceUrl,
-            Entries = playlistEntries,
-            Urls = urls
-        };
-    }
-
-    private static PlaylistEntryKind ResolvePlaylistEntryKind(JsonElement entry)
-    {
-        var videoCodec = GetOptionalString(entry, "vcodec");
-        var audioCodec = GetOptionalString(entry, "acodec");
-        if (!string.IsNullOrWhiteSpace(videoCodec)
-            && !string.Equals(videoCodec, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return PlaylistEntryKind.Video;
-        }
-
-        if (!string.IsNullOrWhiteSpace(audioCodec)
-            && !string.Equals(audioCodec, "none", StringComparison.OrdinalIgnoreCase))
-        {
-            return PlaylistEntryKind.Audio;
-        }
-
-        var extension = GetOptionalString(entry, "ext");
-        return string.IsNullOrWhiteSpace(extension)
-            ? PlaylistEntryKind.Unknown
-            : PlaylistEntryKind.Resource;
-    }
-
-    private static IReadOnlyList<MediaResourceInfo> ParsePlaylistResources(JsonElement entry)
-    {
-        var resources = new List<MediaResourceInfo>();
-        foreach (var propertyName in new[] { "attachments", "resources", "files" })
-        {
-            if (!entry.TryGetProperty(propertyName, out var items)
-                || items.ValueKind != JsonValueKind.Array)
-            {
-                continue;
-            }
-
-            foreach (var item in items.EnumerateArray())
-            {
-                var resourceUrl = GetOptionalString(item, "url");
-                if (string.IsNullOrWhiteSpace(resourceUrl)
-                    || !IsAbsoluteHttpUrl(resourceUrl)
-                    || resources.Any(resource => string.Equals(
-                        resource.Url,
-                        resourceUrl,
-                        StringComparison.OrdinalIgnoreCase)))
-                {
-                    continue;
-                }
-
-                resources.Add(new MediaResourceInfo
-                {
-                    Url = resourceUrl,
-                    Title = NormalizeMetadataTitle(
-                        GetOptionalString(item, "title"))
-                        is { Length: > 0 } title
-                        ? title
-                        : NormalizeMetadataTitle(GetOptionalString(item, "filename")),
-                    Extension = GetOptionalString(item, "ext").Trim().ToLowerInvariant(),
-                    MimeType = GetOptionalString(item, "mime_type").Trim(),
-                    Kind = PlaylistEntryKind.Resource,
-                    OriginalIndex = resources.Count + 1
-                });
-            }
-        }
-
-        return resources;
-    }
-
-    internal static string ExtractPlaylistUrlFromJson(string json)
-    {
-        using var doc = JsonDocument.Parse(json);
-        return ExtractPlaylistUrl(doc.RootElement);
-    }
-
-    private static string ExtractPlaylistUrl(JsonElement root)
-    {
-        var videoUrl = GetOptionalString(root, "url");
-        if (string.IsNullOrWhiteSpace(videoUrl))
-            return GetOptionalString(root, "webpage_url");
-
-        if (IsAbsoluteHttpUrl(videoUrl))
-            return videoUrl;
-
-        var extractorKey = GetOptionalString(root, "ie_key");
-        if (string.IsNullOrWhiteSpace(extractorKey))
-            extractorKey = GetOptionalString(root, "extractor_key");
-
-        return string.Equals(extractorKey, "Youtube", StringComparison.OrdinalIgnoreCase)
-            ? $"https://www.youtube.com/watch?v={videoUrl}"
-            : videoUrl;
-    }
-
-    private static bool IsAbsoluteHttpUrl(string value)
-        => Uri.TryCreate(value, UriKind.Absolute, out var uri)
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-
     public async Task DownloadAsync(
         DownloadTask task,
         IProgress<DownloadProgress>? progress = null,
@@ -757,9 +407,13 @@ public partial class YtDlpService
         task.Status = DownloadStatus.Downloading;
 
         IReadOnlyList<CookieAttempt> attempts;
+        var downloadUrl = task.Url;
         try
         {
-            attempts = await _cookieCoordinator.BuildAttemptsAsync(task.Url, ct);
+            if (DouyinUrlParser.Parse(task.Url).RequiresExpansion)
+                logCallback?.Invoke("[yt-dlp] 正在解析抖音分享链接...");
+            downloadUrl = await _douyinUrlResolver.ResolveAsync(task.Url, ct);
+            attempts = await _cookieCoordinator.BuildAttemptsAsync(downloadUrl, ct);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -770,7 +424,7 @@ public partial class YtDlpService
         {
             task.Status = DownloadStatus.Failed;
             task.ErrorMessage = ex.Message;
-            logCallback?.Invoke($"[yt-dlp] Cookie strategy initialization failed: {ex.Message}");
+            logCallback?.Invoke($"[yt-dlp] 下载链接或 Cookie 策略初始化失败: {ex.Message}");
             return;
         }
 
@@ -786,7 +440,7 @@ public partial class YtDlpService
             {
                 cookieArguments = await _cookieCoordinator.AcquireArgumentsAsync(
                     attempt,
-                    task.Url,
+                    downloadUrl,
                     ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -813,7 +467,7 @@ public partial class YtDlpService
             if (_configService.Config.UseAria2c && string.IsNullOrWhiteSpace(aria2cPath))
                 logCallback?.Invoke("[yt-dlp] aria2c 已启用但未找到 aria2c.exe，已回退到 yt-dlp 内置下载器。");
 
-            var args = BuildDownloadArgs(task, cookieArguments.Arguments, aria2cPath);
+            var args = BuildDownloadArgs(task, cookieArguments.Arguments, aria2cPath, downloadUrl);
             var strategyTag = attempt.Source switch
             {
                 CookieSourceKind.Anonymous => "匿名访问",
@@ -939,12 +593,14 @@ public partial class YtDlpService
         logCallback?.Invoke($"[yt-dlp] failed (exit code: {lastExitCode})");
     }
 
-    private List<string> BuildDownloadArgs(
+    internal List<string> BuildDownloadArgs(
         DownloadTask task,
         IReadOnlyList<string> cookieArguments,
-        string? aria2cPath = null)
+        string? aria2cPath = null,
+        string? downloadUrl = null)
     {
         ArgumentNullException.ThrowIfNull(cookieArguments);
+        downloadUrl ??= DouyinUrlParser.TryGetCanonicalVideoUrl(task.Url, out var canonical) ? canonical : task.Url;
         var args = new List<string>
         {
             "--ignore-config",
@@ -1019,11 +675,11 @@ public partial class YtDlpService
 
         AddAria2cArgs(args, _configService.Config.UseAria2c, aria2cPath, fragments);
 
-        AddSiteCompatibilityArgs(args, task.Url);
+        AddSiteCompatibilityArgs(args, downloadUrl);
         AddProxyArgs(args);
         args.AddRange(cookieArguments);
 
-        args.Add(task.Url);
+        args.Add(downloadUrl);
         return args;
     }
 
@@ -1455,6 +1111,10 @@ public partial class YtDlpService
         var failure = CookieFailureClassifier.Classify(platform.Id, stderrLines);
         var lastErrorLine = failure.LastErrorLine;
 
+        if (platform.Id == "douyin" && lastErrorLine?.Contains("Unsupported URL", StringComparison.OrdinalIgnoreCase) == true)
+            return "当前下载器未能识别这个抖音地址。请复制具体视频的分享链接或 www.douyin.com/video/视频编号 地址；图文、主页和直播地址不能作为普通视频下载。\n"
+                + RedactPotentialSensitiveText(lastErrorLine);
+
         if (platform.Id == "douyin"
             && failure.Category == CookieFailureCategory.CookieExpired)
         {
@@ -1652,17 +1312,6 @@ public partial class YtDlpService
             && extensions.Any(candidate => extension.Equals(candidate, comparison));
     }
 
-    private static IEnumerable<string> EnumerateProcessLines(string output)
-    {
-        using var reader = new StringReader(output);
-        while (reader.ReadLine() is { } line)
-        {
-            var trimmed = line.Trim();
-            if (!string.IsNullOrWhiteSpace(trimmed))
-                yield return trimmed;
-        }
-    }
-
     private static ProcessStartInfo CreateProcessStartInfo(string fileName, IEnumerable<string> args)
     {
         var psi = new ProcessStartInfo
@@ -1815,7 +1464,16 @@ public partial class YtDlpService
             {
                 touchOutput();
                 output?.AppendLine(line);
-                lineReceived?.Invoke(line);
+                try
+                {
+                    lineReceived?.Invoke(line);
+                }
+                catch (Exception ex)
+                {
+                    // Keep consuming the pipe even when a progress/log observer
+                    // fails; stopping here can block the child on a full pipe.
+                    Debug.WriteLine($"[YtDlpService] process output callback error: {ex.GetType().Name}");
+                }
             }
         }
         catch (Exception ex) when (ex is IOException or ObjectDisposedException or InvalidOperationException)

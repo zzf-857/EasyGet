@@ -9,6 +9,92 @@ namespace EasyGet.Tests;
 public class HistoryServiceTests
 {
     [Fact]
+    public async Task GetKnownDirectoriesAsync_DeduplicatesPathsAndPrefersTheBatchDirectory()
+    {
+        using var root = new TestDirectory();
+        using var service = new HistoryService(root.Path("history.db"));
+        var collectionDirectory = root.Path("collection");
+        var standaloneDirectory = root.Path("standalone");
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/collection/one",
+            BatchDirectory = collectionDirectory,
+            FilePath = root.Path("collection", "nested", "one.mp4")
+        });
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/collection/two",
+            BatchDirectory = collectionDirectory,
+            FilePath = root.Path("collection", "nested", "two.mp4")
+        });
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/standalone/one",
+            BatchDirectory = "\t ",
+            FilePath = root.Path("standalone", "one.mp4")
+        });
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/standalone/two",
+            FilePath = root.Path("standalone", "two.mp4")
+        });
+        await service.AddAsync(new DownloadHistory { Url = "https://example.com/no-path" });
+
+        var directories = await service.GetKnownDirectoriesAsync();
+
+        Assert.Equal(2, directories.Count);
+        Assert.Contains(collectionDirectory, directories);
+        Assert.Contains(standaloneDirectory, directories);
+        Assert.DoesNotContain(root.Path("collection", "nested"), directories);
+    }
+
+    [Fact]
+    public async Task Constructor_UpgradesOldHistoryColumnsAndPreservesValuesWhenReopened()
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        await using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+        {
+            await connection.OpenAsync();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE download_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT, title TEXT, platform TEXT, format TEXT, quality TEXT,
+                    file_size INTEGER, file_path TEXT, download_time TEXT
+                );
+                INSERT INTO download_history (url, title)
+                VALUES ('https://example.com/legacy', 'legacy title');
+                """;
+            await cmd.ExecuteNonQueryAsync();
+        }
+
+        using (var service = new HistoryService(dbPath))
+        {
+            var legacy = Assert.Single(await service.GetAllAsync());
+            Assert.Equal("legacy title", legacy.Title);
+            Assert.Equal("", legacy.ThumbnailUrl);
+            Assert.Equal("", legacy.BatchId);
+            Assert.Equal(0, legacy.FolderId);
+            Assert.Empty(legacy.AttachmentFilePaths);
+            await service.AddAsync(new DownloadHistory
+            {
+                Url = "https://example.com/new",
+                ThumbnailUrl = "https://example.com/poster.jpg",
+                BatchId = "new-batch",
+                AttachmentFilePaths = [root.Path("metadata.json")]
+            });
+        }
+
+        using var reopened = new HistoryService(dbPath);
+        var records = await reopened.GetAllAsync();
+        Assert.Equal(2, records.Count);
+        var added = Assert.Single(records, item => item.BatchId == "new-batch");
+        Assert.Equal("https://example.com/poster.jpg", added.ThumbnailUrl);
+        Assert.Equal(root.Path("metadata.json"), Assert.Single(added.AttachmentFilePaths));
+    }
+
+    [Fact]
     public async Task AddAsync_AssignsGeneratedIdAndIsolatesHistoryAddedSubscribers()
     {
         var dbPath = CreateTempDatabasePath();

@@ -70,29 +70,38 @@ public partial class HistoryService
         }
 
         EnsureCollectionSubscriptionColumns(transaction);
-        using (var dropLegacyIndexes = _connection.CreateCommand())
+        if (RequiresCollectionKeyMigration(transaction))
         {
-            dropLegacyIndexes.Transaction = transaction;
-            dropLegacyIndexes.CommandText = """
-                DROP INDEX IF EXISTS idx_collection_subscriptions_canonical_key;
-                DROP INDEX IF EXISTS idx_collection_subscription_items_key;
-                """;
-            dropLegacyIndexes.ExecuteNonQuery();
-        }
+            using (var dropLegacyIndexes = _connection.CreateCommand())
+            {
+                dropLegacyIndexes.Transaction = transaction;
+                dropLegacyIndexes.CommandText = """
+                    DROP INDEX IF EXISTS idx_collection_subscriptions_canonical_key;
+                    DROP INDEX IF EXISTS idx_collection_subscription_items_key;
+                    """;
+                dropLegacyIndexes.ExecuteNonQuery();
+            }
 
-        NormalizeLegacyCollectionKeys(transaction);
-        MergeDuplicateCollectionSubscriptions(transaction);
-        MergeDuplicateCollectionItems(transaction);
+            NormalizeLegacyCollectionKeys(transaction);
+            MergeDuplicateCollectionSubscriptions(transaction);
+            MergeDuplicateCollectionItems(transaction);
+
+            using var uniqueIndexes = _connection.CreateCommand();
+            uniqueIndexes.Transaction = transaction;
+            uniqueIndexes.CommandText = """
+                CREATE UNIQUE INDEX idx_collection_subscriptions_canonical_key
+                ON collection_subscriptions (canonical_key);
+                CREATE UNIQUE INDEX idx_collection_subscription_items_key
+                ON collection_subscription_items (subscription_id, entry_key);
+                """;
+            uniqueIndexes.ExecuteNonQuery();
+        }
 
         using var indexes = _connection.CreateCommand();
         indexes.Transaction = transaction;
         indexes.CommandText = """
-            CREATE UNIQUE INDEX idx_collection_subscriptions_canonical_key
-            ON collection_subscriptions (canonical_key);
             CREATE INDEX IF NOT EXISTS idx_collection_subscriptions_due
             ON collection_subscriptions (auto_check_enabled, next_check_utc);
-            CREATE UNIQUE INDEX idx_collection_subscription_items_key
-            ON collection_subscription_items (subscription_id, entry_key);
             CREATE INDEX IF NOT EXISTS idx_collection_subscription_items_pending
             ON collection_subscription_items (subscription_id, is_present, state);
             """;
@@ -100,9 +109,77 @@ public partial class HistoryService
         transaction.Commit();
     }
 
+    private bool RequiresCollectionKeyMigration(SqliteTransaction transaction)
+    {
+        if (!HasCollectionKeyIndex(transaction, "collection_subscriptions",
+                "idx_collection_subscriptions_canonical_key", ["canonical_key"])
+            || !HasCollectionKeyIndex(transaction, "collection_subscription_items",
+                "idx_collection_subscription_items_key", ["subscription_id", "entry_key"]))
+        {
+            return true;
+        }
+
+        // Valid unique indexes already guarantee there are no duplicate normalized
+        // keys. Only legacy blank or untrimmed keys still require the merge pass.
+        using var invalidKeys = _connection.CreateCommand();
+        invalidKeys.Transaction = transaction;
+        invalidKeys.CommandText = """
+            SELECT EXISTS (
+                SELECT 1 FROM collection_subscriptions
+                WHERE canonical_key IS NULL OR TRIM(canonical_key) = ''
+                   OR canonical_key <> TRIM(canonical_key)
+            ) OR EXISTS (
+                SELECT 1 FROM collection_subscription_items
+                WHERE entry_key IS NULL OR TRIM(entry_key) = ''
+                   OR entry_key <> TRIM(entry_key)
+            )
+            """;
+        return Convert.ToInt64(invalidKeys.ExecuteScalar(), CultureInfo.InvariantCulture) != 0;
+    }
+
+    private bool HasCollectionKeyIndex(
+        SqliteTransaction transaction,
+        string tableName,
+        string indexName,
+        IReadOnlyList<string> expectedColumns)
+    {
+        using (var index = _connection.CreateCommand())
+        {
+            index.Transaction = transaction;
+            index.CommandText = """
+                SELECT 1 FROM pragma_index_list($tableName)
+                WHERE name = $indexName AND "unique" = 1 AND partial = 0
+                """;
+            index.Parameters.AddWithValue("$tableName", tableName);
+            index.Parameters.AddWithValue("$indexName", indexName);
+            if (index.ExecuteScalar() is null)
+                return false;
+        }
+
+        using var columns = _connection.CreateCommand();
+        columns.Transaction = transaction;
+        columns.CommandText = """
+            SELECT name, coll FROM pragma_index_xinfo($indexName)
+            WHERE key = 1 ORDER BY seqno
+            """;
+        columns.Parameters.AddWithValue("$indexName", indexName);
+        using var reader = columns.ExecuteReader();
+        foreach (var expectedColumn in expectedColumns)
+        {
+            if (!reader.Read()
+                || !string.Equals(ReadString(reader, 0), expectedColumn, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(ReadString(reader, 1), "BINARY", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return !reader.Read();
+    }
+
     private void EnsureCollectionSubscriptionColumns(SqliteTransaction transaction)
     {
-        EnsureCollectionTableColumns("collection_subscriptions", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        EnsureTableColumns("collection_subscriptions", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["canonical_key"] = "TEXT NOT NULL DEFAULT ''",
             ["source_url"] = "TEXT NOT NULL DEFAULT ''",
@@ -124,7 +201,7 @@ public partial class HistoryService
             ["updated_at_utc"] = "TEXT NOT NULL DEFAULT ''"
         }, transaction);
 
-        EnsureCollectionTableColumns("collection_subscription_items", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        EnsureTableColumns("collection_subscription_items", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["subscription_id"] = "INTEGER NOT NULL DEFAULT 0",
             ["entry_key"] = "TEXT NOT NULL DEFAULT ''",
@@ -141,33 +218,6 @@ public partial class HistoryService
             ["updated_at_utc"] = "TEXT NOT NULL DEFAULT ''",
             ["task_id"] = "TEXT NOT NULL DEFAULT ''"
         }, transaction);
-    }
-
-    private void EnsureCollectionTableColumns(
-        string tableName,
-        IReadOnlyDictionary<string, string> requiredColumns,
-        SqliteTransaction transaction)
-    {
-        var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using (var info = _connection.CreateCommand())
-        {
-            info.Transaction = transaction;
-            info.CommandText = $"PRAGMA table_info({tableName})";
-            using var reader = info.ExecuteReader();
-            while (reader.Read())
-                existingColumns.Add(ReadString(reader, "name"));
-        }
-
-        foreach (var column in requiredColumns)
-        {
-            if (existingColumns.Contains(column.Key))
-                continue;
-
-            using var alter = _connection.CreateCommand();
-            alter.Transaction = transaction;
-            alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {column.Key} {column.Value}";
-            alter.ExecuteNonQuery();
-        }
     }
 
     private void NormalizeLegacyCollectionKeys(SqliteTransaction transaction)

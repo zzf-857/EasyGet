@@ -8,6 +8,154 @@ namespace EasyGet.Tests;
 public sealed class CollectionSubscriptionPersistenceTests
 {
     [Fact]
+    public async Task Initialization_HealthyDatabaseDoesNotRewriteRowsOrRebuildIndexes()
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        using (var service = new HistoryService(dbPath))
+        {
+            await service.UpsertCollectionSubscriptionAsync(
+                CreateSubscription("healthy:key"), [Entry("healthy-entry", "Healthy entry", 1)]);
+        }
+
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+        using (var triggers = connection.CreateCommand())
+        {
+            triggers.CommandText = """
+                CREATE TRIGGER reject_subscription_rewrite
+                BEFORE UPDATE ON collection_subscriptions
+                BEGIN SELECT RAISE(ABORT, 'healthy subscriptions must not be rewritten'); END;
+                CREATE TRIGGER reject_item_rewrite
+                BEFORE UPDATE ON collection_subscription_items
+                BEGIN SELECT RAISE(ABORT, 'healthy items must not be rewritten'); END;
+                """;
+            await triggers.ExecuteNonQueryAsync();
+        }
+        using var schemaVersion = connection.CreateCommand();
+        schemaVersion.CommandText = "PRAGMA schema_version";
+        var before = await schemaVersion.ExecuteScalarAsync();
+
+        using var reopened = new HistoryService(dbPath);
+
+        Assert.Equal(before, await schemaVersion.ExecuteScalarAsync());
+        var subscription = Assert.Single(await reopened.GetCollectionSubscriptionsAsync());
+        Assert.Equal("healthy:key", subscription.CanonicalKey);
+        Assert.Equal("healthy-entry", Assert.Single(subscription.Items).EntryKey);
+    }
+
+    [Theory]
+    [InlineData("CREATE INDEX idx_collection_subscriptions_canonical_key ON collection_subscriptions (canonical_key)")]
+    [InlineData("CREATE UNIQUE INDEX idx_collection_subscriptions_canonical_key ON collection_subscriptions (title)")]
+    [InlineData("CREATE UNIQUE INDEX idx_collection_subscriptions_canonical_key ON collection_subscriptions (canonical_key) WHERE id < 0")]
+    [InlineData("CREATE UNIQUE INDEX idx_collection_subscriptions_canonical_key ON collection_subscriptions (canonical_key COLLATE NOCASE)")]
+    public async Task Initialization_RepairsIncorrectSameNameKeyIndexes(string indexSql)
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        using (var service = new HistoryService(dbPath))
+        {
+            await service.UpsertCollectionSubscriptionAsync(
+                CreateSubscription("healthy:key"), [Entry("entry", "Entry", 1)]);
+        }
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+        using (var replaceIndex = connection.CreateCommand())
+        {
+            replaceIndex.CommandText = $"DROP INDEX idx_collection_subscriptions_canonical_key; {indexSql}";
+            await replaceIndex.ExecuteNonQueryAsync();
+        }
+
+        using var reopened = new HistoryService(dbPath);
+
+        using var insert = connection.CreateCommand();
+        insert.CommandText = """
+            INSERT INTO collection_subscriptions (canonical_key, title)
+            VALUES ('healthy:key', 'Different title')
+            """;
+        await Assert.ThrowsAsync<SqliteException>(() => insert.ExecuteNonQueryAsync());
+        insert.CommandText = """
+            INSERT INTO collection_subscriptions (canonical_key, title)
+            VALUES ('HEALTHY:KEY', 'Case-sensitive key')
+            """;
+        Assert.Equal(1, await insert.ExecuteNonQueryAsync());
+    }
+
+    [Theory]
+    [InlineData(null, "legacy:subscription:17", "legacy:item:23")]
+    [InlineData("", "legacy:subscription:17", "legacy:item:23")]
+    [InlineData("   ", "legacy:subscription:17", "legacy:item:23")]
+    [InlineData("  legacy:key  ", "legacy:key", "legacy:key")]
+    public async Task Initialization_NormalizesLegacyKeysEvenWhenUniqueIndexesAlreadyExist(
+        string? rawKey,
+        string expectedSubscriptionKey,
+        string expectedEntryKey)
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        await using (var connection = new SqliteConnection($"Data Source={dbPath}"))
+        {
+            await connection.OpenAsync();
+            using var setup = connection.CreateCommand();
+            setup.CommandText = """
+                CREATE TABLE collection_subscriptions (id INTEGER PRIMARY KEY, canonical_key TEXT);
+                CREATE TABLE collection_subscription_items (
+                    id INTEGER PRIMARY KEY, subscription_id INTEGER NOT NULL, entry_key TEXT
+                );
+                CREATE UNIQUE INDEX idx_collection_subscriptions_canonical_key
+                ON collection_subscriptions (canonical_key);
+                CREATE UNIQUE INDEX idx_collection_subscription_items_key
+                ON collection_subscription_items (subscription_id, entry_key);
+                INSERT INTO collection_subscriptions (id, canonical_key) VALUES (17, $key);
+                INSERT INTO collection_subscription_items (id, subscription_id, entry_key) VALUES (23, 17, $key);
+                """;
+            setup.Parameters.AddWithValue("$key", (object?)rawKey ?? DBNull.Value);
+            await setup.ExecuteNonQueryAsync();
+        }
+
+        using var service = new HistoryService(dbPath);
+
+        var subscription = Assert.Single(await service.GetCollectionSubscriptionsAsync());
+        Assert.Equal(expectedSubscriptionKey, subscription.CanonicalKey);
+        Assert.Equal(expectedEntryKey, Assert.Single(subscription.Items).EntryKey);
+    }
+
+    [Fact]
+    public async Task Initialization_RepairsItemIndexThatIncludesAnExtraKeyColumn()
+    {
+        using var root = new TestDirectory();
+        var dbPath = root.Path("history.db");
+        long subscriptionId;
+        using (var service = new HistoryService(dbPath))
+        {
+            var subscription = await service.UpsertCollectionSubscriptionAsync(
+                CreateSubscription("healthy:key"), [Entry("entry", "Entry", 1)]);
+            subscriptionId = subscription.Id;
+        }
+        await using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync();
+        using (var replaceIndex = connection.CreateCommand())
+        {
+            replaceIndex.CommandText = """
+                DROP INDEX idx_collection_subscription_items_key;
+                CREATE UNIQUE INDEX idx_collection_subscription_items_key
+                ON collection_subscription_items (subscription_id, entry_key, id);
+                """;
+            await replaceIndex.ExecuteNonQueryAsync();
+        }
+
+        using var reopened = new HistoryService(dbPath);
+
+        using var duplicate = connection.CreateCommand();
+        duplicate.CommandText = """
+            INSERT INTO collection_subscription_items (subscription_id, entry_key)
+            VALUES ($subscriptionId, 'entry')
+            """;
+        duplicate.Parameters.AddWithValue("$subscriptionId", subscriptionId);
+        await Assert.ThrowsAsync<SqliteException>(() => duplicate.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
     public async Task Upsert_PersistsCompleteBaselineAndSettingsAcrossRestart()
     {
         var dbPath = TestTempPaths.CreateSqliteDatabasePath("easyget-collection-subscription");

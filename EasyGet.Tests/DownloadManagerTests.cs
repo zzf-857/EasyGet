@@ -228,6 +228,46 @@ public class DownloadManagerTests
         Assert.Null(second.OutputFileNameOverride);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecutionService_RestoresCustomOutputNameAndReleasesReservationWhenEngineFails(bool useM3u8Fallback)
+    {
+        using var root = new TestDirectory();
+        using var server = useM3u8Fallback ? new MasterPlaylistServer() : null;
+        var config = new ConfigService(root.Path("config"));
+        var outputDirectory = root.Path("downloads");
+        root.Touch(Path.Combine("downloads", "指定标题.mp4"));
+        var task = new DownloadTask
+        {
+            Url = server?.Url ?? "https://example.test/video",
+            Title = "用户标题",
+            OutputFileNameOverride = "指定标题",
+            OutputDirectory = outputDirectory,
+            Format = "mp4",
+            ErrorMessage = "previous failure"
+        };
+        var ytDlp = new FailingYtDlpDownloadService();
+        var execution = new DownloadExecutionService(ytDlp, config);
+        var logLines = new List<string>();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => execution.DownloadAsync(
+            task, new Progress<DownloadProgress>(), logLines.Add, CancellationToken.None));
+
+        Assert.Equal("指定标题 (2)", ytDlp.ReservedFileName);
+        Assert.Equal("指定标题", task.OutputFileNameOverride);
+        Assert.Equal("用户标题", task.Title);
+        if (useM3u8Fallback)
+        {
+            Assert.Equal(DownloadStatus.Downloading, ytDlp.StatusAtDownload);
+            Assert.Equal("", ytDlp.ErrorAtDownload);
+            Assert.Contains(logLines, line => line.Contains("回退", StringComparison.Ordinal));
+        }
+
+        using var nextReservation = DownloadOutputPathReservation.Reserve(outputDirectory, "指定标题.mp4");
+        Assert.Equal(root.Path("downloads", "指定标题 (2).mp4"), nextReservation.Path);
+    }
+
     [Fact]
     public void DownloadTask_DisplayTitleShowsUsefulPlaceholderBeforeMetadataArrives()
     {
@@ -1445,6 +1485,28 @@ public class DownloadManagerTests
             {
             }
             _cts.Dispose();
+        }
+    }
+
+    private sealed class FailingYtDlpDownloadService : IYtDlpDownloadService
+    {
+        public string? ReservedFileName { get; private set; }
+        public DownloadStatus StatusAtDownload { get; private set; }
+        public string? ErrorAtDownload { get; private set; }
+
+        public Task<VideoInfo?> GetVideoInfoAsync(string url, CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Metadata is not needed by the execution test.");
+
+        public Task DownloadAsync(
+            DownloadTask task,
+            IProgress<DownloadProgress>? progress = null,
+            Action<string>? logCallback = null,
+            CancellationToken cancellationToken = default)
+        {
+            ReservedFileName = task.OutputFileNameOverride;
+            StatusAtDownload = task.Status;
+            ErrorAtDownload = task.ErrorMessage;
+            return Task.FromException(new InvalidOperationException("simulated engine failure"));
         }
     }
 

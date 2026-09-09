@@ -127,6 +127,14 @@ public sealed class DownloadDuplicateDetector
     public static string NormalizeUrl(string url)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        if (TelegramLinkParser.Parse(url) is { } telegram)
+        {
+            var target = telegram.chatTarget.StartsWith("-100", StringComparison.Ordinal)
+                ? "c/" + telegram.chatTarget[4..]
+                : telegram.chatTarget.ToLowerInvariant();
+            var range = telegram.endId is { } end ? $"-{end}" : "";
+            return $"https://t.me/{target}/{telegram.startId}{range}";
+        }
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed)
             || parsed.Scheme is not ("http" or "https")
             || string.IsNullOrWhiteSpace(parsed.Host)
@@ -156,6 +164,30 @@ public sealed class DownloadDuplicateDetector
         var path = parsed.GetComponents(UriComponents.Path, UriFormat.UriEscaped);
         builder.Path = NormalizePath(path);
         return builder.Uri.AbsoluteUri;
+    }
+
+    /// <summary>Index history once when a batch needs only duplicate membership, not file recovery details.</summary>
+    internal static HashSet<string> FindHistoryDuplicateUrls(
+        IEnumerable<string> urls, IEnumerable<DownloadHistory> history)
+    {
+        ArgumentNullException.ThrowIfNull(urls);
+        ArgumentNullException.ThrowIfNull(history);
+        var knownUrls = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in history)
+        {
+            if (string.IsNullOrWhiteSpace(item?.Url))
+                continue;
+            try { knownUrls.Add(NormalizeUrl(item.Url)); }
+            catch (ArgumentException) { /* Invalid legacy rows are not duplicate candidates. */ }
+        }
+
+        var duplicates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var url in urls)
+        {
+            if (knownUrls.Contains(NormalizeUrl(url)))
+                duplicates.Add(url);
+        }
+        return duplicates;
     }
 
     private static bool UrlsMatch(string normalizedUrl, string candidate)

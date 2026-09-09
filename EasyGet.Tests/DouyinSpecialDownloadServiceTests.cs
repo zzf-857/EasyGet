@@ -8,6 +8,19 @@ namespace EasyGet.Tests;
 
 public class DouyinSpecialDownloadServiceTests
 {
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("[sidecar] downloading")]
+    [InlineData("[{\"event\":\"success\"}]")]
+    [InlineData("{invalid json")]
+    public void SidecarMessageParser_RejectsNonMessageLines(string line)
+    {
+        Assert.False(DouyinSidecarMessageParser.TryParse(line, out var message));
+        Assert.Equal(DouyinSidecarEventKind.Unknown, message.Kind);
+        Assert.Equal(line.Trim(), message.RawLine);
+    }
+
     [Fact]
     public void TryParseStdoutLine_ParsesProgressJsonLine()
     {
@@ -15,7 +28,7 @@ public class DouyinSpecialDownloadServiceTests
             {"event":"progress","percent":12.5,"downloaded_bytes":1024,"total_bytes":4096,"speed_bytes_per_sec":512.5,"eta_seconds":6}
             """;
 
-        var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(line, out var message);
+        var parsed = DouyinSidecarMessageParser.TryParse(line, out var message);
 
         Assert.True(parsed);
         Assert.Equal(DouyinSidecarEventKind.Progress, message.Kind);
@@ -34,7 +47,7 @@ public class DouyinSpecialDownloadServiceTests
             {"event":"progress","summary":{"success_count":4,"failed_count":1,"skipped_count":2},"percent":75}
             """;
 
-        var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(line, out var message);
+        var parsed = DouyinSidecarMessageParser.TryParse(line, out var message);
 
         Assert.True(parsed);
         Assert.Equal(DouyinSidecarEventKind.Progress, message.Kind);
@@ -50,7 +63,7 @@ public class DouyinSpecialDownloadServiceTests
             {"event":"success","details":{"counts":{"success":4,"failed":1,"skipped":2}}}
             """;
 
-        var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(line, out var message);
+        var parsed = DouyinSidecarMessageParser.TryParse(line, out var message);
 
         Assert.True(parsed);
         Assert.Equal(DouyinSidecarEventKind.Success, message.Kind);
@@ -62,7 +75,7 @@ public class DouyinSpecialDownloadServiceTests
     [Fact]
     public void TryParseStdoutLine_IgnoresNonJsonLine()
     {
-        var parsed = DouyinSpecialDownloadService.TryParseStdoutLine(
+        var parsed = DouyinSidecarMessageParser.TryParse(
             "[douyin-sidecar] browser warmup",
             out var message);
 
@@ -77,7 +90,7 @@ public class DouyinSpecialDownloadServiceTests
         var videoPath = Path.Combine(outputDirectory, "video.mp4");
         var commentsPath = Path.Combine(outputDirectory, "comments.json");
 
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             $$"""
             {
               "event": "success",
@@ -102,7 +115,7 @@ public class DouyinSpecialDownloadServiceTests
     {
         var outputPath = Path.Combine(Path.GetTempPath(), "hot_board.jsonl");
 
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             $$"""
             {
               "event": "success",
@@ -136,7 +149,7 @@ public class DouyinSpecialDownloadServiceTests
     [Fact]
     public void TryMapProgress_MapsAndClampsSidecarProgress()
     {
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             """{"event":"progress","percent":120,"downloaded_bytes":-10,"total_bytes":1000,"speed_bytes_per_sec":-3,"eta_seconds":-2}""",
             out var message);
 
@@ -154,7 +167,7 @@ public class DouyinSpecialDownloadServiceTests
     [Fact]
     public void TryMapProgress_ComputesPercentWhenOnlyByteCountsAreProvided()
     {
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             """{"event":"progress","downloaded_bytes":250,"total_bytes":1000}""",
             out var message);
 
@@ -178,7 +191,7 @@ public class DouyinSpecialDownloadServiceTests
             Status = DownloadStatus.Downloading,
             ErrorMessage = "previous error"
         };
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             """
             {
               "event": "success",
@@ -219,7 +232,7 @@ public class DouyinSpecialDownloadServiceTests
             OutputDirectory = outputDirectory,
             Status = DownloadStatus.Downloading
         };
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             $$"""{"event":"success","title":"outside","output_file_path":"{{JsonEscaped(unsafeOutputPath)}}"}""",
             out var message);
 
@@ -243,7 +256,7 @@ public class DouyinSpecialDownloadServiceTests
             OutputDirectory = outputDirectory,
             Status = DownloadStatus.Downloading
         };
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             $$"""
             {
               "event": "success",
@@ -286,7 +299,7 @@ public class DouyinSpecialDownloadServiceTests
                 OutputDirectory = outputDirectory,
                 Status = DownloadStatus.Downloading
             };
-            DouyinSpecialDownloadService.TryParseStdoutLine(
+            DouyinSidecarMessageParser.TryParse(
                 $$"""
                 {
                   "event": "success",
@@ -342,7 +355,7 @@ public class DouyinSpecialDownloadServiceTests
                 OutputDirectory = outputDirectory,
                 Status = DownloadStatus.Downloading
             };
-            DouyinSpecialDownloadService.TryParseStdoutLine(
+            DouyinSidecarMessageParser.TryParse(
                 $$"""
                 {
                   "event": "success",
@@ -392,7 +405,7 @@ public class DouyinSpecialDownloadServiceTests
                 OutputDirectory = outputDirectory,
                 Status = DownloadStatus.Downloading
             };
-            DouyinSpecialDownloadService.TryParseStdoutLine(
+            DouyinSidecarMessageParser.TryParse(
                 $$"""
                 {
                   "event": "success",
@@ -417,7 +430,7 @@ public class DouyinSpecialDownloadServiceTests
                 OutputDirectory = outputDirectory,
                 Status = DownloadStatus.Downloading
             };
-            DouyinSpecialDownloadService.TryParseStdoutLine(
+            DouyinSidecarMessageParser.TryParse(
                 $$"""
                 {
                   "event": "success",
@@ -462,7 +475,7 @@ public class DouyinSpecialDownloadServiceTests
                 OutputDirectory = outputDirectory,
                 Status = DownloadStatus.Downloading
             };
-            DouyinSpecialDownloadService.TryParseStdoutLine(
+            DouyinSidecarMessageParser.TryParse(
                 $$"""
                 {
                   "event": "success",
@@ -497,7 +510,7 @@ public class DouyinSpecialDownloadServiceTests
             Platform = "",
             Status = DownloadStatus.Downloading
         };
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             """{"event":"failed","error":"signature expired","title":"new title","platform":"Douyin"}""",
             out var message);
 
@@ -517,7 +530,7 @@ public class DouyinSpecialDownloadServiceTests
             Status = DownloadStatus.Downloading,
             ErrorMessage = "previous error"
         };
-        DouyinSpecialDownloadService.TryParseStdoutLine(
+        DouyinSidecarMessageParser.TryParse(
             """{"event":"cancelled","message":"cancelled by caller"}""",
             out var message);
 

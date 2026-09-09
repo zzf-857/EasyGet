@@ -10,6 +10,40 @@ namespace EasyGet.Tests;
 public class HistoryViewModelTests
 {
     [Fact]
+    public async Task LoadHistory_SearchKeepsMoveTargetsFromHiddenHistoryOutsideDownloadRoot()
+    {
+        using var root = new TestDirectory();
+        var downloadRoot = root.Path("downloads");
+        var hiddenDirectory = root.Path("external", "hidden-history");
+        Directory.CreateDirectory(downloadRoot);
+        Directory.CreateDirectory(hiddenDirectory);
+        using var service = new HistoryService(root.Path("history.db"));
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/visible",
+            Title = "needle match"
+        });
+        await service.AddAsync(new DownloadHistory
+        {
+            Url = "https://example.com/hidden",
+            Title = "unrelated result",
+            FilePath = Path.Combine(hiddenDirectory, "video.mp4")
+        });
+        var config = new TestConfigService();
+        config.Config.DefaultDownloadPath = downloadRoot;
+        var scheduler = new ManualHistoryUpdateScheduler();
+        using var viewModel = new HistoryViewModel(service, config, static _ => { }, scheduler.Schedule);
+        viewModel.SearchKeyword = "needle";
+        await viewModel.LoadAllHistoryForWorkspace(); // Also cancels the pending search debounce.
+
+        await viewModel.LoadHistory();
+
+        Assert.Equal("needle match", Assert.Single(viewModel.HistoryItems).Title);
+        Assert.Contains(viewModel.BulkTargetFolders, target =>
+            !target.IsOrganizer && target.Directory == hiddenDirectory);
+    }
+
+    [Fact]
     public async Task EnsureHistoryLoadedAsync_ReusesTheSuccessfulInitialLoad()
     {
         var dbPath = CreateTempDatabasePath();
@@ -217,14 +251,14 @@ public class HistoryViewModelTests
             Assert.Equal(folder.Id, workspaceFolder.Id);
             Assert.True(workspaceFolder.CanAcceptDrop);
             Assert.Empty(viewModel.BatchFolderCards);
-            var originalTarget = Assert.Single(viewModel.BulkTargetFolders.Where(target => target.IsOrganizer));
+            var originalTarget = Assert.Single(viewModel.BulkTargetFolders, target => target.IsOrganizer);
             Assert.Equal(folder.Id, originalTarget.FolderId);
             viewModel.BulkTargetFolder = originalTarget;
 
             await viewModel.LoadHistory();
 
             var refreshedFolder = Assert.Single(viewModel.HistoryFolders);
-            var reboundTarget = Assert.Single(viewModel.BulkTargetFolders.Where(target => target.IsOrganizer));
+            var reboundTarget = Assert.Single(viewModel.BulkTargetFolders, target => target.IsOrganizer);
             Assert.NotSame(originalTarget, reboundTarget);
             Assert.Same(reboundTarget, viewModel.BulkTargetFolder);
             Assert.Equal(refreshedFolder.Id, reboundTarget.FolderId);

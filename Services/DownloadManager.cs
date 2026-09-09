@@ -3,6 +3,7 @@ using System.Collections.Specialized;
 using System.IO;
 using System.ComponentModel;
 using System.Threading.Channels;
+using System.Windows.Threading;
 using EasyGet.Models;
 
 namespace EasyGet.Services;
@@ -12,15 +13,13 @@ namespace EasyGet.Services;
 /// </summary>
 public class DownloadManager : IDisposable
 {
-    private readonly IYtDlpDownloadService _ytDlpService;
-    private readonly M3u8DownloadService _m3u8DownloadService;
-    private readonly TelegramDownloadService _telegramDownloadService;
-    private readonly HttpResourceDownloadService _resourceDownloadService;
+    private readonly DownloadExecutionService _executionService;
+    private readonly DownloadHistoryRecorder _historyRecorder;
     private readonly HistoryService _historyService;
     private readonly ConfigService _configService;
     private readonly TaskQueuePersistenceService? _taskQueuePersistence;
     private readonly DynamicConcurrencyGate _downloadGate;
-    private readonly SemaphoreSlim _historyWriteSemaphore = new(1, 1);
+    private readonly Dispatcher? _uiDispatcher = System.Windows.Application.Current?.Dispatcher;
     private readonly Channel<DownloadAttempt> _metadataQueue;
     private readonly Task[] _metadataWorkers;
     private readonly object _attemptLock = new();
@@ -75,10 +74,9 @@ public class DownloadManager : IDisposable
         TaskQueuePersistenceService? taskQueuePersistence = null,
         HttpResourceDownloadService? resourceDownloadService = null)
     {
-        _ytDlpService = ytDlpService;
-        _m3u8DownloadService = m3u8DownloadService ?? new M3u8DownloadService(configService, new EnvironmentService());
-        _telegramDownloadService = telegramDownloadService ?? new TelegramDownloadService(configService);
-        _resourceDownloadService = resourceDownloadService ?? new HttpResourceDownloadService(configService);
+        _executionService = new DownloadExecutionService(
+            ytDlpService, configService, m3u8DownloadService, telegramDownloadService, resourceDownloadService);
+        _historyRecorder = new DownloadHistoryRecorder(historyService);
         _historyService = historyService;
         _configService = configService;
         _taskQueuePersistence = taskQueuePersistence;
@@ -99,6 +97,21 @@ public class DownloadManager : IDisposable
         Tasks.CollectionChanged += OnTasksCollectionChangedForScheduling;
         if (_taskQueuePersistence is not null)
             Tasks.CollectionChanged += OnTasksCollectionChangedForPersistence;
+    }
+
+    internal DownloadManager(
+        IYtDlpDownloadService ytDlpService,
+        HistoryService historyService,
+        ConfigService configService,
+        M3u8DownloadService? m3u8DownloadService,
+        TelegramDownloadService? telegramDownloadService,
+        TaskQueuePersistenceService? taskQueuePersistence,
+        HttpResourceDownloadService? resourceDownloadService,
+        Dispatcher uiDispatcher)
+        : this(ytDlpService, historyService, configService, m3u8DownloadService,
+            telegramDownloadService, taskQueuePersistence, resourceDownloadService)
+    {
+        _uiDispatcher = uiDispatcher;
     }
 
     /// <summary>
@@ -842,7 +855,7 @@ public class DownloadManager : IDisposable
         var task = attempt.Task;
         try
         {
-            var info = await _ytDlpService.GetVideoInfoAsync(
+            var info = await _executionService.GetVideoInfoAsync(
                 task.Url,
                 attempt.Token);
             if (info != null
@@ -937,9 +950,13 @@ public class DownloadManager : IDisposable
                     currentTask => ApplyProgress(currentTask, p));
             });
 
-            await DownloadWithMatchingServiceAsync(task, progress, attempt.Token);
+            await _executionService.DownloadAsync(
+                task,
+                progress,
+                line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}"),
+                attempt.Token);
             if (IsCurrentAttempt(attempt))
-                await SaveHistoryIfCompletedAsync(task);
+                await _historyRecorder.SaveIfCompletedAsync(task);
         }
         catch (OperationCanceledException)
         {
@@ -1072,6 +1089,17 @@ public class DownloadManager : IDisposable
         DownloadAttempt attempt,
         Action<DownloadTask> update)
     {
+        // Marshal the whole guarded update before taking UpdateSync. Otherwise a
+        // worker can hold the lock while waiting for the UI thread to finish the
+        // same attempt, and neither thread can continue.
+        if (_uiDispatcher is not null && !_uiDispatcher.CheckAccess())
+        {
+            if (_uiDispatcher.HasShutdownStarted || _uiDispatcher.HasShutdownFinished)
+                return false;
+
+            return _uiDispatcher.Invoke(() => TryUpdateCurrentAttempt(attempt, update));
+        }
+
         lock (attempt.UpdateSync)
         {
             lock (_attemptLock)
@@ -1762,194 +1790,14 @@ public class DownloadManager : IDisposable
 
     private static void ApplyProgress(DownloadTask task, DownloadProgress progress)
     {
-        void Apply()
-        {
-            task.Progress = Math.Clamp(NormalizeFiniteProgressValue(progress.Percent), 0, 100);
-            task.Speed = Math.Max(0, NormalizeFiniteProgressValue(progress.Speed));
-            task.Eta = Math.Max(0, NormalizeFiniteProgressValue(progress.Eta));
-            task.DownloadedSize = Math.Max(0, progress.Downloaded);
-        }
-
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-            Apply();
-        else
-            dispatcher.Invoke(Apply);
+        task.Progress = Math.Clamp(NormalizeFiniteProgressValue(progress.Percent), 0, 100);
+        task.Speed = Math.Max(0, NormalizeFiniteProgressValue(progress.Speed));
+        task.Eta = Math.Max(0, NormalizeFiniteProgressValue(progress.Eta));
+        task.DownloadedSize = Math.Max(0, progress.Downloaded);
     }
 
     private static double NormalizeFiniteProgressValue(double value)
         => double.IsFinite(value) ? value : 0;
-
-    private async Task DownloadWithMatchingServiceAsync(
-        DownloadTask task,
-        IProgress<DownloadProgress> progress,
-        CancellationToken token)
-    {
-        Action<string> log = line => LogReceived?.Invoke($"[{DateTime.Now:HH:mm:ss}] {line}");
-        var engine = DownloadRouteResolver.Resolve(task.Url, task.IsNonVideoResource);
-
-        if (engine == DownloadEngine.M3u8)
-        {
-            try
-            {
-                await _m3u8DownloadService.DownloadAsync(task, progress, log, token);
-                return;
-            }
-            catch (NotSupportedException ex)
-            {
-                log($"[m3u8] {ex.Message}");
-                log("[m3u8] 尝试自动回退到默认下载器 (yt-dlp)...");
-                task.Status = DownloadStatus.Downloading;
-                task.ErrorMessage = string.Empty; // 必须清空错误信息，否则 UI 会一直显示红字导致用户误解
-
-                await DownloadWithReservedYtDlpOutputAsync(task, progress, log, token);
-                return;
-            }
-        }
-
-        if (engine == DownloadEngine.Telegram)
-        {
-            await _telegramDownloadService.DownloadAsync(task, progress, log, token);
-            return;
-        }
-
-        if (engine == DownloadEngine.Resource)
-        {
-            await _resourceDownloadService.DownloadAsync(task, progress, log, token);
-            return;
-        }
-
-        await DownloadWithReservedYtDlpOutputAsync(task, progress, log, token);
-    }
-
-    private async Task DownloadWithReservedYtDlpOutputAsync(
-        DownloadTask task,
-        IProgress<DownloadProgress> progress,
-        Action<string> log,
-        CancellationToken token)
-    {
-        var requestedFileName =
-            $"{DownloadFileNameBuilder.SanitizeResolvedTitle(task.OutputFileNameOverride ?? task.Title)}{ResolveExpectedYtDlpExtension(task.Format)}";
-        using var reservation = DownloadOutputPathReservation.Reserve(
-            task.OutputDirectory,
-            requestedFileName);
-        var previous = task.OutputFileNameOverride;
-        task.OutputFileNameOverride = System.IO.Path.GetFileNameWithoutExtension(reservation.Path);
-        try
-        {
-            await _ytDlpService.DownloadAsync(task, progress, log, token);
-        }
-        finally
-        {
-            task.OutputFileNameOverride = previous;
-        }
-    }
-
-    private static string ResolveExpectedYtDlpExtension(string? format)
-        => format?.Trim().ToLowerInvariant() switch
-        {
-            "mp3" => ".mp3",
-            "m4a" => ".m4a",
-            "mkv" => ".mkv",
-            "webm" => ".webm",
-            _ => ".mp4"
-        };
-
-    private async Task SaveHistoryIfCompletedAsync(DownloadTask task)
-    {
-        if (task.Status != DownloadStatus.Completed)
-            return;
-
-        await _historyWriteSemaphore.WaitAsync();
-        try
-        {
-            await _historyService.AddAsync(new DownloadHistory
-            {
-                Url = task.Url,
-                Title = task.Title,
-                Platform = task.Platform,
-                Format = task.Format,
-                Quality = task.Quality,
-                FileSize = task.FileSize,
-                FilePath = task.OutputFilePath,
-                BatchId = task.BatchId,
-                BatchName = task.BatchName,
-                BatchDirectory = task.BatchDirectory,
-                AttachmentFilePaths = GetAttachmentFilePathsForHistory(task),
-                ThumbnailUrl = task.ThumbnailUrl,
-                DownloadTime = DateTime.Now
-            });
-        }
-        finally
-        {
-            _historyWriteSemaphore.Release();
-        }
-    }
-
-    private static List<string> GetAttachmentFilePathsForHistory(DownloadTask task)
-    {
-        var attachmentFilePaths = new List<string>();
-        foreach (var rawPath in task.OutputFilePaths)
-        {
-            if (string.IsNullOrWhiteSpace(rawPath))
-                continue;
-
-            var path = rawPath.Trim();
-            if (AreEquivalentPaths(path, task.OutputFilePath)
-                || !IsSafeOutputFilePath(task.OutputDirectory, path)
-                || attachmentFilePaths.Any(existingPath => AreEquivalentPaths(existingPath, path)))
-            {
-                continue;
-            }
-
-            attachmentFilePaths.Add(path);
-        }
-
-        return attachmentFilePaths;
-    }
-
-    private static bool IsSafeOutputFilePath(string? outputDirectory, string outputFilePath)
-    {
-        if (string.IsNullOrWhiteSpace(outputDirectory) || string.IsNullOrWhiteSpace(outputFilePath))
-            return false;
-
-        try
-        {
-            var fullOutputDirectory = System.IO.Path.GetFullPath(outputDirectory);
-            var fullOutputFilePath = System.IO.Path.GetFullPath(outputFilePath);
-            var directoryWithSeparator = fullOutputDirectory.EndsWith(System.IO.Path.DirectorySeparatorChar)
-                || fullOutputDirectory.EndsWith(System.IO.Path.AltDirectorySeparatorChar)
-                    ? fullOutputDirectory
-                    : fullOutputDirectory + System.IO.Path.DirectorySeparatorChar;
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-
-            return fullOutputFilePath.StartsWith(directoryWithSeparator, comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static bool AreEquivalentPaths(string left, string right)
-    {
-        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
-            return false;
-
-        try
-        {
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            return string.Equals(System.IO.Path.GetFullPath(left), System.IO.Path.GetFullPath(right), comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or System.IO.PathTooLongException)
-        {
-            return string.Equals(left, right, StringComparison.Ordinal);
-        }
-    }
 
     private void ApplyVideoInfoMetadata(DownloadTask task, VideoInfo info)
     {
@@ -2098,28 +1946,4 @@ public class DownloadManager : IDisposable
 
         public void SignalCompletion() => _completion.TrySetResult();
     }
-}
-
-internal interface IYtDlpDownloadService
-{
-    Task<VideoInfo?> GetVideoInfoAsync(string url, CancellationToken cancellationToken = default);
-
-    Task DownloadAsync(
-        DownloadTask task,
-        IProgress<DownloadProgress>? progress = null,
-        Action<string>? logCallback = null,
-        CancellationToken cancellationToken = default);
-}
-
-internal sealed class YtDlpDownloadServiceAdapter(YtDlpService ytDlpService) : IYtDlpDownloadService
-{
-    public Task<VideoInfo?> GetVideoInfoAsync(string url, CancellationToken cancellationToken = default)
-        => ytDlpService.GetVideoInfoAsync(url, cancellationToken);
-
-    public Task DownloadAsync(
-        DownloadTask task,
-        IProgress<DownloadProgress>? progress = null,
-        Action<string>? logCallback = null,
-        CancellationToken cancellationToken = default)
-        => ytDlpService.DownloadAsync(task, progress, logCallback, cancellationToken);
 }

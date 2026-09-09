@@ -28,19 +28,17 @@ public partial class BatchDownloadViewModel : ObservableObject
     private readonly DownloadPreflightService _preflightService;
     private readonly HistoryService? _historyService;
     private readonly DownloadDuplicateDetector? _duplicateDetector;
-    private readonly ExistingCollectionFolderStore _collectionFolderStore;
+    private readonly DownloadDestinationViewModel _destination;
     private readonly Func<string, CancellationToken, Task<PlaylistInfo>> _getPlaylistInfoAsync;
     private readonly Func<Task<List<DownloadHistory>>>? _loadDownloadHistoryAsync;
     private readonly Action<ProcessStartInfo> _startProcess;
     private readonly Func<string?> _readClipboardText;
-    private readonly Func<string, string?> _selectDirectory;
     private readonly HashSet<DownloadTask> _trackedQueueTasks = [];
     private readonly HashSet<BatchDownloadDraft> _trackedPendingItems = [];
     private readonly HashSet<PlaylistEntryInfo> _trackedPlaylistEntries = [];
     private readonly object _queueStateLock = new();
+    private DownloadQueueSummary _queueSummary = new();
     private volatile bool _suppressQueueRefresh;
-    private string _downloadRootDirectory = "";
-    private string? _selectedCollectionDirectoryBeforeRefresh;
     private string _pendingCollectionTitle = "";
     private List<string> _pendingCollectionUrls = [];
     private PlaylistInfo? _pendingCollectionInfo;
@@ -49,10 +47,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     private bool _suppressDraftInvalidation;
     private bool _draftsAreExactCollectionImport;
     private string _draftCollectionTitle = "";
-    private bool _applyingSharedDestination;
-    private bool _isRefreshingDestinationOptions;
     private bool _updatingPlaylistSelection;
-    private Task<bool> _destinationPersistenceTask = Task.FromResult(true);
 
     [ObservableProperty] private string _urlsText = "";
     [ObservableProperty] private string _selectedFormat = "mp4";
@@ -73,7 +68,11 @@ public partial class BatchDownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(HasPlaylistPreview))]
     private string _playlistTitle = "";
     [ObservableProperty] private string _selectedQueueFilter = "全部";
-    [ObservableProperty] private string _downloadDirectory = "";
+    public string DownloadDirectory
+    {
+        get => _destination.DownloadDirectory;
+        set => _destination.DownloadDirectory = value;
+    }
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsBatchInputStep))]
     [NotifyPropertyChangedFor(nameof(BatchConfirmationSummary))]
@@ -85,8 +84,11 @@ public partial class BatchDownloadViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(CanSelectExistingCollectionFolder))]
     [NotifyPropertyChangedFor(nameof(CanEditPendingItems))]
     private bool _isResolvingNames;
-    [ObservableProperty]
-    private ExistingCollectionFolder? _selectedCollectionFolder;
+    public ExistingCollectionFolder? SelectedCollectionFolder
+    {
+        get => _destination.SelectedCollectionFolder;
+        set => _destination.SelectedCollectionFolder = value;
+    }
 
     public ObservableCollection<DownloadTask> QueueTasks => _downloadManager.Tasks;
     public ObservableCollection<DownloadTask> VisibleQueueTasks { get; } = [];
@@ -95,26 +97,26 @@ public partial class BatchDownloadViewModel : ObservableObject
     public ObservableCollection<PlaylistSectionInfo> PlaylistSections { get; } = [];
     public CollectionUpdatesViewModel? CollectionUpdatesVM { get; }
     public ReadOnlyObservableCollection<ExistingCollectionFolder> ExistingCollectionFolders
-        => _collectionFolderStore.Folders;
-    public int ActiveDownloadCount => QueueTasks.Count(task => task.Status == DownloadStatus.Downloading);
-    public int WaitingTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Waiting);
-    public int TotalTaskCount => QueueTasks.Count;
-    public int CompletedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Completed);
-    public int FailedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Failed);
-    public int CancelledTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Cancelled);
-    public int PausedTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Paused);
-    public int ScheduledTaskCount => QueueTasks.Count(task => task.Status == DownloadStatus.Scheduled);
-    public int RunningTaskCount => QueueTasks.Count(task => task.Status is DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging);
-    public int RemainingTaskCount => QueueTasks.Count(task => task.Status is not (DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled));
-    public int FinishedTaskCount => TotalTaskCount - RemainingTaskCount;
+        => _destination.ExistingCollectionFolders;
+    public int ActiveDownloadCount => _queueSummary.Downloading;
+    public int WaitingTaskCount => _queueSummary.Waiting;
+    public int TotalTaskCount => _queueSummary.Total;
+    public int CompletedTaskCount => _queueSummary.Completed;
+    public int FailedTaskCount => _queueSummary.Failed;
+    public int CancelledTaskCount => _queueSummary.Cancelled;
+    public int PausedTaskCount => _queueSummary.Paused;
+    public int ScheduledTaskCount => _queueSummary.Scheduled;
+    public int RunningTaskCount => _queueSummary.Running;
+    public int RemainingTaskCount => _queueSummary.Remaining;
+    public int FinishedTaskCount => _queueSummary.Finished;
     public bool HasQueueTasks => TotalTaskCount > 0;
     public bool HasVisibleQueueTasks => VisibleQueueTasks.Count > 0;
-    public bool CanPauseAll => QueueTasks.Any(task => task.Status == DownloadStatus.Downloading);
-    public bool CanResumeAll => QueueTasks.Any(task => task.Status == DownloadStatus.Paused);
-    public bool CanStopAll => QueueTasks.Any(task => task.Status is DownloadStatus.Waiting or DownloadStatus.Resolving or DownloadStatus.Downloading or DownloadStatus.Merging or DownloadStatus.Paused or DownloadStatus.Scheduled);
-    public bool CanClearFinished => QueueTasks.Any(task => task.Status is DownloadStatus.Completed or DownloadStatus.Failed or DownloadStatus.Cancelled);
+    public bool CanPauseAll => ActiveDownloadCount > 0;
+    public bool CanResumeAll => PausedTaskCount > 0;
+    public bool CanStopAll => _queueSummary.CanStop;
+    public bool CanClearFinished => FinishedTaskCount > 0;
     public bool CanRetryFailed => FailedTaskCount > 0;
-    public bool IsLoadingCollectionFolders => _collectionFolderStore.IsLoading;
+    public bool IsLoadingCollectionFolders => _destination.IsLoadingCollectionFolders;
     public bool HasPlaylistPreview => PlaylistEntries.Count > 0;
     public bool IsBatchDownloadMode => !IsCollectionUpdatesMode;
     public bool HasTrackablePlaylist => _pendingCollectionInfo is not null
@@ -132,17 +134,13 @@ public partial class BatchDownloadViewModel : ObservableObject
     public bool CanEditBatchDestination
         => !IsDownloading && !IsResolvingNames && !IsLoadingCollectionFolders;
     public bool CanSelectExistingCollectionFolder
-        => _collectionFolderStore.HasFolders && CanEditBatchDestination;
+        => _destination.HasFolders && CanEditBatchDestination;
     public bool CanEditPendingItems
         => IsNameConfirmationStep && !IsResolvingNames && !IsDownloading;
     public string ExistingCollectionFolderPlaceholder
-        => $"临时下载 · {_downloadRootDirectory}";
-    public double OverallProgress => TotalTaskCount == 0
-        ? 0
-        : QueueTasks.Sum(task => task.Status == DownloadStatus.Completed ? 100 : Math.Clamp(task.Progress, 0, 100)) / TotalTaskCount;
-    public double AggregateSpeed => QueueTasks
-        .Where(task => task.Status == DownloadStatus.Downloading)
-        .Sum(task => double.IsFinite(task.Speed) ? Math.Max(0, task.Speed) : 0);
+        => _destination.ExistingCollectionFolderPlaceholder;
+    public double OverallProgress => _queueSummary.OverallProgress;
+    public double AggregateSpeed => _queueSummary.AggregateSpeed;
     public string AggregateSpeedText => $"{ByteSizeFormatter.FormatClampZero((long)AggregateSpeed)}/s";
     public string OverallProgressText => $"{OverallProgress:F0}%";
     public string QueueSummaryText => TotalTaskCount == 0
@@ -361,22 +359,17 @@ public partial class BatchDownloadViewModel : ObservableObject
         _preflightService = preflightService ?? new DownloadPreflightService();
         _historyService = historyService;
         _duplicateDetector = duplicateDetector;
-        _collectionFolderStore = collectionFolderStore
-            ?? new ExistingCollectionFolderStore(historyService, configService);
+        _destination = new DownloadDestinationViewModel(configService,
+            collectionFolderStore ?? new ExistingCollectionFolderStore(historyService, configService),
+            selectDirectory);
+        _destination.PropertyChanged += OnDestinationPropertyChanged;
+        _destination.NotificationRequested += (message, success) => RequestShowNotification?.Invoke(message, success);
         _getPlaylistInfoAsync = getPlaylistInfoAsync ?? FetchCompletePlaylistInfoAsync;
         _loadDownloadHistoryAsync = loadDownloadHistoryAsync
             ?? (historyService is null ? null : () => historyService.GetAllAsync());
         CollectionUpdatesVM = collectionUpdatesViewModel;
         _startProcess = startProcess;
         _readClipboardText = readClipboardText ?? ReadClipboardText;
-        _selectDirectory = selectDirectory ?? SelectDirectory;
-        _downloadRootDirectory = _configService.Config.DefaultDownloadPath;
-        DownloadDirectory = _downloadRootDirectory;
-        _configService.DefaultDownloadPathChanged += OnSharedDefaultDownloadPathChanged;
-        _configService.SelectedCollectionDirectoryChanged += OnSharedSelectedCollectionDirectoryChanged;
-        _collectionFolderStore.PropertyChanged += OnCollectionFolderStorePropertyChanged;
-        _collectionFolderStore.FoldersRefreshing += OnCollectionFoldersRefreshing;
-        _collectionFolderStore.FoldersRefreshed += OnCollectionFoldersRefreshed;
         QueueTasks.CollectionChanged += OnQueueTasksChanged;
         PendingItems.CollectionChanged += OnPendingItemsChanged;
         PlaylistEntries.CollectionChanged += OnPlaylistEntriesChanged;
@@ -432,190 +425,46 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     public void RefreshRuntimeConfigDisplay()
     {
-        OnSharedDefaultDownloadPathChanged(_configService.Config.DefaultDownloadPath);
-        OnSharedSelectedCollectionDirectoryChanged(
-            _configService.Config.SelectedCollectionDirectory);
+        _destination.RefreshFromConfiguration();
     }
 
     [RelayCommand(CanExecute = nameof(CanEditDestination))]
-    private async Task BrowseDirectory()
-    {
-        var selectedDirectory = _selectDirectory(DownloadDirectory);
-        if (string.IsNullOrWhiteSpace(selectedDirectory))
-            return;
-
-        try
-        {
-            SelectedCollectionFolder = await _collectionFolderStore.RegisterCollectionAsync(
-                selectedDirectory);
-            if (!await _destinationPersistenceTask)
-            {
-                RequestShowNotification?.Invoke(
-                    "合集已选择，但保存失败；应用退出时将再次尝试保存。",
-                    false);
-            }
-        }
-        catch (Exception ex) when (ex is IOException
-                                   or UnauthorizedAccessException
-                                   or ArgumentException
-                                   or NotSupportedException
-                                   or InvalidOperationException)
-        {
-            RequestShowNotification?.Invoke($"无法添加合集目录：{ex.Message}", false);
-        }
-    }
+    private Task BrowseDirectory() => _destination.BrowseAsync();
 
     [RelayCommand(CanExecute = nameof(CanClearSelectedCollectionFolder))]
-    private void ClearSelectedCollectionFolder()
-        => SelectedCollectionFolder = null;
+    private void ClearSelectedCollectionFolder() => SelectedCollectionFolder = null;
 
     private bool CanClearSelectedCollectionFolder()
         => SelectedCollectionFolder is not null && CanEditDestination();
 
-    private bool CanEditDestination()
-        => CanEditBatchDestination;
+    private bool CanEditDestination() => CanEditBatchDestination;
 
     [RelayCommand(CanExecute = nameof(CanEditDestination))]
     private Task RefreshExistingCollectionFolders()
         => LoadExistingCollectionFoldersAsync(forceRefresh: true);
 
-    private async Task LoadExistingCollectionFoldersAsync(bool forceRefresh)
-    {
-        try
-        {
-            if (forceRefresh)
-                await _collectionFolderStore.RefreshAsync();
-            else
-                await _collectionFolderStore.EnsureLoadedAsync();
+    private Task LoadExistingCollectionFoldersAsync(bool forceRefresh)
+        => _destination.LoadAsync(forceRefresh);
 
-            OnSharedSelectedCollectionDirectoryChanged(
-                _configService.Config.SelectedCollectionDirectory);
-        }
-        catch (Exception ex)
-        {
-            RequestShowNotification?.Invoke($"读取已有合集失败：{ex.Message}", false);
-        }
-    }
-
-    private void OnCollectionFolderStorePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    private void OnDestinationPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        switch (e.PropertyName)
+        if (e.PropertyName != nameof(DownloadDestinationViewModel.HasFolders))
+            OnPropertyChanged(e.PropertyName);
+        if (e.PropertyName is nameof(DownloadDestinationViewModel.IsLoadingCollectionFolders)
+            or nameof(DownloadDestinationViewModel.HasFolders))
         {
-            case nameof(ExistingCollectionFolderStore.IsLoading):
-                OnPropertyChanged(nameof(IsLoadingCollectionFolders));
-                OnPropertyChanged(nameof(CanEditBatchDestination));
-                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
-                ResolveBatchNamesCommand.NotifyCanExecuteChanged();
-                StartBatchDownloadCommand.NotifyCanExecuteChanged();
-                NotifyDestinationCommandsCanExecuteChanged();
-                break;
-            case nameof(ExistingCollectionFolderStore.HasFolders):
-                OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
-                break;
-            case nameof(ExistingCollectionFolderStore.Placeholder):
-                OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
-                break;
+            OnPropertyChanged(nameof(CanEditBatchDestination));
+            OnPropertyChanged(nameof(CanSelectExistingCollectionFolder));
+        }
+        if (e.PropertyName is nameof(DownloadDestinationViewModel.SelectedCollectionFolder)
+            or nameof(DownloadDestinationViewModel.IsLoadingCollectionFolders))
+            NotifyDestinationCommandsCanExecuteChanged();
+        if (e.PropertyName == nameof(DownloadDestinationViewModel.IsLoadingCollectionFolders))
+        {
+            ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+            StartBatchDownloadCommand.NotifyCanExecuteChanged();
         }
     }
-
-    private void OnCollectionFoldersRefreshing(object? sender, EventArgs e)
-    {
-        _selectedCollectionDirectoryBeforeRefresh = SelectedCollectionFolder?.Directory
-            ?? _configService.Config.SelectedCollectionDirectory;
-        _isRefreshingDestinationOptions = true;
-    }
-
-    private void OnCollectionFoldersRefreshed(object? sender, EventArgs e)
-    {
-        var selectedPath = _selectedCollectionDirectoryBeforeRefresh
-            ?? SelectedCollectionFolder?.Directory
-            ?? _configService.Config.SelectedCollectionDirectory;
-        _selectedCollectionDirectoryBeforeRefresh = null;
-        try
-        {
-            OnSharedSelectedCollectionDirectoryChanged(selectedPath ?? "");
-        }
-        finally
-        {
-            _isRefreshingDestinationOptions = false;
-        }
-    }
-
-    partial void OnSelectedCollectionFolderChanged(ExistingCollectionFolder? value)
-    {
-        DownloadDirectory = value?.Directory ?? _downloadRootDirectory;
-        ClearSelectedCollectionFolderCommand.NotifyCanExecuteChanged();
-        if (_applyingSharedDestination || _isRefreshingDestinationOptions)
-            return;
-
-        _configService.UpdateSelectedCollectionDirectory(value?.Directory);
-        _destinationPersistenceTask = _configService.SaveAsync();
-    }
-
-    private void OnSharedDefaultDownloadPathChanged(string path)
-    {
-        void Apply()
-        {
-            _downloadRootDirectory = path;
-            if (SelectedCollectionFolder is null)
-                DownloadDirectory = path;
-            OnPropertyChanged(nameof(ExistingCollectionFolderPlaceholder));
-        }
-
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-            Apply();
-        else
-            dispatcher.Invoke(Apply);
-    }
-
-    private void OnSharedSelectedCollectionDirectoryChanged(string directory)
-    {
-        void Apply()
-        {
-            var selected = string.IsNullOrWhiteSpace(directory)
-                ? null
-                : ExistingCollectionFolderStore.PathsEqual(
-                    SelectedCollectionFolder?.Directory,
-                    directory)
-                    && Directory.Exists(directory)
-                    ? SelectedCollectionFolder
-                    : _collectionFolderStore.FindByDirectory(directory);
-            _applyingSharedDestination = true;
-            try
-            {
-                SelectedCollectionFolder = selected;
-            }
-            finally
-            {
-                _applyingSharedDestination = false;
-            }
-
-            DownloadDirectory = selected?.Directory ?? _downloadRootDirectory;
-            if (!string.IsNullOrWhiteSpace(directory) && selected is null)
-            {
-                _configService.UpdateSelectedCollectionDirectory(null);
-                _destinationPersistenceTask = _configService.SaveAsync();
-            }
-        }
-
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-            Apply();
-        else
-            dispatcher.Invoke(Apply);
-    }
-
-    private static string? SelectDirectory(string currentDirectory)
-    {
-        var dialog = new Microsoft.Win32.OpenFolderDialog
-        {
-            Title = "选择文件夹作为合集",
-            InitialDirectory = currentDirectory
-        };
-        return dialog.ShowDialog() == true ? dialog.FolderName : null;
-    }
-
     private void OnQueueTasksChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
         if (_suppressQueueRefresh)
@@ -641,20 +490,29 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     private void OnPlaylistEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
+        if (_updatingPlaylistSelection)
+            return;
+        RefreshPlaylistPreview();
+    }
+
+    private void RefreshPlaylistPreview()
+    {
         SynchronizePlaylistEntrySubscriptions();
-        RebuildPlaylistSections();
         OnPropertyChanged(nameof(HasPlaylistPreview));
-        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
-        OnPropertyChanged(nameof(PlaylistSelectionSummary));
+        RefreshPlaylistSelection();
     }
 
     private void OnPlaylistEntryPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(PlaylistEntryInfo.IsSelected))
+        if (e.PropertyName != nameof(PlaylistEntryInfo.IsSelected) || _updatingPlaylistSelection)
             return;
 
-        if (!_updatingPlaylistSelection)
-            UpdateUrlsFromPlaylistSelection();
+        UpdateUrlsFromPlaylistSelection();
+        RefreshPlaylistSelection();
+    }
+
+    private void RefreshPlaylistSelection()
+    {
         RebuildPlaylistSections();
         OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
         OnPropertyChanged(nameof(PlaylistSelectionSummary));
@@ -663,8 +521,9 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     private void SynchronizePlaylistEntrySubscriptions()
     {
+        var current = PlaylistEntries.ToHashSet();
         foreach (var entry in _trackedPlaylistEntries
-                     .Where(entry => !PlaylistEntries.Contains(entry))
+                     .Where(entry => !current.Contains(entry))
                      .ToList())
         {
             entry.PropertyChanged -= OnPlaylistEntryPropertyChanged;
@@ -702,7 +561,8 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     private void SynchronizePendingItemSubscriptions()
     {
-        foreach (var tracked in _trackedPendingItems.Where(item => !PendingItems.Contains(item)).ToList())
+        var current = PendingItems.ToHashSet();
+        foreach (var tracked in _trackedPendingItems.Where(item => !current.Contains(item)).ToList())
         {
             tracked.PropertyChanged -= OnPendingItemPropertyChanged;
             _trackedPendingItems.Remove(tracked);
@@ -741,7 +601,8 @@ public partial class BatchDownloadViewModel : ObservableObject
 
     private void SynchronizeQueueSubscriptions()
     {
-        foreach (var tracked in _trackedQueueTasks.Where(task => !QueueTasks.Contains(task)).ToList())
+        var current = QueueTasks.ToHashSet();
+        foreach (var tracked in _trackedQueueTasks.Where(task => !current.Contains(task)).ToList())
         {
             tracked.PropertyChanged -= OnQueueTaskPropertyChanged;
             _trackedQueueTasks.Remove(tracked);
@@ -781,6 +642,7 @@ public partial class BatchDownloadViewModel : ObservableObject
     {
         lock (_queueStateLock)
         {
+            _queueSummary = DownloadQueueSummary.Capture(QueueTasks);
             OnPropertyChanged(nameof(OverallProgress));
             OnPropertyChanged(nameof(OverallProgressText));
             OnPropertyChanged(nameof(AggregateSpeed));
@@ -802,6 +664,8 @@ public partial class BatchDownloadViewModel : ObservableObject
             _ => true
         }).ToList();
 
+        if (VisibleQueueTasks.SequenceEqual(visible))
+            return;
         VisibleQueueTasks.Clear();
         foreach (var task in visible)
             VisibleQueueTasks.Add(task);
@@ -1169,9 +1033,7 @@ public partial class BatchDownloadViewModel : ObservableObject
             if (_loadDownloadHistoryAsync is not null && _duplicateDetector is not null)
             {
                 var history = await _loadDownloadHistoryAsync();
-                var duplicateUrls = urls
-                    .Where(url => _duplicateDetector.Detect(url, history).IsDuplicate)
-                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                var duplicateUrls = DownloadDuplicateDetector.FindHistoryDuplicateUrls(urls, history);
                 if (duplicateUrls.Count > 0
                     && ConfirmFunc?.Invoke(
                         $"发现 {duplicateUrls.Count} 个链接已在历史或本地文件中。\n是否仍然全部重新下载？选择“否”将跳过重复项。",
@@ -1689,6 +1551,7 @@ public partial class BatchDownloadViewModel : ObservableObject
             _updatingPlaylistSelection = false;
         }
 
+        RefreshPlaylistPreview();
         PlaylistTitle = playlist.Title.Trim();
         _pendingCollectionTitle = playlist.Title.Trim();
         _pendingCollectionUrls = entries.Select(entry => entry.Url).ToList();
@@ -1795,10 +1658,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         }
 
         UpdateUrlsFromPlaylistSelection();
-        RebuildPlaylistSections();
-        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
-        OnPropertyChanged(nameof(PlaylistSelectionSummary));
-        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+        RefreshPlaylistSelection();
     }
 
     [RelayCommand]
@@ -1825,10 +1685,7 @@ public partial class BatchDownloadViewModel : ObservableObject
         }
 
         UpdateUrlsFromPlaylistSelection();
-        RebuildPlaylistSections();
-        OnPropertyChanged(nameof(SelectedPlaylistEntryCount));
-        OnPropertyChanged(nameof(PlaylistSelectionSummary));
-        ResolveBatchNamesCommand.NotifyCanExecuteChanged();
+        RefreshPlaylistSelection();
     }
 
     private void ClearPlaylistPreview()

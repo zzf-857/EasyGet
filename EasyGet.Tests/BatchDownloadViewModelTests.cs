@@ -793,6 +793,44 @@ public class BatchDownloadViewModelTests
     }
 
     [Fact]
+    public void PlaylistBulkChanges_RebuildSectionSummariesOnceAndKeepItemSubscriptions()
+    {
+        using var root = new TestDirectory();
+        using var history = new HistoryService(root.Path("history.db"));
+        var config = new ConfigService(root.Path("config"));
+        var service = new BlockingYtDlpDownloadService();
+        using var manager = new DownloadManager(service, history, config);
+        var viewModel = new BatchDownloadViewModel(manager, config,
+            new YtDlpService(config, new EnvironmentService()));
+        var resets = 0;
+        viewModel.PlaylistSections.CollectionChanged += (_, e) =>
+        {
+            if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Reset)
+                resets++;
+        };
+        Assert.True(viewModel.ApplyPlaylistImport(new PlaylistInfo
+        {
+            Title = "Large collection",
+            Entries = Enumerable.Range(0, 1000).Select(index => new PlaylistEntryInfo
+            {
+                Url = $"https://example.test/video/{index}",
+                OriginalTitle = $"Video {index}",
+                SectionTitle = "Chapter"
+            }).ToList()
+        }));
+        Assert.Equal(1, resets);
+
+        resets = 0;
+        viewModel.ClearPlaylistSelectionCommand.Execute(null);
+        Assert.Equal(1, resets);
+        Assert.Equal(0, viewModel.SelectedPlaylistEntryCount);
+        Assert.Equal(0, Assert.Single(viewModel.PlaylistSections).SelectedEntryCount);
+        viewModel.PlaylistEntries[0].IsSelected = true;
+        Assert.Equal(1, viewModel.SelectedPlaylistEntryCount);
+        Assert.Contains("https://example.test/video/0", viewModel.UrlsText);
+    }
+
+    [Fact]
     public async Task TrackedPlaylist_PersistsCompleteBaselineAndCorrelatesSelectedTasks()
     {
         using var root = new TestDirectory();

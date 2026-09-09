@@ -8,6 +8,21 @@ namespace EasyGet.Tests;
 public class YtDlpArgsTests
 {
     [Fact]
+    public void BuildDownloadArgs_NormalizesDouyinShareVideoWithoutChangingTaskIdentity()
+    {
+        using var root = new TestDirectory();
+        var service = new YtDlpService(new ConfigService(root.Path("config")), new EnvironmentService());
+        const string original = "https://www.iesdouyin.com/share/video/7621772413184822582/?region=CN";
+        var task = new DownloadTask { Url = original, OutputDirectory = root.DirectoryPath };
+
+        var args = service.BuildDownloadArgs(task, Array.Empty<string>());
+
+        Assert.Equal("https://www.douyin.com/video/7621772413184822582", args[^1]);
+        Assert.Equal(original, task.Url);
+        Assert.DoesNotContain(original, args);
+    }
+
+    [Fact]
     public void AddAria2cArgs_SkipsExternalDownloaderWhenExecutableIsMissing()
     {
         var args = new List<string>();
@@ -93,10 +108,6 @@ public class YtDlpArgsTests
         var config = new ConfigService(root.Path("config"));
         config.Config.GlobalDownloadRateLimitKilobytesPerSecond = 4096;
         var service = new YtDlpService(config, new EnvironmentService());
-        var method = typeof(YtDlpService).GetMethod(
-            "BuildDownloadArgs",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(method);
         var task = new DownloadTask
         {
             Url = "https://example.test/video",
@@ -105,9 +116,7 @@ public class YtDlpArgsTests
             Quality = "best"
         };
 
-        var args = (List<string>)method!.Invoke(
-            service,
-            [task, Array.Empty<string>(), null])!;
+        var args = service.BuildDownloadArgs(task, Array.Empty<string>());
 
         AssertOptionValue(args, "--limit-rate", "4096K");
     }
@@ -119,10 +128,6 @@ public class YtDlpArgsTests
         var service = new YtDlpService(
             new ConfigService(root.Path("config")),
             new EnvironmentService());
-        var method = typeof(YtDlpService).GetMethod(
-            "BuildDownloadArgs",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(method);
         var task = new DownloadTask
         {
             Url = "https://example.test/video",
@@ -132,9 +137,7 @@ public class YtDlpArgsTests
             SourceFormatSelector = "137+ba/b"
         };
 
-        var args = (List<string>)method!.Invoke(
-            service,
-            [task, Array.Empty<string>(), null])!;
+        var args = service.BuildDownloadArgs(task, Array.Empty<string>());
 
         AssertOptionValue(args, "-f", "137+ba/b");
     }
@@ -146,10 +149,6 @@ public class YtDlpArgsTests
         var service = new YtDlpService(
             new ConfigService(root.Path("config")),
             new EnvironmentService());
-        var method = typeof(YtDlpService).GetMethod(
-            "BuildDownloadArgs",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(method);
         var task = new DownloadTask
         {
             Url = "https://example.test/master.m3u8",
@@ -160,9 +159,7 @@ public class YtDlpArgsTests
             OutputFileNameOverride = "共享标题 (2)"
         };
 
-        var args = (List<string>)method!.Invoke(
-            service,
-            [task, Array.Empty<string>(), null])!;
+        var args = service.BuildDownloadArgs(task, Array.Empty<string>());
 
         AssertOptionValue(
             args,
@@ -260,10 +257,6 @@ public class YtDlpArgsTests
         var service = new YtDlpService(
             new ConfigService(root.Path("config")),
             new EnvironmentService());
-        var method = typeof(YtDlpService).GetMethod(
-            "BuildDownloadArgs",
-            BindingFlags.NonPublic | BindingFlags.Instance);
-        Assert.NotNull(method);
         var task = new DownloadTask
         {
             Url = "https://www.tiktok.com/@creator/video/1234567890123456789",
@@ -272,9 +265,7 @@ public class YtDlpArgsTests
             Quality = "best"
         };
 
-        var args = (List<string>)method!.Invoke(
-            service,
-            [task, Array.Empty<string>(), null])!;
+        var args = service.BuildDownloadArgs(task, Array.Empty<string>());
 
         Assert.Equal("--ignore-config", args[0]);
         Assert.Equal(1, args.Count(argument => argument == "--ignore-config"));

@@ -472,22 +472,20 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
             var bulkTargetSnapshotTask = LoadBulkTargetFolderSnapshotAsync();
 
             var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
+            var folderCounts = folders.ToDictionary(folder => folder.Id, folder => folder.ItemCount);
 
             foreach (var folder in HistoryFolders)
             {
-                var refreshedFolder = folders.FirstOrDefault(candidate => candidate.Id == folder.Id);
-                if (refreshedFolder is not null)
-                    folder.ItemCount = refreshedFolder.ItemCount;
+                if (folderCounts.TryGetValue(folder.Id, out var itemCount))
+                    folder.ItemCount = itemCount;
             }
 
-            var existingIds = HistoryItems.Select(item => item.Id).ToHashSet();
+            var existingItems = HistoryItems.ToDictionary(item => item.Id);
             var candidates = pendingItems
-                .Where(item => item.Id > 0 && !existingIds.Contains(item.Id))
-                .GroupBy(item => item.Id)
-                .Select(group => group.Last())
+                .Where(item => item.Id > 0 && !existingItems.ContainsKey(item.Id))
                 .ToList();
             var enrichmentTask = Task.Run(() => candidates
-                .Select(EnrichHistoryItem)
+                .Select(HistoryItemEnrichmentService.Enrich)
                 .ToList());
             await Task.WhenAll(bulkTargetSnapshotTask, enrichmentTask);
             var bulkTargetSnapshot = await bulkTargetSnapshotTask;
@@ -499,8 +497,8 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
             var addedItems = new List<DownloadHistory>();
             foreach (var pendingItem in pendingItems)
             {
-                var existingItem = HistoryItems.FirstOrDefault(item => item.Id == pendingItem.Id);
-                if (existingItem is null || existingItem.IsRecentlyCompleted)
+                if (!existingItems.TryGetValue(pendingItem.Id, out var existingItem)
+                    || existingItem.IsRecentlyCompleted)
                     continue;
 
                 existingItem.IsRecentlyCompleted = true;
@@ -510,7 +508,7 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
             foreach (var result in enrichedItems)
             {
                 if (!MatchesCurrentHistoryQuery(result.Item)
-                    || HistoryItems.Any(item => item.Id == result.Item.Id))
+                    || !existingItems.TryAdd(result.Item.Id, result.Item))
                 {
                     continue;
                 }
@@ -526,8 +524,6 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
             if (shouldRebuild)
             {
                 var orderedItems = HistoryItems
-                    .GroupBy(item => item.Id)
-                    .Select(group => group.First())
                     .OrderByDescending(item => item.DownloadTime)
                     .ThenByDescending(item => item.Id)
                     .ToList();
@@ -673,21 +669,19 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
             var unfiledCount = await _historyService.GetUnfiledCountAsync();
             var folders = await _historyService.GetFoldersAsync();
             var items = await _historyService.GetAllAsync(searchKeyword);
-            var allItemsForBulkTargets = string.IsNullOrWhiteSpace(searchKeyword)
-                ? items
-                : await _historyService.GetAllAsync();
+            // Primary keys are unique. Keep the date sort because legacy timestamps
+            // may parse differently from SQLite's raw text ordering.
             var filteredItems = items
                 .Where(item => MatchesMediaFilter(item, mediaFilter))
-                .GroupBy(item => item.Id)
-                .Select(group => group.First())
                 .OrderByDescending(item => item.DownloadTime)
                 .ThenByDescending(item => item.Id)
                 .ToList();
             var folderNames = folders.ToDictionary(folder => folder.Id, folder => folder.Name);
 
-            var bulkTargetSnapshotTask = LoadBulkTargetFolderSnapshotAsync(allItemsForBulkTargets);
+            var bulkTargetSnapshotTask = LoadBulkTargetFolderSnapshotAsync(
+                string.IsNullOrWhiteSpace(searchKeyword) ? items : null);
             var enrichmentTask = Task.Run(() => filteredItems
-                .Select(EnrichHistoryItem)
+                .Select(HistoryItemEnrichmentService.Enrich)
                 .ToList());
             await Task.WhenAll(bulkTargetSnapshotTask, enrichmentTask);
             var bulkTargetSnapshot = await bulkTargetSnapshotTask;
@@ -882,14 +876,17 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
     private async Task<BulkTargetFolderSnapshot> LoadBulkTargetFolderSnapshotAsync(
         IReadOnlyList<DownloadHistory>? allHistoryItems = null)
     {
-        var historyItems = allHistoryItems ?? await _historyService.GetAllAsync();
+        var historyDirectories = allHistoryItems is null
+            ? await _historyService.GetKnownDirectoriesAsync()
+            : allHistoryItems
+                .Select(item => string.IsNullOrWhiteSpace(item.BatchDirectory)
+                    ? BatchDownloadOrganizer.ResolveOutputDirectory(item.FilePath)
+                    : item.BatchDirectory)
+                .ToList();
         var existingCollectionFolders = await _historyService.GetExistingCollectionFoldersAsync();
         var knownDirectories = existingCollectionFolders
             .Select(folder => folder.Directory)
-            .Concat(historyItems.Select(item => item.BatchDirectory))
-            .Concat(historyItems
-                .Where(item => string.IsNullOrWhiteSpace(item.BatchDirectory))
-                .Select(item => BatchDownloadOrganizer.ResolveOutputDirectory(item.FilePath)))
+            .Concat(historyDirectories)
             .Where(directory => !string.IsNullOrWhiteSpace(directory))
             .Distinct(OperatingSystem.IsWindows()
                 ? StringComparer.OrdinalIgnoreCase
@@ -1839,14 +1836,8 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
         };
     }
 
-    private static HistoryItemEnrichment EnrichHistoryItem(DownloadHistory item)
-        => new(
-            item,
-            ResolveExistingHistoryPath(item),
-            BuildDouyinManifestSummary(item));
-
     private static void ApplyHistoryItemEnrichment(
-        HistoryItemEnrichment result,
+        HistoryItemEnrichmentService.HistoryItemEnrichment result,
         IReadOnlyDictionary<long, string> folderNames)
     {
         result.Item.AvailableFilePath = result.AvailableFilePath;
@@ -1856,190 +1847,8 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
         result.Item.OrganizerFolderName = folderNames.GetValueOrDefault(result.Item.FolderId, "");
     }
 
-    private static string ResolveExistingHistoryPath(DownloadHistory item)
-    {
-        if (!IsDouyinManifestPath(item.FilePath) && PathExists(item.FilePath))
-            return item.FilePath;
-
-        return item.AttachmentFilePaths
-            .FirstOrDefault(path => !IsDouyinManifestPath(path) && PathExists(path))
-            ?? "";
-    }
-
-    private static DouyinManifestSummaryResult BuildDouyinManifestSummary(DownloadHistory item)
-    {
-        var manifestPath = ResolveSafeDouyinManifestPath(item);
-        if (string.IsNullOrWhiteSpace(manifestPath))
-            return DouyinManifestSummaryResult.Empty;
-
-        var summary = DouyinManifestReader.ReadSummary(manifestPath);
-        if (summary is null)
-            return DouyinManifestSummaryResult.Empty;
-
-        var attachmentCount = item.AttachmentFilePaths
-            .Count(path => !IsDouyinManifestPath(path));
-        return new DouyinManifestSummaryResult(
-            FormatDouyinManifestSummary(summary, attachmentCount),
-            summary);
-    }
-
-    private static string ResolveSafeDouyinManifestPath(DownloadHistory item)
-    {
-        var anchorPaths = ResolveExistingNonManifestAnchorPaths(item);
-        if (anchorPaths.Count == 0)
-            return "";
-
-        foreach (var rawPath in EnumerateDouyinManifestCandidatePaths(item))
-        {
-            if (!IsDouyinManifestPath(rawPath))
-                continue;
-
-            try
-            {
-                var fullPath = Path.GetFullPath(rawPath.Trim());
-                var manifestDirectory = Path.GetDirectoryName(fullPath);
-                if (File.Exists(fullPath)
-                    && !string.IsNullOrWhiteSpace(manifestDirectory)
-                    && IsSafeDouyinManifestParentDirectory(manifestDirectory)
-                    && anchorPaths.All(anchorPath => IsDirectoryAncestorOfPathOrSelf(manifestDirectory, anchorPath)))
-                {
-                    return fullPath;
-                }
-            }
-            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-            {
-            }
-        }
-
-        return "";
-    }
-
-    private static IEnumerable<string> EnumerateDouyinManifestCandidatePaths(DownloadHistory item)
-    {
-        if (!string.IsNullOrWhiteSpace(item.FilePath))
-            yield return item.FilePath;
-
-        foreach (var path in item.AttachmentFilePaths)
-            yield return path;
-    }
-
-    private static List<string> ResolveExistingNonManifestAnchorPaths(DownloadHistory item)
-    {
-        var anchorPaths = new List<string>();
-        AddExistingNonManifestAnchorPath(anchorPaths, item.FilePath);
-
-        foreach (var path in item.AttachmentFilePaths)
-            AddExistingNonManifestAnchorPath(anchorPaths, path);
-
-        return anchorPaths;
-    }
-
-    private static void AddExistingNonManifestAnchorPath(List<string> anchorPaths, string rawPath)
-    {
-        if (string.IsNullOrWhiteSpace(rawPath) || IsDouyinManifestPath(rawPath))
-            return;
-
-        try
-        {
-            var fullPath = Path.GetFullPath(rawPath.Trim());
-            if (File.Exists(fullPath) && !anchorPaths.Any(path => AreEquivalentPaths(path, fullPath)))
-                anchorPaths.Add(fullPath);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-        }
-    }
-
     internal static bool IsSafeDouyinManifestParentDirectory(string manifestDirectory)
-    {
-        if (string.IsNullOrWhiteSpace(manifestDirectory))
-            return false;
-
-        try
-        {
-            var fullDirectory = Path.GetFullPath(manifestDirectory.Trim());
-            var root = Path.GetPathRoot(fullDirectory);
-            if (string.IsNullOrWhiteSpace(root))
-                return false;
-
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            return !string.Equals(
-                TrimTrailingDirectorySeparators(fullDirectory),
-                TrimTrailingDirectorySeparators(root),
-                comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static bool IsDirectoryAncestorOfPathOrSelf(string ancestorDirectory, string path)
-    {
-        try
-        {
-            var fullAncestor = Path.GetFullPath(ancestorDirectory);
-            var fullPath = Path.GetFullPath(path);
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            if (string.Equals(fullAncestor, fullPath, comparison))
-                return true;
-
-            var ancestorWithSeparator = fullAncestor.EndsWith(Path.DirectorySeparatorChar)
-                || fullAncestor.EndsWith(Path.AltDirectorySeparatorChar)
-                    ? fullAncestor
-                    : fullAncestor + Path.DirectorySeparatorChar;
-            return fullPath.StartsWith(ancestorWithSeparator, comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static string TrimTrailingDirectorySeparators(string path)
-        => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-    private static string FormatDouyinManifestSummary(DouyinManifestSummary summary, int attachmentCount)
-    {
-        var itemCountText = summary.IsTruncated
-            ? $"{summary.ItemCount}+"
-            : summary.ItemCount.ToString();
-        var parts = new List<string> { $"作品 {itemCountText}" };
-        if (summary.VideoCount > 0)
-            parts.Add($"视频 {summary.VideoCount}");
-        if (summary.GalleryCount > 0)
-            parts.Add($"图文 {summary.GalleryCount}");
-        if (summary.MusicCount > 0)
-            parts.Add($"音乐 {summary.MusicCount}");
-        parts.Add($"附属 {Math.Max(0, attachmentCount)}");
-        return string.Join(" / ", parts);
-    }
-
-    private static bool IsDouyinManifestPath(string path)
-        => DouyinSpecialDownloadService.IsDouyinManifestPath(path);
-
-    private static bool AreEquivalentPaths(string left, string right)
-    {
-        try
-        {
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return string.Equals(left, right, StringComparison.Ordinal);
-        }
-    }
-
-    private static bool PathExists(string path)
-        => !string.IsNullOrWhiteSpace(path)
-           && (System.IO.File.Exists(path) || System.IO.Directory.Exists(path));
+        => HistoryItemEnrichmentService.IsSafeDouyinManifestParentDirectory(manifestDirectory);
 
     private sealed class ThumbnailHydrationSession
     {
@@ -2076,19 +1885,7 @@ public partial class HistoryViewModel : ObservableObject, IDisposable
         }
     }
 
-    private sealed record HistoryItemEnrichment(
-        DownloadHistory Item,
-        string AvailableFilePath,
-        DouyinManifestSummaryResult DouyinManifestSummary);
-
     private sealed record BulkTargetFolderSnapshot(
         IReadOnlyList<string> Directories,
         IReadOnlyList<ExistingCollectionFolder> ExistingCollectionFolders);
-
-    private sealed record DouyinManifestSummaryResult(
-        string SummaryText,
-        DouyinManifestSummary? Summary)
-    {
-        public static DouyinManifestSummaryResult Empty { get; } = new("", null);
-    }
 }

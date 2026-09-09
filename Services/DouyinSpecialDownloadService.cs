@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Text.Json;
 using EasyGet.Models;
 
 namespace EasyGet.Services;
@@ -120,11 +119,6 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 {
     internal const string DouyinCookieEnvironmentVariableName = "EASYGET_DOUYIN_COOKIE";
     private const int MaxTaskEventLogLines = 6;
-    private const string DouyinManifestFileName = "download_manifest.jsonl";
-    private const string DouyinManifestSnapshotPrefix = "download_manifest.easyget-";
-    private const string DouyinManifestExtension = ".jsonl";
-    private const int DouyinManifestSnapshotTimestampLength = 16;
-    private const int DouyinManifestSnapshotUuidLength = 8;
     private const string SensitiveValueRedaction = "[redacted]";
 
     private readonly IDouyinSidecarProcessRunner _runner;
@@ -145,7 +139,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         {
             await foreach (var line in _runner.RunSelfTestAsync(ct))
             {
-                if (!TryParseStdoutLine(line, out var message))
+                if (!DouyinSidecarMessageParser.TryParse(line, out var message))
                     continue;
 
                 if (message.Kind is DouyinSidecarEventKind.Success or DouyinSidecarEventKind.Failed)
@@ -202,7 +196,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         {
             await foreach (var line in _runner.RunDiscoveryAsync(sidecarRequest, cancellationToken))
             {
-                if (!TryParseStdoutLine(line, out var message))
+                if (!DouyinSidecarMessageParser.TryParse(line, out var message))
                 {
                     if (!string.IsNullOrWhiteSpace(line))
                         logCallback?.Invoke(RedactSensitiveText(line, sidecarRequest.Cookie));
@@ -268,7 +262,7 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
 
             await foreach (var line in _runner.RunAsync(request, cancellationToken))
             {
-                if (!TryParseStdoutLine(line, out var message))
+                if (!DouyinSidecarMessageParser.TryParse(line, out var message))
                 {
                     if (!string.IsNullOrWhiteSpace(line))
                         logCallback?.Invoke(RedactSensitiveText(line, request.Cookie));
@@ -377,102 +371,6 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
         }
     }
 
-    internal static bool TryParseStdoutLine(string line, out DouyinSidecarMessage message)
-    {
-        var rawLine = line.Trim();
-        message = new DouyinSidecarMessage
-        {
-            RawLine = rawLine
-        };
-
-        if (string.IsNullOrWhiteSpace(rawLine))
-            return false;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(rawLine);
-            var root = doc.RootElement;
-            if (root.ValueKind != JsonValueKind.Object)
-                return false;
-
-            var eventName = SelectFirstNonEmpty(
-                GetOptionalString(root, "event"),
-                GetOptionalString(root, "type"),
-                GetOptionalString(root, "status"));
-            var kind = ParseEventKind(eventName);
-
-            var summary = GetOptionalObject(root, "summary") ?? root;
-            var progress = GetOptionalObject(root, "progress") ?? root;
-            var details = GetOptionalObject(root, "details") ?? GetOptionalObject(summary, "details");
-            var counts = details.HasValue
-                ? GetOptionalObject(details.Value, "counts")
-                : null;
-
-            if (kind == DouyinSidecarEventKind.Unknown && HasProgressFields(progress))
-                kind = DouyinSidecarEventKind.Progress;
-
-            message.Kind = kind;
-            message.Message = GetString(summary, root, "message", "detail");
-            message.Error = GetString(summary, root, "error", "reason");
-            message.Title = GetString(summary, root, "title");
-            message.Platform = GetString(summary, root, "platform", "extractor", "extractor_key");
-            message.DurationSeconds = GetDouble(summary, root, "duration_seconds", "duration");
-            message.ThumbnailUrl = GetString(summary, root, "thumbnail_url", "thumbnail");
-            message.FileSizeBytes = GetInt64(summary, root, "file_size_bytes", "file_size", "filesize");
-            message.OutputFilePath = GetString(summary, root, "output_file_path", "output_path", "file_path");
-            message.OutputFilePaths = GetStringList(details, summary, root, "output_files");
-            message.ManifestPath = SelectFirstNonEmpty(
-                details.HasValue ? GetOptionalString(details.Value, "manifest_path") : "",
-                GetString(summary, root, "manifest_path"));
-            message.Percent = GetDouble(progress, root, "percent", "percentage");
-            message.SpeedBytesPerSecond = GetDouble(progress, root, "speed_bytes_per_sec", "speed_bytes_per_second", "speed");
-            message.EtaSeconds = GetDouble(progress, root, "eta_seconds", "eta");
-            message.DownloadedBytes = GetInt64(progress, root, "downloaded_bytes", "downloaded");
-            message.TotalBytes = GetInt64(progress, root, "total_bytes", "total");
-            message.SuccessCount = GetInt32(counts, summary, root, "success_count", "success", "succeeded");
-            message.FailedCount = GetInt32(counts, summary, root, "failed_count", "failed", "failure_count");
-            message.SkippedCount = GetInt32(counts, summary, root, "skipped_count", "skipped", "skip_count");
-            if (details.HasValue)
-            {
-                message.IsDiscovery = string.Equals(
-                    GetOptionalString(details.Value, "kind"),
-                    "discovery",
-                    StringComparison.OrdinalIgnoreCase);
-                message.DiscoveryType = GetOptionalString(details.Value, "discovery_type");
-                message.DiscoveryKeyword = GetOptionalString(details.Value, "keyword");
-                message.DiscoveryLimit = GetOptionalInt32(details.Value, "limit");
-                message.DiscoverySearchMax = GetOptionalInt32(details.Value, "search_max");
-                message.DiscoveryItemCount = GetOptionalInt32(details.Value, "item_count");
-                message.DiscoveryItems = GetDiscoveryItems(details.Value);
-                message.SelfTestImportsOk = GetOptionalBool(details.Value, "imports_ok");
-                message.SelfTestCheckedModules = GetOptionalStringList(details.Value, "checked_modules");
-                message.SelfTestFailedModules = GetOptionalStringList(details.Value, "failed_modules");
-                message.AuthorSummaries = GetAuthorSummaries(details.Value);
-                message.TranscriptFileCount = GetOptionalInt32(details.Value, "transcript_file_count");
-                if (GetOptionalObject(details.Value, "database") is { } database)
-                {
-                    message.DatabaseEnabled = GetOptionalBool(database, "enabled");
-                    message.DatabasePath = GetOptionalString(database, "path");
-                    message.DatabaseExists = GetOptionalBool(database, "exists");
-                }
-
-                if (GetOptionalObject(details.Value, "live_room") is { } liveRoom)
-                {
-                    message.LiveRoomTitle = GetOptionalString(liveRoom, "title");
-                    message.LiveAuthorName = GetOptionalString(liveRoom, "author_name");
-                    message.LiveRoomStatus = GetOptionalInt32(liveRoom, "status");
-                    message.LiveRoomStatusText = GetOptionalString(liveRoom, "status_text");
-                }
-            }
-
-            return message.Kind != DouyinSidecarEventKind.Unknown;
-        }
-        catch (JsonException)
-        {
-            return false;
-        }
-    }
-
     internal static bool TryMapProgress(DouyinSidecarMessage message, out DownloadProgress progress)
     {
         progress = new DownloadProgress();
@@ -537,11 +435,12 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     {
         ApplySummaryMetadata(task, message, useDefaultDouyinPlatform: true);
         ApplyOutcomeCounts(task, message);
+        var outputResolver = new DouyinOutputFileResolver(task.OutputDirectory);
 
         if (!string.IsNullOrWhiteSpace(message.OutputFilePath))
         {
             var outputFilePath = message.OutputFilePath.Trim();
-            if (!IsSafeOutputFilePath(task.OutputDirectory, outputFilePath))
+            if (!outputResolver.IsSafeFilePath(outputFilePath))
             {
                 task.Status = DownloadStatus.Failed;
                 task.ErrorMessage = "Douyin sidecar returned output file outside the task output directory.";
@@ -551,19 +450,8 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
             task.OutputFilePath = outputFilePath;
         }
 
-        var safeOutputFilePaths = GetSafeOutputFilePaths(task.OutputDirectory, message.OutputFilePaths);
-        if (!string.IsNullOrWhiteSpace(task.OutputFilePath)
-            && !ContainsEquivalentPath(safeOutputFilePaths, task.OutputFilePath))
-        {
-            safeOutputFilePaths.Insert(0, task.OutputFilePath);
-        }
-        if (TryGetSafeManifestPath(task.OutputDirectory, message.ManifestPath, out var manifestPath)
-            && !ContainsEquivalentPath(safeOutputFilePaths, manifestPath))
-        {
-            safeOutputFilePaths.Add(manifestPath);
-        }
-
-        task.OutputFilePaths = safeOutputFilePaths;
+        task.OutputFilePaths = outputResolver.Collect(
+            task.OutputFilePath, message.OutputFilePaths, message.ManifestPath);
 
         var fileSize = NormalizeNonNegativeInt64(message.FileSizeBytes);
         if (fileSize > 0)
@@ -712,315 +600,6 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     private static string FormatWorkCount(int count)
         => count == 1 ? "1 个作品" : $"{count} 个作品";
 
-    private static DouyinSidecarEventKind ParseEventKind(string value)
-    {
-        return value.Trim().ToLowerInvariant() switch
-        {
-            "progress" or "download_progress" or "downloading" => DouyinSidecarEventKind.Progress,
-            "success" or "completed" or "complete" or "done" or "ok" => DouyinSidecarEventKind.Success,
-            "failed" or "failure" or "error" => DouyinSidecarEventKind.Failed,
-            "cancelled" or "canceled" or "cancel" => DouyinSidecarEventKind.Cancelled,
-            "log" or "message" => DouyinSidecarEventKind.Log,
-            _ => DouyinSidecarEventKind.Unknown
-        };
-    }
-
-    private static bool HasProgressFields(JsonElement element)
-        => HasProperty(element, "percent")
-           || HasProperty(element, "percentage")
-           || HasProperty(element, "downloaded_bytes")
-           || HasProperty(element, "total_bytes");
-
-    private static bool HasProperty(JsonElement element, string propertyName)
-        => element.ValueKind == JsonValueKind.Object
-           && element.TryGetProperty(propertyName, out _);
-
-    private static JsonElement? GetOptionalObject(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind == JsonValueKind.Object
-            && element.TryGetProperty(propertyName, out var value)
-            && value.ValueKind == JsonValueKind.Object)
-        {
-            return value;
-        }
-
-        return null;
-    }
-
-    private static List<string> GetStringList(
-        JsonElement? primary,
-        JsonElement secondary,
-        JsonElement fallback,
-        string propertyName)
-    {
-        var primaryValues = GetOptionalStringList(primary, propertyName);
-        if (primaryValues.Count > 0)
-            return primaryValues;
-
-        var secondaryValues = GetOptionalStringList(secondary, propertyName);
-        if (secondaryValues.Count > 0)
-            return secondaryValues;
-
-        return GetOptionalStringList(fallback, propertyName);
-    }
-
-    private static List<string> GetOptionalStringList(JsonElement? element, string propertyName)
-    {
-        if (!element.HasValue
-            || element.Value.ValueKind != JsonValueKind.Object
-            || !element.Value.TryGetProperty(propertyName, out var value))
-        {
-            return [];
-        }
-
-        if (value.ValueKind == JsonValueKind.String)
-        {
-            var singleValue = value.GetString();
-            return string.IsNullOrWhiteSpace(singleValue) ? [] : [singleValue];
-        }
-
-        if (value.ValueKind != JsonValueKind.Array)
-            return [];
-
-        var results = new List<string>();
-        foreach (var item in value.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String)
-                continue;
-
-            var itemValue = item.GetString();
-            if (!string.IsNullOrWhiteSpace(itemValue))
-                results.Add(itemValue);
-        }
-
-        return results;
-    }
-
-    private static IReadOnlyList<DouyinDiscoveryItem> GetDiscoveryItems(JsonElement details)
-    {
-        if (details.ValueKind != JsonValueKind.Object
-            || !details.TryGetProperty("items", out var items)
-            || items.ValueKind != JsonValueKind.Array)
-        {
-            return [];
-        }
-
-        var results = new List<DouyinDiscoveryItem>();
-        foreach (var item in items.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.Object)
-                continue;
-
-            results.Add(new DouyinDiscoveryItem(
-                Word: GetOptionalString(item, "word"),
-                HotValue: GetOptionalInt64(item, "hot_value"),
-                Position: GetOptionalInt32(item, "position"),
-                AwemeId: GetOptionalString(item, "aweme_id"),
-                Description: GetOptionalString(item, "desc"),
-                AuthorNickname: GetOptionalString(item, "author_nickname"),
-                SecUid: GetOptionalString(item, "sec_uid"),
-                Url: GetOptionalString(item, "url")));
-        }
-
-        return results;
-    }
-
-    private static IReadOnlyList<DouyinManifestAuthorSummary> GetAuthorSummaries(JsonElement details)
-    {
-        if (details.ValueKind != JsonValueKind.Object
-            || !details.TryGetProperty("author_summaries", out var authors)
-            || authors.ValueKind != JsonValueKind.Array)
-        {
-            return [];
-        }
-
-        var results = new List<DouyinManifestAuthorSummary>();
-        foreach (var author in authors.EnumerateArray())
-        {
-            if (author.ValueKind != JsonValueKind.Object)
-                continue;
-
-            var authorName = GetOptionalString(author, "author_name").Trim();
-            var workCount = GetOptionalInt32(author, "work_count") ?? 0;
-            if (string.IsNullOrWhiteSpace(authorName) || workCount <= 0)
-                continue;
-
-            results.Add(new DouyinManifestAuthorSummary(authorName, workCount));
-        }
-
-        return results;
-    }
-
-    private static string GetString(JsonElement primary, JsonElement fallback, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetOptionalString(primary, propertyName);
-            if (!string.IsNullOrWhiteSpace(value))
-                return value;
-        }
-
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetOptionalString(fallback, propertyName);
-            if (!string.IsNullOrWhiteSpace(value))
-                return value;
-        }
-
-        return "";
-    }
-
-    private static double? GetDouble(JsonElement primary, JsonElement fallback, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetOptionalDouble(primary, propertyName);
-            if (value.HasValue)
-                return value;
-        }
-
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetOptionalDouble(fallback, propertyName);
-            if (value.HasValue)
-                return value;
-        }
-
-        return null;
-    }
-
-    private static long? GetInt64(JsonElement primary, JsonElement fallback, params string[] propertyNames)
-    {
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetOptionalInt64(primary, propertyName);
-            if (value.HasValue)
-                return value;
-        }
-
-        foreach (var propertyName in propertyNames)
-        {
-            var value = GetOptionalInt64(fallback, propertyName);
-            if (value.HasValue)
-                return value;
-        }
-
-        return null;
-    }
-
-    private static int? GetInt32(JsonElement? primary, JsonElement secondary, JsonElement fallback, params string[] propertyNames)
-    {
-        var value = primary.HasValue
-            ? GetInt64(primary.Value, secondary, propertyNames)
-            : null;
-        value ??= GetInt64(secondary, fallback, propertyNames);
-        if (!value.HasValue)
-            return null;
-
-        return (int)Math.Clamp(value.Value, int.MinValue, int.MaxValue);
-    }
-
-    private static int? GetOptionalInt32(JsonElement element, string propertyName)
-    {
-        var value = GetOptionalInt64(element, propertyName);
-        if (!value.HasValue)
-            return null;
-
-        return (int)Math.Clamp(value.Value, int.MinValue, int.MaxValue);
-    }
-
-    private static string GetOptionalString(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value)
-            || value.ValueKind != JsonValueKind.String)
-        {
-            return "";
-        }
-
-        return value.GetString() ?? "";
-    }
-
-    private static bool? GetOptionalBool(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value))
-        {
-            return null;
-        }
-
-        if (value.ValueKind == JsonValueKind.True)
-            return true;
-        if (value.ValueKind == JsonValueKind.False)
-            return false;
-        if (value.ValueKind == JsonValueKind.String
-            && bool.TryParse(value.GetString(), out var boolValue))
-        {
-            return boolValue;
-        }
-
-        return null;
-    }
-
-    private static double? GetOptionalDouble(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value))
-        {
-            return null;
-        }
-
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out var number))
-            return number;
-
-        if (value.ValueKind == JsonValueKind.String
-            && double.TryParse(
-                value.GetString(),
-                NumberStyles.Float,
-                CultureInfo.InvariantCulture,
-                out var stringNumber))
-        {
-            return stringNumber;
-        }
-
-        return null;
-    }
-
-    private static long? GetOptionalInt64(JsonElement element, string propertyName)
-    {
-        if (element.ValueKind != JsonValueKind.Object
-            || !element.TryGetProperty(propertyName, out var value))
-        {
-            return null;
-        }
-
-        if (value.ValueKind == JsonValueKind.Number)
-        {
-            if (value.TryGetInt64(out var number))
-                return number;
-
-            if (value.TryGetDouble(out var doubleNumber)
-                && double.IsFinite(doubleNumber)
-                && doubleNumber >= long.MinValue
-                && doubleNumber <= long.MaxValue)
-            {
-                return (long)doubleNumber;
-            }
-        }
-
-        if (value.ValueKind == JsonValueKind.String
-            && long.TryParse(
-                value.GetString(),
-                NumberStyles.Integer,
-                CultureInfo.InvariantCulture,
-                out var stringNumber))
-        {
-            return stringNumber;
-        }
-
-        return null;
-    }
-
     private static double NormalizeFiniteValue(double? value)
     {
         var number = value ?? 0;
@@ -1030,175 +609,8 @@ public sealed class DouyinSpecialDownloadService : IDouyinSpecialDownloadService
     private static long NormalizeNonNegativeInt64(long? value)
         => Math.Max(0, value ?? 0);
 
-    private static bool IsSafeOutputFilePath(string? outputDirectory, string outputFilePath)
-    {
-        if (string.IsNullOrWhiteSpace(outputDirectory) || string.IsNullOrWhiteSpace(outputFilePath))
-            return false;
-
-        try
-        {
-            var fullOutputDirectory = Path.GetFullPath(outputDirectory);
-            var fullOutputFilePath = Path.GetFullPath(outputFilePath);
-            var directoryWithSeparator = fullOutputDirectory.EndsWith(Path.DirectorySeparatorChar)
-                || fullOutputDirectory.EndsWith(Path.AltDirectorySeparatorChar)
-                    ? fullOutputDirectory
-                    : fullOutputDirectory + Path.DirectorySeparatorChar;
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-
-            return fullOutputFilePath.StartsWith(directoryWithSeparator, comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static List<string> GetSafeOutputFilePaths(
-        string? outputDirectory,
-        IEnumerable<string> outputFilePaths)
-    {
-        var safePaths = new List<string>();
-        foreach (var rawPath in outputFilePaths)
-        {
-            if (string.IsNullOrWhiteSpace(rawPath))
-                continue;
-
-            var outputFilePath = rawPath.Trim();
-            if (!IsSafeOutputFilePath(outputDirectory, outputFilePath)
-                || ContainsEquivalentPath(safePaths, outputFilePath))
-            {
-                continue;
-            }
-
-            safePaths.Add(outputFilePath);
-        }
-
-        return safePaths;
-    }
-
-    private static bool TryGetSafeManifestPath(string? outputDirectory, string? manifestPath, out string safeManifestPath)
-    {
-        safeManifestPath = "";
-        if (string.IsNullOrWhiteSpace(manifestPath))
-            return false;
-
-        try
-        {
-            var fullManifestPath = Path.GetFullPath(manifestPath.Trim());
-            if (!IsDouyinManifestPath(fullManifestPath)
-                || !IsSafeOutputFilePath(outputDirectory, fullManifestPath)
-                || !File.Exists(fullManifestPath))
-            {
-                return false;
-            }
-
-            safeManifestPath = fullManifestPath;
-            return true;
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
-    }
-
     internal static bool IsDouyinManifestPath(string path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-            return false;
-
-        try
-        {
-            return IsDouyinManifestFileName(Path.GetFileName(path.Trim()));
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return false;
-        }
-    }
-
-    private static bool IsDouyinManifestFileName(string? fileName)
-    {
-        if (string.IsNullOrWhiteSpace(fileName))
-            return false;
-
-        var comparison = OperatingSystem.IsWindows()
-            ? StringComparison.OrdinalIgnoreCase
-            : StringComparison.Ordinal;
-
-        if (string.Equals(fileName, DouyinManifestFileName, comparison))
-            return true;
-
-        if (!fileName.StartsWith(DouyinManifestSnapshotPrefix, comparison)
-            || !fileName.EndsWith(DouyinManifestExtension, comparison))
-        {
-            return false;
-        }
-
-        var tokenLength = fileName.Length
-            - DouyinManifestSnapshotPrefix.Length
-            - DouyinManifestExtension.Length;
-        var expectedTokenLength = DouyinManifestSnapshotTimestampLength
-            + 1
-            + DouyinManifestSnapshotUuidLength;
-        if (tokenLength != expectedTokenLength)
-            return false;
-
-        var tokenStart = DouyinManifestSnapshotPrefix.Length;
-        var timestamp = fileName.Substring(tokenStart, DouyinManifestSnapshotTimestampLength);
-        var separatorIndex = tokenStart + DouyinManifestSnapshotTimestampLength;
-        var uuidStart = separatorIndex + 1;
-        var uuid = fileName.Substring(uuidStart, DouyinManifestSnapshotUuidLength);
-
-        return fileName[separatorIndex] == '-'
-               && IsDouyinManifestSnapshotTimestamp(timestamp)
-               && uuid.All(IsHexDigit);
-    }
-
-    private static bool IsDouyinManifestSnapshotTimestamp(string value)
-    {
-        if (value.Length != DouyinManifestSnapshotTimestampLength
-            || value[8] != 'T'
-            || value[15] != 'Z')
-        {
-            return false;
-        }
-
-        for (var index = 0; index < value.Length; index++)
-        {
-            if (index is 8 or 15)
-                continue;
-
-            if (!char.IsDigit(value[index]))
-                return false;
-        }
-
-        return true;
-    }
-
-    private static bool IsHexDigit(char value)
-        => value is >= '0' and <= '9'
-           or >= 'a' and <= 'f'
-           or >= 'A' and <= 'F';
-
-    private static bool ContainsEquivalentPath(IEnumerable<string> paths, string candidate)
-        => paths.Any(path => AreEquivalentPaths(path, candidate));
-
-    private static bool AreEquivalentPaths(string left, string right)
-    {
-        try
-        {
-            var comparison = OperatingSystem.IsWindows()
-                ? StringComparison.OrdinalIgnoreCase
-                : StringComparison.Ordinal;
-            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            return string.Equals(left, right, StringComparison.Ordinal);
-        }
-    }
+        => DouyinOutputFileResolver.IsDouyinManifestPath(path);
 
     private static string SelectFirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? "";

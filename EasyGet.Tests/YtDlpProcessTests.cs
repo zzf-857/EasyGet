@@ -312,6 +312,43 @@ public class YtDlpProcessTests
         Assert.Equal("", result.StandardError);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task RunDownloadProcessAsync_KeepsDrainingPipeWhenOutputSubscriberThrows(
+        bool standardError, bool unexpectedException)
+    {
+        var receivedCount = 0;
+        var sawFinalOutput = false;
+        void ReceiveLine(string line)
+        {
+            if (++receivedCount == 1)
+            {
+                if (unexpectedException)
+                    throw new ArgumentException("observer failed");
+                throw new InvalidOperationException("observer failed");
+            }
+            sawFinalOutput |= line == "finished";
+        }
+
+        var streamName = standardError ? "Error" : "Out";
+        var result = await YtDlpService.RunDownloadProcessAsync(
+            "powershell",
+            ["-NoProfile", "-Command",
+                $"[Console]::{streamName}.WriteLine('start'); "
+                + $"for ($i = 0; $i -lt 2000; $i++) {{ [Console]::{streamName}.WriteLine(('x' * 256)) }}; "
+                + $"[Console]::{streamName}.WriteLine('finished')"],
+            TimeSpan.FromSeconds(2),
+            standardError ? null : ReceiveLine,
+            standardError ? ReceiveLine : null);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(2_002, receivedCount);
+        Assert.True(sawFinalOutput);
+    }
+
     private static int CountOccurrences(string text, string value)
     {
         var count = 0;

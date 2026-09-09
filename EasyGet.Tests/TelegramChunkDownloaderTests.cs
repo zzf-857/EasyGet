@@ -121,6 +121,7 @@ public class TelegramChunkDownloaderTests
 
         await UntilAsync(() => calls.Count == 4);
         firstWave[1].SetException(new RpcException(420, message, 3));
+        await UntilAsync(() => throttle.ConcurrencyLimit == 1);
         firstWave[2].SetResult(Block(2));
         firstWave[3].SetResult(Block(3));
         firstWave[0].SetResult(Block(0));
@@ -132,27 +133,25 @@ public class TelegramChunkDownloaderTests
             Assert.Equal(4, calls.Count);
         }
         clock.Advance(TimeSpan.FromSeconds(1));
-        await UntilAsync(() => subsequent.Count == 1);
-        Assert.Equal(5, calls.Count);
-        Assert.True(subsequent.TryDequeue(out var retry));
-        var fifth = calls.Last();
-        Assert.Equal((long)Chunk, fifth.Offset);
-        Assert.True(fifth.Time >= clock.Start + TimeSpan.FromSeconds(3));
-        retry.SetResult(Block(1));
-        await UntilAsync(() => subsequent.Count == 1);
-        Assert.Equal(6, calls.Count);
-        Assert.True(subsequent.TryDequeue(out var next));
-        next.SetResult(Block((int)(calls.Last().Offset / Chunk)));
-        await UntilAsync(() => subsequent.Count == 1);
-        Assert.Equal(7, calls.Count);
-        Assert.True(subsequent.TryDequeue(out var last));
-        last.SetResult(Block((int)(calls.Last().Offset / Chunk)));
+        // The failed block and the next prefetched block may enter the shared
+        // gate in either order. Verify cooldown and one-at-a-time requests,
+        // rather than imposing a thread-pool scheduling order.
+        for (var expectedCalls = 5; expectedCalls <= 7; expectedCalls++)
+        {
+            await UntilAsync(() => subsequent.Count == 1);
+            Assert.Equal(expectedCalls, calls.Count);
+            var request = calls.Last();
+            Assert.True(request.Time >= clock.Start + TimeSpan.FromSeconds(3));
+            Assert.True(subsequent.TryDequeue(out var pending));
+            pending.SetResult(Block((int)(request.Offset / Chunk)));
+        }
         await running.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.Equal(2, counts[Chunk]);
         Assert.All(counts.Where(pair => pair.Key != Chunk), pair => Assert.Equal(1, pair.Value));
         Assert.Equal(reports.Order(), reports);
         Assert.Contains(reports.Zip(reports.Skip(1)), pair => pair.First == pair.Second);
+        Assert.Equal(Enumerable.Range(0, 6).SelectMany(Block).ToArray(), output.ToArray());
     }
 
     [Fact]

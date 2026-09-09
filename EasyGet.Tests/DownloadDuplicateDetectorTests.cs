@@ -6,6 +6,40 @@ namespace EasyGet.Tests;
 
 public sealed class DownloadDuplicateDetectorTests
 {
+    [Theory]
+    [InlineData("tg://privatepost?channel=1234567890&post=456&thread=99", "https://t.me/c/1234567890/456")]
+    [InlineData("https://telegram.me/c/1234567890/99/456?single", "https://t.me/c/1234567890/456")]
+    [InlineData("tg://resolve?domain=ExampleChannel&post=456", "https://t.me/examplechannel/456")]
+    public void NormalizeUrl_UsesTheSameIdentityForTelegramMessageLinks(string url, string expected)
+    {
+        Assert.Equal(expected, DownloadDuplicateDetector.NormalizeUrl(url));
+        Assert.True(new DownloadDuplicateDetector(_ => false).Detect(url,
+            [new DownloadHistory { Url = expected }]).IsDuplicate);
+    }
+
+    [Fact]
+    public void FindHistoryDuplicateUrls_IndexesHistoryOnceForTheWholeBatch()
+    {
+        var enumerations = 0;
+        IEnumerable<DownloadHistory> History()
+        {
+            Assert.Equal(1, ++enumerations);
+            yield return new DownloadHistory { Url = "invalid legacy URL" };
+            yield return new DownloadHistory { Url = "https://t.me/c/123/456" };
+            for (var index = 0; index < 1000; index++)
+                yield return new DownloadHistory { Url = $"https://example.test/video?id={index}" };
+        }
+        var urls = Enumerable.Range(0, 1500)
+            .Select(index => $"https://example.test/video?utm_source=share&id={index}")
+            .Append("tg://privatepost?channel=123&post=456");
+
+        var duplicates = DownloadDuplicateDetector.FindHistoryDuplicateUrls(urls, History());
+
+        Assert.Equal(1001, duplicates.Count);
+        Assert.Contains("tg://privatepost?channel=123&post=456", duplicates);
+        Assert.DoesNotContain("https://example.test/video?utm_source=share&id=1000", duplicates);
+    }
+
     [Fact]
     public void NormalizeUrl_RemovesTrackingAndFragmentButPreservesContentIdentifiers()
     {

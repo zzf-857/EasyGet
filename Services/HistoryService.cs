@@ -144,27 +144,15 @@ public partial class HistoryService : IDisposable
             """;
         cmd.ExecuteNonQuery();
 
-        // 兼容旧版数据库：尝试添加 thumbnail_url 列（已存在则忽略）
-        try
+        EnsureTableColumns("download_history", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            using var alter = _connection.CreateCommand();
-            alter.CommandText = "ALTER TABLE download_history ADD COLUMN thumbnail_url TEXT NOT NULL DEFAULT ''";
-            alter.ExecuteNonQuery();
-        }
-        catch { /* 列已存在，忽略 */ }
-
-        EnsureTextColumn("batch_id");
-        EnsureTextColumn("batch_name");
-        EnsureTextColumn("batch_directory");
-        EnsureIntegerColumn("folder_id");
-
-        try
-        {
-            using var alter = _connection.CreateCommand();
-            alter.CommandText = "ALTER TABLE download_history ADD COLUMN attachment_file_paths TEXT NOT NULL DEFAULT '[]'";
-            alter.ExecuteNonQuery();
-        }
-        catch { /* 列已存在，忽略 */ }
+            ["thumbnail_url"] = "TEXT NOT NULL DEFAULT ''",
+            ["batch_id"] = "TEXT NOT NULL DEFAULT ''",
+            ["batch_name"] = "TEXT NOT NULL DEFAULT ''",
+            ["batch_directory"] = "TEXT NOT NULL DEFAULT ''",
+            ["folder_id"] = "INTEGER NOT NULL DEFAULT 0",
+            ["attachment_file_paths"] = "TEXT NOT NULL DEFAULT '[]'"
+        });
 
         using var index = _connection.CreateCommand();
         index.CommandText = """
@@ -207,31 +195,30 @@ public partial class HistoryService : IDisposable
         InitializeCollectionSubscriptionDatabase();
     }
 
-    private void EnsureTextColumn(string columnName)
+    private void EnsureTableColumns(
+        string tableName,
+        IReadOnlyDictionary<string, string> requiredColumns,
+        SqliteTransaction? transaction = null)
     {
-        try
+        var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var info = _connection.CreateCommand())
         {
-            using var alter = _connection.CreateCommand();
-            alter.CommandText = $"ALTER TABLE download_history ADD COLUMN {columnName} TEXT NOT NULL DEFAULT ''";
-            alter.ExecuteNonQuery();
+            info.Transaction = transaction;
+            info.CommandText = $"PRAGMA table_info({tableName})";
+            using var reader = info.ExecuteReader();
+            while (reader.Read())
+                existingColumns.Add(ReadString(reader, "name"));
         }
-        catch (SqliteException)
-        {
-            // 旧库升级时列已存在即可继续；后续查询会再次验证数据库结构。
-        }
-    }
 
-    private void EnsureIntegerColumn(string columnName)
-    {
-        try
+        foreach (var column in requiredColumns)
         {
+            if (existingColumns.Contains(column.Key))
+                continue;
+
             using var alter = _connection.CreateCommand();
-            alter.CommandText = $"ALTER TABLE download_history ADD COLUMN {columnName} INTEGER NOT NULL DEFAULT 0";
+            alter.Transaction = transaction;
+            alter.CommandText = $"ALTER TABLE {tableName} ADD COLUMN {column.Key} {column.Value}";
             alter.ExecuteNonQuery();
-        }
-        catch (SqliteException)
-        {
-            // 旧库升级时列已存在即可继续。
         }
     }
 
@@ -368,6 +355,30 @@ public partial class HistoryService : IDisposable
             }
 
             return results;
+        });
+
+    /// <summary>
+    /// Reads only the paths needed by the move-target picker, without materializing
+    /// every history record or decoding its attachment JSON.
+    /// </summary>
+    internal Task<IReadOnlyList<string>> GetKnownDirectoriesAsync()
+        => WithConnectionAsync<IReadOnlyList<string>>(async () =>
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT DISTINCT batch_directory, file_path FROM download_history";
+            var directories = new HashSet<string>(PathComparer);
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var batchDirectory = ReadString(reader, 0);
+                var directory = string.IsNullOrWhiteSpace(batchDirectory)
+                    ? BatchDownloadOrganizer.ResolveOutputDirectory(ReadString(reader, 1))
+                    : batchDirectory;
+                if (!string.IsNullOrWhiteSpace(directory))
+                    directories.Add(directory);
+            }
+
+            return directories.ToList();
         });
 
     /// <summary>

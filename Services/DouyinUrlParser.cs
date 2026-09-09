@@ -35,55 +35,58 @@ internal static class DouyinUrlParser
             return Unknown(originalUrl);
 
         if (!Uri.TryCreate(EnsureScheme(originalUrl), UriKind.Absolute, out var uri)
-            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+            || !string.IsNullOrEmpty(uri.UserInfo) || !uri.IsDefaultPort)
         {
             return Unknown(originalUrl);
         }
 
         var host = uri.Host.ToLowerInvariant();
-        if (IsShortLinkHost(host))
-            return Build(DouyinUrlKind.ShortLink, originalUrl, GetPathSegment(uri, 0));
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (IsShortLinkHost(host) && segments.Length == 1
+            && segments[0].ToLowerInvariant() is not ("share" or "video" or "note" or "user" or "live"))
+            return Build(DouyinUrlKind.ShortLink, originalUrl, GetPathSegment(segments, 0));
 
         if (!IsDouyinHost(host))
             return Unknown(originalUrl);
 
         if (host.Equals("live.douyin.com", StringComparison.OrdinalIgnoreCase))
-            return BuildWithNumericId(DouyinUrlKind.Live, originalUrl, GetPathSegment(uri, 0));
+            return BuildWithNumericId(DouyinUrlKind.Live, originalUrl, GetPathSegment(segments, 0));
 
         var modalId = GetQueryParameter(uri, "modal_id");
-        if (!string.IsNullOrWhiteSpace(modalId) && modalId.All(char.IsDigit))
+        if (IsNumericId(modalId))
             return Build(DouyinUrlKind.Video, originalUrl, modalId);
 
-        var firstSegment = GetPathSegment(uri, 0);
+        var firstSegment = GetPathSegment(segments, 0);
         if (string.IsNullOrWhiteSpace(firstSegment))
             return Unknown(originalUrl);
 
         var firstSegmentLower = firstSegment.ToLowerInvariant();
         if (firstSegmentLower == "follow"
-            && string.Equals(GetPathSegment(uri, 1), "live", StringComparison.OrdinalIgnoreCase))
+            && string.Equals(GetPathSegment(segments, 1), "live", StringComparison.OrdinalIgnoreCase))
         {
-            return BuildWithNumericId(DouyinUrlKind.Live, originalUrl, GetPathSegment(uri, 2));
+            return BuildWithNumericId(DouyinUrlKind.Live, originalUrl, GetPathSegment(segments, 2));
         }
 
         var kindSegment = firstSegmentLower;
         var idSegmentIndex = 1;
         if (kindSegment == "share")
         {
-            kindSegment = GetPathSegment(uri, 1)?.ToLowerInvariant() ?? "";
+            kindSegment = GetPathSegment(segments, 1)?.ToLowerInvariant() ?? "";
             idSegmentIndex = 2;
         }
 
         return kindSegment switch
         {
-            "video" => BuildWithNumericId(DouyinUrlKind.Video, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "note" => BuildWithNumericId(DouyinUrlKind.Note, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "gallery" => BuildWithNumericId(DouyinUrlKind.Gallery, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "slides" => BuildWithNumericId(DouyinUrlKind.Slides, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "user" => BuildUser(originalUrl, uri, GetPathSegment(uri, idSegmentIndex)),
-            "collection" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Collection, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "mix" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Mix, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "music" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Music, originalUrl, GetPathSegment(uri, idSegmentIndex)),
-            "live" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Live, originalUrl, GetPathSegment(uri, idSegmentIndex)),
+            "video" => BuildWithNumericId(DouyinUrlKind.Video, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "note" => BuildWithNumericId(DouyinUrlKind.Note, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "gallery" => BuildWithNumericId(DouyinUrlKind.Gallery, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "slides" => BuildWithNumericId(DouyinUrlKind.Slides, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "user" => BuildUser(originalUrl, uri, GetPathSegment(segments, idSegmentIndex)),
+            "collection" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Collection, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "mix" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Mix, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "music" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Music, originalUrl, GetPathSegment(segments, idSegmentIndex)),
+            "live" when idSegmentIndex == 1 => BuildWithNumericId(DouyinUrlKind.Live, originalUrl, GetPathSegment(segments, idSegmentIndex)),
             _ => Unknown(originalUrl)
         };
     }
@@ -94,13 +97,17 @@ internal static class DouyinUrlParser
         return info.IsRecognized;
     }
 
+    internal static bool TryGetCanonicalVideoUrl(string? url, out string canonicalUrl)
+    {
+        var info = Parse(url);
+        canonicalUrl = info.Kind == DouyinUrlKind.Video
+            ? $"https://www.douyin.com/video/{info.Id}"
+            : "";
+        return canonicalUrl.Length > 0;
+    }
+
     private static DouyinUrlInfo Build(DouyinUrlKind kind, string originalUrl, string? id)
         => new(kind, originalUrl, string.IsNullOrWhiteSpace(id) ? null : id);
-
-    private static DouyinUrlInfo BuildWithRequiredId(DouyinUrlKind kind, string originalUrl, string? id)
-        => string.IsNullOrWhiteSpace(id)
-            ? Unknown(originalUrl)
-            : Build(kind, originalUrl, id);
 
     private static DouyinUrlInfo BuildUser(string originalUrl, Uri uri, string? id)
         => string.IsNullOrWhiteSpace(id)
@@ -112,9 +119,12 @@ internal static class DouyinUrlParser
                 IsFavoriteCollectionTab(uri));
 
     private static DouyinUrlInfo BuildWithNumericId(DouyinUrlKind kind, string originalUrl, string? id)
-        => !string.IsNullOrWhiteSpace(id) && id.All(char.IsDigit)
+        => IsNumericId(id)
             ? Build(kind, originalUrl, id)
             : Unknown(originalUrl);
+
+    private static bool IsNumericId(string? id)
+        => !string.IsNullOrWhiteSpace(id) && id.All(character => character is >= '0' and <= '9');
 
     private static DouyinUrlInfo Unknown(string originalUrl)
         => new(DouyinUrlKind.Unknown, originalUrl, null);
@@ -143,9 +153,8 @@ internal static class DouyinUrlParser
            || host.Equals("iesdouyin.com", StringComparison.OrdinalIgnoreCase)
            || host.EndsWith(".iesdouyin.com", StringComparison.OrdinalIgnoreCase);
 
-    private static string? GetPathSegment(Uri uri, int index)
+    private static string? GetPathSegment(string[] segments, int index)
     {
-        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
         if (index < 0 || index >= segments.Length)
             return null;
 

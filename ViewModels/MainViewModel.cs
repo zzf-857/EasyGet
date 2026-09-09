@@ -19,6 +19,7 @@ public partial class MainViewModel : ObservableObject
     private readonly TrayIconService? _trayIconService;
     private readonly BackgroundUpdateCoordinator? _backgroundUpdateCoordinator;
     private readonly CollectionRefreshCoordinator? _collectionRefreshCoordinator;
+    private readonly CoalescedUiRefresh _taskStatusRefresh;
 
     [ObservableProperty] private ObservableObject? _currentPage;
     [ObservableProperty] private int _selectedNavIndex;
@@ -109,6 +110,11 @@ public partial class MainViewModel : ObservableObject
         BatchDownloadVM = batchDownloadVm;
         HistoryVM = historyVm;
         SettingsVM = settingsVm;
+        _taskStatusRefresh = new CoalescedUiRefresh(() =>
+        {
+            UpdateTaskbarProgress();
+            NotifyTaskStatusChanged();
+        });
 
         CurrentPage = DownloadVM;
         SelectedNavIndex = 0;
@@ -173,43 +179,19 @@ public partial class MainViewModel : ObservableObject
             Notifications.Add(item);
         });
 
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.Invoke(action);
-        }
+        UiDispatcher.Post(action);
     }
 
     private void OnNotificationExpired(NotificationItem item)
     {
         var action = new Action(() => RemoveNotification(item));
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.Invoke(action);
-        }
+        UiDispatcher.Post(action);
     }
 
     private void OnNotificationClosed(NotificationItem item)
     {
         var action = new Action(() => RemoveNotification(item));
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.Invoke(action);
-        }
+        UiDispatcher.Post(action);
     }
 
     private void RemoveNotification(NotificationItem item)
@@ -347,15 +329,7 @@ public partial class MainViewModel : ObservableObject
             Notifications.Clear();
         });
 
-        var dispatcher = System.Windows.Application.Current?.Dispatcher;
-        if (dispatcher is null || dispatcher.CheckAccess())
-        {
-            action();
-        }
-        else
-        {
-            dispatcher.Invoke(action);
-        }
+        UiDispatcher.Post(action);
     }
 
     [RelayCommand]
@@ -543,28 +517,14 @@ public partial class MainViewModel : ObservableObject
                 task.PropertyChanged -= OnTaskPropertyChanged;
             }
         }
-        UpdateTaskbarProgress();
-        NotifyTaskStatusChanged();
+        _taskStatusRefresh.Request();
     }
 
     private void OnTaskPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(DownloadTask.Progress) or nameof(DownloadTask.Status) or nameof(DownloadTask.Speed))
         {
-            var app = System.Windows.Application.Current;
-            if (app is not null)
-            {
-                app.Dispatcher.Invoke(() =>
-                {
-                    UpdateTaskbarProgress();
-                    NotifyTaskStatusChanged();
-                });
-            }
-            else
-            {
-                UpdateTaskbarProgress();
-                NotifyTaskStatusChanged();
-            }
+            _taskStatusRefresh.Request();
         }
     }
 

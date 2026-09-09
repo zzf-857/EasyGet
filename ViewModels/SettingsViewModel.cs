@@ -30,7 +30,6 @@ public partial class SettingsViewModel : ObservableObject
         _ => "EasyGet 设置"
     };
 
-    private const int AutoSaveDebounceMilliseconds = 150;
     private static readonly int[] GlobalDownloadRateLimitPresets =
     [
         0,
@@ -49,12 +48,6 @@ public partial class SettingsViewModel : ObservableObject
     ];
     private static readonly TimeSpan BrowserLoginDetectionTimeout = TimeSpan.FromMinutes(3);
     private static readonly TimeSpan BrowserLoginDetectionInterval = TimeSpan.FromSeconds(2);
-
-    private enum SettingsSaveIntent
-    {
-        Automatic,
-        Explicit
-    }
 
     private static readonly IReadOnlyDictionary<string, string> DouyinTemplatePreviewValues =
         new Dictionary<string, string>(StringComparer.Ordinal)
@@ -95,12 +88,7 @@ public partial class SettingsViewModel : ObservableObject
         DownloadPerformanceAdvisor.GetCurrentRecommendation();
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _browserLoginCancellations =
         new(StringComparer.Ordinal);
-    private readonly SemaphoreSlim _settingsSaveGate = new(1, 1);
-    private readonly object _autoSaveGate = new();
-    private CancellationTokenSource? _autoSaveDebounce;
-    private Task _pendingAutoSaveTask = Task.CompletedTask;
-    private long _autoSaveRequestedVersion;
-    private long _autoSavePersistedVersion;
+    private readonly SettingsSaveCoordinator _settingsSaveCoordinator;
     private int _lastDiscoveredBrowserProfileCount;
     private AppUpdateInfo? _availableAppUpdate;
     private string? _downloadedInstallerPath;
@@ -538,6 +526,9 @@ public partial class SettingsViewModel : ObservableObject
             [Path.Combine(AppContext.BaseDirectory, "logs")]);
         _userDataBackupService = userDataBackupService ?? new UserDataBackupService(
             UserDataBackupPaths.FromConfigDirectory(configService.ConfigDirectory));
+        _settingsSaveCoordinator = new SettingsSaveCoordinator(
+            PersistSettingsAsync,
+            TimeSpan.FromMilliseconds(150));
         _configService.DefaultDownloadPathChanged += OnSharedDefaultDownloadPathChanged;
         AppVersionText = $"v{_appUpdateService.CurrentVersion}";
         AppRuntimeText = _appUpdateService.RuntimeDescription;
@@ -665,36 +656,15 @@ public partial class SettingsViewModel : ObservableObject
                 profiles,
                 platforms,
                 cancellationToken);
-            var health = _cookieHealthStore.Snapshot();
+            var presenter = new CookiePlatformStatusPresenter(
+                _cookieHealthStore.Snapshot(),
+                detection,
+                profiles.Count);
             _lastDiscoveredBrowserProfileCount = profiles.Count;
             var verifiedPlatforms = 0;
 
             foreach (var platform in platforms)
             {
-                var successful = health
-                    .Where(record => string.Equals(
-                                         record.PlatformId,
-                                         platform.StorageKey,
-                                         StringComparison.Ordinal)
-                                     && record.LastSuccessUtc.HasValue
-                                     && record.ConsecutiveFailures == 0
-                                     && (!record.LastFailureUtc.HasValue
-                                         || record.LastSuccessUtc.Value >= record.LastFailureUtc.Value))
-                    .OrderByDescending(record => record.LastSuccessUtc)
-                    .FirstOrDefault();
-                var authenticatedSuccessful = health
-                    .Where(record => string.Equals(
-                                         record.PlatformId,
-                                         platform.StorageKey,
-                                         StringComparison.Ordinal)
-                                     && IsAuthenticatedCookieSource(record.Source)
-                                     && record.LastSuccessUtc.HasValue
-                                     && record.ConsecutiveFailures == 0
-                                     && (!record.LastFailureUtc.HasValue
-                                         || record.LastSuccessUtc.Value >= record.LastFailureUtc.Value))
-                    .OrderByDescending(record => record.LastSuccessUtc)
-                    .FirstOrDefault();
-
                 var item = CookiePlatformStatuses.FirstOrDefault(status =>
                     string.Equals(status.StorageKey, platform.StorageKey, StringComparison.Ordinal));
                 if (item is null)
@@ -708,52 +678,8 @@ public partial class SettingsViewModel : ObservableObject
                     CookiePlatformStatuses.Add(item);
                 }
 
-                var browserLoginDetected = detection.TryGetProfile(
-                    platform.StorageKey,
-                    out var detectedProfile);
-                var authenticatedByHealth = authenticatedSuccessful is not null;
-                if (item.IsOperating)
-                {
-                    if (successful is not null)
-                        verifiedPlatforms++;
-                    continue;
-                }
-
-                item.IsDetected = browserLoginDetected;
-                item.HasAuthenticatedSession = browserLoginDetected || authenticatedByHealth;
-                if (successful is not null)
-                {
+                if (presenter.Apply(item))
                     verifiedPlatforms++;
-                    item.IsAvailable = true;
-                    item.NeedsLogin = false;
-                    item.StatusText = authenticatedByHealth
-                        ? $"最近验证可用 · {DescribeCookieSource(authenticatedSuccessful!.Source)}"
-                        : browserLoginDetected
-                            ? $"已检测到 {detectedProfile.BrowserName} 登录状态 · 下载时自动读取 Cookie"
-                            : $"最近验证可用 · {DescribeCookieSource(successful.Source)}";
-                }
-                else if (browserLoginDetected)
-                {
-                    item.IsAvailable = false;
-                    item.NeedsLogin = false;
-                    item.StatusText = $"已检测到 {detectedProfile.BrowserName} 登录状态 · 下载时自动读取 Cookie";
-                }
-                else if (profiles.Count > 0)
-                {
-                    item.IsAvailable = false;
-                    item.HasAuthenticatedSession = false;
-                    item.NeedsLogin = detection.ReadableProfileCount > 0;
-                    item.StatusText = detection.ReadableProfileCount > 0
-                        ? "未检测到该平台登录 Cookie · 可点击浏览器登录"
-                        : "浏览器配置已发现，但登录状态暂时无法读取 · 下载时仍会自动尝试";
-                }
-                else
-                {
-                    item.IsAvailable = false;
-                    item.HasAuthenticatedSession = false;
-                    item.NeedsLogin = true;
-                    item.StatusText = "未发现可复用浏览器配置，首次使用时需要登录";
-                }
             }
 
             UpdateCookieStatusSummary(
@@ -784,21 +710,6 @@ public partial class SettingsViewModel : ObservableObject
             ? $"未发现受支持浏览器配置 · 检测到 {detectedPlatformCount} 个平台登录 · {verifiedPlatformCount} 个平台近期下载验证"
             : $"发现 {profileCount} 个浏览器配置 · 检测到 {detectedPlatformCount} 个平台登录 · {verifiedPlatformCount} 个平台近期下载验证";
     }
-
-    private static string DescribeCookieSource(CookieSourceKind source)
-        => source switch
-        {
-            CookieSourceKind.Anonymous => "公开访问",
-            CookieSourceKind.LegacyScoped => "平台手动 Cookie",
-            CookieSourceKind.Browser => "本机浏览器",
-            CookieSourceKind.ManagedSession => "EasyGet 托管登录",
-            _ => "本地登录状态"
-        };
-
-    private static bool IsAuthenticatedCookieSource(CookieSourceKind source)
-        => source is CookieSourceKind.LegacyScoped
-            or CookieSourceKind.Browser
-            or CookieSourceKind.ManagedSession;
 
     [RelayCommand(AllowConcurrentExecutions = true)]
     private async Task LoginPlatform(CookiePlatformStatusItem? item)
@@ -1252,16 +1163,10 @@ public partial class SettingsViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task SaveSettings()
-    {
-        var targetVersion = CancelPendingAutoSave();
-        if (await PersistSettingsAsync(SettingsSaveIntent.Explicit))
-            MarkAutoSaveVersionPersisted(targetVersion);
-    }
+    private Task SaveSettings() => _settingsSaveCoordinator.SaveExplicitAsync();
 
     private async Task<bool> PersistSettingsAsync(SettingsSaveIntent saveIntent)
     {
-        await _settingsSaveGate.WaitAsync();
         try
         {
             var c = _configService.Config;
@@ -1360,9 +1265,7 @@ public partial class SettingsViewModel : ObservableObject
             c.TgPhoneNumber = TgPhoneNumber;
 
             ConfigService.NormalizeRuntimeConfig(c);
-            SyncNormalizedPerformanceValues(c);
-            SyncNormalizedCollectionRefreshInterval(c);
-            SyncNormalizedDouyinValues(c);
+            SyncNormalizedSettings(c);
 
             _downloadManager.UpdateConcurrencyLimit(c.MaxConcurrentDownloads);
             if (saveIntent == SettingsSaveIntent.Explicit
@@ -1429,10 +1332,6 @@ public partial class SettingsViewModel : ObservableObject
         {
             SettingsSaveStatusMessage = "设置保存失败，请检查目录权限后重试";
             return false;
-        }
-        finally
-        {
-            _settingsSaveGate.Release();
         }
     }
 
@@ -1562,178 +1461,24 @@ public partial class SettingsViewModel : ObservableObject
 
     private void AutoSave()
     {
-        if (_isInitializing)
-            return;
-
-        CancellationTokenSource debounce;
-        CancellationTokenSource? previousDebounce;
-        long version;
-        lock (_autoSaveGate)
-        {
-            version = ++_autoSaveRequestedVersion;
-            previousDebounce = _autoSaveDebounce;
-            debounce = new CancellationTokenSource();
-            _autoSaveDebounce = debounce;
-            _pendingAutoSaveTask = RunAutoSaveAsync(version, debounce);
-        }
-        TryCancelDebounce(previousDebounce);
+        if (!_isInitializing)
+            _settingsSaveCoordinator.RequestAutoSave();
     }
 
-    private async Task RunAutoSaveAsync(
-        long version,
-        CancellationTokenSource debounce)
+    public Task<bool> FlushPendingSaveAsync() => _settingsSaveCoordinator.FlushAsync();
+
+    private void SyncNormalizedSettings(AppConfig config)
     {
-        try
-        {
-            await Task.Delay(AutoSaveDebounceMilliseconds, debounce.Token);
-            if (await PersistSettingsAsync(SettingsSaveIntent.Automatic))
-                MarkAutoSaveVersionPersisted(version);
-        }
-        catch (OperationCanceledException) when (debounce.IsCancellationRequested)
-        {
-        }
-        finally
-        {
-            lock (_autoSaveGate)
-            {
-                if (ReferenceEquals(_autoSaveDebounce, debounce))
-                    _autoSaveDebounce = null;
-            }
-
-            debounce.Dispose();
-        }
-    }
-
-    public async Task<bool> FlushPendingSaveAsync()
-    {
-        while (true)
-        {
-            Task pendingSave;
-            CancellationTokenSource? debounce;
-            long targetVersion;
-            lock (_autoSaveGate)
-            {
-                targetVersion = _autoSaveRequestedVersion;
-                debounce = _autoSaveDebounce;
-                pendingSave = _pendingAutoSaveTask;
-            }
-            TryCancelDebounce(debounce);
-
-            await pendingSave;
-
-            lock (_autoSaveGate)
-            {
-                if (_autoSavePersistedVersion >= targetVersion
-                    && _autoSaveRequestedVersion == targetVersion)
-                {
-                    return true;
-                }
-            }
-
-            if (!await PersistSettingsAsync(SettingsSaveIntent.Automatic))
-                return false;
-
-            lock (_autoSaveGate)
-            {
-                _autoSavePersistedVersion = Math.Max(
-                    _autoSavePersistedVersion,
-                    targetVersion);
-                if (_autoSaveRequestedVersion == targetVersion)
-                    return true;
-            }
-        }
-    }
-
-    private long CancelPendingAutoSave()
-    {
-        CancellationTokenSource? debounce;
-        long targetVersion;
-        lock (_autoSaveGate)
-        {
-            debounce = _autoSaveDebounce;
-            targetVersion = _autoSaveRequestedVersion;
-        }
-        TryCancelDebounce(debounce);
-        return targetVersion;
-    }
-
-    private static void TryCancelDebounce(CancellationTokenSource? debounce)
-    {
-        try
-        {
-            debounce?.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-        }
-    }
-
-    private void MarkAutoSaveVersionPersisted(long version)
-    {
-        lock (_autoSaveGate)
-            _autoSavePersistedVersion = Math.Max(_autoSavePersistedVersion, version);
-    }
-
-    private void SyncNormalizedPerformanceValues(EasyGet.Models.AppConfig config)
-    {
-        if (MaxConcurrentDownloads == config.MaxConcurrentDownloads
-            && ConcurrentFragments == config.ConcurrentFragments
-            && GlobalDownloadRateLimitKilobytesPerSecond == config.GlobalDownloadRateLimitKilobytesPerSecond)
-        {
-            return;
-        }
-
+        var wasInitializing = _isInitializing;
         _isInitializing = true;
         try
         {
+            // Observable setters already ignore unchanged values. Suppress automatic
+            // persistence once while applying all normalized settings.
             MaxConcurrentDownloads = config.MaxConcurrentDownloads;
             ConcurrentFragments = config.ConcurrentFragments;
             GlobalDownloadRateLimitKilobytesPerSecond = config.GlobalDownloadRateLimitKilobytesPerSecond;
-        }
-        finally
-        {
-            _isInitializing = false;
-        }
-    }
-
-    private void SyncNormalizedCollectionRefreshInterval(EasyGet.Models.AppConfig config)
-    {
-        if (CollectionRefreshIntervalHours == config.CollectionRefreshIntervalHours)
-            return;
-
-        _isInitializing = true;
-        try
-        {
             CollectionRefreshIntervalHours = config.CollectionRefreshIntervalHours;
-        }
-        finally
-        {
-            _isInitializing = false;
-        }
-    }
-
-    private void SyncNormalizedDouyinValues(EasyGet.Models.AppConfig config)
-    {
-        if (DouyinMode == config.DouyinMode
-            && DouyinLimit == config.DouyinLimit
-            && DouyinFilenameTemplate == config.DouyinFilenameTemplate
-            && DouyinFolderTemplate == config.DouyinFolderTemplate
-            && DouyinAuthorDirectoryMode == config.DouyinAuthorDirectoryMode
-            && DouyinGroupByMode == config.DouyinGroupByMode
-            && DouyinMaxComments == config.DouyinMaxComments
-            && DouyinCommentPageSize == config.DouyinCommentPageSize
-            && DouyinLiveMaxDurationSeconds == config.DouyinLiveMaxDurationSeconds
-            && DouyinLiveChunkSize == config.DouyinLiveChunkSize
-            && DouyinLiveIdleTimeoutSeconds == config.DouyinLiveIdleTimeoutSeconds
-            && DouyinStartTime == config.DouyinStartTime
-            && DouyinEndTime == config.DouyinEndTime)
-        {
-            return;
-        }
-
-        _isInitializing = true;
-        try
-        {
             DouyinMode = config.DouyinMode;
             DouyinLimit = config.DouyinLimit;
             DouyinFilenameTemplate = config.DouyinFilenameTemplate;
@@ -1750,7 +1495,7 @@ public partial class SettingsViewModel : ObservableObject
         }
         finally
         {
-            _isInitializing = false;
+            _isInitializing = wasInitializing;
         }
     }
 

@@ -6,6 +6,26 @@ namespace EasyGet.Tests;
 public class DouyinUrlParserTests
 {
     [Theory]
+    [InlineData("https://www.iesdouyin.com/share/video/7621772413184822582/?region=CN")]
+    [InlineData("https://iesdouyin.com/share/video/7621772413184822582")]
+    [InlineData("https://www.douyin.com/discover?modal_id=7621772413184822582")]
+    public void ShareVideo_MapsToTheVideoExtractorUrl(string url)
+    {
+        Assert.True(DouyinUrlParser.TryGetCanonicalVideoUrl(url, out var canonical));
+        Assert.Equal("https://www.douyin.com/video/7621772413184822582", canonical);
+        Assert.False(DouyinUrlParser.Parse(url).RequiresExpansion);
+    }
+
+    [Theory]
+    [InlineData("https://v.douyin.com/")]
+    [InlineData("https://www.douyin.com/video/١٢٣")]
+    [InlineData("https://user:password@www.iesdouyin.com/share/video/123")]
+    [InlineData("https://www.iesdouyin.com.evil.test/share/video/123")]
+    [InlineData("https://www.iesdouyin.com:8443/share/video/123")]
+    public void IncompleteOrMisleadingUrl_DoesNotBecomeACanonicalVideo(string url)
+        => Assert.False(DouyinUrlParser.TryGetCanonicalVideoUrl(url, out _));
+
+    [Theory]
     [InlineData("https://v.douyin.com/i6EpMYVJgA8/", "i6EpMYVJgA8")]
     [InlineData("https://v.iesdouyin.com/ZM8AqvE/", "ZM8AqvE")]
     [InlineData("v.douyin.com/share-token/", "share-token")]
