@@ -83,11 +83,20 @@ public class LayoutContractTests
         var style = FindStyle(document, x, "SidebarNavItem");
         var glyphStyle = FindStyle(document, x, "SidebarNavGlyph");
         var labelStyle = FindStyle(document, x, "SidebarNavLabel");
+        var contentStyle = FindStyle(document, x, "SidebarNavContent");
         var panelStyle = FindStyle(document, x, "SidebarNavigationPanel");
 
         Assert.Equal("{StaticResource NavigationHeight}", GetSetterValue(style, "Height"));
         Assert.Equal("Center", GetSetterValue(glyphStyle, "VerticalAlignment"));
         Assert.Equal("Center", GetSetterValue(labelStyle, "VerticalAlignment"));
+        Assert.Equal("Horizontal", GetSetterValue(contentStyle, "Orientation"));
+        Assert.Equal("Left", GetSetterValue(contentStyle, "HorizontalAlignment"));
+        Assert.Equal("Center", GetSetterValue(contentStyle, "VerticalAlignment"));
+        var compactContentTrigger = contentStyle.Descendants().Single(element =>
+            element.Name.LocalName == "DataTrigger"
+            && element.Attribute("Binding")?.Value == "{Binding IsCompactLayout}"
+            && element.Attribute("Value")?.Value == "True");
+        Assert.Equal("Center", GetSetterValue(compactContentTrigger, "HorizontalAlignment"));
         Assert.Contains(style.Elements(), element =>
             element.Name.LocalName == "Setter"
             && element.Attribute("Property")?.Value == "Margin"
@@ -129,16 +138,15 @@ public class LayoutContractTests
         {
             var contentGrid = item.Elements().Single(element => element.Name.LocalName == "Grid");
             Assert.Equal("Center", contentGrid.Attribute("VerticalAlignment")?.Value);
-            var centeredContent = contentGrid.Elements().Single(element =>
+            var alignedContent = contentGrid.Elements().Single(element =>
                 element.Name.LocalName == "StackPanel");
 
-            Assert.Equal("Horizontal", centeredContent.Attribute("Orientation")?.Value);
-            Assert.Equal("Center", centeredContent.Attribute("HorizontalAlignment")?.Value);
-            Assert.Equal("Center", centeredContent.Attribute("VerticalAlignment")?.Value);
-            Assert.Contains(centeredContent.Elements(), element =>
+            Assert.Equal("{StaticResource SidebarNavContent}", alignedContent.Attribute("Style")?.Value);
+            Assert.Null(alignedContent.Attribute("HorizontalAlignment"));
+            Assert.Contains(alignedContent.Elements(), element =>
                 element.Name.LocalName == "TextBlock"
                 && element.Attribute("Style")?.Value == "{StaticResource SidebarNavGlyph}");
-            Assert.Contains(centeredContent.Elements(), element =>
+            Assert.Contains(alignedContent.Elements(), element =>
                 element.Name.LocalName == "TextBlock"
                 && element.Attribute("Style")?.Value == "{StaticResource SidebarNavLabel}");
         });

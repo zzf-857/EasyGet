@@ -96,6 +96,17 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="SidebarNavContent" TargetType="StackPanel">
+            <Setter Property="Orientation" Value="Horizontal"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsCompactLayout}" Value="True">
+                    <Setter Property="HorizontalAlignment" Value="Center"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <Style x:Key="SidebarNavItem" TargetType="RadioButton" BasedOn="{StaticResource NavRadioButton}">
             <Setter Property="GroupName" Value="MainNavigation"/>
             <Setter Property="Height" Value="{StaticResource NavigationHeight}"/>
@@ -317,8 +328,7 @@
                                          ToolTip="单个下载" AutomationProperties.Name="单个下载"
                                          IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=0, Mode=TwoWay}">
                                 <Grid VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <StackPanel Style="{StaticResource SidebarNavContent}">
                                         <TextBlock Text="&#xE118;" Style="{StaticResource SidebarNavGlyph}"/>
                                         <TextBlock Text="单个下载" Margin="12,0,0,0"
                                                    Style="{StaticResource SidebarNavLabel}"/>
@@ -331,8 +341,7 @@
                                          ToolTip="批量队列" AutomationProperties.Name="批量队列"
                                          IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=1, Mode=TwoWay}">
                                 <Grid VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <StackPanel Style="{StaticResource SidebarNavContent}">
                                         <TextBlock Text="&#xE8FD;" Style="{StaticResource SidebarNavGlyph}"/>
                                         <TextBlock Text="批量队列" Margin="12,0,0,0"
                                                    Style="{StaticResource SidebarNavLabel}"/>
@@ -353,8 +362,7 @@
                                          ToolTip="媒体库" AutomationProperties.Name="媒体库"
                                          IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=2, Mode=TwoWay}">
                                 <Grid VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <StackPanel Style="{StaticResource SidebarNavContent}">
                                         <TextBlock Text="&#xE81C;" Style="{StaticResource SidebarNavGlyph}"/>
                                         <TextBlock Text="媒体库" Margin="12,0,0,0"
                                                    Style="{StaticResource SidebarNavLabel}"/>
@@ -367,8 +375,7 @@
                                          ToolTip="设置" AutomationProperties.Name="设置"
                                          IsChecked="{Binding SelectedNavIndex, Converter={StaticResource IntToBoolConverter}, ConverterParameter=3, Mode=TwoWay}">
                                 <Grid VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <StackPanel Style="{StaticResource SidebarNavContent}">
                                         <TextBlock Text="&#xE713;" Style="{StaticResource SidebarNavGlyph}"/>
                                         <TextBlock Text="设置" Margin="12,0,0,0"
                                                    Style="{StaticResource SidebarNavLabel}"/>

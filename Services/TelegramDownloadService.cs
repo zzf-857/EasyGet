@@ -3,8 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
-using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,128 +15,30 @@ public class TelegramDownloadService : IDisposable
 {
     private readonly ConfigService _configService;
     private WTelegram.Client? _client;
+    private ITelegramDownloadClient? _downloadClient;
     private string? _loginRequirement; // 缓存登录步骤，如 "verification_code" 或 "password"
     private readonly SemaphoreSlim _clientSemaphore = new(1, 1);
+    private readonly CancellationTokenSource _shutdown = new();
+    // Keep server cooldowns when a cancelled connection is recreated or the next
+    // queued video starts. Reconnecting must not reset a known Telegram wait.
+    private readonly TelegramDownloadThrottle _downloadThrottle = new();
+    private int _disposed;
 
     public TelegramDownloadService(ConfigService configService)
     {
         _configService = configService;
     }
 
+    internal TelegramDownloadService(ConfigService configService, ITelegramDownloadClient client)
+        : this(configService)
+    {
+        _downloadClient = client;
+    }
+
     public static bool IsTelegramUrl(string? url) => ParseTelegramLink(url) is not null;
 
     public static (string chatTarget, int startId, int? endId)? ParseTelegramLink(string? link)
-    {
-        if (string.IsNullOrWhiteSpace(link)
-            || !Uri.TryCreate(link.Trim(), UriKind.Absolute, out var uri))
-        {
-            return null;
-        }
-
-        if (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
-            || uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
-        {
-            return ParseHttpTelegramLink(uri);
-        }
-
-        return uri.Scheme.Equals("tg", StringComparison.OrdinalIgnoreCase)
-            ? ParseTgTelegramLink(uri)
-            : null;
-    }
-
-    private static (string chatTarget, int startId, int? endId)? ParseHttpTelegramLink(Uri uri)
-    {
-        if (!IsTelegramHost(uri.Host)
-            || !string.IsNullOrEmpty(uri.UserInfo)
-            || !uri.IsDefaultPort)
-        {
-            return null;
-        }
-
-        var normalizedPath = uri.AbsolutePath.TrimEnd('/');
-        var segments = normalizedPath.Split('/');
-        if (segments.Length == 3
-            && segments[0].Length == 0
-            && IsTelegramUsername(segments[1])
-            && !segments[1].Equals("c", StringComparison.OrdinalIgnoreCase)
-            && TryParseMessageRange(segments[2], out var publicStartId, out var publicEndId))
-        {
-            return (segments[1], publicStartId, publicEndId);
-        }
-
-        if (segments.Length == 4
-            && segments[0].Length == 0
-            && segments[1].Equals("c", StringComparison.OrdinalIgnoreCase)
-            && TryBuildPrivateChatTarget(segments[2], out var chatTarget)
-            && TryParseMessageRange(segments[3], out var privateStartId, out var privateEndId))
-        {
-            return (chatTarget, privateStartId, privateEndId);
-        }
-
-        return null;
-    }
-
-    private static (string chatTarget, int startId, int? endId)? ParseTgTelegramLink(Uri uri)
-    {
-        if (!string.IsNullOrEmpty(uri.UserInfo)
-            || !uri.IsDefaultPort
-            || uri.AbsolutePath != "/"
-            || !TryGetQueryParameter(uri, "post", out var post)
-            || !TryParseMessageRange(post, out var startId, out var endId))
-        {
-            return null;
-        }
-
-        if (uri.Host.Equals("resolve", StringComparison.OrdinalIgnoreCase)
-            && TryGetQueryParameter(uri, "domain", out var username)
-            && IsTelegramUsername(username)
-            && !username.Equals("c", StringComparison.OrdinalIgnoreCase))
-        {
-            return (username, startId, endId);
-        }
-
-        if (uri.Host.Equals("private", StringComparison.OrdinalIgnoreCase)
-            && TryGetQueryParameter(uri, "channel", out var channel)
-            && TryBuildPrivateChatTarget(channel, out var chatTarget))
-        {
-            return (chatTarget, startId, endId);
-        }
-
-        return null;
-    }
-
-    private static bool IsTelegramHost(string host)
-    {
-        return host.Equals("t.me", StringComparison.OrdinalIgnoreCase)
-            || host.Equals("www.t.me", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool IsTelegramUsername(string value)
-    {
-        if (value.Length == 0)
-            return false;
-
-        foreach (var character in value)
-        {
-            var isAsciiLetterOrDigit = character is >= 'a' and <= 'z'
-                or >= 'A' and <= 'Z'
-                or >= '0' and <= '9';
-            if (!isAsciiLetterOrDigit && character != '_')
-                return false;
-        }
-
-        return true;
-    }
-
-    private static bool TryBuildPrivateChatTarget(string channel, out string chatTarget)
-    {
-        chatTarget = "";
-        if (!TryParsePositiveLong(channel, out var channelId))
-            return false;
-
-        chatTarget = $"-100{channelId}";
-        return long.TryParse(chatTarget, out _);
-    }
+        => TelegramLinkParser.Parse(link);
 
     /// <summary>
     /// WTelegram 对话字典以频道原始正数 ID 为键；解析得到的 <c>-100{channelId}</c> 仅作展示标记。
@@ -158,35 +58,6 @@ public class TelegramDownloadService : IDisposable
             return channelId;
 
         throw new ArgumentException("不是有效的 Telegram 私有频道标识。", nameof(chatTarget));
-    }
-
-    private static bool TryParseMessageRange(string value, out int startId, out int? endId)
-    {
-        startId = 0;
-        endId = null;
-
-        var separatorIndex = value.IndexOfAny(['-', '_']);
-        var startText = separatorIndex >= 0 ? value[..separatorIndex] : value;
-        if (!TryParsePositiveInt(startText, out startId))
-            return false;
-
-        if (separatorIndex < 0)
-            return true;
-
-        var endText = value[(separatorIndex + 1)..];
-        if (!TryParsePositiveInt(endText, out var parsedEndId) || parsedEndId < startId)
-            return false;
-
-        endId = parsedEndId;
-        return true;
-    }
-
-    private static bool TryParsePositiveInt(string value, out int result)
-    {
-        result = 0;
-        return ContainsOnlyAsciiDigits(value)
-            && int.TryParse(value, out result)
-            && result > 0;
     }
 
     private static bool TryParsePositiveLong(string value, out long result)
@@ -211,69 +82,39 @@ public class TelegramDownloadService : IDisposable
         return true;
     }
 
-    private static bool TryGetQueryParameter(Uri uri, string parameterName, out string value)
-    {
-        value = "";
-        var found = false;
-        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var separatorIndex = pair.IndexOf('=');
-            var encodedName = separatorIndex >= 0 ? pair[..separatorIndex] : pair;
-            if (!TryDecodeQueryComponent(encodedName, out var name))
-                return false;
-
-            if (!name.Equals(parameterName, StringComparison.OrdinalIgnoreCase))
-                continue;
-
-            if (found || separatorIndex < 0
-                || !TryDecodeQueryComponent(pair[(separatorIndex + 1)..], out value))
-            {
-                value = "";
-                return false;
-            }
-
-            found = true;
-        }
-
-        return found;
-    }
-
-    private static bool TryDecodeQueryComponent(string value, out string decoded)
-    {
-        try
-        {
-            decoded = Uri.UnescapeDataString(value.Replace('+', ' '));
-            return true;
-        }
-        catch (UriFormatException)
-        {
-            decoded = "";
-            return false;
-        }
-    }
-
     /// <summary>
     /// 初始化并连接 Telegram，检查登录状态
     /// </summary>
     public async Task<string?> CheckLoginStatusAsync()
     {
-        await _clientSemaphore.WaitAsync();
+        await _clientSemaphore.WaitAsync(_shutdown.Token);
         try
         {
-            if (_client == null)
+            if (_client == null && _downloadClient == null)
             {
+                if (!HasCredentials() || !File.Exists(GetSessionPath()))
+                    return "phone_number";
                 InitClient();
             }
 
-            if (_client!.User != null)
-                return null; // 已登录
+            if (_downloadClient!.IsLoggedIn)
+                return null;
 
-            var loginResult = await _client.Login(_configService.Config.TgPhoneNumber);
-            _loginRequirement = loginResult;
-            return loginResult; // 返回 "verification_code", "password" 或 null
+            if (_loginRequirement is not null)
+                return _loginRequirement;
+            if (!_downloadClient.HasSavedSession)
+                return "phone_number";
+            await _downloadClient.RestoreSessionAsync(_shutdown.Token);
+            return _downloadClient.IsLoggedIn ? null : "phone_number";
+        }
+        catch (Exception ex) when (ex is TimeoutException or OperationCanceledException)
+        {
+            await AbortDownloadClientAsync();
+            throw;
         }
         finally
         {
+            ClearAbortedClient();
             _clientSemaphore.Release();
         }
     }
@@ -283,7 +124,7 @@ public class TelegramDownloadService : IDisposable
     /// </summary>
     public async Task<string?> SendCodeAsync(string phone, string apiId, string apiHash)
     {
-        await _clientSemaphore.WaitAsync();
+        await _clientSemaphore.WaitAsync(_shutdown.Token);
         try
         {
             // 保存凭证
@@ -298,6 +139,8 @@ public class TelegramDownloadService : IDisposable
                 _client = null;
             }
 
+            _downloadClient = null;
+            _loginRequirement = null;
             InitClient();
             var loginResult = await _client!.Login(phone);
             _loginRequirement = loginResult;
@@ -314,7 +157,7 @@ public class TelegramDownloadService : IDisposable
     /// </summary>
     public async Task<string?> SubmitCodeAsync(string code)
     {
-        await _clientSemaphore.WaitAsync();
+        await _clientSemaphore.WaitAsync(_shutdown.Token);
         try
         {
             if (_client == null)
@@ -335,7 +178,7 @@ public class TelegramDownloadService : IDisposable
     /// </summary>
     public async Task<string?> SubmitPasswordAsync(string password)
     {
-        await _clientSemaphore.WaitAsync();
+        await _clientSemaphore.WaitAsync(_shutdown.Token);
         try
         {
             if (_client == null)
@@ -356,7 +199,7 @@ public class TelegramDownloadService : IDisposable
     /// </summary>
     public async Task LogOutAsync()
     {
-        await _clientSemaphore.WaitAsync();
+        await _clientSemaphore.WaitAsync(_shutdown.Token);
         try
         {
             if (_client != null)
@@ -366,6 +209,8 @@ public class TelegramDownloadService : IDisposable
                 _client = null;
             }
 
+            _downloadClient = null;
+            _loginRequirement = null;
             var sessionPath = GetSessionPath();
             if (File.Exists(sessionPath))
             {
@@ -382,6 +227,9 @@ public class TelegramDownloadService : IDisposable
     {
         return Path.Combine(ConfigService.GetToolsDirectory(), "telegram.session");
     }
+
+    private bool HasCredentials() => !string.IsNullOrWhiteSpace(_configService.Config.TgApiId)
+        && !string.IsNullOrWhiteSpace(_configService.Config.TgApiHash);
 
     private void InitClient()
     {
@@ -406,100 +254,10 @@ public class TelegramDownloadService : IDisposable
             };
         });
 
-        // 接管 TCP 连接并处理 Socks5/HTTP 代理
-        _client.TcpHandler = async (host, port) =>
-        {
-            var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            try
-            {
-                if (_configService.Config.UseProxy && !string.IsNullOrWhiteSpace(_configService.Config.ProxyAddress))
-                {
-                    var proxyUri = new Uri(_configService.Config.ProxyAddress);
-                    var proxyHost = proxyUri.Host;
-                    var proxyPort = proxyUri.Port;
-
-                    await socket.ConnectAsync(proxyHost, proxyPort);
-
-                    if (proxyUri.Scheme.Equals("socks5", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Socks5 握手
-                        socket.Send(new byte[] { 5, 1, 0 });
-                        var resp = new byte[2];
-                        socket.Receive(resp);
-                        if (resp[0] != 5 || resp[1] != 0)
-                        {
-                            throw new Exception("Socks5 代理建立握手协议失败。");
-                        }
-
-                        var request = new List<byte> { 5, 1, 0 };
-                        if (IPAddress.TryParse(host, out var ipAddress))
-                        {
-                            if (ipAddress.AddressFamily == AddressFamily.InterNetwork)
-                            {
-                                request.Add(1);
-                                request.AddRange(ipAddress.GetAddressBytes());
-                            }
-                            else
-                            {
-                                request.Add(4);
-                                request.AddRange(ipAddress.GetAddressBytes());
-                            }
-                        }
-                        else
-                        {
-                            request.Add(3);
-                            var domainBytes = Encoding.ASCII.GetBytes(host);
-                            request.Add((byte)domainBytes.Length);
-                            request.AddRange(domainBytes);
-                        }
-
-                        request.Add((byte)(port >> 8));
-                        request.Add((byte)(port & 0xFF));
-
-                        socket.Send(request.ToArray());
-
-                        var connResp = new byte[256];
-                        int len = socket.Receive(connResp);
-                        if (len < 4 || connResp[1] != 0)
-                        {
-                            throw new Exception($"Socks5 代理连接目标失败，Reply Code: {connResp[1]}");
-                        }
-                    }
-                    else if (proxyUri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase))
-                    {
-                        // HTTP CONNECT 隧道
-                        var connectCmd = $"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n";
-                        socket.Send(Encoding.ASCII.GetBytes(connectCmd));
-
-                        var buffer = new byte[2048];
-                        int len = socket.Receive(buffer);
-                        var responseText = Encoding.ASCII.GetString(buffer, 0, len);
-                        if (!responseText.Contains("200 Connection Established", StringComparison.OrdinalIgnoreCase)
-                            && !responseText.Contains("200 OK", StringComparison.OrdinalIgnoreCase))
-                        {
-                            throw new Exception($"HTTP 代理建立通道失败:\n{responseText}");
-                        }
-                    }
-                    else
-                    {
-                        throw new NotSupportedException($"暂不支持的代理协议: {proxyUri.Scheme}");
-                    }
-                }
-                else
-                {
-                    await socket.ConnectAsync(host, port);
-                }
-                
-                var tcpClient = new TcpClient();
-                tcpClient.Client = socket;
-                return tcpClient;
-            }
-            catch
-            {
-                socket.Close();
-                throw;
-            }
-        };
+        _client.TcpHandler = (host, port) => TelegramConnectionFactory.ConnectAsync(
+            host, port, _configService.Config.UseProxy ? _configService.Config.ProxyAddress : null);
+        _client.FloodRetryThreshold = 0;
+        _downloadClient = new TelegramDownloadClient(_client, _downloadThrottle);
 
         // 屏蔽 WTelegramClient 的内部日志以防刷屏
         WTelegram.Helpers.Log = (level, message) => Debug.WriteLine($"[WTelegram] {level}: {message}");
@@ -514,386 +272,301 @@ public class TelegramDownloadService : IDisposable
         Action<string>? logCallback = null,
         CancellationToken ct = default)
     {
-        task.Status = DownloadStatus.Downloading;
-        logCallback?.Invoke($"[Telegram] 开始提取任务: {task.Url}");
-
-        var parsed = ParseTelegramLink(task.Url);
-        if (parsed == null)
-        {
-            throw new ArgumentException("无法识别的 Telegram 直链格式");
-        }
-
-        var (chatTarget, startId, endId) = parsed.Value;
-
+        var gateHeld = false;
+        using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _shutdown.Token);
         try
         {
             ct.ThrowIfCancellationRequested();
+            ct = lifetime.Token;
+            ct.ThrowIfCancellationRequested();
+            var parsed = ParseTelegramLink(task.Url)
+                ?? throw new ArgumentException("无法识别的 Telegram 消息链接，请复制具体消息链接。");
+            var (chatTarget, startId, endId) = parsed;
 
-            // 确保客户端登录成功
+            // Do not allow login/logout to dispose a client while it is downloading.
             await _clientSemaphore.WaitAsync(ct);
-            try
+            gateHeld = true;
+            task.Status = DownloadStatus.Downloading;
+            task.ErrorMessage = "";
+            task.Progress = 0;
+            if (_downloadClient is null && HasCredentials() && File.Exists(GetSessionPath()))
+                InitClient();
+            var client = _downloadClient
+                ?? throw new InvalidOperationException("请先在设置中完成 Telegram 授权");
+            if (!client.IsLoggedIn)
+            {
+                if (!client.HasSavedSession)
+                    throw new InvalidOperationException("请先在设置中完成 Telegram 授权");
+                logCallback?.Invoke("[Telegram] 正在恢复本机已保存的登录会话...");
+                await client.RestoreSessionAsync(ct);
+                if (!client.IsLoggedIn)
+                    throw new InvalidOperationException("Telegram 会话已失效，请在设置中重新登录。");
+            }
+
+            logCallback?.Invoke($"[Telegram] 正在查找会话: {chatTarget}（私有会话包含全部分页和归档）...");
+            var peerInfo = await ExecuteTelegramRequestAsync(
+                async () => chatTarget.StartsWith("-100", StringComparison.Ordinal)
+                    ? (IPeerInfo)await TelegramPeerResolver.ResolvePrivateChannelAsync(client, GetPrivateChatLookupId(chatTarget), ct)
+                    : await client.ResolveUsernameAsync(chatTarget, ct),
+                logCallback, ct);
+            var peer = peerInfo.ToInputPeer();
+            var title = peerInfo is ChatBase chat ? chat.Title : chatTarget;
+            var safeTitle = DownloadFileNameBuilder.SanitizeResolvedTitle(title);
+            if (safeTitle.Length > 100)
+                safeTitle = safeTitle[..100];
+            var folderName = endId is { } end
+                ? $"{safeTitle}_{startId}-{end}"
+                : $"{safeTitle}_{startId}";
+            var savePath = BuildSafeMediaFilePath(task.OutputDirectory, folderName, $"TG_{startId}");
+            Directory.CreateDirectory(savePath);
+            task.Title = folderName;
+            task.OutputFilePath = savePath;
+            task.OutputFilePaths = [];
+
+            var total = (long)(endId ?? startId) - startId + 1;
+            var successes = 0L;
+            var skipped = 0L;
+            var failureCount = 0L;
+            var failedMessageIds = new List<int>();
+            string? firstError = null;
+            for (long index = 0; index < total; index++)
             {
                 ct.ThrowIfCancellationRequested();
-                if (_client?.User is null)
+                var messageId = checked((int)(startId + index));
+                try
                 {
-                    throw new InvalidOperationException("请先在设置中完成 Telegram 授权");
-                }
-            }
-            finally
-            {
-                _clientSemaphore.Release();
-            }
-
-            ct.ThrowIfCancellationRequested();
-            logCallback?.Invoke($"[Telegram] 正在获取会话: {chatTarget}...");
-            IPeerInfo peerInfo;
-            try
-            {
-                // 获取会话实体
-                if (long.TryParse(chatTarget, out _))
-                {
-                    var lookupId = GetPrivateChatLookupId(chatTarget);
-                    // 私有群组：为了避免 access_hash 缺失，先获取所有对话列表填充本地缓存
-                    ct.ThrowIfCancellationRequested();
-                    var dialogs = await _client!.Messages_GetDialogs();
-                    ct.ThrowIfCancellationRequested();
-                    Dictionary<long, ChatBase>? chatsDict = null;
-                    if (dialogs is Messages_Dialogs md) chatsDict = md.chats;
-                    else if (dialogs is Messages_DialogsSlice mds) chatsDict = mds.chats;
-
-                    if (chatsDict != null && chatsDict.TryGetValue(lookupId, out var chat))
+                    var message = await ExecuteTelegramRequestAsync(
+                        () => client.GetMessageAsync(peer, messageId, ct), logCallback, ct);
+                    if (message is not Message regularMessage)
                     {
-                        peerInfo = chat;
+                        skipped++;
+                        logCallback?.Invoke($"[Telegram] 消息 {messageId} 不存在、已删除或为话题/服务消息，跳过。");
                     }
                     else
                     {
-                        throw new Exception($"未能在对话列表中查找到频道 ID {lookupId}，请确保您已加入该私有群聊并且该群在对话列表中。");
+                        await SaveMessageAsync(client, peer, regularMessage, task, savePath,
+                            endId.HasValue ? $"{messageId}_" : "", index, total, progress, logCallback, ct);
+                        successes++;
                     }
                 }
-                else
+                catch (OperationCanceledException) { throw; }
+                catch (TimeoutException) { throw; }
+                catch (Exception ex)
                 {
-                    // 公开群组/频道
-                    ct.ThrowIfCancellationRequested();
-                    var resolved = await _client!.Contacts_ResolveUsername(chatTarget);
-                    ct.ThrowIfCancellationRequested();
-                    peerInfo = resolved.UserOrChat;
+                    if (client is TelegramDownloadClient { IsAborted: true })
+                        throw;
+                    if (!endId.HasValue)
+                        throw new IOException($"下载消息 {messageId} 失败: {DescribeTelegramError(ex)}", ex);
+                    failureCount++;
+                    if (failedMessageIds.Count < 20)
+                        failedMessageIds.Add(messageId);
+                    firstError ??= DescribeTelegramError(ex);
+                    logCallback?.Invoke($"[Telegram] 消息 {messageId} 下载失败: {DescribeTelegramError(ex)}");
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"获取会话失败，请确保您已加入此群组且网络正常: {ex.Message}", ex);
+                progress?.Report(new DownloadProgress { Percent = Math.Min(99.9, (index + 1) * 100d / total) });
             }
 
-            string chatTitle = "";
-            InputPeer? inputPeer = null;
-            if (peerInfo is User u)
-            {
-                chatTitle = u.MainUsername ?? u.ID.ToString();
-                inputPeer = u.ToInputPeer();
-            }
-            else if (peerInfo is ChatBase cb)
-            {
-                chatTitle = cb.Title;
-                inputPeer = cb.ToInputPeer();
-            }
-            else
-            {
-                throw new Exception("无法识别的 Telegram 会话类型");
-            }
-
-            var safeTitle = string.Concat(chatTitle.Split(Path.GetInvalidFileNameChars())).Trim();
-            if (string.IsNullOrWhiteSpace(safeTitle))
-            {
-                safeTitle = chatTarget;
-            }
-
-            if (endId != null)
-            {
-                // 范围消息下载
-                var start = startId;
-                var end = endId.Value;
-                if (end < start)
-                {
-                    // 自动纠错顺序
-                    (start, end) = (end, start);
-                }
-
-                var msgIds = new List<int>();
-                for (int i = start; i <= end; i++)
-                {
-                    msgIds.Add(i);
-                }
-
-                logCallback?.Invoke($"[Telegram] 启动范围提取任务: {chatTitle} [ID {start} - {end}]，共 {msgIds.Count} 个消息。");
-                var folderName = $"{safeTitle}_{start}-{end}";
-                task.Title = folderName;
-                var savePath = Path.Combine(task.OutputDirectory, folderName);
-                Directory.CreateDirectory(savePath);
-
-                int successCount = 0;
-                int failCount = 0;
-
-                for (int idx = 0; idx < msgIds.Count; idx++)
-                {
-                    ct.ThrowIfCancellationRequested();
-
-                    var msgId = msgIds[idx];
-                    logCallback?.Invoke($"[Telegram] [{idx + 1}/{msgIds.Count}] 正在拉取消息 ID: {msgId}...");
-                    
-                    var success = await DownloadSingleMessageAsync(
-                        task, inputPeer, msgId, savePath, logCallback, progress, 
-                        totalInBatch: msgIds.Count, currentBatchIndex: idx, 
-                        prefix: $"{msgId}_", ct: ct);
-                    ct.ThrowIfCancellationRequested();
-
-                    if (success) successCount++;
-                    else failCount++;
-
-                    // 智能避让风控
-                    if (idx < msgIds.Count - 1)
-                    {
-                        var delayMs = new Random().Next(2000, 5000);
-                        logCallback?.Invoke($"[Telegram] 模拟真人呼吸，等待 {delayMs / 1000.0:F1} 秒...");
-                        await Task.Delay(delayMs, ct);
-                    }
-                }
-
-                ct.ThrowIfCancellationRequested();
-                if (successCount == 0)
-                {
-                    throw new Exception("范围提取中所有的消息均下载失败。");
-                }
-
-                ct.ThrowIfCancellationRequested();
-                task.Status = DownloadStatus.Completed;
-                task.Progress = 100;
-                task.OutputFilePath = savePath;
-                UpdateTaskFileSizeFromDirectory(task, savePath, logCallback);
-                logCallback?.Invoke($"[Telegram] 范围提取完成。成功: {successCount} | 失败: {failCount}。已保存至目录: {savePath}");
-            }
-            else
-            {
-                // 单条消息下载
-                logCallback?.Invoke($"[Telegram] 正在拉取单条消息 ID: {startId}...");
-                var folderName = $"{safeTitle}_{startId}";
-                task.Title = folderName;
-                var savePath = Path.Combine(task.OutputDirectory, folderName);
-                Directory.CreateDirectory(savePath);
-
-                var success = await DownloadSingleMessageAsync(task, inputPeer, startId, savePath, logCallback, progress, 1, 0, "", ct);
-                ct.ThrowIfCancellationRequested();
-                if (!success)
-                {
-                    throw new Exception($"下载消息 ID {startId} 失败。");
-                }
-
-                ct.ThrowIfCancellationRequested();
-                task.Status = DownloadStatus.Completed;
-                task.Progress = 100;
-                task.OutputFilePath = savePath;
-                UpdateTaskFileSizeFromDirectory(task, savePath, logCallback);
-                logCallback?.Invoke($"[Telegram] 单条提取完成。已保存至目录: {savePath}");
-            }
+            ct.ThrowIfCancellationRequested();
+            UpdateTaskFileSizeFromDirectory(task, savePath, logCallback);
+            if (failureCount > 0)
+                throw new IOException($"Telegram 范围下载未全部完成：成功 {successes}，跳过 {skipped}，失败 {failureCount}。失败消息 ID：{string.Join(", ", failedMessageIds)}。{firstError} 已下载文件保留在：{savePath}");
+            if (successes == 0)
+                throw new IOException("没有下载到可保存的消息。消息可能已删除、无访问权限，或链接指向话题入口；请复制话题内具体消息的链接。");
+            task.DownloadedSize = task.FileSize;
+            task.Progress = 100;
+            task.Status = DownloadStatus.Completed;
+            logCallback?.Invoke($"[Telegram] 下载完成：成功 {successes}，跳过 {skipped}。已保存至：{savePath}");
         }
         catch (OperationCanceledException)
         {
+            if (gateHeld)
+                await AbortDownloadClientAsync();
             task.MarkCancelledUnlessPaused();
-            logCallback?.Invoke("[Telegram] 提取任务已被用户取消。");
+            logCallback?.Invoke("[Telegram] 下载已取消。");
             throw;
+        }
+        catch (Exception) when (ct.IsCancellationRequested)
+        {
+            if (gateHeld)
+                await AbortDownloadClientAsync();
+            task.MarkCancelledUnlessPaused();
+            throw new OperationCanceledException(ct);
         }
         catch (Exception ex)
         {
+            if (gateHeld && ex is TimeoutException)
+                await AbortDownloadClientAsync();
             task.Status = DownloadStatus.Failed;
-            task.ErrorMessage = ex.Message;
-            logCallback?.Invoke($"[Telegram] 任务失败: {ex.Message}");
+            task.ErrorMessage = DescribeTelegramError(ex);
+            logCallback?.Invoke($"[Telegram] 下载失败: {task.ErrorMessage}");
             throw;
+        }
+        finally
+        {
+            if (gateHeld)
+            {
+                ClearAbortedClient();
+                _clientSemaphore.Release();
+            }
         }
     }
 
-    private async Task<bool> DownloadSingleMessageAsync(
-        DownloadTask task,
-        InputPeer peer,
-        int messageId,
-        string savePath,
-        Action<string>? logCallback,
-        IProgress<DownloadProgress>? progress,
-        int totalInBatch,
-        int currentBatchIndex,
-        string prefix,
-        CancellationToken ct)
+    private async Task AbortDownloadClientAsync()
     {
-        try
+        if (_downloadClient is not TelegramDownloadClient client || client.IsAborted)
+            return;
+        try { await client.AbortAsync().WaitAsync(TimeSpan.FromSeconds(15)); }
+        catch (Exception ex) { Debug.WriteLine($"[Telegram] 中止连接: {ex.GetType().Name}"); }
+    }
+
+    private void ClearAbortedClient()
+    {
+        if (_downloadClient is TelegramDownloadClient { IsAborted: true })
         {
-            ct.ThrowIfCancellationRequested();
-
-            // 通过 WTelegramClient 抓取单条消息，根据 Peer 类型分流调用
-            Messages_MessagesBase res;
-            if (peer is InputPeerChannel ipc)
-            {
-                var inputChannel = new InputChannel(ipc.channel_id, ipc.access_hash);
-                ct.ThrowIfCancellationRequested();
-                res = await _client!.Channels_GetMessages(inputChannel, new InputMessageID { id = messageId });
-            }
-            else
-            {
-                ct.ThrowIfCancellationRequested();
-                res = await _client!.Messages_GetMessages(new InputMessageID { id = messageId });
-            }
-            ct.ThrowIfCancellationRequested();
-
-            if (res.Messages.Length == 0 || res.Messages[0] is MessageEmpty)
-            {
-                logCallback?.Invoke($"[Telegram] 消息 ID {messageId} 未找到或已被删除。");
-                return false;
-            }
-
-            var message = res.Messages[0] as Message;
-            if (message == null)
-            {
-                logCallback?.Invoke($"[Telegram] 消息 ID {messageId} 格式无效。");
-                return false;
-            }
-
-            // 1. 保存文本内容
-            if (!string.IsNullOrWhiteSpace(message.message))
-            {
-                logCallback?.Invoke($"[Telegram] 消息文本: {message.message}");
-                var textPath = Path.Combine(savePath, $"{prefix}message_text.txt");
-                await File.WriteAllTextAsync(textPath, message.message, Encoding.UTF8, ct);
-                logCallback?.Invoke($"[Telegram] 文本已写入: {textPath}");
-            }
-
-            // 2. 下载媒体内容
-            if (message.media != null)
-            {
-                string filename = $"media_{messageId}";
-                long totalSize = 0;
-
-                if (message.media is MessageMediaDocument md && md.document is Document doc)
-                {
-                    totalSize = doc.size;
-                    // 从属性中寻找文件名
-                    foreach (var attr in doc.attributes)
-                    {
-                        if (attr is DocumentAttributeFilename daf)
-                        {
-                            filename = daf.file_name;
-                            break;
-                        }
-                    }
-                    if (string.IsNullOrWhiteSpace(filename))
-                    {
-                        var ext = !string.IsNullOrWhiteSpace(doc.mime_type) && doc.mime_type.Contains('/') 
-                            ? $".{doc.mime_type.Split('/')[1]}" 
-                            : ".bin";
-                        filename = $"media_{messageId}{ext}";
-                    }
-                }
-                else if (message.media is MessageMediaPhoto mp && mp.photo is Photo photo)
-                {
-                    // 照片通常取最大尺寸
-                    filename = $"media_{messageId}.jpg";
-                    totalSize = photo.sizes.Length > 0 ? photo.sizes[^1].FileSize : 0;
-                }
-
-                if (totalSize > 0)
-                {
-                    task.FileSize = totalSize;
-                }
-                var mediaFilePath = BuildSafeMediaFilePath(
-                    savePath,
-                    filename,
-                    $"media_{messageId}",
-                    prefix);
-                var safeFileName = Path.GetFileName(mediaFilePath);
-                var fileExt = Path.GetExtension(safeFileName).TrimStart('.').ToLowerInvariant();
-                if (!string.IsNullOrEmpty(fileExt))
-                {
-                    task.Format = fileExt;
-                }
-
-                logCallback?.Invoke($"[Telegram] 准备下载媒体文件: {safeFileName} (大小: {ByteSizeFormatter.FormatOrUnknown(totalSize)})");
-
-                // 流式分块下载，并提供精确进度上报
-                using (var fileStream = new FileStream(mediaFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, useAsync: true))
-                {
-                    var lastReportedTime = DateTime.UtcNow;
-                    var lastReportedBytes = 0L;
-
-                    Action<long, long> reportProgress = (bytesDownloaded, totalSize) =>
-                    {
-                        var now = DateTime.UtcNow;
-                        var elapsed = (now - lastReportedTime).TotalSeconds;
-
-                        if (elapsed >= 0.1 || bytesDownloaded == totalSize)
-                        {
-                            double speed = 0;
-                            if (elapsed > 0)
-                            {
-                                speed = (bytesDownloaded - lastReportedBytes) / elapsed;
-                            }
-                            lastReportedTime = now;
-                            lastReportedBytes = bytesDownloaded;
-
-                            double eta = 0;
-                            if (speed > 0 && totalSize > bytesDownloaded)
-                            {
-                                eta = (totalSize - bytesDownloaded) / speed;
-                            }
-
-                            double batchBasePercent = (double)currentBatchIndex / totalInBatch * 100;
-                            double currentMediaPercent = totalSize > 0 ? (double)bytesDownloaded / totalSize * 100 : 0;
-                            double totalPercent = batchBasePercent + (currentMediaPercent / totalInBatch);
-
-                            progress?.Report(new DownloadProgress
-                            {
-                                Percent = Math.Min(99.9, totalPercent),
-                                Speed = speed,
-                                Eta = eta,
-                                Downloaded = bytesDownloaded,
-                                Total = totalSize
-                            });
-                        }
-                    };
-
-                    var cancellableProgress = CreateCancellableProgressCallback(ct, reportProgress);
-                    if (message.media is MessageMediaDocument mDoc && mDoc.document is Document d)
-                    {
-                        ct.ThrowIfCancellationRequested();
-                        await _client!.DownloadFileAsync(d, fileStream, (PhotoSizeBase)null!, cancellableProgress);
-                        ct.ThrowIfCancellationRequested();
-                    }
-                    else if (message.media is MessageMediaPhoto mPhoto && mPhoto.photo is Photo p)
-                    {
-                        var largestSize = p.sizes[^1];
-                        ct.ThrowIfCancellationRequested();
-                        await _client!.DownloadFileAsync(p, fileStream, largestSize, cancellableProgress);
-                        ct.ThrowIfCancellationRequested();
-                    }
-                }
-
-                ct.ThrowIfCancellationRequested();
-                logCallback?.Invoke($"[Telegram] 媒体保存成功: {mediaFilePath}");
-            }
-
-            ct.ThrowIfCancellationRequested();
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logCallback?.Invoke($"[Telegram] 下载消息 ID {messageId} 出错: {ex.Message}");
-            return false;
+            _client = null;
+            _downloadClient = null;
+            _loginRequirement = null;
         }
     }
 
+    private static async Task SaveMessageAsync(
+        ITelegramDownloadClient client, InputPeer peer, Message message, DownloadTask task,
+        string savePath, string prefix, long batchIndex, long batchCount,
+        IProgress<DownloadProgress>? progress, Action<string>? log, CancellationToken ct)
+    {
+        var hasText = !string.IsNullOrWhiteSpace(message.message);
+        if (hasText)
+        {
+            var textPath = Path.Combine(savePath, $"{prefix}message_text.txt");
+            await File.WriteAllTextAsync(textPath, message.message, Encoding.UTF8, ct);
+            task.OutputFilePaths.Add(textPath);
+        }
+        if (message.media is not (MessageMediaDocument or MessageMediaPhoto))
+        {
+            if (!hasText)
+                throw new NotSupportedException("该消息没有可保存的文本、文件或照片。");
+            return;
+        }
+
+        for (var attempt = 0; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var (filename, expectedSize) = GetMediaFileInfo(message);
+            var finalPath = BuildSafeMediaFilePath(savePath, filename, $"media_{message.id}.bin", prefix);
+            if (hasText && Path.GetFileName(finalPath).Equals($"{prefix}message_text.txt", StringComparison.OrdinalIgnoreCase))
+                finalPath = BuildSafeMediaFilePath(savePath, $"media_{message.id}_{filename}", $"media_{message.id}.bin", prefix);
+            var temporaryPath = Path.Combine(savePath, $".telegram-{Guid.NewGuid():N}.part");
+            try
+            {
+                log?.Invoke($"[Telegram] 下载 {Path.GetFileName(finalPath)}，大小 {ByteSizeFormatter.FormatOrUnknown(expectedSize)}");
+                var timer = Stopwatch.StartNew();
+                var lastBytes = 0L;
+                var lastTime = TimeSpan.Zero;
+                using (var output = new FileStream(temporaryPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true))
+                {
+                    var callback = CreateCancellableProgressCallback(ct, (downloaded, size) =>
+                    {
+                        var now = timer.Elapsed;
+                        var elapsed = (now - lastTime).TotalSeconds;
+                        if (elapsed < 0.1 && downloaded != size)
+                            return;
+                        var speed = elapsed > 0 ? Math.Max(0, downloaded - lastBytes) / elapsed : 0;
+                        lastBytes = downloaded;
+                        lastTime = now;
+                        progress?.Report(new DownloadProgress
+                        {
+                            Percent = Math.Min(99.9, (batchIndex + (size > 0 ? Math.Clamp(downloaded / (double)size, 0, 1) : 0)) * 100 / batchCount),
+                            Speed = speed,
+                            Eta = speed > 0 ? Math.Max(0, size - downloaded) / speed : 0,
+                            Downloaded = downloaded,
+                            Total = size
+                        });
+                    });
+                    await client.DownloadMediaAsync(message.media, output, callback, ct, log);
+                    await output.FlushAsync(ct);
+                    if (output.Length == 0 || (expectedSize > 0 && output.Length != expectedSize))
+                        throw new IOException($"Telegram 文件不完整：预期 {expectedSize} 字节，实际 {output.Length} 字节。");
+                }
+                ct.ThrowIfCancellationRequested();
+                File.Move(temporaryPath, finalPath, overwrite: true);
+                task.Format = Path.GetExtension(finalPath).TrimStart('.').ToLowerInvariant();
+                task.OutputFilePaths.Add(finalPath);
+                var savedBytes = new FileInfo(finalPath).Length;
+                var averageSpeed = (long)(savedBytes / Math.Max(0.001, timer.Elapsed.TotalSeconds));
+                log?.Invoke($"[Telegram] 媒体已保存: {finalPath}，耗时 {timer.Elapsed.TotalSeconds:F1} 秒，平均 {ByteSizeFormatter.FormatOrUnknown(averageSpeed)}/s（包含服务器等待）。");
+                return;
+            }
+            catch (RpcException ex) when (attempt < 2 && ex.Message.StartsWith("FILE_REFERENCE_", StringComparison.Ordinal))
+            {
+                log?.Invoke("[Telegram] 文件引用已过期，重新获取消息后重试...");
+                message = await ExecuteTelegramRequestAsync(
+                    () => client.GetMessageAsync(peer, message.id, ct), log, ct) as Message
+                    ?? throw new IOException("重新获取消息失败，消息可能已删除。", ex);
+            }
+            catch (RpcException ex) when (attempt < 2 && ex.Code == 420 && ex.X > 0 && ex.X <= 60
+                && !(client is TelegramDownloadClient && TelegramDownloadClient.UsesChunkDownloader(message.media)))
+            {
+                log?.Invoke($"[Telegram] 请求受限，按服务器要求等待 {ex.X} 秒后重试...");
+                await Task.Delay(TimeSpan.FromSeconds(ex.X), ct);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
+            }
+        }
+    }
+
+    internal static (string FileName, long Size) GetMediaFileInfo(Message message)
+    {
+        if (message.media is MessageMediaDocument { document: Document document })
+        {
+            var filename = document.attributes?.OfType<DocumentAttributeFilename>().FirstOrDefault()?.file_name;
+            if (string.IsNullOrWhiteSpace(filename))
+            {
+                var extension = document.mime_type?.ToLowerInvariant() switch
+                {
+                    "video/mp4" => ".mp4", "video/webm" => ".webm", "video/quicktime" => ".mov",
+                    "audio/mpeg" => ".mp3", "audio/mp4" => ".m4a", "audio/ogg" => ".ogg",
+                    "image/jpeg" => ".jpg", "image/png" => ".png", "image/webp" => ".webp",
+                    "image/gif" => ".gif", "application/pdf" => ".pdf", "application/zip" => ".zip",
+                    _ => ".bin"
+                };
+                filename = $"media_{message.id}{extension}";
+            }
+            return (filename, document.size);
+        }
+        if (message.media is MessageMediaPhoto { photo: Photo photo } && photo.LargestPhotoSize is { } size)
+            return ($"media_{message.id}.jpg", size.FileSize);
+        throw new IOException("这条消息的媒体已失效或没有可下载的原始文件。");
+    }
+
+    private static async Task<T> ExecuteTelegramRequestAsync<T>(
+        Func<Task<T>> request, Action<string>? log, CancellationToken ct)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            try { return await request(); }
+            catch (RpcException ex) when (attempt < 2 && ex.Code == 420 && ex.X > 0 && ex.X <= 60)
+            {
+                log?.Invoke($"[Telegram] 请求受限，按服务器要求等待 {ex.X} 秒后重试...");
+                await Task.Delay(TimeSpan.FromSeconds(ex.X), ct);
+            }
+        }
+    }
+
+    private static string DescribeTelegramError(Exception ex) => ex switch
+    {
+        RpcException rpc when rpc.Code == 420 && rpc.Message == "FLOOD_PREMIUM_WAIT_X"
+            => $"Telegram 对免费账号的下载请求限速，请等待 {rpc.X} 秒后重试。",
+        RpcException { Code: 420 } rpc => $"Telegram 请求过于频繁，请等待 {rpc.X} 秒后重试。",
+        RpcException rpc when rpc.Message is "CHANNEL_PRIVATE" or "CHAT_FORBIDDEN" or "CHANNEL_INVALID"
+            => "当前 Telegram 账号无法访问该私有频道或群组，请确认绑定账号和成员权限。",
+        RpcException { Code: 401 } => "Telegram 登录会话已失效，请在设置中重新登录。",
+        TimeoutException => "Telegram 请求超时，请检查代理和网络连接后重试。",
+        _ => ex.Message
+    };
     internal static WTelegram.Client.ProgressCallback CreateCancellableProgressCallback(
         CancellationToken ct,
         Action<long, long> reportProgress)
@@ -972,7 +645,15 @@ public class TelegramDownloadService : IDisposable
 
     public void Dispose()
     {
-        _client?.Dispose();
-        _clientSemaphore.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+        _shutdown.Cancel();
+        if (_downloadClient is TelegramDownloadClient client)
+            client.AbortAsync().GetAwaiter().GetResult();
+        else
+            _client?.Dispose();
+        // In-flight operations and queued callers still use the gate/token while
+        // unwinding. Leave these managed objects for GC instead of disposing them
+        // underneath WaitAsync/Release (no WaitHandle is allocated by this service).
     }
 }

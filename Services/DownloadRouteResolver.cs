@@ -20,6 +20,9 @@ internal static class DownloadRouteResolver
         if (TelegramDownloadService.IsTelegramUrl(url))
             return DownloadEngine.Telegram;
 
+        if (TelegramLinkParser.IsTelegramMessageLinkWithComment(url))
+            throw new NotSupportedException("暂不支持 Telegram 评论链接，请复制讨论组内具体消息链接后重试。");
+
         if (resourceHint || HttpResourceDownloadService.IsResourceUrl(url))
             return DownloadEngine.Resource;
 

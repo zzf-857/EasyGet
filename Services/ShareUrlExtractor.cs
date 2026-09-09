@@ -9,15 +9,6 @@ internal static partial class ShareUrlExtractor
         if (string.IsNullOrWhiteSpace(input))
             return null;
 
-        var trimmed = input.Trim();
-        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
-        {
-            var match = UrlAtStartRegex().Match(trimmed);
-            if (match.Success)
-                return TrimTrailingSharePunctuation(match.Value);
-        }
-
         var urlMatch = UrlRegex().Match(input);
         return urlMatch.Success ? TrimTrailingSharePunctuation(urlMatch.Value) : null;
     }
@@ -52,12 +43,7 @@ internal static partial class ShareUrlExtractor
     }
 
     [GeneratedRegex(
-        @"^https?://[^\s\u4e00-\u9fff]+",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex UrlAtStartRegex();
-
-    [GeneratedRegex(
-        @"https?://[^\s\u4e00-\u9fff]+",
+        @"(?:https?://|tg://(?:resolve|privatepost|private)(?=[/?#]))[^\s\u4e00-\u9fff]+",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex UrlRegex();
 }

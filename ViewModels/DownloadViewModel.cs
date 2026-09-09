@@ -1301,7 +1301,8 @@ public partial class DownloadViewModel : ObservableObject
             return false;
 
         if (!Uri.TryCreate(extracted, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps
+                && !TelegramDownloadService.IsTelegramUrl(extracted)))
         {
             return false;
         }

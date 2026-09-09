@@ -40,11 +40,26 @@ public class ShareUrlExtractorTests
     }
 
     [Theory]
+    [InlineData("tg://resolve?domain=durov&post=123", "tg://resolve?domain=durov&post=123")]
+    [InlineData("复制链接：tg://privatepost?channel=123&post=789&thread=456，查看文件", "tg://privatepost?channel=123&post=789&thread=456")]
+    [InlineData(" tg://private?channel=123&post=456。", "tg://private?channel=123&post=456")]
+    [InlineData("Watch: TG://PRIVATEPOST?channel=123&post=456 now", "TG://PRIVATEPOST?channel=123&post=456")]
+    [InlineData("<tg://resolve?domain=durov&post=123>", "tg://resolve?domain=durov&post=123")]
+    [InlineData("tg://privatepost?channel=123&post=456 https://example.com/video", "tg://privatepost?channel=123&post=456")]
+    public void Extract_ReturnsTelegramMessageSchemesFromShareText(string input, string expected)
+    {
+        Assert.Equal(expected, ShareUrlExtractor.Extract(input));
+    }
+
+    [Theory]
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("hello world")]
     [InlineData("ftp://example.com/video")]
-    public void Extract_ReturnsNullWhenTextHasNoHttpUrl(string input)
+    [InlineData("tg://join?invite=123")]
+    [InlineData("tg://privatepost.evil.example?channel=123&post=456")]
+    [InlineData("tg://resolveother?domain=durov&post=123")]
+    public void Extract_ReturnsNullWhenTextHasNoSupportedUrl(string input)
     {
         Assert.Null(ShareUrlExtractor.Extract(input));
     }

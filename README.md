@@ -44,7 +44,7 @@ EasyGet 是一款基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 并扩展专�
 - **下载历史资料库** — SQLite 持久化存储，支持搜索、合集折叠、自定义整理文件夹、整组/全选、批量移动或删除以及拖拽整理；整理操作不会移动已经下载的本地文件
 - **m3u8 视频流下载** — 自动识别 `.m3u8` 或 `.m3n8` 播放列表并调用 16 线程高速分片下载，支持进度速度计算，并由 ffmpeg 自动 remux 合并为 MP4（对加密流有防护校验）
 - **央视频专用下载** — 识别 `yangshipin.cn/video/home?vid=...` 页面，使用本机 Edge/Chrome 在隐藏模式下获取当次有效的公开 MP4 地址，支持文件大小预览、进度显示、失败重试与断点续传；不绕过会员、地区或受保护媒体限制。实现与限制见 [央视频识别与下载说明](docs/yangshipin-integration.md)
-- **Telegram 媒体直链流式下载** — 纯 C# 原生对接 Telegram 核心网络套接字（基于 MTProto WTelegramClient），自动匹配公开（如 `t.me/durov/123`）或私有（如 `t.me/c/xxxx/xxxx`）频道直链及批量范围消息，流式分块下载，支持代理外挂与断点续传
+- **Telegram 媒体下载** — 基于 WTelegramClient 下载已登录账号有权访问的公开或私有频道、群组消息；支持普通消息、话题消息、消息范围与 `tg://privatepost` 深链接，分页查找会话（含归档），支持 HTTP / SOCKS5 代理，下载完成后校验文件大小再保存正式文件；视频／文档最多四块并发，服务器限流时共享等待并降低并发，详情见 [免费账号下载优化](docs/telegram-download-performance.md)
 - **智能环境检测** — 启动时自动检测 yt-dlp / ffmpeg，缺失则从官方发布源自动下载安装，并支持在设置页手动重试与更新 yt-dlp
 - **应用版本更新** — 设置页可检查 GitHub Release 最新版本，下载 `EasyGet-Setup-vX.Y.Z.exe` 并启动安装器覆盖升级
 

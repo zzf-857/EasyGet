@@ -11,6 +11,7 @@ public class TelegramDownloadServiceTests
     [InlineData("https://t.me/durov/123")]
     [InlineData("http://T.ME/durov/123")]
     [InlineData("https://www.t.me/durov/123")]
+    [InlineData("https://telegram.me/durov/123")]
     [InlineData("https://t.me/durov/123/")]
     [InlineData("tg://resolve?domain=durov&post=123")]
     [InlineData("https://t.me/c/1234567890/456")]
@@ -41,7 +42,6 @@ public class TelegramDownloadServiceTests
 
     [Theory]
     [InlineData("https://example.com")]
-    [InlineData("https://telegram.me/durov/123")]
     [InlineData("https://t.me/durov")]
     [InlineData("https://t.me/c/1234567890")]
     [InlineData("https://evil.example/path/t.me/durov/123")]

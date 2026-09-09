@@ -391,6 +391,37 @@ public class DownloadViewModelTests
         Assert.True(DownloadViewModel.IsValidClipboardUrl("分享链接 https://c.com/video 给你", "https://a.com", "https://b.com"));
     }
 
+    [Theory]
+    [InlineData("tg://privatepost?channel=1234567890&post=789&thread=456", true)]
+    [InlineData("分享文件：tg://private?channel=1234567890&post=789，点击查看", true)]
+    [InlineData("TG://RESOLVE?domain=durov&post=789", true)]
+    [InlineData("tg://privatepost?channel=1234567890", false)]
+    [InlineData("tg://privatepost?channel=1234567890&post=0", false)]
+    [InlineData("tg://privatepost?channel=1234567890&post=789&comment=999", false)]
+    [InlineData("tg://resolve?domain=durov", false)]
+    [InlineData("tg://privatepost.evil.example?channel=1234567890&post=789", false)]
+    public void IsValidClipboardUrl_AcceptsOnlyValidTelegramMessageDeepLinks(string text, bool expected)
+    {
+        Assert.Equal(expected, DownloadViewModel.IsValidClipboardUrl(text, "", ""));
+    }
+
+    [Fact]
+    public void CheckClipboardAndPrompt_RaisesTelegramDeepLinkEventOnce()
+    {
+        using var context = CreateDownloadContext();
+        var viewModel = context.ViewModel;
+        const string link = "tg://privatepost?channel=1234567890&post=789&thread=456";
+        var detectedUrls = new List<string>();
+        viewModel.ClipboardLinkDetected += detectedUrls.Add;
+
+        viewModel.CheckClipboardAndPrompt($"分享文件：{link}，点击查看");
+        viewModel.CheckClipboardAndPrompt(link);
+
+        Assert.Equal(link, viewModel.ClipboardPromptUrl);
+        Assert.Equal([link], detectedUrls);
+        Assert.False(DownloadViewModel.IsValidClipboardUrl(link, link, ""));
+    }
+
     [Fact]
     public void CheckClipboardAndPrompt_RaisesDetectedEventOnceForANewUrl()
     {
