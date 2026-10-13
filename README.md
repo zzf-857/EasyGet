@@ -22,17 +22,19 @@
 
 EasyGet 是一款基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 并扩展专用解析器的 Windows 桌面视频下载工具，支持 YouTube、Bilibili、X(Twitter)、Instagram、抖音、央视频等网站的视频下载。项目采用 WPF + MVVM 架构，提供暗色主题、多任务队列、下载历史、智能登录与 Cookie、播放列表导入和环境自动安装等能力。
 
-## 🖼️ 界面设计存档（v1.0）
+## 🖼️ 界面展示（v2.0.0）
 
-以下图片是 2026-06-11 的 v1.0 设计与过程存档，部分素材为概念图，仅作历史参考，不代表当前版本的实机界面。
+以下为 2026-10-13 运行当前 Windows 版本截取的真实界面。使用临时配置拍摄，下载与媒体库中的视频为 [Big Buck Bunny 公开样例](https://www.w3schools.com/html/mov_bbb.mp4)。
 
-| 视频下载 | 批量下载 |
+| 单个下载 | 批量队列 |
 |---|---|
-| ![视频下载页](Designer/v1.0/2026-06-11-readme-screenshots/download-view.png) | ![批量下载页](Designer/v1.0/2026-06-11-readme-screenshots/batch-download-view.png) |
+| ![单个下载页](Designer/v2.0/2026-10-13-readme-screenshots/download-view.png) | ![批量队列页](Designer/v2.0/2026-10-13-readme-screenshots/batch-download-view.png) |
 
-| 历史记录 | 设置 |
+| 媒体库 | 设置 |
 |---|---|
-| ![历史记录页](Designer/v1.0/2026-06-11-readme-screenshots/history-view.png) | ![设置页](Designer/v1.0/2026-06-11-readme-screenshots/settings-view.png) |
+| ![媒体库页](Designer/v2.0/2026-10-13-readme-screenshots/history-view.png) | ![设置页](Designer/v2.0/2026-10-13-readme-screenshots/settings-view.png) |
+
+历史设计与过程图保留在 [Designer 归档](Designer/README.md)。
 
 ## ✨ 功能特性
 
