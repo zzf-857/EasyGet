@@ -24,7 +24,7 @@ EasyGet 是一款基于 [yt-dlp](https://github.com/yt-dlp/yt-dlp) 并扩展专�
 
 ## 🖼️ 界面展示（v2.0.0）
 
-以下为 2026-10-13 运行当前 Windows 版本截取的真实界面。使用临时配置拍摄，下载与媒体库中的视频为 [Big Buck Bunny 公开样例](https://www.w3schools.com/html/mov_bbb.mp4)。
+以下为 2026-10-13 从当前运行的 Windows 程序直接截取的四个主要面板。
 
 | 单个下载 | 批量队列 |
 |---|---|
